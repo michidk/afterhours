@@ -192,6 +192,95 @@ test("grenades bounce off ground, walls and roofs, detonate once, and bound acti
   assert.equal(g.active.size, 96);
 });
 
+test("grenades bounce off rotated vehicles and characters without contact damage", () => {
+  const { s, p } = setup();
+  const car = s.spawn("car", 0, 0);
+  car.angle = Math.PI / 2;
+  const actor = s.spawn("pedestrian", 0, 6);
+  const g = new Grenades();
+  g.throw(p, 0);
+  const projectile = [...g.active.values()][0];
+  projectile.x = -2.4;
+  projectile.z = 0;
+  projectile.y = 1;
+  projectile.vx = 15;
+  projectile.vy = projectile.vz = 0;
+  const blasts: number[] = [];
+  const blast = () => {
+    blasts.push(1);
+  };
+  g.step(s.city, 0.1, 1 / 120, blast, s.entities.values());
+  assert.ok(projectile.x <= -2.31 + 1e-8);
+  assert.equal(projectile.vx, -7.5);
+  assert.equal(car.health, 100);
+  projectile.x = 0;
+  projectile.z = 5.35;
+  projectile.y = 1;
+  projectile.vx = projectile.vy = 0;
+  projectile.vz = 15;
+  g.step(s.city, 0.2, 1 / 120, blast, s.entities.values());
+  assert.ok(projectile.z <= 5.42 + 1e-8);
+  assert.equal(projectile.vz, -7.5);
+  assert.equal(actor.health, 100);
+  projectile.x = projectile.z = 0;
+  projectile.y = 2;
+  projectile.vx = projectile.vz = 0;
+  projectile.vy = -10;
+  g.step(s.city, 0.3, 1 / 120, blast, [car]);
+  assert.equal(projectile.y, 1.96);
+  assert.ok(projectile.vy > 0);
+  assert.equal(blasts.length, 0);
+  assert.deepEqual([p.health, car.health, actor.health], [100, 100, 100]);
+  g.step(
+    s.city,
+    3,
+    1 / 120,
+    (x, y, z, radius, damage) => {
+      blasts.push(1);
+      s.blast(x, y, z, radius, damage);
+    },
+    s.entities.values(),
+  );
+  assert.equal(blasts.length, 1);
+  assert.ok(car.health < 100);
+  assert.ok(actor.health < 100);
+  s.destruction.dispose();
+});
+
+test("grenades grant brief owner clearance and skip seated or dead character contacts", () => {
+  const { s, p } = setup();
+  const g = new Grenades();
+  g.throw(p, 0);
+  const projectile = [...g.active.values()][0];
+  const reset = () => {
+    projectile.x = -0.5;
+    projectile.z = 0;
+    projectile.y = 1;
+    projectile.vx = 15;
+    projectile.vy = projectile.vz = 0;
+  };
+  const blast = () => {
+    assert.fail("fuse has not expired");
+  };
+  reset();
+  g.step(s.city, 0.01, 1 / 120, blast, [p]);
+  assert.equal(projectile.x, -0.375);
+  assert.equal(projectile.vx, 15);
+  reset();
+  g.step(s.city, 0.25, 1 / 120, blast, [p]);
+  assert.equal(projectile.x, -0.58);
+  assert.equal(projectile.vx, -7.5);
+  assert.equal(p.health, 100);
+  const rider = s.spawn("player", 0, 0);
+  rider.vehicle = "occupied-car";
+  const dead = s.spawn("pedestrian", 0, 0);
+  dead.health = 0;
+  reset();
+  g.step(s.city, 0.3, 1 / 120, blast, [rider, dead]);
+  assert.equal(projectile.x, -0.375);
+  assert.equal(projectile.vx, 15);
+});
+
 test("grenade blasts hit seated occupants exactly once and vehicle wreck blasts exclude released occupants", () => {
   const { s, p } = setup();
   p.x = 0;

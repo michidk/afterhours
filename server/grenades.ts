@@ -3,6 +3,10 @@ import { WORLD_LIMIT, groundLevel } from "../shared/water.ts";
 import type { GrenadeState } from "../shared/grenades.ts";
 import { staticGeometry } from "../shared/physics/static.ts";
 import { WEAPONS } from "../shared/catalog.ts";
+import { contact, entityBox } from "../shared/physics/collision.ts";
+
+const FUSE_SECONDS = 3,
+  OWNER_GRACE_SECONDS = 0.2;
 
 export class Grenades {
   readonly active = new Map<string, GrenadeState>();
@@ -22,7 +26,7 @@ export class Grenades {
       vy: 7 + Math.max(0, p.vy),
       vz: dz * 15 + p.vz,
       radius: 0.16,
-      detonateAt: time + 3,
+      detonateAt: time + FUSE_SECONDS,
     };
     this.active.set(g.id, g);
     return true;
@@ -32,7 +36,14 @@ export class Grenades {
     time: number,
     dt: number,
     blast: (x: number, y: number, z: number, radius: number, damage: number) => void,
+    entities: Iterable<Entity> = [],
   ) {
+    if (!this.active.size) return;
+    const colliders = [...entities].filter(
+      (e) =>
+        !e.vehicle &&
+        ((e.kind !== "player" && e.kind !== "pedestrian") || e.health > 0),
+    );
     for (const g of this.active.values()) {
       if (time >= g.detonateAt) {
         this.active.delete(g.id);
@@ -62,6 +73,43 @@ export class Grenades {
         } else {
           g.z = b.z + (dz < 0 ? -d : d);
           g.vz *= -0.5;
+        }
+      }
+      for (const e of colliders) {
+        if (
+          e.id === g.owner &&
+          time < g.detonateAt - FUSE_SECONDS + OWNER_GRACE_SECONDS
+        )
+          continue;
+        const box = entityBox(e);
+        if (
+          Math.abs(g.x - e.x) > box.w + box.d + g.radius ||
+          Math.abs(g.z - e.z) > box.w + box.d + g.radius
+        )
+          continue;
+        const top = e.y + 1.8;
+        if (g.y - g.radius >= top || g.y + g.radius <= e.y) continue;
+        const collision = contact(
+          { x: g.x, z: g.z, angle: 0, w: g.radius, d: g.radius },
+          box,
+        );
+        if (!collision) continue;
+        if (previousY - g.radius >= top && g.vy < e.vy) {
+          g.y = top + g.radius;
+          g.vy = e.vy + (e.vy - g.vy) * 0.4;
+          g.vx *= 0.7;
+          g.vz *= 0.7;
+        } else if (previousY + g.radius <= e.y && g.vy > e.vy) {
+          g.y = e.y - g.radius;
+          g.vy = e.vy - (g.vy - e.vy) * 0.4;
+        } else {
+          g.x -= collision.nx * collision.depth;
+          g.z -= collision.nz * collision.depth;
+          const speed = (g.vx - e.vx) * collision.nx + (g.vz - e.vz) * collision.nz;
+          if (speed > 0) {
+            g.vx -= collision.nx * speed * 1.5;
+            g.vz -= collision.nz * speed * 1.5;
+          }
         }
       }
       const floor = groundLevel(g.x, g.z) + g.radius;
