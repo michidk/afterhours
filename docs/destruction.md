@@ -10,7 +10,7 @@ Rapier 3D simulates debris with gravity, angular motion, CCD, friction, restitut
 | ---------------- | ------------------------------------------- | -------------------------------------------------------------------------- |
 | Broken prop      | 30 seconds; fades over the final 3 seconds  | Returns to its original position/orientation once actors clear it          |
 | Broken hydrant   | Same prop timer                             | Water sprays from the original pipe until restoration                      |
-| Corpse           | 30 seconds; fades over the final 3 seconds  | Player respawns after 3 seconds; NPC recovers after 30 seconds             |
+| Corpse           | 180 seconds; fades over the final 3 seconds | Player respawns after 3 seconds; NPC recovers after 30 seconds             |
 | Exploded vehicle | 180 seconds; fades over the final 3 seconds | Wreck is removed; AI replacement follows the existing clear-lane lifecycle |
 
 Broken fixture membership is a reliable update sent when it changes and on join/reconnect. Spatial snapshots carry nearby debris poses, rotation, velocities and authoritative expiry times. The client interpolates positions/quaternions, fades meshes, and runs bounded cosmetic water particles. Chunk unloading disposes fixture models, lights and fountains; loading a broken fixture keeps it hidden. The same collision overlay removes broken obstacles from client prediction. Death bodies remain after player respawn without duplicating on repeated fatal damage.

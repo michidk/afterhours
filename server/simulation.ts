@@ -306,7 +306,7 @@ export class Simulation {
       )
         e.burning = TUNING.fireSeconds;
     } else if (e.health <= 0) {
-      e.down = e.kind === "player" ? 3 : TUNING.corpseSeconds;
+      e.down = e.kind === "player" ? 3 : TUNING.npcRecoverySeconds;
       this.destruction.corpse(e, this.time);
     }
   }

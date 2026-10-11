@@ -255,6 +255,23 @@ test("car impacts, weapons and explosions break authoritative fixtures", () => {
   }
 });
 
+test("NPC recovery stays at thirty seconds while its corpse lasts three minutes", () => {
+  const sim = new Simulation(fixture());
+  sim.entities.clear();
+  try {
+    const npc = sim.spawn("pedestrian", 250, 250);
+    sim.damage(npc, 150);
+    for (let i = 0; i < 31 * 30; i++) sim.tick(1 / 30);
+    assert.equal(npc.health, 100);
+    assert.equal(npc.down, 0);
+    const body = [...sim.destruction.active.values()][0].state;
+    assert.equal(body.expiresAt - body.brokenAt, 180);
+    assert.equal(sim.destruction.active.size, 1);
+  } finally {
+    sim.destruction.dispose();
+  }
+});
+
 test("fatal characters leave one timed body while players respawn and wrecks last three minutes", () => {
   const sim = new Simulation(fixture());
   sim.entities.clear();
@@ -273,7 +290,7 @@ test("fatal characters leave one timed body while players respawn and wrecks las
     assert.equal(p.health, 100);
     assert.equal(sim.destruction.active.size, 1, "body survives player respawn");
     const body = [...sim.destruction.active.values()][0].state;
-    assert.equal(body.expiresAt - body.brokenAt, TUNING.corpseSeconds);
+    assert.equal(body.expiresAt - body.brokenAt, 180);
     const car = sim.spawn("car", 300, 300);
     sim.damage(car, 200);
     for (let i = 0; i < 6.1 * 30; i++) sim.tick(1 / 30);
