@@ -1,29 +1,34 @@
 # AFTERHOURS todo
 
-Audit baseline: `c2da9ed`, pulled from `origin/main` before reviewing the previous gameplay request. Agent maintenance rules are in [AGENTS.md](AGENTS.md). Unchecked items are missing, incomplete, or awaiting the requested visual or handling review.
+Read [AGENTS.md](AGENTS.md) for backlog maintenance. Always update this file with related code changes and verified results. `PLAN.md` is retired.
 
-Interpret the dictated "chatpack" as a jetpack, "Chetsky" as jet skis, and "M gees" as machine guns. The requested three-minute lifetime is interpreted as applying to corpses as well as exploded vehicles.
+The original audit used `c2da9ed` after pulling `origin/main`. The dictated "chatpack", "Chetsky", and "M gees" mean jetpack, jet skis, and machine guns. Corpses and vehicle wrecks use three-minute timers.
 
-## Remaining gameplay work
+## Gameplay implementation
 
-- [x] Keep corpses for 180 seconds and fade them before removal. `TUNING.corpseSeconds` is separate from the 30-second `npcRecoverySeconds` in [shared/catalog.ts](shared/catalog.ts). Verified player respawn, NPC recovery, retained corpses, and wreck cleanup in [destruction regressions](tests/destruction.test.ts).
-- [x] Show chosen overhead names with projected DOM labels, independent of hidden rider meshes. [Nameplate regressions](tests/nameplates.test.ts) cover passengers, reconnect/roster changes, offscreen removal, and plain-text names. A real headless browser join and disconnect check verified the visible name and removal; passenger live check is included in [browser verification](scripts/browser-gameplay-check.mjs).
-- [x] Gate engine audio and powered rotor/propeller animation on shared `propulsionRunning`. Pushed idle vehicles remain silent; abandoned helicopters can windmill silently. [Engine regressions](tests/engine-audio.test.ts) failed before the fix and pass for push, boarding, shutdown, and wreck cases. Audible listening remains part of the final playtest.
-- [ ] Refine and playtest helicopter and plane movement. Existing flight includes takeoff, obstacle clearance, lift, stalls, and abandoned-aircraft crashes, but the requested handling polish still needs an explicit review of acceleration, turning, braking, climbing, and descending for each model.
-- [ ] Put model-dependent movement parameters in the shared vehicle catalog and provide multiple variants of each vehicle kind. Sedan, sport, and van tuning and two helicopter models already exist. Plane thrust, lift threshold, damping, and turn response in [shared/physics/plane.ts](shared/physics/plane.ts), and most helicopter response values in [shared/physics/helicopter.ts](shared/physics/helicopter.ts), are hardcoded. There is only one plane model. Keep authority and prediction on the same algorithms and verify that variants handle differently.
-- [ ] Finish presentation and integrated verification of ammunition pickups. [server/inventory.ts](server/inventory.ts) replenishes compatible owned weapons independently of weapon slots and keeps surplus in the pickup. Finite magazines, reserves, reloading, and ammo-preserving weapon drops work.
-- [ ] Finish grenade rendering and integrated verification. Server-owned throwing, physical travel/bounces, a three-second fuse, shared explosions, finite charges, and pickups are covered by [weapon regressions](tests/weapons.test.ts).
-- [ ] Finish knife rendering and integrated verification. The catalog and server implement distinct close melee behavior and pickups.
-- [ ] Finish machine-gun rendering and integrated verification. [shared/catalog.ts](shared/catalog.ts) has distinct damage, rate of fire, range, magazine, and reload parameters beyond the existing SMG.
-- [ ] Finish flamethrower rendering, flame effects, and integrated verification. [server/combat.ts](server/combat.ts) implements finite fuel, cone damage, wall/fixture occlusion, and pickups.
+- [x] Temporary destructible plants, benches, lamps, signals, and hydrants. Server-owned debris lasts 30 seconds, fades, and restores fixtures at their original positions once clear. Hydrants spray until restoration. The saved city is unchanged. See [destruction](docs/destruction.md).
+- [x] Three-minute corpses and wrecks with independent player recovery after three seconds and NPC recovery after 30 seconds. Water and rooftop corpses retain valid altitude. Saturation retains all corpse snapshots within a 128-body physical budget; retired airborne bodies settle instead of hanging. See [lifecycle tests](tests/destruction.test.ts).
+- [x] Chosen overhead player names, including riders. Labels use plain text, follow projected seat poses, and clear on disconnect, reconnect, death, or view loss. Unit tests and headless browser join, seated-name, and disconnect checks pass. See [nameplates](tests/nameplates.test.ts).
+- [x] Shared client collision prediction and server reconciliation. Prediction replays unacknowledged inputs and solves static and dynamic contacts without deciding damage or ownership. See [prediction tests](tests/prediction.test.ts).
+- [x] Engine audio and powered rotor animation depend on actual propulsion, not movement from being pushed. Abandoned helicopters may windmill silently. Push, driver, shutdown, and wreck regressions pass. See [engine tests](tests/engine-audio.test.ts).
+- [x] Model-dependent shared handling and multiple variants of every vehicle kind. Three cars, two helicopters, two planes, two boats, two jet skis, and two speedboats have normal saved-world placements. Aircraft tests cover acceleration, turning, braking, climb, descent, stalls, clearance, ditching, and prediction agreement. See [vehicle handling](docs/water.md).
+- [x] Finite ammunition, reserves, reloads, tagged ammo supplies, retained surplus, and ammo-preserving drops. Compatible ammo can refill owned weapons even with four occupied slots. Supplies derive near existing pads at runtime and refill after 20 seconds. See [weapon tests](tests/weapons.test.ts).
+- [x] Physical grenades with finite charges, a three-second server fuse, wall, roof, floor, rotated vehicle, and actor bounces. The thrower has a short collision grace period. Grenades render and disappear on detonation; blast damage hits occupants once and lethal hits release seats for recovery.
+- [x] Distinct knife melee, machine-gun handling, and flamethrower fuel, cone damage, and occlusion. Every held weapon and supply has a model. Real browser firing and screenshots cover the new weapons and flame effects.
+- [x] Jetpack pickup, separate equipment slot, B toggle, E thrust, Q descent, fuel, exhaust feedback, multiplayer snapshots, and shared prediction. G drops an active pack with remaining fuel. Empty packs return to parachute controls, and render extrapolation cannot spend replay fuel. Remote propulsion audio attenuates with distance. See [jetpack tests](tests/jetpack.test.ts).
+- [x] Animated offshore water, shared bounds, swimming, and shore exits. Waves update mesh vertices and normals but do not change the flat authoritative water surface. See [water tests](tests/water.test.ts) and [renderer tests](tests/gameplay-render.test.ts).
+- [x] Boats, jet skis, and speedboats with shared hull contacts, distinct tuning, seats, boarding, and driver-only controls. All six models agree between authority and prediction.
+- [x] AI watercraft cruising bounded offshore routes. Three-minute progress tests cover all models; stealing the driver seat removes the AI route.
+- [x] Panelled ram-air parachutes with alternating cells, twelve suspension lines, and a harness. Aircraft exits, rooftops, released jetpack thrust, and fuel exhaustion deploy automatically. Renderer tests and inspected browser screenshots verify the new canopy.
+- [x] CI for formatting, import boundaries, types, tests, and production build. [Workflow](.github/workflows/ci.yml) is published. Tests run serially so real-time transport servers do not compete with CPU-heavy simulations.
 
-Combat implementation progress: [weapon regressions](tests/weapons.test.ts) verify new catalog weapons, finite ammo/fuel/grenade charges, compatible ammo with full inventory and retained surplus, shared blasts with exact-once occupant damage, projectile bounces/fuse, and supplies derived from the immutable saved city. Tagged jetpack pickup/drop preserves fuel independently of weapon slots. Weapon and pickup presentation, effects, and integrated browser verification are still pending; keep the related items open until those checks finish.
+## Integrated verification
 
-- [ ] Add a usable jetpack with pickup, equip, movement, visual feedback, and multiplayer state. It is absent from the shared entity and input contracts.
-- [ ] Add animated, usable water and the shared water boundaries needed by watercraft. Shared offshore boundaries, swimming, and shoreline step-up now work in authority and prediction. Animated water rendering remains open.
-- [ ] Add boats, jet skis, and speedboats, with distinct variants, model parameters, boarding, and shared authoritative and predicted movement. Six models and swimmer boarding/exit behavior pass [water regressions](tests/water.test.ts). Craft rendering and live transport review remain open.
-- [ ] Add AI that uses watercraft and cruises along navigable water routes. Six models now cruise bounded offshore routes in [server/ai.ts](server/ai.ts), with a three-minute progress regression. Browser integration review remains open.
-- [ ] Remodel and visually review parachutes. [client/scene.ts](client/scene.ts) currently uses a half-sphere canopy and four suspension lines. Automatic deployment, steering, and rooftop descent already work; the requested nicer appearance remains an art task.
+- [ ] Complete the final transport browser pass and final full-suite rerun after review fixes. The earlier integrated suite passed 149 tests. The latest contact, corpse, renderer, engine, and codec checks passed 27 tests. Build, formatting, boundaries, and types pass.
+- Browser checks run headless because the shared T3 browser has no automation host. [Rerunnable gameplay check](scripts/browser-gameplay-check.mjs) covers names, supplies, weapons, grenades, jetpack, parachute, watercraft, animated water, cruising AI, and aircraft controls. `--transport-only` repeats only transport checks.
+- Protocol version is 3. Tagged supplies, thrown grenades, jetpack updates, and explicit equipment removal round-trip through the binary codec. Production debug tools remain opt-in and debug-disabled transport tests pass.
+- `data/city.json` remains untouched. No automatic generation or permanent map writes were added.
+- Under physics saturation, retired corpses use noninteractive ballistic settling before retaining a lying pose. They ignore walls, actors, and later impacts. Normal debris uses Rapier contacts.
 
 ## Audio replacement
 
@@ -31,39 +36,3 @@ Combat implementation progress: [weapon regressions](tests/weapons.test.ts) veri
 - [x] Research and replace the eleven old clips with 108 CC0 clips across 33 sound banks. Each bank has alternate takes, no immediate sample repeat, and bounded pitch, gain, and tone variation. Add missing footsteps, handling, boarding, parachute, fire, water, coast, and life-state cues. See [inventory and future sounds](docs/audio.md), [source credits](public/audio/CREDITS.md), and the listening page at `/audio.html`.
 - [x] Verify every clip's manifest coverage, distinct waveform, headroom, fades, and loop seam. Headless Chrome decoded all 108 files, played all 33 banks, measured a nonzero unclipped mix, and confirmed mute, resume, and cleanup. Listening-page screenshots covered 1280 and 390 px widths.
 - [ ] Listen on real speakers or headphones and refine recording choices and the mix. Wall occlusion, layered RPM recordings, dedicated aircraft doors, voices, and more footstep surfaces remain documented limits. Sound needs for the pending weapons, jetpack, watercraft, and weather are listed in [audio research](docs/audio.md).
-
-Water and handling implementation is ready for integration: shared water boundaries, swimming and shore exits, six watercraft models, cruising AI, a second plane, model-dependent flight controls, and water ditching are covered by [water and aircraft regressions](docs/water.md). The saved city remains unchanged. Keep the related items open until their rendering, controls, audio, and browser handling review are integrated and verified.
-
-## Carried over from the old plan
-
-- [x] Publish CI for formatting, import boundaries, types, tests, and build. [Workflow](.github/workflows/ci.yml) was pushed with managed authentication; [run 38177211233](https://github.com/michidk/afterhours/actions/runs/38177211233) passed on `332d07c`.
-
-`PLAN.md` is retired. Its completed foundation items remain documented in README and the linked documents and tests; its unfinished CI item is preserved above.
-
-## Implemented parts of the request
-
-- Temporary destruction covers palms, trees, benches, lamps, signals, and hydrants, with server-owned Rapier debris, a 30-second prop lifetime, fading, and restoration at the original position once clear. Hydrants spray until restoration. The saved map remains unchanged. Exploded vehicle wrecks last 180 seconds. See [destruction implementation and timers](docs/destruction.md), [server regressions](tests/destruction.test.ts), and [renderer regressions](tests/destruction-render.test.ts).
-- Chosen player names are validated on join and appear in chat and the connected-player list. See [sessions](server/session.ts) and [player list](client/ui/player-list.ts). Overhead names remain open above.
-- Client prediction already solves local static and dynamic contacts, replays unacknowledged inputs, and reconciles against server snapshots. Damage and ownership remain authoritative. See [shared movement](shared/physics/movement.ts), [prediction](client/network/prediction.ts), and [prediction regressions](tests/prediction.test.ts).
-- Cars have sedan, sport, and van variants with different physical parameters. Sparrow and Atlas helicopters differ in speed, mass, size, and seats. Fists, bats, pistols, and SMGs have distinct weapon stats, finite firearm ammo, reloads, drops, and exclusive weapon pickups. See [catalog](shared/catalog.ts), [inventory](server/inventory.ts), and [combat regressions](tests/combat.test.ts).
-- Airborne aircraft exits and walking off rooftops automatically deploy a steerable parachute. Landing clears it on streets or roofs, and both authority and prediction use the same descent behavior. See [character altitude](shared/physics/movement.ts) and [parachute regressions](tests/parachute.test.ts).
-
-## Audit verification
-
-Source, existing tests, and recorded project evidence were reviewed at the baseline above. A direct `GameAudio.update` check with stub audio nodes reproduced engine loops for pushed, unoccupied cars, grounded helicopters, and planes. This confirms routing, not audible playback.
-
-`bun run test` passed all 104 tests. `bun run build` and `bun run check` passed, including formatting, import boundaries, and types. Local Markdown links and removal of `PLAN.md` were checked. The existing suite verifies the implemented destruction, inventory, collision prediction, and parachute behavior; a passing suite does not cover the open features above.
-
-Live browser appearance, subjective vehicle handling, and listening checks have not been repeated for this audit. Keep those checks open where requested above.
-
-Review regression progress: lethal grenade damage now frees driver/passenger seats even when the vehicle survives, and both riders can respawn. Empty jetpacks cannot retain powered horizontal speed; parachutes take movement priority. Q provides finite-fuel controlled descent and lands safely on roofs using the same authority/prediction solver. [Weapon](tests/weapons.test.ts) and [jetpack](tests/jetpack.test.ts) regressions cover these cases.
-
-## Audio verification result
-
-The audio and combat regressions pass, as do `bun run build` and `bun run check`. The full suite reports 107 passing tests and one failing debug transport test. The failure at `tests/debug.test.ts:168` also reproduces in an untouched checkout of `3f500a0`; its fixed 250 ms snapshot wait is sensitive to this environment. A second run failed at its fixed-duration movement assertion instead. Keep that existing transport-test issue open rather than treating audio verification as a full-suite pass.
-
-Headless Chrome evidence is recorded in [audio browser check](docs/audio-browser-check.json). A live game session confirmed pickup, authoritative pistol shots, reload, and N muting and resuming loops with no failed clips. After merging `332d07c`, all 14 targeted audio, combat, and destruction tests pass, along with build and check. No real-device listening or subjective approval is claimed.
-
-## CC0 follow-up verification
-
-The follow-up full run reports 108 passing tests and two transport failures. The debug test fails at its known snapshot wait at `tests/debug.test.ts:168`. The multiplayer test times out waiting for input acknowledgement at `tests/network.test.ts:124`; it passes when run separately. Audio asset and selection checks pass, including exact CC0 provenance coverage. Headless checks cover 1280 and 390 px listening-page widths with no horizontal overflow. All 15 targeted audio, combat, and destruction tests pass, as do build, formatting, types, and import boundaries. A fresh live game decoded 114 clips and confirmed pickup, shots, slot-based firearm handling, reload, and N muting. Loop resume is verified by the separate mixer check. Real-device listening remains open.

@@ -499,8 +499,12 @@ export class Simulation {
   }
   private step(dt: number) {
     this.time += dt;
-    this.grenades.step(this.city, this.time, dt, (x, y, z, radius, damage) =>
-      this.blast(x, y, z, radius, damage),
+    this.grenades.step(
+      this.city,
+      this.time,
+      dt,
+      (x, y, z, radius, damage) => this.blast(x, y, z, radius, damage),
+      this.entities.values(),
     );
     this.day = (this.day + dt * this.dayRate) % 24;
     const list = [...this.entities.values()];

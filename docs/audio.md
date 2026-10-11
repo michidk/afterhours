@@ -1,6 +1,6 @@
 # Sound inventory
 
-The library replaces all eleven previous WAVs with 114 edited CC0 clips across 35 sound banks. Every bank has at least two takes. Sources, author credits, and reproduction instructions are in [audio credits](../public/audio/CREDITS.md). `/audio.html` is an explicit listening page and uses the gameplay engine.
+The library replaces all eleven previous WAVs with 114 edited CC0 clips across 36 sound banks. Every bank has at least two takes. Sources, author credits, and reproduction instructions are in [audio credits](../public/audio/CREDITS.md). `/audio.html` is an explicit listening page and uses the gameplay engine.
 
 ## Shipped sounds
 
@@ -66,22 +66,22 @@ Research excluded the CC-BY close-combat bat pack. CC0 sports-bat recordings con
 
 Kenney's CC0 packs cover the short actions without another runtime dependency. Longer licensed recordings cover engines, aircraft, water, fire, and coast. The CC-BY footsteps pack was considered and excluded to keep a single asset license.
 
-| Additional sound                                          | When it becomes necessary                                                                                                    |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Sand, gravel, and distinct roof footsteps                 | When those surface materials have explicit contact classification; current footsteps distinguish parks from other ground     |
-| Car engine start, shutdown, idle, and loaded RPM layers   | When vehicle ignition and RPM become modeled state; current loops derive pitch from speed                                    |
-| Aircraft doors, rotor startup and shutdown                | When replacing car-door boarding proxies and adding separate rotor start or stop cues                                        |
-| Pedestrian speech, pain, and panic calls                  | When characters have a defined voice direction and voice budget; current damage uses impact feedback                         |
-| Birds, insects, and district ambience                     | When districts have authored ambient zones and time-of-day schedules; current ambience covers coast and parachute wind       |
-| Horns and reverse alarms                                  | When gameplay supports those actions; do not play warning sounds without a corresponding vehicle signal                      |
-| Swimming, splashes, rain, thunder, and wind on trees      | When water movement or weather exists                                                                                        |
-| Building glass, interiors, footsteps on stairs, and doors | When those objects can interact or be destroyed; current building facades are static                                         |
-| Grenades                                                  | Pin pull, throw, surface bounces, and explosion when grenade gameplay lands; reuse impact and explosion banks where suitable |
-| Knives and machine guns                                   | Dedicated swings, contact, shot, reload, and dry-fire banks when those weapons arrive                                        |
-| Flamethrowers                                             | Ignition, flame roar, and extinguish when fuel and damage are authoritative                                                  |
-| Jetpacks                                                  | Ignition, idle, thrust, and shutdown when jetpack state exists                                                               |
-| Boats, jet skis, and speedboats                           | Model-specific motors, wake and spray, hull contacts, and boarding when navigable water exists                               |
-| Police sirens, missions, alerts, and music                | When those game systems exist; they are not inferred from traffic or the city clock                                          |
+| Additional sound                                          | When it becomes necessary                                                                                                |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Sand, gravel, and distinct roof footsteps                 | When those surface materials have explicit contact classification; current footsteps distinguish parks from other ground |
+| Car engine start, shutdown, idle, and loaded RPM layers   | When vehicle ignition and RPM become modeled state; current loops derive pitch from speed                                |
+| Aircraft doors, rotor startup and shutdown                | When replacing car-door boarding proxies and adding separate rotor start or stop cues                                    |
+| Pedestrian speech, pain, and panic calls                  | When characters have a defined voice direction and voice budget; current damage uses impact feedback                     |
+| Birds, insects, and district ambience                     | When districts have authored ambient zones and time-of-day schedules; current ambience covers coast and parachute wind   |
+| Horns and reverse alarms                                  | When gameplay supports those actions; do not play warning sounds without a corresponding vehicle signal                  |
+| Swimming, splashes, rain, thunder, and wind on trees      | When water movement or weather exists                                                                                    |
+| Building glass, interiors, footsteps on stairs, and doors | When those objects can interact or be destroyed; current building facades are static                                     |
+| Grenades                                                  | Dedicated pin-pull and bounce foley; explosions currently reuse the explosion bank                                       |
+| Knives and machine guns                                   | Dedicated swings, contact, shot, reload, and dry-fire banks beyond the current melee and SMG proxies                     |
+| Flamethrowers                                             | Ignition, flame roar, and extinguish beyond the current fire-loop proxy                                                  |
+| Jetpacks                                                  | Ignition, idle, thrust, and shutdown beyond the current finite-range wind proxy                                          |
+| Boats, jet skis, and speedboats                           | Model-specific motors, wake and spray, hull contacts, and boarding beyond the current sport and van motor proxies        |
+| Police sirens, missions, alerts, and music                | When those game systems exist; they are not inferred from traffic or the city clock                                      |
 
 Field-recorded loops are edited excerpts, not multi-layer studio engine recordings. Some source textures and foley proxies may need art direction after listening. Pitch variation stays within each bank's range to preserve the action's identity. The current attenuation and compressor do not guarantee a pleasing mix on every audio device.
 

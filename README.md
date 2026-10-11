@@ -34,19 +34,20 @@ bun run start
 
 ## Controls
 
-| Key                | Action                                                                                          |
-| ------------------ | ----------------------------------------------------------------------------------------------- |
-| WASD / arrows      | Walk; cars/planes use W/S throttle and A/D steer; helicopters fly in world directions           |
-| Shift              | Sprint on foot (left or right Shift)                                                            |
-| Space              | Legacy sprint / car handbrake / plane ground brake                                              |
-| F                  | Take a free driver/passenger seat, exit, or collect a weapon; aircraft exits deploy a parachute |
-| Mouse              | Aim on foot; left click attacks                                                                 |
-| J                  | Punch / swing / fire                                                                            |
-| 1–4                | Equip inventory slot                                                                            |
-| G / R              | Drop equipped weapon / reload                                                                   |
-| E / Q              | Plane climb / descend (airspeed must exceed 19 m/s to climb)                                    |
-| Enter / H / Escape | Chat / help / close panels                                                                      |
-| M / N / F1         | Island map / mute sound / development menu with tools, clock, and camera selection              |
+| Key                | Action                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------- |
+| WASD / arrows      | Walk, swim, or fly helicopters; cars, planes, and watercraft use W/S throttle and A/D steer |
+| Shift              | Sprint on foot (left or right Shift)                                                        |
+| Space              | Sprint / car handbrake / aircraft and watercraft brake                                      |
+| F                  | Take a seat, exit, or collect a weapon, ammo, or jetpack; airborne exits deploy a parachute |
+| Mouse              | Aim on foot; left click attacks                                                             |
+| J                  | Punch / swing / fire                                                                        |
+| 1–4                | Equip inventory slot                                                                        |
+| G / R              | Drop active jetpack or equipped weapon / reload                                             |
+| E / Q              | Aircraft climb / descend; enabled jetpack thrust / descent                                  |
+| B                  | Enable or disable equipped jetpack                                                          |
+| Enter / H / Escape | Chat / help / close panels                                                                  |
+| M / N / F1         | Island map / mute sound / development menu with tools, clock, and camera selection          |
 
 F1 also selects an elevated free camera or first-person fly camera. Both move independently of the player: WASD/arrows move, E/Q raise/lower, Shift or Space moves faster, and the wheel zooms without fixed zoom caps. Right-drag looks around in fly mode. Escape returns to player follow and restores gameplay controls. In debug camera mode the server receives idle player controls while the city keeps simulating. [Detailed controls and recorded day/night comparisons](docs/debugging.md).
 
@@ -54,22 +55,30 @@ M toggles the full island map; Escape or the Close button dismisses it. Drag to 
 
 Cars have four wheel forces, yaw-dependent contact velocities, front steering, rear handbrake grip recovery, SAT contacts, angular impulses, and fading tyre trails. Sedan, sport, and van models differ in mass, power, grip, durability, speed, and appearance. Damaged vehicles smoke, burn for six seconds, explode with nearby damage, and leave temporary wrecks.
 
-The top-left player list shows everyone connected to the city, including distant players, with character colours and a YOU badge. It updates on join/leave/reconnect.
+The top-left player list shows everyone connected to the city, including distant players, with character colours and a YOU badge. Overhead names identify nearby players, including seated passengers. Both update on join/leave/reconnect.
 
 Palms, trees, benches, lamps, signal poles and hydrants can be knocked over or destroyed with weapons/explosions. Server-owned physical debris lasts 30 seconds and fades before fixtures return to their original locations; occupied reset positions wait until clear. Broken hydrants spray water until restoration. Corpses last three minutes while players respawn after three seconds and NPCs recover after 30 seconds; exploded vehicle wrecks last three minutes. The saved map stays unchanged. See [destruction scope and timers](docs/destruction.md).
 
 Vehicles support shared rides with server-assigned seats. The first available seat is the driver/pilot seat; later players take passenger seats. Only the driver controls movement; passengers follow the vehicle smoothly and can exit independently. The HUD shows your role and occupancy. Leaving or disconnecting frees only your seat, and explosions affect every occupant. A vacant driver seat is available to the next person boarding; existing passengers keep their seats rather than automatically taking control. Board aircraft while grounded. Helicopters wait one second for passengers before automatic takeoff; each boarding passenger gets at least another half-second, and pilot movement starts takeoff immediately.
 
-| Vehicle       | Seats |
-| ------------- | ----- |
-| Paloma Sedan  | 4     |
-| Comet GT      | 2     |
-| Market Van    | 2     |
-| Sparrow       | 2     |
-| Atlas Utility | 6     |
-| Island Hopper | 4     |
+| Vehicle                    | Seats |
+| -------------------------- | ----- |
+| Paloma Sedan               | 4     |
+| Comet GT                   | 2     |
+| Market Van                 | 2     |
+| Sparrow                    | 2     |
+| Atlas Utility              | 6     |
+| Island Hopper              | 4     |
+| Firefly Sport              | 2     |
+| Harbor Skiff / Quay Launch | 4 / 6 |
+| Wave Runner / Sea Dart     | 2 / 1 |
+| Coast Comet / Offshore GT  | 4 / 2 |
 
-Sparrow and Atlas helicopters automatically climb above buildings, palms, lamps, and nearby vehicles and anticipate roof edges. F exits immediately in the air and deploys a parachute; steer with WASD to descend at up to 4 m/s and land on streets or rooftops. Empty aircraft keep their momentum, fall, and crash; severe impacts trigger the damage/fire/explosion sequence. The plane uses a marked airfield, needs speed for lift, stalls when slow, and also supports parachute exits. Cars climb physical ramp slopes and jump from their high edge, including normal AI traffic. The solid sides and back block ground-level approaches.
+Sparrow and Atlas helicopters automatically climb above buildings, palms, lamps, and nearby vehicles and anticipate roof edges. E/Q adjusts altitude; Space brakes horizontal flight. Sparrow responds faster than the heavier Atlas. Island Hopper and Firefly Sport planes use the airfield, need model-specific airspeed for lift, and stall when slow; Firefly accelerates and turns faster. F exits airborne aircraft and opens a panelled ram-air parachute with suspension lines and a harness. Walking off rooftops also opens it automatically. WASD steers and descent is limited to 4 m/s. Empty aircraft fall and crash on land or water. Cars climb ramps and jump from the high edge; solid sides and backs block ground-level approaches.
+
+The coast has animated water with a flat shared collision surface. Swim offshore at 2.8 m/s and step back onto shore. Boats, jet skis, and speedboats each have two models with different acceleration, drag, steering, braking, and speed. Six idle craft wait on the west coast near x=-823, z=-48 through 32; AI craft cruise offshore routes and can be stolen. F boards from shore or water; WASD drives and Space brakes. See [water and handling](docs/water.md).
+
+Jetpack supplies appear near existing golden pads. F equips a pack separately from the four weapon slots. B enables it; E burns up to 45 seconds of fuel for thrust and WASD steers. Q descends, and releasing thrust or exhausting fuel opens a parachute. G drops an enabled pack with its remaining fuel. Replacing a pack requires dropping the current one. Fuel, equipment, and flight remain server-owned and are predicted by the same shared movement code.
 
 Pedestrians navigate connected sidewalks/crosswalks, wait for signals, avoid props, panic near fast cars, and recover from knockdowns. Traffic chooses reachable street destinations, follows lanes, queues behind vehicles, obeys signal phases, turns through intersections, and reverses out of jams. Players can steal traffic cars. Fists, bats, knives, pistols, SMGs, machine guns, flamethrowers, and grenades use server-owned inventory, ammunition, cooldowns, reloads, drops, and exclusive pickups. Ammo supplies refill compatible owned weapons even with all four slots occupied; surplus stays on the ground. Flamethrowers spend fuel on a short forward cone blocked by walls and fixtures. Grenades carry three charges, follow physical trajectories with bounces, and explode after a three-second fuse. New supplies are placed near existing saved-map pads at runtime without changing the city artifact; pads refill 20 seconds after collection.
 

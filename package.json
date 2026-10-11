@@ -7,7 +7,7 @@
     "dev": "node --import tsx server/index.ts",
     "build": "tsc --noEmit && vite build",
     "start": "node --import tsx server/index.ts --production",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "tsx --test --test-concurrency=1 tests/*.test.ts",
     "city:generate": "tsx scripts/generate-city.ts",
     "audio:prepare": "tsx scripts/prepare-audio.ts",
     "format": "prettier --write .",

@@ -385,8 +385,14 @@ export class GameAudio {
     }
     if (listener) {
       for (const e of entities) {
-        if (e.jetpack?.active && e.jetpack.fuel > 0 && e.vy > 0.1 && !e.vehicle)
-          loop("jetpack:" + e.id, "wind", e, 1.5, 0.7);
+        if (
+          e.jetpack?.active &&
+          e.jetpack.fuel > 0 &&
+          Math.abs(e.vy) > 0.1 &&
+          !e.parachute &&
+          !e.vehicle
+        )
+          loop("jetpack:" + e.id, "jetpack", e, 1.5, 0.7);
         if (
           e.weapon === "flamethrower" &&
           (e.cooldown || 0) > 0 &&

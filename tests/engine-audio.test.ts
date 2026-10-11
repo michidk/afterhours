@@ -61,3 +61,64 @@ test("pushing idle vehicles never starts engines; powering and shutdown control 
     assert.equal(starts, 1, `${kind} wrecked`);
   }
 });
+
+test("observer jetpacks attenuate with distance while local parachute wind stays audible", () => {
+  const listener: Entity = {
+    id: "listener",
+    kind: "player",
+    x: 0,
+    y: 20,
+    z: 0,
+    vx: 0,
+    vy: -4,
+    vz: 0,
+    angle: 0,
+    color: "#ffffff",
+    health: 100,
+    parachute: true,
+  };
+  const gains = new Map<string, number>();
+  const audio = new GameAudio();
+  const parameter = { setTargetAtTime() {} };
+  Object.assign(audio, {
+    context: { currentTime: 0, state: "running" },
+    voice: (sound: string) => ({
+      sound,
+      rate: 1,
+      variation: 1,
+      cutoff: 16000,
+      filter: { frequency: parameter },
+      pan: { pan: parameter },
+      gain: {
+        gain: {
+          setTargetAtTime(value: number) {
+            gains.set(sound, value);
+          },
+        },
+      },
+      source: {
+        buffer: { duration: 1 },
+        start() {},
+        stop() {},
+        playbackRate: parameter,
+      },
+    }),
+  });
+  const flyer = {
+    ...listener,
+    id: "flyer",
+    vy: 3,
+    parachute: undefined,
+    jetpack: { active: true, fuel: 45 },
+  };
+  audio.update([flyer], listener, 1);
+  const near = gains.get("jetpack")!;
+  assert.ok(near > 0);
+  flyer.x = 20;
+  audio.update([flyer], listener, 1);
+  assert.ok(gains.get("jetpack")! < near);
+  flyer.x = 100;
+  audio.update([flyer], listener, 1);
+  assert.ok(!audio.diagnostics.loopSounds.includes("jetpack"));
+  assert.ok(audio.diagnostics.loopSounds.includes("wind"));
+});

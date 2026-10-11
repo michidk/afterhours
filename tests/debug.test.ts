@@ -83,6 +83,15 @@ test("camera movement and look stay independent while zoom has no gameplay limit
   assert.deepEqual(camera.position, before);
 });
 
+test("debug cameras reach offshore water and stay inside the shared world boundary", () => {
+  const camera = new DebugCamera();
+  camera.setMode("free", { x: 0, y: 46, z: -26 }, { x: 0, y: 0, z: 0 });
+  camera.setPose({ x: -950, y: 0, z: 0 });
+  assert.equal(camera.focus.x, -950);
+  camera.update({ ...idle(), left: true }, 10);
+  assert.equal(camera.focus.x, -1068);
+});
+
 test("lighting is continuous, periodic and readable across the full day", () => {
   for (let hour = 0; hour < 24; hour += 0.01) {
     const a = environmentAt(hour),

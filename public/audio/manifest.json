@@ -79,6 +79,16 @@
     "voices": 5,
     "loop": true
   },
+  "jetpack": {
+    "files": ["wind-1", "wind-2", "wind-3"],
+    "volume": 0.12,
+    "pitch": 0.5,
+    "gainVariation": 0.12,
+    "range": 35,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": true
+  },
   "canopy": {
     "files": ["canopy-1", "canopy-2", "canopy-3"],
     "volume": 0.08,

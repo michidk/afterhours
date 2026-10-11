@@ -1,4 +1,4 @@
-import { VEHICLES, WEAPONS } from "../shared/catalog.ts";
+import { VEHICLES, WEAPONS, isVehicleModel } from "../shared/catalog.ts";
 import { availableSeat, occupiedSeats, seatCapacity } from "../shared/seats.ts";
 import type { Pickup } from "../shared/protocol.ts";
 import "./style.css";
@@ -247,7 +247,17 @@ document.addEventListener("visibilitychange", () => {
 });
 $("#closehelp").onclick = () => $("#help").classList.add("hidden");
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-spawn]"))
-  button.onclick = () => send({ type: "debug", kind: button.dataset.spawn });
+  button.onclick = () => {
+    const kind = button.dataset.spawn;
+    if (kind && isVehicleModel(kind))
+      void automation
+        ?.spawn(kind)
+        .catch((error: unknown) =>
+          toast(error instanceof Error ? error.message : "Vehicle spawn failed"),
+        );
+    else send({ type: "debug", kind });
+    button.blur();
+  };
 $<HTMLSelectElement>("#camera-mode").onchange = (event) => {
   setCamera((event.target as HTMLSelectElement).value as CameraMode);
   (event.target as HTMLSelectElement).blur();

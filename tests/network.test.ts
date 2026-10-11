@@ -127,7 +127,13 @@ test("multiplayer authority, delta recovery, input sequences, jitter, reconnects
     a.send({ type: "input", seq: 4, timestamp: 0, ...idle(), down: true });
     await pause(50);
     assert.equal(a.messages.filter((m) => m.type === "state").at(-1).ack, 8);
-    await pause(400);
+    const heldFrame = a.messages.filter((m) => m.type === "state").at(-1).frame;
+    await a.wait(
+      (m) =>
+        m.type === "state" &&
+        m.frame > heldFrame &&
+        Math.abs(a.entities.get(a.welcome.id)!.vz) < 0.1,
+    );
     const stopped = a.entities.get(a.welcome.id)!;
     assert.ok(Math.abs(stopped.vz) < 0.1, "stale held input stops after 250 ms");
     const lastFrame = a.messages.filter((m) => m.type === "state").at(-1).frame;

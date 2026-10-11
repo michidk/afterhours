@@ -56,6 +56,7 @@ export const SOUND_BANKS = {
   skid: bank(clips("skid", 3), { loop: true, volume: 0.22, pitch: 1.5, range: 45 }),
   fire: bank(clips("fire", 3), { loop: true, volume: 0.22, pitch: 0.5, range: 25 }),
   wind: bank(clips("wind", 3), { loop: true, volume: 0.12, pitch: 0.5, range: 0 }),
+  jetpack: bank(clips("wind", 3), { loop: true, volume: 0.12, pitch: 0.5, range: 35 }),
   canopy: bank(clips("canopy", 3), { loop: true, volume: 0.08, pitch: 0.5, range: 0 }),
   water: bank(clips("water", 3), { loop: true, volume: 0.18, pitch: 0.5, range: 22 }),
   coast: bank(clips("coast", 3), { loop: true, volume: 0.12, pitch: 0.35, range: 0 }),

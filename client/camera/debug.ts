@@ -1,4 +1,4 @@
-import { LIMIT } from "../../shared/world.ts";
+import { WORLD_LIMIT } from "../../shared/water.ts";
 import type { Input } from "../../shared/world.ts";
 export type CameraMode = "follow" | "free" | "fly";
 export interface CameraPoint {
@@ -47,9 +47,9 @@ export class DebugCamera {
       throw Error("Camera pose must be finite");
     if (this.mode === "free") {
       this.focus = {
-        x: Math.max(-LIMIT - 36, Math.min(LIMIT + 36, point.x)),
+        x: Math.max(-WORLD_LIMIT + 4, Math.min(WORLD_LIMIT - 4, point.x)),
         y: Math.max(0, Math.min(220, point.y)),
-        z: Math.max(-LIMIT - 36, Math.min(LIMIT + 36, point.z)),
+        z: Math.max(-WORLD_LIMIT + 4, Math.min(WORLD_LIMIT - 4, point.z)),
       };
       this.updateFreePosition();
     } else if (this.mode === "fly") {
@@ -95,16 +95,16 @@ export class DebugCamera {
     const length = Math.max(1, Math.hypot(x, y, z));
     const point = this.mode === "free" ? this.focus : this.position;
     point.x = Math.max(
-      -LIMIT - 36,
-      Math.min(LIMIT + 36, point.x + (x / length) * speed * dt),
+      -WORLD_LIMIT + 4,
+      Math.min(WORLD_LIMIT - 4, point.x + (x / length) * speed * dt),
     );
     point.y = Math.max(
       this.mode === "fly" ? 1 : 0,
       Math.min(700, point.y + (y / length) * speed * dt),
     );
     point.z = Math.max(
-      -LIMIT - 36,
-      Math.min(LIMIT + 36, point.z + (z / length) * speed * dt),
+      -WORLD_LIMIT + 4,
+      Math.min(WORLD_LIMIT - 4, point.z + (z / length) * speed * dt),
     );
     if (this.mode === "free") this.updateFreePosition();
   }

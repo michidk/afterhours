@@ -700,7 +700,7 @@ export class CityScene {
             !!e.jetpack &&
               !e.parachute &&
               (child.name !== "jetpack exhaust" ||
-                (!!e.jetpack.active && e.jetpack.fuel > 0 && e.vy > 0.1)),
+                (!!e.jetpack.active && e.jetpack.fuel > 0 && Math.abs(e.vy) > 0.1)),
           );
 
       for (const child of parts) {
