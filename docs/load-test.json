@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-11T19:20:59.178Z",
+  "node": "v24.11.1",
+  "platform": "win32",
+  "players": 16,
+  "durationSeconds": 30.053,
+  "bytes": 12498177,
+  "bytesPerSecondPerPlayer": 26038,
+  "frames": 7216,
+  "full": 256,
+  "delta": 6960,
+  "largestMessageBytes": 26211,
+  "health": {
+    "ok": true,
+    "version": 1,
+    "time": 30.0666666666656,
+    "players": 16,
+    "entities": 129,
+    "traffic": {
+      "jamCount": 0,
+      "jammedCars": 0,
+      "despawned": 0,
+      "respawned": 0,
+      "pendingRespawns": 0
+    },
+    "ticks": 902,
+    "late": 0,
+    "tickP95Ms": 26.192800000000716,
+    "tickMaxMs": 35.396199999999226,
+    "bytesSent": 12498177,
+    "rejectedMessages": 0,
+    "memoryMB": 272
+  }
+}

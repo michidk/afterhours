@@ -1,0 +1,7 @@
+node_modules
+dist
+bun.lock
+data/*.json
+data/city-preview.html
+docs/*benchmark.json
+docs/load-test.json

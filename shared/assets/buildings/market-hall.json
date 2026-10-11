@@ -1,0 +1,10 @@
+{
+  "id": "market-hall",
+  "name": "Market hall",
+  "height": [5, 9],
+  "colors": ["#cfad83", "#b9c5af", "#cf997d"],
+  "facade": "piers",
+  "storefront": true,
+  "trim": "#eee0c3",
+  "floorHeight": 3.8
+}

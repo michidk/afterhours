@@ -1,0 +1,18 @@
+﻿{
+  "date": "2026-10-11",
+  "source": "user-reported desktop browser after one minute of play",
+  "stage": "before vehicle smoothing and trail upload optimizations",
+  "gpu": {
+    "vendor": "Google Inc. (NVIDIA)",
+    "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x00002786) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)"
+  },
+  "fps": 165.10731975682606,
+  "frameP95Ms": 35.20000000111759,
+  "viewport": [1588, 1271],
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+  "targetFrameP95Ms": 33.3,
+  "passed": false,
+  "measurementScope": "existing rolling last-600-frame diagnostics; not a full-minute aggregate",
+  "next": "repeat a full-duration profile after the optimizations"
+}

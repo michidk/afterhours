@@ -1,6 +1,20 @@
+import type { BuildingAssetId } from "./assets/buildings/index.ts";
 export const BLOCK = 64;
-export const LIMIT = 224;
-export const ROADS = [-192, -128, -64, 0, 64, 128, 192];
+import type { VehicleModel, WeaponItem, WeaponKind } from "./catalog.ts";
+export const LIMIT = 816;
+export interface Road {
+  /** Segment centre (also the streaming index position). Endpoints form the street graph. */
+  x: number;
+  z: number;
+  ax: number;
+  az: number;
+  bx: number;
+  bz: number;
+  width: number;
+  kind: "avenue" | "street" | "coast" | "service";
+  signalA?: boolean;
+  signalB?: boolean;
+}
 export type Kind = "player" | "pedestrian" | "car" | "helicopter" | "plane";
 export interface Entity {
   id: string;
@@ -16,11 +30,43 @@ export interface Entity {
   health: number;
   name?: string;
   driver?: string;
+  /** Vehicle occupant IDs; slot zero is the driver/pilot. Null means vacant. */
+  seats?: (string | null)[];
   vehicle?: string;
+  /** Assigned vehicle slot, including zero for the driver/pilot. */
+  seat?: number;
+  parachute?: boolean;
   weapon?: string;
   ai?: boolean;
   cooldown?: number;
   down?: number;
+  angularVelocity?: number;
+  steering?: number;
+  rearGripLoss?: number;
+  skidding?: boolean;
+  wheelSkids?: boolean[];
+  burning?: number;
+  wreck?: number;
+  flight?: "grounded" | "takingOff" | "cruising" | "landing" | "falling";
+  takeoffDelay?: number;
+  targetAltitude?: number;
+  landingX?: number;
+  landingZ?: number;
+  model?: VehicleModel;
+  maxHealth?: number;
+  inventory?: WeaponItem[];
+  equipped?: number;
+  reloadUntil?: number;
+  aim?: number;
+}
+export interface WorldEvent {
+  kind: string;
+  x: number;
+  y: number;
+  z: number;
+  angle?: number;
+  length?: number;
+  sound?: "pistol" | "smg" | "punch" | "bat" | "impact";
 }
 export interface Input {
   up: boolean;
@@ -28,9 +74,12 @@ export interface Input {
   left: boolean;
   right: boolean;
   brake: boolean;
+  sprint?: boolean;
   ascend: boolean;
   descend: boolean;
   attack: boolean;
+  aim?: number;
+  shotTime?: number;
 }
 export const idle = (): Input => ({
   up: false,
@@ -38,11 +87,15 @@ export const idle = (): Input => ({
   left: false,
   right: false,
   brake: false,
+  sprint: false,
   ascend: false,
   descend: false,
   attack: false,
 });
 export interface Building {
+  /** Replaceable visual recipe; dimensions remain authoritative collision bounds. */
+  asset?: BuildingAssetId;
+  facing?: number;
   x: number;
   z: number;
   w: number;
@@ -52,11 +105,33 @@ export interface Building {
   style: number;
 }
 export interface City {
+  roads: Road[];
   seed: number;
+  props: { x: number; z: number; h: number; kind: "palm" | "lamp" | "tree" }[];
   buildings: Building[];
-  parks: { x: number; z: number }[];
+  parks: {
+    x: number;
+    z: number;
+    w?: number;
+    d?: number;
+    kind?: "garden" | "civic" | "woodland";
+  }[];
+  surfaces?: {
+    x: number;
+    z: number;
+    w: number;
+    d: number;
+    kind: "plaza" | "parking" | "service" | "court" | "quay";
+  }[];
   ramps: { x: number; z: number }[];
   pickups: { x: number; z: number; weapon: string }[];
+  airport: { x: number; z: number; w: number; d: number };
+  landmarks: {
+    x: number;
+    z: number;
+    name: string;
+    kind: "tower" | "plaza" | "airport";
+  }[];
 }
 export function random(seed: number) {
   return () => {
@@ -65,56 +140,6 @@ export function random(seed: number) {
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
     t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-export function generateCity(seed = 713): City {
-  const r = random(seed),
-    buildings: Building[] = [],
-    parks: { x: number; z: number }[] = [];
-  const colors = [
-    "#d8b88d",
-    "#d2c8b3",
-    "#ca8b72",
-    "#91b5ac",
-    "#d0a074",
-    "#a8afbc",
-  ];
-  for (let ix = 0; ix < 6; ix++)
-    for (let iz = 0; iz < 6; iz++) {
-      const x = ROADS[ix] + 32,
-        z = ROADS[iz] + 32;
-      if (
-        (ix === 4 && iz === 4) ||
-        (r() < 0.14 && (ix < 2 || ix > 3 || iz < 2 || iz > 3))
-      ) {
-        parks.push({ x, z });
-        continue;
-      }
-      for (const dx of [-11, 11])
-        for (const dz of [-11, 11])
-          buildings.push({
-            x: x + dx,
-            z: z + dz,
-            w: 15 + r() * 2,
-            d: 15 + r() * 2,
-            h: ix < 2 ? 12 + r() * 24 : 6 + r() * 12,
-            color: colors[Math.floor(r() * colors.length)],
-            style: Math.floor(r() * 3),
-          });
-    }
-  return {
-    seed,
-    buildings,
-    parks,
-    ramps: [
-      { x: 3.5, z: 91 },
-      { x: -124.5, z: -37 },
-    ],
-    pickups: [
-      { x: 12, z: 17, weapon: "pistol" },
-      { x: -12, z: -15, weapon: "bat" },
-      { x: 76, z: 12, weapon: "pistol" },
-    ],
   };
 }
 export function signal(time: number, axis: "x" | "z") {
@@ -132,11 +157,14 @@ export function signal(time: number, axis: "x" | "z") {
         : "red";
 }
 export function district(x: number, z: number) {
-  return x < -64
-    ? "DOWNTOWN"
-    : z > 64
-      ? "PALM GARDENS"
-      : x > 64
-        ? "EAST MARKET"
-        : "LITTLE HAVANA";
+  if (x > 512 && z < -512) return "PALOMA INTERNATIONAL";
+  if (z < -384 && x > 192) return "PORT PALOMA";
+  if (x > 256 && z < 128) return "IRONWORKS";
+  if (x < -384) return "SUNSET BEACH";
+  if (z > 384) return "NORTHWOOD";
+  if (z > 256 && x > 192) return "UNIVERSITY";
+  if (z > 128) return "PALM GARDENS";
+  if (x < -64 && z > -256) return "DOWNTOWN";
+  if (x > 128) return "EAST MARKET";
+  return "LITTLE HAVANA";
 }

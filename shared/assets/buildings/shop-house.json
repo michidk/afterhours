@@ -1,0 +1,10 @@
+{
+  "id": "shop-house",
+  "name": "Pastel shop house",
+  "height": [7, 14],
+  "colors": ["#cd957c", "#d8b98c", "#8fb7ac", "#d4ae98"],
+  "facade": "windows",
+  "storefront": true,
+  "trim": "#f0dfbd",
+  "floorHeight": 3.3
+}

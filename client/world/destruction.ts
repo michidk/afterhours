@@ -1,0 +1,309 @@
+import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Color4 } from "@babylonjs/core/Maths/math.color";
+import { ParticleSystem } from "@babylonjs/core/Particles/particleSystem";
+import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
+import type { Destructible, DebrisState } from "../../shared/destruction.ts";
+import { TUNING } from "../../shared/catalog.ts";
+import type { CityScene } from "../scene.ts";
+
+type Model = {
+  root: TransformNode;
+  meshes: Mesh[];
+  lamp?: Vector3;
+  light?: { mesh: Mesh; axis: "x" | "z" };
+  lit: boolean;
+};
+type Frame = { time: number; states: Map<string, DebrisState> };
+export class DestructionRenderer {
+  private staticNodes = new Map<string, Model>();
+  private debrisNodes = new Map<string, Model>();
+  private broken = new Set<string>();
+  private frames: Frame[] = [];
+  private received = 0;
+  private water = new Map<string, ParticleSystem>();
+  private waterTexture?: DynamicTexture;
+  constructor(private host: CityScene) {}
+  syncStatic(fixtures: Destructible[]) {
+    const wanted = new Set(fixtures.map((p) => p.id));
+    for (const [id, model] of this.staticNodes)
+      if (!wanted.has(id)) {
+        this.disposeModel(model);
+        this.staticNodes.delete(id);
+        this.stopWater(id);
+      }
+    for (const p of fixtures)
+      if (!this.staticNodes.has(p.id)) this.staticNodes.set(p.id, this.make(p, true));
+    this.refresh();
+  }
+  setBroken(ids: string[]) {
+    this.broken = new Set(ids);
+    this.refresh();
+  }
+  receive(states: DebrisState[], time: number, now = performance.now()) {
+    this.frames.push({ time, states: new Map(states.map((s) => [s.id, s])) });
+    if (this.frames.length > 8) this.frames.shift();
+    this.received = now;
+  }
+  update(now = performance.now()) {
+    const latest = this.frames.at(-1);
+    if (!latest) return;
+    const time = latest.time + Math.max(0, now - this.received) / 1000,
+      renderTime = time - 0.08;
+    let previous = this.frames[0],
+      next = latest;
+    for (let i = 1; i < this.frames.length; i++)
+      if (this.frames[i].time >= renderTime) {
+        previous = this.frames[i - 1];
+        next = this.frames[i];
+        break;
+      }
+    for (const [id, model] of this.debrisNodes)
+      if (!latest.states.has(id)) {
+        this.disposeModel(model);
+        this.debrisNodes.delete(id);
+      }
+    for (const [id, state] of latest.states) {
+      let model = this.debrisNodes.get(id);
+      if (!model) {
+        model = this.make(state.source, false);
+        this.debrisNodes.set(id, model);
+      }
+      const a = previous.states.get(id) ?? state,
+        b = next.states.get(id) ?? state,
+        t =
+          next.time > previous.time
+            ? Math.max(
+                0,
+                Math.min(1, (renderTime - previous.time) / (next.time - previous.time)),
+              )
+            : 1,
+        extrapolate = Math.max(0, Math.min(0.08, renderTime - latest.time));
+      model.root.position.set(
+        a.position.x +
+          (b.position.x - a.position.x) * t +
+          state.velocity.x * extrapolate,
+        a.position.y +
+          (b.position.y - a.position.y) * t +
+          state.velocity.y * extrapolate,
+        a.position.z +
+          (b.position.z - a.position.z) * t +
+          state.velocity.z * extrapolate,
+      );
+      model.root.rotationQuaternion = Quaternion.Slerp(
+        new Quaternion(a.rotation.x, a.rotation.y, a.rotation.z, a.rotation.w),
+        new Quaternion(b.rotation.x, b.rotation.y, b.rotation.z, b.rotation.w),
+        t,
+      );
+      const fade = Math.max(
+        0,
+        Math.min(1, (state.expiresAt - time) / TUNING.debrisFadeSeconds),
+      );
+      for (const mesh of model.meshes) mesh.visibility = fade;
+      model.root.setEnabled(
+        fade > 0 &&
+          Math.hypot(
+            model.root.position.x - this.host.target.x,
+            model.root.position.z - this.host.target.z,
+          ) < 160,
+      );
+    }
+  }
+  private refresh() {
+    for (const [id, model] of this.staticNodes) {
+      const broken = this.broken.has(id);
+      model.root.setEnabled(!broken);
+      this.light(model, !broken);
+      if (broken && id.startsWith("hydrant:")) this.startWater(id, model.root.position);
+      else this.stopWater(id);
+    }
+  }
+  private light(model: Model, enabled: boolean) {
+    if (enabled === model.lit) return;
+    model.lit = enabled;
+    if (model.lamp) {
+      if (enabled) this.host.lighting.lamps.push(model.lamp);
+      else
+        this.host.lighting.lamps = this.host.lighting.lamps.filter(
+          (p) => p !== model.lamp,
+        );
+    }
+    if (model.light) {
+      if (enabled) this.host.lights.push(model.light);
+      else this.host.lights = this.host.lights.filter((p) => p !== model.light);
+    }
+  }
+  private make(p: DebrisState["source"], live: boolean): Model {
+    const h = this.host,
+      root = new TransformNode(`${live ? "fixture" : "debris"}:${p.id}`, h.scene),
+      before = new Set(h.scene.meshes);
+    let bulb: Mesh | undefined;
+    if (p.kind === "palm") h.palm(0, 0, p.h);
+    else if (p.kind === "tree") {
+      h.cylinder("tree trunk", 0, p.h * 0.3, 0, p.h * 0.6, 0.5, "#80705a");
+      h.box(
+        "tree crown",
+        0,
+        p.h * 0.72,
+        0,
+        5.5,
+        p.h * 0.4,
+        5.5,
+        "#617f55",
+        undefined,
+        true,
+      );
+      h.box(
+        "tree crown top",
+        0.5,
+        p.h * 0.9,
+        0,
+        3.5,
+        p.h * 0.2,
+        3.8,
+        "#80935f",
+        undefined,
+        true,
+      );
+    } else if (p.kind === "bench") {
+      h.box("bench seat", 0, 0.7, 0, 1.1, 0.2, 2.8, "#97785a", undefined, true);
+      h.box("bench back", 0.5, 1.05, 0, 0.15, 0.7, 2.8, "#97785a");
+      for (const z of [-0.9, 0.9])
+        h.box("bench leg", 0, 0.4, z, 0.75, 0.6, 0.15, "#46534e");
+    } else if (p.kind === "hydrant") {
+      h.cylinder("hydrant body", 0, 0.5, 0, 0.8, 0.46, "#b94932");
+      h.cylinder("hydrant cap", 0, 0.94, 0, 0.18, 0.58, "#e0aa4d");
+      h.box("hydrant outlets", 0, 0.6, 0, 0.9, 0.25, 0.3, "#b94932");
+    } else if (p.kind === "lamp") {
+      h.cylinder("lamp pole", 0, p.h / 2, 0, p.h, 0.16, "#46534e");
+      h.box("lamp arm", 0.6, p.h, 0, 1.5, 0.15, 0.15, "#46534e");
+      bulb = h.box(
+        "lamp",
+        1.3,
+        p.h - 0.1,
+        0,
+        0.65,
+        0.2,
+        0.45,
+        live ? "#ffe5a1" : "#3c4744",
+      );
+      if (live) bulb.material = h.streetGlow;
+    } else if (p.kind === "signal") {
+      h.cylinder("signal pole", 0, 2.1, 0, 4.2, 0.18, "#364747");
+      h.box("signal housing", 0, 4, 0, 0.65, 1.5, 0.6, "#263739");
+      bulb = h.box(
+        "signal",
+        0,
+        4.2,
+        -0.32,
+        0.34,
+        0.34,
+        0.05,
+        live ? "#88ca9e" : "#263739",
+      );
+    } else if (p.kind === "corpse") {
+      h.cylinder("body", 0, 1, 0, 0.8, 0.65, p.color);
+      h.cylinder("head", 0, 1.65, 0, 0.4, 0.4, "#c79e7b");
+      h.box("hair", 0, 1.87, 0, 0.43, 0.14, 0.4, "#473e35");
+      for (const side of [-1, 1]) {
+        h.box("leg", side * 0.17, 0.35, 0, 0.23, 0.65, 0.25, "#354955");
+        h.box("arm", side * 0.42, 1, 0, 0.18, 0.65, 0.22, p.color);
+      }
+    }
+    const created = h.scene.meshes.filter((mesh) => !before.has(mesh)) as Mesh[],
+      groups = new Map<number, Mesh[]>();
+    for (const mesh of created) {
+      h.shadows.removeShadowCaster(mesh);
+      if (mesh === bulb) continue;
+      const key = mesh.material!.uniqueId,
+        group = groups.get(key) ?? [];
+      group.push(mesh);
+      groups.set(key, group);
+    }
+    const meshes: Mesh[] = bulb ? [bulb] : [];
+    for (const group of groups.values()) {
+      const merged =
+        group.length === 1 ? group[0] : Mesh.MergeMeshes(group, true, true)!;
+      if (merged) meshes.push(merged);
+    }
+    for (const mesh of meshes) {
+      mesh.receiveShadows = true;
+      mesh.position.y -= p.h / 2;
+      mesh.parent = root;
+      h.shadows.addShadowCaster(mesh);
+    }
+    h.shadowCandidates.push(...meshes);
+    root.position.set(p.x, p.h / 2, p.z);
+    if (p.kind !== "corpse") root.rotation.y = p.angle ?? 0;
+    const model: Model = { root, meshes, lit: false };
+    if (live && p.kind === "lamp") model.lamp = new Vector3(p.x + 1.3, p.h - 0.1, p.z);
+    if (live && p.kind === "signal") model.light = { mesh: bulb!, axis: p.axis ?? "z" };
+    return model;
+  }
+  private startWater(id: string, position: Vector3) {
+    if (this.water.has(id) || this.water.size >= 16) return;
+    if (!this.waterTexture) {
+      this.waterTexture = new DynamicTexture("water spray", 32, this.host.scene, false);
+      const ctx = this.waterTexture.getContext();
+      ctx.clearRect(0, 0, 32, 32);
+      ctx.fillStyle = "white";
+      ctx.beginPath();
+      ctx.arc(16, 16, 10, 0, Math.PI * 2);
+      ctx.fill();
+      this.waterTexture.update();
+    }
+    const water = new ParticleSystem(`hydrant:${id}`, 96, this.host.scene);
+    water.particleTexture = this.waterTexture;
+    water.emitter = new Vector3(position.x, 0.25, position.z);
+    water.minEmitBox = new Vector3(-0.12, 0, -0.12);
+    water.maxEmitBox = new Vector3(0.12, 0, 0.12);
+    water.direction1 = new Vector3(-0.8, 6, -0.8);
+    water.direction2 = new Vector3(0.8, 8, 0.8);
+    water.minEmitPower = 1;
+    water.maxEmitPower = 1;
+    water.gravity = new Vector3(0, -12, 0);
+    water.minLifeTime = 0.8;
+    water.maxLifeTime = 1.2;
+    water.minSize = 0.07;
+    water.maxSize = 0.2;
+    water.emitRate = 60;
+    water.color1 = new Color4(0.65, 0.9, 1, 0.8);
+    water.color2 = new Color4(0.95, 1, 1, 0.6);
+    water.colorDead = new Color4(0.65, 0.9, 1, 0);
+    water.start();
+    this.water.set(id, water);
+  }
+  private stopWater(id: string) {
+    const water = this.water.get(id);
+    if (water) {
+      water.dispose(false, false);
+      this.water.delete(id);
+    }
+  }
+  private disposeModel(model: Model) {
+    this.light(model, false);
+    const meshes = new Set(model.meshes);
+    for (const mesh of meshes) this.host.shadows.removeShadowCaster(mesh);
+    this.host.shadowCandidates = this.host.shadowCandidates.filter(
+      (m) => !meshes.has(m),
+    );
+    model.root.dispose();
+  }
+  get diagnostics() {
+    return {
+      fixtures: this.staticNodes.size,
+      debris: this.debrisNodes.size,
+      fountains: this.water.size,
+    };
+  }
+  dispose() {
+    for (const model of [...this.staticNodes.values(), ...this.debrisNodes.values()])
+      this.disposeModel(model);
+    for (const id of this.water.keys()) this.stopWater(id);
+    this.waterTexture?.dispose();
+    this.staticNodes.clear();
+    this.debrisNodes.clear();
+    this.frames = [];
+  }
+}

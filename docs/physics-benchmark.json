@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-11T17:04:53.696Z",
+  "node": "v24.11.1",
+  "platform": "win32",
+  "bodies": 120,
+  "stepHz": 120,
+  "samples": 599,
+  "custom": {
+    "p50Ms": 3.5980999999999312,
+    "p95Ms": 4.966599999999971,
+    "maxMs": 8.912599999999884
+  },
+  "rapier": {
+    "p50Ms": 0.16769999999996799,
+    "p95Ms": 0.3320000000003347,
+    "maxMs": 2.578399999999874
+  },
+  "rapierCCDStoppedBeforeWall": true,
+  "method": "120 equal rectangle bodies, no tyre forces/AI/vertical simulation, three SAT passes versus Rapier defaults with CCD, 120 warmup steps then 599 samples. Contact-only microbenchmark, not a full-game comparison."
+}

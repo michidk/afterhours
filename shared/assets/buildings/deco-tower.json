@@ -1,0 +1,10 @@
+{
+  "id": "deco-tower",
+  "name": "Art deco tower",
+  "height": [28, 54],
+  "colors": ["#d8c9a6", "#b7c5bb", "#d7ba9b"],
+  "facade": "piers",
+  "storefront": false,
+  "trim": "#f0dfbc",
+  "floorHeight": 3.8
+}

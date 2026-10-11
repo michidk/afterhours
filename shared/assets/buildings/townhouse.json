@@ -1,0 +1,10 @@
+{
+  "id": "townhouse",
+  "name": "Northwood townhouse",
+  "height": [6, 11],
+  "colors": ["#b4c1a3", "#d7b89c", "#c9c6b1"],
+  "facade": "windows",
+  "storefront": false,
+  "trim": "#e7dbc2",
+  "floorHeight": 3.3
+}

@@ -9,7 +9,7 @@
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["node"]
+    "types": ["node", "vite/client"]
   },
-  "include": ["client", "server", "shared", "tests"]
+  "include": ["client", "server", "shared", "tests", "scripts"]
 }

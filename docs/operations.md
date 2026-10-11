@@ -1,0 +1,13 @@
+﻿# Operations
+
+`docker compose up -d --build` builds the production client/server and starts Caddy plus one Node process. `data/` is a read-only bind mount so manually generated artifacts can be replaced without rebuilding the image. After `bun run city:generate`, restart `game` to load the file. Never regenerate during startup. Production debug is explicitly disabled in the compose environment.
+
+Default local HTTPS is localhost:8443. Caddy's local CA root lives in its persistent data volume; copy it with `docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./local-root.crt` and trust it using your operating system certificate manager for local browser testing. Do not commit certificates/private keys. Public DNS/domain mode uses ACME certificates; set DOMAIN plus HTTP_PORT=80 and HTTPS_PORT=443 before starting compose. Both ports must reach Caddy. WebSocket upgrades and Host/Origin are preserved by reverse_proxy.
+
+`docker compose logs -f game caddy` includes startup failures and structured HTTPS request logs. `/health` exposes aggregate CPU/runtime diagnostics; it contains no reconnect tokens or player names. Monitor p95 tick time against 33.33 ms, catch-up drops, RSS growth, outgoing bytes, and reconnect failures. Periodic container health checks report failure; restart policies recover a crashed process, while an unhealthy-but-running process needs an external monitor/operator restart. No claim of automatic failover is made.
+
+Shutdown releases connections with "Server restarting". Browsers retry; a restarted process creates a fresh dynamic world, and old reconnect tokens expire with it. The immutable city artifact is persisted; dynamic players, inventory, traffic damage and clock are intentionally reset. An in-process disconnect keeps its player for 15 seconds, releases inputs and vehicle ownership, and deploys a parachute for an airborne aircraft occupant. Empty aircraft retain momentum and fall/crash. One replica hosts one city; do not load-balance clients over independent copies of the process.
+
+The local deployment acceptance test checks HTTPS content, WSS joining, production cheat gating, artifact delivery, health, and reconnect after `docker compose restart game`. A public-domain launch remains an operator action requiring a domain/host; no public deployment is implied by local container validation.
+
+Health includes `traffic` counters for persistent jam groups/cars, cumulative AI despawns/replacements, and pending replacements. A growing replacement queue usually means clear road sites are unavailable; the server retries without forcing overlaps. Traffic cleanup and the queue reset on process restart. See [traffic lifecycle](traffic.md).

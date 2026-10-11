@@ -1,0 +1,10 @@
+{
+  "id": "glass-tower",
+  "name": "Glass office tower",
+  "height": [34, 66],
+  "colors": ["#8ca8aa", "#9aafb8", "#78969b"],
+  "facade": "glass",
+  "storefront": false,
+  "trim": "#d5d9cf",
+  "floorHeight": 4.2
+}

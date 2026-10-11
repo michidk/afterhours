@@ -1,0 +1,211 @@
+import { staticGeometry } from "./static.ts";
+import { fallAircraft } from "./abandoned-aircraft.ts";
+import { LIMIT, type City, type Entity, type Input } from "../world.ts";
+import { TUNING, VEHICLES } from "../catalog.ts";
+import { flyPlane } from "./plane.ts";
+import { carForces, clamp, wrap } from "./vehicle.ts";
+import { flyHelicopter } from "./helicopter.ts";
+import { carAltitude, carGrounded, rampContacts } from "./ramps.ts";
+import {
+  entityBox,
+  buildingBox,
+  contact,
+  resolveContact,
+  vehicle,
+  shape,
+} from "./collision.ts";
+export function characterForces(
+  e: Entity,
+  input: Input,
+  dt: number,
+  direction?: { x: number; z: number; speed: number },
+) {
+  let x = direction?.x ?? Number(input.right) - Number(input.left),
+    z = direction?.z ?? Number(input.up) - Number(input.down);
+  const length = Math.hypot(x, z),
+    speed =
+      direction?.speed ??
+      (e.parachute ? 6 : input.sprint || input.brake ? TUNING.sprint : TUNING.walk);
+  if (length) {
+    x = (x / length) * speed;
+    z = (z / length) * speed;
+  }
+  if (input.aim !== undefined) {
+    e.angle = input.aim;
+    e.aim = input.aim;
+  } else if (length)
+    e.angle = wrap(
+      e.angle + clamp(wrap(Math.atan2(x, z) - e.angle), -14 * dt, 14 * dt),
+    );
+  const dx = x - e.vx,
+    dz = z - e.vz,
+    d = Math.hypot(dx, dz),
+    change = (e.parachute ? 8 : length ? TUNING.acceleration : TUNING.braking) * dt;
+  if (d > 0) {
+    e.vx += dx * Math.min(1, change / d);
+    e.vz += dz * Math.min(1, change / d);
+  }
+}
+// Only roofs under the character's feet can support it. A wall beside a
+// descending player must never pull them upward onto its roof.
+export function characterAltitude(e: Entity, city: City, dt: number) {
+  let floor = 0;
+  for (const b of staticGeometry(city).query(e.x, e.z, 1)) {
+    const roof = b.h + 1.8;
+    if (
+      !b.obstacle &&
+      roof <= e.y + 0.02 &&
+      Math.abs(e.x - b.x) < b.w / 2 &&
+      Math.abs(e.z - b.z) < b.d / 2
+    )
+      floor = Math.max(floor, roof);
+  }
+  if (e.y > floor + 0.02) {
+    // Walking off a roof is also a safe descent, rather than an invisible fall.
+    if (e.kind === "player" && e.y - floor > 1.5) e.parachute = true;
+    e.vy = e.parachute
+      ? clamp(e.vy + (-4 - e.vy) * (1 - Math.exp(-5 * dt)), -4, 0)
+      : e.vy - 18 * dt;
+    e.y = Math.max(floor, e.y + e.vy * dt);
+  }
+  if (e.y <= floor + 0.02) {
+    e.y = floor;
+    e.vy = 0;
+    e.parachute = undefined;
+  }
+}
+/** Private, finite-mass neighbours. Never apply speculative impulses to snapshots. */
+export function predictionWorld(e: Entity, nearby: Entity[]) {
+  return nearby
+    .filter(
+      (b) =>
+        b.id !== e.id &&
+        !b.vehicle &&
+        (vehicle(b) || b.health > 0) &&
+        Math.hypot(b.x - e.x, b.z - e.z) < 24,
+    )
+    .map((b) => structuredClone(b));
+}
+export function predictStep(
+  e: Entity,
+  input: Input,
+  city: City,
+  nearby: Entity[],
+  dt: number,
+  shadows = predictionWorld(e, nearby),
+) {
+  const count = Math.ceil(dt / TUNING.physicsStep),
+    h = dt / count;
+  const bodies = [e, ...shadows];
+  for (let i = 0; i < count; i++) {
+    if (e.down || e.wreck) return;
+    const previous = { ...e };
+    if (!vehicle(e)) characterForces(e, input, h);
+    else if (e.kind === "car") {
+      carForces(
+        e,
+        {
+          throttle: Number(input.up) - Number(input.down),
+          steer: Number(input.right) - Number(input.left),
+          brake: input.brake,
+        },
+        h,
+        carGrounded(e, city),
+      );
+    } else if (!e.driver && (e.y > 0.2 || e.flight === "falling"))
+      fallAircraft(e, city, h);
+    else if (e.kind === "helicopter") flyHelicopter(e, input, city, nearby, h);
+    else flyPlane(e, input, h);
+    const speed = Math.hypot(e.vx, e.vz),
+      limit = e.model ? VEHICLES[e.model].speed : 52;
+    if (vehicle(e) && speed > limit) {
+      e.vx *= limit / speed;
+      e.vz *= limit / speed;
+    }
+    e.x += e.vx * h;
+    e.z += e.vz * h;
+    if (e.kind === "car") carAltitude(e, previous, city, h);
+    if (!vehicle(e)) characterAltitude(e, city, h);
+    if (vehicle(e)) e.angle = wrap(e.angle + (e.angularVelocity || 0) * h);
+    // Remote controls are unknown: coast private neighbours between corrections.
+    for (const b of shadows) {
+      const previous = { ...b };
+      if (b.kind === "car" && !b.driver && !b.ai)
+        carForces(b, { throttle: 0, steer: 0, brake: false }, h, carGrounded(b, city));
+      b.x += b.vx * h;
+      b.z += b.vz * h;
+      if (vehicle(b)) b.angle = wrap(b.angle + (b.angularVelocity || 0) * h);
+      if (b.kind === "car") carAltitude(b, previous, city, h);
+      else b.y = Math.max(0, b.y + b.vy * h);
+    }
+    resolveMovementContacts(bodies, city);
+  }
+}
+
+/** Provisional contact solve; never damage entities or change gameplay ownership. */
+export function resolveMovementContacts(bodies: Entity[], city: City) {
+  for (let pass = 0; pass < 3; pass++) {
+    for (const body of bodies) {
+      resolveStaticContacts(body, city);
+    }
+    for (let i = 0; i < bodies.length; i++)
+      for (let j = i + 1; j < bodies.length; j++) {
+        const first = bodies[i],
+          second = bodies[j];
+        if (
+          Math.abs(first.y - second.y) > 1.8 ||
+          Math.abs(first.x - second.x) > 10 ||
+          Math.abs(first.z - second.z) > 10
+        )
+          continue;
+        // Match authoritative pair ordering, including coincident centres.
+        const [a, b] = first.id < second.id ? [first, second] : [second, first];
+        const c = contact(entityBox(a), entityBox(b));
+        if (c) resolveContact(a, b, c);
+      }
+  }
+}
+
+function resolveStaticContacts(body: Entity, city: City) {
+  for (const b of staticGeometry(city).query(body.x, body.z, 6)) {
+    if (
+      body.y >= b.h + (b.obstacle ? 0 : 1.8) - 0.02 ||
+      Math.abs(body.x - b.x) > b.w / 2 + 6 ||
+      Math.abs(body.z - b.z) > b.d / 2 + 6
+    )
+      continue;
+    const c = contact(entityBox(body), buildingBox(b));
+    if (c) resolveContact(body, undefined, c);
+  }
+  for (const c of rampContacts(body, city)) resolveContact(body, undefined, c);
+  const s = shape(body),
+    r = Math.max(s.w, s.d);
+  if (Math.abs(body.x) > LIMIT - r) {
+    body.x = clamp(body.x, -LIMIT + r, LIMIT - r);
+    body.vx *= -0.15;
+  }
+  if (Math.abs(body.z) > LIMIT - r) {
+    body.z = clamp(body.z, -LIMIT + r, LIMIT - r);
+    body.vz *= -0.15;
+  }
+}
+
+/** Cosmetic correction cannot displace the neighbours shown by the renderer. */
+export function constrainRenderPose(pose: Entity, city: City, nearby: Entity[]) {
+  for (let pass = 0; pass < 3; pass++) {
+    resolveStaticContacts(pose, city);
+    for (const b of nearby) {
+      if (
+        b.id === pose.id ||
+        b.vehicle ||
+        (!vehicle(b) && b.health <= 0) ||
+        Math.abs(pose.y - b.y) > 1.8 ||
+        Math.abs(pose.x - b.x) > 10 ||
+        Math.abs(pose.z - b.z) > 10
+      )
+        continue;
+      const c = contact(entityBox(pose), entityBox(b));
+      if (c) resolveContact(pose, undefined, c);
+    }
+  }
+}

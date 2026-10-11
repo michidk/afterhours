@@ -1,0 +1,10 @@
+{
+  "id": "hotel",
+  "name": "Seafront hotel",
+  "height": [18, 32],
+  "colors": ["#e1bba4", "#e6d0aa", "#a6c4b8"],
+  "facade": "balconies",
+  "storefront": true,
+  "trim": "#f2e4c9",
+  "floorHeight": 3.5
+}

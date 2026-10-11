@@ -1,385 +1,612 @@
+import { navigationFor } from "../shared/navigation.ts";
+import { staticGeometry } from "../shared/physics/static.ts";
 import {
-  generateCity,
   idle,
   LIMIT,
-  ROADS,
-  signal,
-  random,
+  type City,
   type Entity,
   type Input,
   type Kind,
+  type WorldEvent,
 } from "../shared/world.ts";
+import {
+  carForces,
+  carAltitude,
+  carGrounded,
+  rampContacts,
+  clamp,
+  wrap,
+} from "../shared/physics/index.ts";
+import {
+  vehicle,
+  mass,
+  shape,
+  contact,
+  entityBox,
+  buildingBox,
+  resolveContact,
+  pointVelocity,
+} from "../shared/physics/index.ts";
+import { CityAI } from "./ai.ts";
+import { TrafficManager } from "./traffic.ts";
+import { flyHelicopter, landingSite } from "../shared/physics/index.ts";
+import { characterForces, characterAltitude } from "../shared/physics/index.ts";
+import { VEHICLES, WEAPONS, TUNING, type VehicleModel } from "../shared/catalog.ts";
+import { Inventory } from "./inventory.ts";
+import { SpatialGrid } from "../shared/spatial.ts";
+import type { Building } from "../shared/world.ts";
+
+import { flyPlane } from "../shared/physics/plane.ts";
+import { fallAircraft } from "../shared/physics/abandoned-aircraft.ts";
+import { Combat } from "./combat.ts";
+import { safeSpawn } from "./lifecycle.ts";
+import { availableSeat, vehicleSeats } from "../shared/seats.ts";
+import { Destruction } from "./destruction.ts";
+import type { Vec3 } from "../shared/destruction.ts";
 export class Simulation {
-  city = generateCity();
+  city: City;
   entities = new Map<string, Entity>();
   inputs = new Map<string, Input>();
+  ai: CityAI;
+  traffic = new TrafficManager();
   time = 0;
   day = 16.5;
-  events: { kind: string; x: number; z: number; y: number }[] = [];
+  dayRate = 1 / 75;
+  events: WorldEvent[] = [];
   serial = 0;
-  constructor() {
-    const r = random(982);
+  inventory = new Inventory();
+  spatial = new SpatialGrid<Entity>();
+  destruction: Destruction;
+
+  constructor(city: City) {
+    this.city = city;
+    this.destruction = new Destruction(city);
+    this.ai = new CityAI(navigationFor(city));
+    this.ai.props = city.props;
     for (let i = 0; i < 42; i++) {
-      const vertical = i % 2 === 0;
-      const road = ROADS[i % 7];
-      const direction = i % 4 < 2 ? 1 : -1;
       const e = this.spawn(
         "car",
-        vertical ? road + direction * 3.5 : r() * 380 - 190,
-        vertical ? r() * 380 - 190 : road - direction * 3.5,
+        0,
+        0,
+        undefined,
+        (["sedan", "sport", "van"] as const)[i % 3],
       );
-      e.angle = (vertical ? 0 : Math.PI / 2) + (direction < 0 ? Math.PI : 0);
-      e.ai = true;
+      this.ai.assign(e, i);
     }
     for (let i = 0; i < 65; i++) {
-      const e = this.spawn(
-        "pedestrian",
-        ROADS[i % 7] + (i % 2 ? 11 : -11),
-        r() * 380 - 190,
-      );
-      e.angle = i % 2 ? 0 : Math.PI;
-      e.ai = true;
+      const e = this.spawn("pedestrian", 0, 0);
+      this.ai.assign(e, i + 9);
     }
     this.spawn("car", 4, 25);
-    this.spawn("helicopter", 0, 34);
-    this.spawn("plane", 150, 0);
+    this.spawn("car", -4, 44, undefined, "sport");
+    this.spawn("car", 68, 25, undefined, "van");
+    this.spawn("helicopter", 0, 36);
+    this.spawn(
+      "plane",
+      this.city.airport.x,
+      this.city.airport.z - this.city.airport.d / 2 + 14,
+    );
+    this.spawn("helicopter", -64, 30, undefined, "utility");
+    for (const p of this.city.pickups)
+      this.inventory.addSource(p.x, p.z, p.weapon as "bat" | "pistol" | "smg");
   }
-  spawn(kind: Kind, x: number, z: number, color?: string) {
-    const id = `e${++this.serial}`,
-      e: Entity = {
-        id,
-        kind,
-        x,
-        z,
-        y: 0,
-        angle: 0,
-        vx: 0,
-        vz: 0,
-        vy: 0,
-        color:
-          color ||
-          ["#e8b63f", "#e86551", "#55a9b8", "#f3eee0", "#80a177"][
-            this.serial % 5
-          ],
-        health: 100,
-      };
-    this.entities.set(id, e);
+  spawn(kind: Kind, x: number, z: number, color?: string, model?: VehicleModel) {
+    model ??=
+      kind === "car"
+        ? "sedan"
+        : kind === "helicopter"
+          ? "scout"
+          : kind === "plane"
+            ? "plane"
+            : undefined;
+    const e: Entity = {
+      id: `e${++this.serial}`,
+      kind,
+      x,
+      z,
+      y: 0,
+      angle: 0,
+      vx: 0,
+      vz: 0,
+      vy: 0,
+      angularVelocity: 0,
+      color:
+        color ||
+        ["#e8b63f", "#e86551", "#55a9b8", "#f3eee0", "#80a177"][this.serial % 5],
+      health: model ? VEHICLES[model].health : 100,
+      maxHealth: model ? VEHICLES[model].health : 100,
+      model,
+    };
+    if (vehicle(e)) e.seats = vehicleSeats(e);
+    if (kind === "helicopter") e.flight = "grounded";
+    this.entities.set(e.id, e);
     return e;
   }
   join(name: string, color: string) {
-    const e = this.spawn("player", 11, 25, color);
-    e.name = name;
-    e.weapon = "fists";
-    this.inputs.set(e.id, idle());
-    return e;
+    const pos = safeSpawn(this.city, [...this.entities.values()]);
+    const p = this.spawn("player", pos.x, pos.z, color);
+    p.name = name;
+    this.inventory.initialize(p);
+    this.inputs.set(p.id, idle());
+    return p;
+  }
+  disconnect(id: string) {
+    const p = this.entities.get(id),
+      v = p?.vehicle ? this.entities.get(p.vehicle) : undefined;
+    this.inputs.set(id, idle());
+    if (p && v && !this.exit(p, v)) {
+      // A blocked grounded exit must still release ownership on disconnect.
+      this.releaseSeat(p, v);
+      p.x = v.x;
+      p.z = v.z;
+      p.y = v.y;
+      p.vx = v.vx;
+      p.vz = v.vz;
+      p.vy = Math.min(0, v.vy);
+      p.parachute =
+        (v.y > 0.2 && (v.kind === "helicopter" || v.kind === "plane")) || undefined;
+    }
   }
   leave(id: string) {
-    const p = this.entities.get(id);
-    if (p?.vehicle) {
-      const v = this.entities.get(p.vehicle);
-      if (v) v.driver = undefined;
-    }
+    this.disconnect(id);
     this.entities.delete(id);
     this.inputs.delete(id);
   }
   blocked(x: number, z: number, r = 0.6) {
     return (
-      Math.abs(x) > LIMIT ||
-      Math.abs(z) > LIMIT ||
+      Math.abs(x) > LIMIT - r ||
+      Math.abs(z) > LIMIT - r ||
+      staticGeometry(this.city)
+        .query(x, z, r + 3)
+        .some(
+          (p) =>
+            p.obstacle &&
+            Math.abs(x - p.x) < p.w / 2 + r &&
+            Math.abs(z - p.z) < p.d / 2 + r,
+        ) ||
       this.city.buildings.some(
-        (b) =>
-          Math.abs(x - b.x) < b.w / 2 + r && Math.abs(z - b.z) < b.d / 2 + r,
+        (b) => Math.abs(x - b.x) < b.w / 2 + r && Math.abs(z - b.z) < b.d / 2 + r,
       )
     );
+  }
+  requestLanding(v: Entity) {
+    const site = landingSite(v, this.city, [...this.entities.values()]);
+    if (site) {
+      v.flight = "landing";
+      v.landingX = site.x;
+      v.landingZ = site.z;
+    }
+  }
+  private releaseSeat(p: Entity, v: Entity) {
+    const wasDriver = v.driver === p.id;
+    v.seats = vehicleSeats(v).map((id) => (id === p.id ? null : id));
+    p.vehicle = undefined;
+    p.seat = undefined;
+    if (!wasDriver) return;
+    v.driver = undefined;
+    v.takeoffDelay = undefined;
+    if ((v.kind === "helicopter" || v.kind === "plane") && v.y > 0.2)
+      v.flight = "falling";
+    else if (v.kind === "helicopter") v.flight = "grounded";
+  }
+  private exit(p: Entity, v: Entity) {
+    const airborne = v.y > 0.2;
+    if (airborne && v.kind !== "helicopter" && v.kind !== "plane") return false;
+    const model = v.model && VEHICLES[v.model];
+    const distance = Math.max(
+      3,
+      shape(v).w + 0.9,
+      airborne && model && model.kind === "helicopter" ? model.rotorRadius + 1 : 0,
+    );
+    for (const side of [1, -1])
+      for (const offset of [0, 2, -2]) {
+        const x =
+            v.x + Math.cos(v.angle) * distance * side + Math.sin(v.angle) * offset,
+          z = v.z - Math.sin(v.angle) * distance * side + Math.cos(v.angle) * offset;
+        if (
+          (airborne
+            ? Math.abs(x) > LIMIT - 0.6 ||
+              Math.abs(z) > LIMIT - 0.6 ||
+              staticGeometry(this.city)
+                .query(x, z, 1)
+                .some(
+                  (b) =>
+                    v.y < b.h + (b.obstacle ? 0 : 1.8) &&
+                    contact({ x, z, w: 0.42, d: 0.42, angle: 0 }, buildingBox(b)),
+                )
+            : this.blocked(x, z)) ||
+          [...this.entities.values()].some(
+            (e) =>
+              e.id !== p.id &&
+              e.id !== v.id &&
+              !e.vehicle &&
+              Math.abs(e.y - (airborne ? v.y : 0)) < 2 &&
+              Math.hypot(e.x - x, e.z - z) < (vehicle(e) ? 2 : 0.8),
+          )
+        )
+          continue;
+        p.x = x;
+        p.z = z;
+        p.y = airborne ? v.y : 0;
+        p.vx = airborne ? clamp(v.vx, -6, 6) : 0;
+        p.vz = airborne ? clamp(v.vz, -6, 6) : 0;
+        p.vy = airborne ? -1 : 0;
+        p.parachute = airborne || undefined;
+        this.releaseSeat(p, v);
+        return true;
+      }
+    return false;
   }
   interact(id: string) {
     const p = this.entities.get(id);
-    if (!p) return;
+    if (!p || p.down) return;
     if (p.vehicle) {
       const v = this.entities.get(p.vehicle);
-      if (!v || v.y > 2) return;
-      for (const side of [1, -1]) {
-        const x = v.x + Math.cos(v.angle) * 3 * side,
-          z = v.z - Math.sin(v.angle) * 3 * side;
-        if (!this.blocked(x, z)) {
-          p.x = x;
-          p.z = z;
-          p.vehicle = undefined;
-          v.driver = undefined;
-          return;
-        }
-      }
+      if (!v) return;
+      this.exit(p, v);
       return;
     }
+    if (p.parachute) return;
     const v = [...this.entities.values()]
       .filter(
         (e) =>
-          ["car", "helicopter", "plane"].includes(e.kind) &&
-          !e.driver &&
-          e.y < 2 &&
+          vehicle(e) &&
+          availableSeat(e) >= 0 &&
+          !e.wreck &&
+          !e.burning &&
+          e.y < 0.5 &&
+          Math.abs(e.y - p.y) < 0.5 &&
           Math.hypot(e.x - p.x, e.z - p.z) < 6,
       )
       .sort(
-        (a, b) =>
-          Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z),
+        (a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z),
       )[0];
+    const pickup = this.inventory.nearest(p);
+    if (
+      pickup &&
+      Math.hypot(pickup.x - p.x, pickup.z - p.z) <
+        (v ? Math.hypot(v.x - p.x, v.z - p.z) : Infinity) &&
+      this.inventory.pickup(p, this.time)
+    )
+      return;
     if (v) {
+      const seat = availableSeat(v);
+      if (seat < 0) return;
       p.vehicle = v.id;
-      v.driver = id;
-      v.ai = false;
+      p.seat = seat;
+      v.seats = vehicleSeats(v);
+      v.seats[seat] = id;
+      p.x = v.x;
+      p.z = v.z;
+      p.y = v.y;
+      p.angle = v.angle;
+      p.vx = p.vz = p.vy = 0;
+      if (seat === 0) {
+        v.driver = id;
+        v.ai = false;
+        this.ai.routes.delete(v.id);
+        if (v.kind === "helicopter") {
+          v.flight = "takingOff";
+          v.takeoffDelay = TUNING.helicopterBoardingSeconds;
+        }
+      } else if (v.kind === "helicopter" && v.takeoffDelay !== undefined) {
+        v.takeoffDelay = Math.max(v.takeoffDelay, 0.5);
+      }
       return;
     }
-    const item = this.city.pickups.find(
-      (e) => Math.hypot(e.x - p.x, e.z - p.z) < 3,
-    );
-    if (item) p.weapon = item.weapon;
+    this.inventory.pickup(p, this.time);
   }
-  attack(p: Entity) {
-    if ((p.cooldown || 0) > 0 || p.vehicle || p.down) return;
-    p.cooldown = p.weapon === "pistol" ? 0.3 : 0.55;
-    const range = p.weapon === "pistol" ? 35 : p.weapon === "bat" ? 3 : 2.1;
-    this.events.push({
-      kind: p.weapon === "pistol" ? "shot" : "hit",
-      x: p.x,
-      z: p.z,
-      y: 1,
-    });
-    for (const e of this.entities.values()) {
-      if (e.id === p.id || e.y > 3) continue;
-      const dx = e.x - p.x,
-        dz = e.z - p.z,
-        d = Math.hypot(dx, dz);
+  damage(e: Entity, amount: number) {
+    if (e.wreck || (!vehicle(e) && e.health <= 0) || amount <= 0) return;
+    e.health = Math.max(0, e.health - amount);
+    if (vehicle(e)) {
       if (
-        d < range &&
-        d > 0 &&
-        (dx * Math.sin(p.angle) + dz * Math.cos(p.angle)) / d > 0.8 &&
-        !this.city.buildings.some((b) => {
-          for (let t = 0; t < d; t += 1) {
-            if (
-              Math.abs(p.x + (dx * t) / d - b.x) < b.w / 2 &&
-              Math.abs(p.z + (dz * t) / d - b.z) < b.d / 2
-            )
-              return true;
-          }
-          return false;
-        })
-      ) {
-        e.health -= p.weapon === "pistol" ? 25 : 20;
-        e.vx += Math.sin(p.angle) * 5;
-        e.vz += Math.cos(p.angle) * 5;
-        if (e.health <= 0) {
-          e.down = 5;
-          e.health = 0;
-        }
-        break;
-      }
+        e.health <= (e.maxHealth || 100) * TUNING.fireThreshold &&
+        e.burning === undefined
+      )
+        e.burning = TUNING.fireSeconds;
+    } else if (e.health <= 0) {
+      e.down = e.kind === "player" ? 3 : TUNING.corpseSeconds;
+      this.destruction.corpse(e, this.time);
     }
   }
-  tick(dt: number) {
-    this.time += dt;
-    this.day = (this.day + dt / 75) % 24;
-    this.events = [];
-    for (const e of this.entities.values()) {
-      e.cooldown = Math.max(0, (e.cooldown || 0) - dt);
-      if (e.down) {
-        e.down -= dt;
-        if (e.down <= 0) {
-          e.down = 0;
-          e.health = 100;
-          if (e.kind === "player") {
-            e.x = 11;
-            e.z = 25;
-          }
-        }
-        continue;
+  damageProp(id: string, amount: number, velocity: Vec3) {
+    const broken = this.destruction.hit(id, amount, this.time, velocity);
+    if (broken) {
+      const p = this.destruction.fixtures.get(id)!;
+      this.events.push({ kind: "propBreak", sound: "impact", x: p.x, y: 0.5, z: p.z });
+    }
+    return broken;
+  }
+  repair(e: Entity) {
+    if (e.wreck) return;
+    e.health = e.maxHealth || 100;
+    e.burning = undefined;
+    e.down = 0;
+  }
+  private explode(e: Entity) {
+    if (e.wreck) return;
+    e.burning = undefined;
+    e.wreck = TUNING.wreckSeconds;
+    e.health = 0;
+    e.ai = false;
+    e.skidding = false;
+    e.wheelSkids?.fill(false);
+    this.events.push({ kind: "explosion", x: e.x, y: e.y + 1, z: e.z });
+    for (const p of this.entities.values())
+      if (p.vehicle === e.id) {
+        this.releaseSeat(p, e);
+        p.x = e.x;
+        p.z = e.z;
+        p.y = e.y;
+        this.damage(p, 150);
       }
-      if (e.kind === "player" && e.vehicle) continue;
-      const input = this.inputs.get(e.driver || e.id) || idle();
-      const ox = e.x,
-        oz = e.z;
-      if (e.kind === "player" || e.kind === "pedestrian") {
-        let dx = 0,
-          dz = 0;
-        if (e.kind === "player") {
-          dx = Number(input.right) - Number(input.left);
-          dz = Number(input.up) - Number(input.down);
-          if (input.attack) this.attack(e);
-        } else {
-          dz = Math.cos(e.angle);
-          if (Math.abs(e.z) > 202) e.angle += Math.PI;
-          const danger = [...this.entities.values()].find(
-            (v) =>
-              v.kind === "car" &&
-              Math.hypot(v.x - e.x, v.z - e.z) < 7 &&
-              Math.hypot(v.vx, v.vz) > 4,
-          );
-          if (danger) dx = Math.sign(e.x - danger.x) * 2;
-          const crossing = ROADS.some((r) => Math.abs(e.z - r) < 12);
-          if (crossing && signal(this.time, "z") !== "green") dz = 0;
-        }
-        const length = Math.hypot(dx, dz);
-        if (length) {
-          e.angle = Math.atan2(dx, dz);
-          e.vx = (dx / length) * (input.brake ? 8 : 4.5);
-          e.vz = (dz / length) * (input.brake ? 8 : 4.5);
-        } else {
-          e.vx *= Math.exp(-12 * dt);
-          e.vz *= Math.exp(-12 * dt);
-        }
-      } else {
-        const forward = e.vx * Math.sin(e.angle) + e.vz * Math.cos(e.angle);
-        let throttle = Number(input.up) - Number(input.down),
-          steer = Number(input.right) - Number(input.left);
-        if (e.ai) {
-          throttle = forward < 10 ? 1 : 0;
-          const vertical = Math.abs(Math.cos(e.angle)) > 0.5;
-          const coordinate = vertical ? e.z : e.x;
-          const direction = Math.sign(
-            vertical ? Math.cos(e.angle) : Math.sin(e.angle),
-          );
-          const next = ROADS.find(
-            (r) =>
-              (r - coordinate) * direction > 8 &&
-              (r - coordinate) * direction < 17,
-          );
-          const front = [...this.entities.values()].some(
-            (v) =>
-              v.id !== e.id &&
-              v.kind === "car" &&
-              Math.hypot(v.x - e.x, v.z - e.z) < 7 &&
-              (v.x - e.x) * Math.sin(e.angle) +
-                (v.z - e.z) * Math.cos(e.angle) >
-                0,
-          );
-          if (
-            (next !== undefined &&
-              signal(this.time, vertical ? "z" : "x") !== "green") ||
-            front
-          ) {
-            throttle = 0;
-            e.vx *= Math.exp(-7 * dt);
-            e.vz *= Math.exp(-7 * dt);
+    e.driver = undefined;
+    e.seats = vehicleSeats(e).map(() => null);
+    for (const other of this.entities.values()) {
+      if (other.id === e.id || other.vehicle || other.wreck) continue;
+      const dx = other.x - e.x,
+        dz = other.z - e.z,
+        dy = other.y - e.y,
+        d = Math.hypot(dx, dz, dy);
+      if (d >= TUNING.explosionRadius) continue;
+      this.damage(other, (1 - d / TUNING.explosionRadius) * TUNING.explosionDamage);
+      const impulse = (1 - d / 12) * 12,
+        flat = Math.hypot(dx, dz) || 1;
+      other.vx += (dx / flat) * impulse;
+      other.vz += (dz / flat) * impulse;
+      if (!vehicle(other)) other.down = Math.max(other.down || 0, 1.5);
+    }
+    this.destruction.blast(e.x, e.y, e.z, this.time);
+  }
+  combat = new Combat();
+  attack(p: Entity) {
+    this.combat.attack(p, this);
+  }
+  drainEvents() {
+    const out = this.events;
+    this.events = [];
+    return out;
+  }
+  tick(dt: number) {
+    const steps = Math.max(1, Math.ceil(dt / (1 / 120))),
+      h = dt / steps;
+    for (let i = 0; i < steps; i++) this.step(h);
+    if (this.traffic.update(this)) {
+      // Snapshot interest must immediately see despawns/new cars in this tick.
+      this.spatial.clear();
+      for (const e of this.entities.values())
+        if (!e.vehicle) this.spatial.insert(e, e.x, e.z, 6);
+    }
+    this.inventory.cleanup(this.time);
+    this.destruction.update(this.time, dt, [...this.entities.values()]);
+    this.combat.record(this);
+    if (this.events.length > 512) this.events.splice(0, this.events.length - 512);
+  }
+  private step(dt: number) {
+    this.time += dt;
+    this.day = (this.day + dt * this.dayRate) % 24;
+    const list = [...this.entities.values()];
+    this.spatial.clear();
+    for (const e of list) if (!e.vehicle) this.spatial.insert(e, e.x, e.z, 6);
+    for (const e of list) {
+      e.cooldown = Math.max(0, (e.cooldown || 0) - dt);
+      if (e.kind === "player") this.inventory.tick(e, this.time);
+      if (e.wreck) {
+        e.wreck -= dt;
+        if (e.wreck <= 0) {
+          const route = this.ai.routes.get(e.id);
+          this.entities.delete(e.id);
+          this.ai.routes.delete(e.id);
+          if (route) {
+            this.traffic.scheduleReplacement(e, this.time);
           }
-          if (e.x > 211) e.x = -210;
-          if (e.z > 211) e.z = -210;
-          if (e.x < -211) e.x = 210;
-          if (e.z < -211) e.z = 210;
+          continue;
         }
-        e.angle +=
-          steer *
-          Math.min(Math.abs(forward) / 5, 1) *
-          1.4 *
-          dt *
-          (forward < 0 ? -1 : 1);
-        const sx = Math.sin(e.angle),
-          sz = Math.cos(e.angle);
-        const lateral = e.vx * sz - e.vz * sx;
-        const grip = e.kind === "car" ? (input.brake ? 1.2 : 8) : 2;
-        e.vx -= sz * lateral * Math.min(1, grip * dt);
-        e.vz += sx * lateral * Math.min(1, grip * dt);
-        const acceleration = e.kind === "plane" ? 17 : 13;
-        e.vx += sx * throttle * acceleration * dt;
-        e.vz += sz * throttle * acceleration * dt;
-        const drag = input.brake ? 1.3 : 0.25;
-        e.vx *= Math.exp(-drag * dt);
-        e.vz *= Math.exp(-drag * dt);
-        const speed = Math.hypot(e.vx, e.vz);
-        if (speed > 48) {
-          e.vx *= 48 / speed;
-          e.vz *= 48 / speed;
+      }
+      if (e.burning !== undefined) {
+        e.burning -= dt;
+        if (e.burning <= 0) this.explode(e);
+      }
+      if (e.vehicle) continue;
+      if (e.down) {
+        e.down = Math.max(0, e.down - dt);
+        e.vx *= Math.exp(-5 * dt);
+        e.vz *= Math.exp(-5 * dt);
+        if (!e.down && e.health <= 0) {
+          e.health = 100;
+          const pos = safeSpawn(this.city, [...this.entities.values()], e.id);
+          e.x = pos.x;
+          e.z = pos.z;
+          if (e.ai) this.ai.assign(e, this.serial++ % 36);
+          if (e.kind === "player") this.inventory.initialize(e);
+          e.y = 0;
+          e.parachute = undefined;
+          e.vx = e.vz = e.vy = 0;
         }
-        if (e.kind === "helicopter" && e.driver) {
-          e.vy = (Number(input.ascend) - Number(input.descend)) * 9;
-          e.y = Math.max(0, Math.min(55, e.y + e.vy * dt));
-        } else if (e.kind === "plane" && e.driver) {
-          e.vy +=
-            (speed > 19
-              ? Number(input.ascend) * 12 - Number(input.descend) * 12
-              : -9) * dt;
-          e.vy *= Math.exp(-2 * dt);
-          e.y = Math.max(0, Math.min(60, e.y + e.vy * dt));
-        } else {
-          if (
-            e.kind === "car" &&
-            e.y === 0 &&
-            speed > 12 &&
-            this.city.ramps.some(
-              (r) => Math.abs(e.x - r.x) < 3 && Math.abs(e.z - r.z) < 3,
-            )
-          )
-            e.vy = 9;
-          e.vy -= 18 * dt;
-          e.y = Math.max(0, e.y + e.vy * dt);
-          if (!e.y) e.vy = 0;
+      }
+      const previous = { ...e };
+      const input = this.inputs.get(e.driver || e.id) || idle();
+      if (!vehicle(e)) {
+        if (!e.down) {
+          const aiDirection = e.ai
+            ? this.ai.pedestrian(
+                e,
+                this.spatial.query(e.x, e.z, 10),
+                dt,
+                this.time,
+                this.city,
+              )
+            : undefined;
+          characterForces(
+            e,
+            input,
+            dt,
+            aiDirection
+              ? {
+                  x: aiDirection.x,
+                  z: aiDirection.z,
+                  speed: aiDirection.sprint ? 5 : 2.2,
+                }
+              : undefined,
+          );
+          if (input.attack) this.attack(e);
         }
-        if (input.brake && speed > 7)
-          this.events.push({ kind: "smoke", x: e.x, z: e.z, y: e.y });
+      } else if (e.kind === "car") {
+        const drive = e.wreck
+          ? { throttle: 0, steer: 0, brake: true }
+          : e.ai
+            ? this.ai.car(e, this.spatial.query(e.x, e.z, 24), this.time, dt)
+            : {
+                throttle: Number(input.up) - Number(input.down),
+                steer: Number(input.right) - Number(input.left),
+                brake: input.brake,
+              };
+        carForces(e, drive, dt, carGrounded(e, this.city));
+      } else if (!e.driver && (e.y > 0.2 || e.flight === "falling")) {
+        const impact = fallAircraft(e, this.city, dt);
+        if (impact > 3) {
+          this.damage(e, (impact - 3) ** 2 * TUNING.wallDamage);
+          this.events.push({
+            kind: "hit",
+            x: e.x,
+            z: e.z,
+            y: e.y + 0.5,
+            sound: "impact",
+          });
+        }
+      } else if (e.kind === "helicopter" && !e.wreck) {
+        if (e.burning !== undefined && e.flight !== "landing") this.requestLanding(e);
+        const wasLanding = e.flight === "landing";
+        flyHelicopter(e, input, this.city, list, dt);
+        if (wasLanding && e.flight === "grounded" && e.driver) {
+          const p = this.entities.get(e.driver);
+          if (p) this.exit(p, e);
+        }
+      } else flyPlane(e, input, dt);
+      const speed = Math.hypot(e.vx, e.vz),
+        limit = e.model ? VEHICLES[e.model].speed : 52;
+      if (vehicle(e) && speed > limit) {
+        e.vx *= limit / speed;
+        e.vz *= limit / speed;
       }
       e.x += e.vx * dt;
       e.z += e.vz * dt;
-      const radius =
-        e.kind === "player" || e.kind === "pedestrian" ? 0.55 : 1.4;
-      const hit = this.city.buildings.some(
-        (b) =>
-          e.y < b.h &&
-          Math.abs(e.x - b.x) < b.w / 2 + radius &&
-          Math.abs(e.z - b.z) < b.d / 2 + radius,
-      );
-      if (hit || Math.abs(e.x) > LIMIT || Math.abs(e.z) > LIMIT) {
-        e.x = ox;
-        e.z = oz;
-        e.vx *= -0.3;
-        e.vz *= -0.3;
-      }
+      if (e.kind === "car") carAltitude(e, previous, this.city, dt);
+      if (!vehicle(e)) characterAltitude(e, this.city, dt);
+      if (vehicle(e)) e.angle = wrap(e.angle + (e.angularVelocity || 0) * dt);
     }
-    const list = [...this.entities.values()];
-    for (let i = 0; i < list.length; i++)
-      for (let j = i + 1; j < list.length; j++) {
-        const a = list[i],
-          b = list[j];
-        if (
-          a.vehicle ||
-          b.vehicle ||
-          a.down ||
-          b.down ||
-          Math.abs(a.y - b.y) > 2
-        )
-          continue;
-        const ac = ["car", "helicopter", "plane"].includes(a.kind),
-          bc = ["car", "helicopter", "plane"].includes(b.kind);
-        const r = (ac ? 1.65 : 0.5) + (bc ? 1.65 : 0.5),
-          dx = b.x - a.x,
-          dz = b.z - a.z,
-          d = Math.hypot(dx, dz);
-        if (d > 0 && d < r) {
-          const nx = dx / d,
-            nz = dz / d,
-            p = (r - d) / 2;
-          a.x -= nx * p;
-          a.z -= nz * p;
-          b.x += nx * p;
-          b.z += nz * p;
-          const speed = (a.vx - b.vx) * nx + (a.vz - b.vz) * nz;
-          if (speed > 0) {
-            a.vx -= nx * speed * 0.65;
-            a.vz -= nz * speed * 0.65;
-            b.vx += nx * speed * 0.65;
-            b.vz += nz * speed * 0.65;
-            if (speed > 6) {
-              this.events.push({ kind: "hit", x: a.x, z: a.z, y: a.y });
-              if (!ac) {
-                a.down = 3;
-                a.health = 50;
+    for (let pass = 0; pass < 3; pass++) {
+      this.spatial.clear();
+      for (const e of list)
+        if (!e.vehicle && this.entities.has(e.id)) this.spatial.insert(e, e.x, e.z, 6);
+      for (const e of list) {
+        if (e.vehicle || !this.entities.has(e.id)) continue;
+        for (const b of staticGeometry(this.city).query(e.x, e.z, 6)) {
+          if (
+            e.y >= b.h + (b.obstacle ? 0 : 1.8) - 0.02 ||
+            Math.abs(e.x - b.x) > b.w / 2 + 6 ||
+            Math.abs(e.z - b.z) > b.d / 2 + 6
+          )
+            continue;
+          const c = contact(entityBox(e), buildingBox(b));
+          if (c) {
+            if (b.destructibleId && this.destruction.broken.has(b.destructibleId))
+              continue;
+            if (pass === 0 && vehicle(e) && b.destructibleId) {
+              const v = pointVelocity(e, c.x, c.z),
+                speed = Math.max(0, v.x * c.nx + v.z * c.nz);
+              if (
+                speed > 2 &&
+                this.damageProp(b.destructibleId, (speed - 2) * 14, {
+                  x: e.vx * 0.7,
+                  y: 2,
+                  z: e.vz * 0.7,
+                })
+              ) {
+                e.vx *= 0.96;
+                e.vz *= 0.96;
+                this.damage(e, Math.max(0, speed - 8) * 0.3);
+                continue;
               }
-              if (!bc) {
-                b.down = 3;
-                b.health = 50;
-              }
+            }
+            const speed = resolveContact(e, undefined, c);
+            if (pass === 0 && vehicle(e) && speed > 3) {
+              this.damage(e, (speed - 3) ** 2 * TUNING.wallDamage);
+              this.events.push({ kind: "hit", x: c.x, z: c.z, y: e.y + 0.5 });
             }
           }
         }
+        for (const c of rampContacts(e, this.city)) {
+          const speed = resolveContact(e, undefined, c);
+          if (pass === 0 && vehicle(e) && speed > 3) {
+            this.damage(e, (speed - 3) ** 2 * TUNING.wallDamage);
+            this.events.push({ kind: "hit", x: c.x, z: c.z, y: e.y + 0.5 });
+          }
+        }
+        const s = shape(e),
+          r = Math.max(s.w, s.d);
+        if (Math.abs(e.x) > LIMIT - r) {
+          const impact = Math.abs(e.vx);
+          e.x = clamp(e.x, -LIMIT + r, LIMIT - r);
+          e.vx *= -0.15;
+          if (vehicle(e) && pass === 0)
+            this.damage(e, Math.max(0, impact - 3) ** 2 * TUNING.wallDamage);
+        }
+        if (Math.abs(e.z) > LIMIT - r) {
+          const impact = Math.abs(e.vz);
+          e.z = clamp(e.z, -LIMIT + r, LIMIT - r);
+          e.vz *= -0.15;
+          if (vehicle(e) && pass === 0)
+            this.damage(e, Math.max(0, impact - 3) ** 2 * TUNING.wallDamage);
+        }
       }
-    for (const p of this.entities.values())
+      for (let i = 0; i < list.length; i++)
+        for (const b of this.spatial.query(list[i].x, list[i].z, 10)) {
+          const a = list[i];
+          if (a.id >= b.id || !this.entities.has(a.id) || !this.entities.has(b.id))
+            continue;
+          if (
+            a.vehicle ||
+            b.vehicle ||
+            (!vehicle(a) && a.health <= 0) ||
+            (!vehicle(b) && b.health <= 0) ||
+            Math.abs(a.y - b.y) > 1.8 ||
+            Math.abs(a.x - b.x) > 10 ||
+            Math.abs(a.z - b.z) > 10
+          )
+            continue;
+          const c = contact(entityBox(a), entityBox(b));
+          if (!c) continue;
+          let vehicleApproach = Infinity;
+          if (vehicle(a) !== vehicle(b)) {
+            // Character locomotion into a parked/departing vehicle is not a strike.
+            // Use the vehicle's contact-point motion toward the character, including yaw.
+            const v = vehicle(a) ? a : b;
+            const velocity = pointVelocity(v, c.x, c.z);
+            const direction = vehicle(a) ? 1 : -1;
+            vehicleApproach = Math.max(
+              0,
+              direction * (velocity.x * c.nx + velocity.z * c.nz),
+            );
+          }
+          const speed = Math.min(resolveContact(a, b, c), vehicleApproach);
+          if (pass === 0 && speed > 3) {
+            const severity = (speed - 3) ** 2 * TUNING.collisionDamage;
+            this.damage(a, severity * Math.min(1, mass(b) / mass(a)));
+            this.damage(b, severity * Math.min(1, mass(a) / mass(b)));
+            if (!vehicle(a) && vehicle(b)) a.down = Math.max(a.down || 0, 0.8);
+            if (!vehicle(b) && vehicle(a)) b.down = Math.max(b.down || 0, 0.8);
+            this.events.push({
+              kind: "hit",
+              x: c.x,
+              z: c.z,
+              y: Math.max(a.y, b.y) + 0.5,
+            });
+          }
+        }
+    }
+    for (const p of list)
       if (p.vehicle) {
         const v = this.entities.get(p.vehicle);
         if (v) {

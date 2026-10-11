@@ -1,0 +1,10 @@
+{
+  "id": "villa",
+  "name": "Garden villa",
+  "height": [5, 9],
+  "colors": ["#edcfac", "#b9cbbb", "#dfb7a2"],
+  "facade": "windows",
+  "storefront": false,
+  "trim": "#e8d6b6",
+  "floorHeight": 3.2
+}

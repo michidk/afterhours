@@ -1,19 +1,55 @@
+import { VEHICLES } from "../shared/catalog.ts";
+import { availableSeat, occupiedSeats, seatCapacity } from "../shared/seats.ts";
+import type { Pickup } from "../shared/protocol.ts";
 import "./style.css";
+import { mountUI } from "./ui/index.ts";
+import { CityMap } from "./ui/city-map.ts";
+import { PlayerList } from "./ui/player-list.ts";
+import { GameNetwork } from "./network/index.ts";
+import { Controls } from "./input/index.ts";
+import { GameAudio } from "./audio/index.ts";
 import { CityScene } from "./scene";
-import { district, idle, LIMIT, ROADS, type Entity } from "../shared/world";
-const app = document.querySelector<HTMLDivElement>("#app")!;
-app.innerHTML = `<section class="overlay" id="entry"><div class="intro"><div class="eyebrow">ONE CITY. ENDLESS POSSIBILITIES.</div><h1 class="brand">AFTER<span>HOURS</span></h1><p class="tagline">Nowhere to be.<br>Everything to get into.</p><p class="muted">A living city. A stolen car. A story worth sharing.<br>Find your people. Take the long way home.</p><form class="entry" id="join"><label for="name">WHAT DO THEY CALL YOU?</label><input id="name" maxlength="18" placeholder="Your street name" autocomplete="nickname" required value="Stranger"><label style="margin-top:20px">PICK YOUR COLOUR</label><div class="swatches" role="group" aria-label="Character colour">${["#e8b63f", "#e86551", "#55a9b8", "#a995c9", "#80a177"].map((c, i) => `<button type="button" class="swatch ${i === 0 ? "selected" : ""}" style="background:${c}" data-color="${c}" aria-label="${["Gold", "Coral", "Teal", "Lavender", "Sage"][i]}" aria-pressed="${i === 0}"></button>`).join("")}</div><button class="primary" id="play" disabled>Warming up the city…</button><div class="entry-footer"><span class="online">● SHARED CITY</span><span>NO ACCOUNT. JUST A NAME.</span></div><div class="loading" id="loading">Building neighbourhoods…<div class="progress"><i style="width:15%"></i></div></div></form><p class="muted" style="font-size:10px;letter-spacing:1px">DESKTOP PLAYTEST · WASD TO MOVE · F TO ENTER A VEHICLE</p></div><div class="corner"><strong>PALOMA ISLAND</strong><small>EVERY NIGHT HAS A STORY / EARLY BUILD 0.1</small></div></section>
-<section class="hud hidden" id="hud"><div class="topbar"><div class="logo">AFTER<span>HOURS</span></div><div class="stats"><div class="panel"><span class="dot"></span><span id="population">1</span> IN THE CITY</div><div class="panel" id="clock">16:30</div></div></div><div class="chat panel"><div class="messages" id="messages"><p><b>Paloma Radio</b> Welcome to the neighbourhood.</p></div><input id="chat" placeholder="Enter to chat…" maxlength="160" aria-label="Chat message"></div><div class="location"><canvas id="minimap" width="220" height="220"></canvas><div class="district panel"><small>PALOMA ISLAND</small><strong id="district">LITTLE HAVANA</strong><p id="street">Paloma Avenue</p></div></div><div class="controls"><div class="panel"><div class="speed"><span id="speed">0</span> <small id="unit">KM/H</small></div><div id="weapon">FISTS</div><div class="health"><i id="health" style="width:100%"></i></div><br></div><div class="panel" id="prompt"><kbd>F</kbd> Enter vehicle / pick up weapon</div><div class="panel"><kbd>W A S D</kbd> Move &nbsp; <kbd>SPACE</kbd> Sprint / handbrake<br><br><kbd>J</kbd> Attack &nbsp; <kbd>H</kbd> Help &nbsp; <kbd>F1</kbd> Debug</div></div><div class="debug panel hidden" id="debug"><h3>DEVELOPER GARAGE</h3><p>Server-authorized sandbox tools</p>${["car", "helicopter", "plane", "pistol", "bat", "heal", "day", "night"].map((kind) => `<button data-spawn="${kind}">${kind.toUpperCase()}</button>`).join("")}</div><div class="help panel hidden" id="help"><h3>YOUR CITY. YOUR RULES.</h3><p><kbd>W A S D</kbd> Walk / throttle and steer<br><kbd>SPACE</kbd> Sprint / handbrake<br><kbd>F</kbd> Enter / exit / pick up<br><kbd>J</kbd> Punch / fire in facing direction<br><kbd>E</kbd> Climb in aircraft<br><kbd>Q</kbd> Descend in aircraft<br><kbd>ENTER</kbd> Chat<br><kbd>F1</kbd> Development garage</p><p>Planes need speed before climbing. Land before exiting. Golden pads contain weapons. Ramps launch fast cars.</p><button id="closehelp">BACK TO THE STREETS</button></div><div class="toast panel hidden" id="toast"></div></section>`;
+import { FrameProfiler } from "./performance/index.ts";
+import { AgentInterface } from "./debug/index.ts";
+import { CityStream } from "./world/stream.ts";
+import { CityRenderer } from "./world/render.ts";
+import { mapManifestSchema } from "../shared/city-stream.ts";
+import type { CameraMode } from "./camera/debug.ts";
+import { district, idle, LIMIT, type Entity } from "../shared/world";
+mountUI();
+let pickups: Pickup[] = [];
 const $ = <T extends HTMLElement = HTMLElement>(s: string) =>
   document.querySelector<T>(s)!;
+const playerList = new PlayerList(
+  $<HTMLUListElement>("#player-list"),
+  $("#player-count"),
+);
 let selected = "#e8b63f",
-  socket: WebSocket | undefined,
+  network: GameNetwork | undefined,
   playerId: string | undefined,
   entities: Entity[] = [],
   joined = false,
   debugAllowed = false,
   scene: CityScene;
-const keys = new Set<string>();
+let automation: AgentInterface | undefined;
+let cityStream: CityStream;
+let cityMap: CityMap | undefined;
+function setCamera(mode: CameraMode) {
+  if (!debugAllowed || !scene) return;
+  controls.clear();
+  network?.input(idle());
+  scene.debugCamera.setMode(mode, scene.camera.position, scene.target);
+  $<HTMLSelectElement>("#camera-mode").value = mode;
+  $("#camera-hint").classList.toggle("hidden", mode === "follow");
+  $("#camera-hint").textContent =
+    mode === "fly"
+      ? "FLY CAMERA · WASD move · E/Q up/down · Shift / Space faster · Right-drag look · Wheel zoom · Escape to follow"
+      : "FREE CAMERA · WASD pan · E/Q raise/lower · Shift / Space faster · Wheel zoom · Escape to follow";
+  network?.send({ type: "debugView", center: null });
+}
+const controls = new Controls(),
+  keys = controls.keys,
+  audio = new GameAudio();
 let toastTimer: ReturnType<typeof setTimeout>;
 document.querySelector("#boot")?.remove();
 function toast(message: string) {
@@ -23,7 +59,7 @@ function toast(message: string) {
   toastTimer = setTimeout(() => $("#toast").classList.add("hidden"), 4000);
 }
 function send(data: unknown) {
-  if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(data));
+  network?.send(data);
 }
 for (const swatch of document.querySelectorAll<HTMLButtonElement>(".swatch"))
   swatch.onclick = () => {
@@ -42,65 +78,95 @@ function loading(text: string, progress: number) {
 $("#join").addEventListener("submit", (event) => {
   event.preventDefault();
   if (!scene) return;
+  audio.unlock();
+  network?.close();
   $("#play").setAttribute("disabled", "");
-  loading("Connecting to Paloma Island…", 80);
-  socket = new WebSocket(
-    `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`,
+  network = new GameNetwork(
+    {
+      welcome(m) {
+        if (m.map.mapId !== cityStream.map.mapId) {
+          location.reload();
+          return;
+        }
+        playerId = m.id;
+        debugAllowed = m.debug;
+        if (debugAllowed && network) {
+          automation = new AgentInterface(network, scene, setCamera);
+          Object.defineProperty(window, "afterhoursDebug", {
+            configurable: true,
+            value: automation,
+          });
+        } else {
+          automation = undefined;
+          delete (window as unknown as { afterhoursDebug?: AgentInterface })
+            .afterhoursDebug;
+        }
+        joined = true;
+        $("#entry").classList.add("hidden");
+        $("#hud").classList.remove("hidden");
+        toast("Welcome to Paloma. Mouse to aim, F to enter a vehicle.");
+      },
+      state(m) {
+        entities = m.entities;
+        pickups = m.pickups;
+        scene.time = m.time;
+        scene.day = m.day;
+        scene.dayRate = m.dayRate ?? 1 / 75;
+        scene.updatePickups(m.pickups);
+        scene.destruction.receive(m.debris ?? [], m.time);
+        $("#population").textContent = String(m.players);
+        const p = entities.find((e) => e.id === playerId);
+        for (const e of m.events) {
+          scene.effect(e);
+          audio.event(e, p);
+        }
+      },
+      chat(name, text) {
+        const p = document.createElement("p"),
+          b = document.createElement("b");
+        b.textContent = name + ": ";
+        p.append(b, document.createTextNode(text));
+        $("#messages").append(p);
+        while ($("#messages").children.length > 6) $("#messages").firstChild?.remove();
+      },
+      roster(players) {
+        playerList.update(players, playerId);
+      },
+      destruction(ids) {
+        scene.destruction.setBroken(ids);
+      },
+      status(state) {
+        loading(state, 90);
+        if (state !== "connected") {
+          playerList.clear(state === "reconnecting" ? "Reconnecting…" : "Connecting…");
+          controls.clear();
+          automation?.stop();
+          automation = undefined;
+          delete (window as unknown as { afterhoursDebug?: AgentInterface })
+            .afterhoursDebug;
+          scene.debugCamera.mode = "follow";
+          $("#camera-hint").classList.add("hidden");
+          $<HTMLSelectElement>("#camera-mode").value = "follow";
+          if (joined)
+            toast(state === "reconnecting" ? "Reconnecting to the city..." : state);
+        }
+      },
+    },
+    $<HTMLInputElement>("#name").value,
+    selected,
+    scene.city,
   );
-  let welcome = false;
-  const timeout = setTimeout(() => {
-    if (!welcome) socket?.close();
-  }, 10000);
-  socket.onopen = () =>
-    send({
-      type: "join",
-      name: $<HTMLInputElement>("#name").value,
-      color: selected,
-    });
-  socket.onmessage = (event) => {
-    const m = JSON.parse(event.data);
-    if (m.type === "welcome") {
-      clearTimeout(timeout);
-      welcome = true;
-      playerId = m.id;
-      debugAllowed = m.debug;
-      joined = true;
-      $("#entry").classList.add("hidden");
-      $("#hud").classList.remove("hidden");
-      toast("Welcome to Paloma. There’s a car just across the street.");
-    }
-    if (m.type === "state") {
-      entities = m.entities;
-      scene.time = m.time;
-      scene.day = m.day;
-      $("#population").textContent = m.players;
-      for (const e of m.events) scene.effect(e);
-    }
-    if (m.type === "chat") {
-      const p = document.createElement("p"),
-        b = document.createElement("b");
-      b.textContent = m.name + ": ";
-      p.append(b, document.createTextNode(m.text));
-      $("#messages").append(p);
-      while ($("#messages").children.length > 6)
-        $("#messages").firstChild?.remove();
-    }
+  network.worldReady = () => {
+    const p = network?.entities.get(network.playerId),
+      body = p?.vehicle ? network?.entities.get(p.vehicle) : p;
+    return !body || cityStream.ready(body);
   };
-  socket.onclose = () => {
-    clearTimeout(timeout);
-    joined = false;
-    keys.clear();
-    $("#entry").classList.remove("hidden");
-    $("#hud").classList.add("hidden");
-    $("#play").removeAttribute("disabled");
-    $("#play").textContent = "Rejoin the city →";
-    loading("Connection closed. Your city is one click away.", 100);
-  };
-  socket.onerror = () =>
-    loading("Unable to connect. Check that the game server is running.", 100);
+  network.connect();
 });
 window.addEventListener("keydown", (event) => {
-  const typing = document.activeElement?.tagName === "INPUT";
+  const typing = ["INPUT", "SELECT", "TEXTAREA"].includes(
+    document.activeElement?.tagName || "",
+  );
   if (typing) {
     if (event.code === "Enter" && document.activeElement?.id === "chat") {
       event.preventDefault();
@@ -120,7 +186,25 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
   keys.add(event.code);
   if (event.repeat) return;
-  if (event.code === "KeyF") send({ type: "interact" });
+  if (event.code === "KeyM") {
+    cityMap?.setOpen(!cityMap.open);
+    return;
+  }
+  if (cityMap?.open) {
+    if (event.code === "Escape") cityMap.setOpen(false);
+    keys.clear();
+    return;
+  }
+  if (event.code === "Escape" && scene.debugCamera.active) setCamera("follow");
+  if (!scene.debugCamera.active && event.code === "KeyF") send({ type: "interact" });
+  if (!scene.debugCamera.active && event.code === "KeyG") send({ type: "drop" });
+  if (!scene.debugCamera.active && event.code === "KeyR") send({ type: "reload" });
+  if (!scene.debugCamera.active && /^Digit[1-4]$/.test(event.code))
+    send({ type: "equip", slot: Number(event.code.slice(-1)) - 1 });
+  if (event.code === "KeyN") {
+    audio.toggle();
+    toast(audio.muted ? "Sound muted" : "Sound on");
+  }
   if (event.code === "F1") {
     if (debugAllowed) $("#debug").classList.toggle("hidden");
     else toast("The development garage is disabled on this server.");
@@ -137,33 +221,73 @@ window.addEventListener("keydown", (event) => {
 });
 window.addEventListener("keyup", (e) => keys.delete(e.code));
 window.addEventListener("blur", () => {
-  keys.clear();
-  send({ type: "input", ...idle() });
+  controls.clear();
+  automation?.stop();
+  network?.input(idle());
 });
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
-    keys.clear();
-    send({ type: "input", ...idle() });
+    controls.clear();
+    automation?.stop();
+    network?.input(idle());
   }
 });
 $("#closehelp").onclick = () => $("#help").classList.add("hidden");
-for (const button of document.querySelectorAll<HTMLButtonElement>(
-  "[data-spawn]",
-))
+for (const button of document.querySelectorAll<HTMLButtonElement>("[data-spawn]"))
   button.onclick = () => send({ type: "debug", kind: button.dataset.spawn });
+$<HTMLSelectElement>("#camera-mode").onchange = (event) => {
+  setCamera((event.target as HTMLSelectElement).value as CameraMode);
+  (event.target as HTMLSelectElement).blur();
+};
+for (const button of document.querySelectorAll<HTMLButtonElement>("[data-hour]"))
+  button.onclick = () =>
+    void automation
+      ?.time(Number(button.dataset.hour), 0)
+      .catch((error) => toast(String(error)));
+$("#time-resume").onclick = () =>
+  void automation?.time(scene.day, 1 / 75).catch((error) => toast(String(error)));
+$("#time-cycle").onclick = () =>
+  void automation?.time(0, 0.8).catch((error) => toast(String(error)));
+const canvas = $<HTMLCanvasElement>("#world");
+canvas.addEventListener("pointermove", (e) => {
+  if (scene?.debugCamera.active) {
+    if (e.buttons & 2) scene.debugCamera.look(e.movementX, e.movementY);
+    return;
+  }
+  const point = scene?.aimPoint(e.clientX, e.clientY),
+    p = network?.prediction?.body;
+  if (point && p && !p.driver) controls.aim = Math.atan2(point.x - p.x, point.z - p.z);
+});
+canvas.addEventListener("pointerdown", (event) => {
+  if (joined) {
+    audio.unlock();
+    if (!cityMap?.open && !scene.debugCamera.active && event.button === 0)
+      controls.mouseDown = true;
+  }
+});
+canvas.addEventListener("contextmenu", (event) => {
+  if (scene?.debugCamera.active) event.preventDefault();
+});
+canvas.addEventListener(
+  "wheel",
+  (event) => {
+    if (scene?.debugCamera.active) {
+      event.preventDefault();
+      scene.debugCamera.zoom(event.deltaY);
+    }
+  },
+  { passive: false },
+);
+window.addEventListener("pointerup", () => (controls.mouseDown = false));
 setInterval(() => {
-  if (joined)
-    send({
-      type: "input",
-      up: keys.has("KeyW") || keys.has("ArrowUp"),
-      down: keys.has("KeyS") || keys.has("ArrowDown"),
-      left: keys.has("KeyA") || keys.has("ArrowLeft"),
-      right: keys.has("KeyD") || keys.has("ArrowRight"),
-      brake: keys.has("Space"),
-      ascend: keys.has("KeyE"),
-      descend: keys.has("KeyQ"),
-      attack: keys.has("KeyJ"),
-    });
+  if (joined && !document.hidden)
+    network?.input(
+      cityMap?.open ||
+        scene.debugCamera.active ||
+        ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName || "")
+        ? idle()
+        : automation?.input || controls.read(),
+    );
 }, 1000 / 30);
 const map = $<HTMLCanvasElement>("#minimap").getContext("2d")!;
 function drawMap(p: Entity) {
@@ -174,9 +298,23 @@ function drawMap(p: Entity) {
   map.translate(110 - p.x * scale, 110 + p.z * scale);
   map.scale(scale, -scale);
   map.fillStyle = "#4e6060";
-  for (const r of ROADS) {
-    map.fillRect(r - 9, -LIMIT, 18, LIMIT * 2);
-    map.fillRect(-LIMIT, r - 9, LIMIT * 2, 18);
+  for (const r of scene.city.roads) {
+    map.strokeStyle = "#4e6060";
+    map.lineWidth = r.width;
+    map.lineCap = "round";
+    map.beginPath();
+    map.moveTo(r.ax, r.az);
+    map.lineTo(r.bx, r.bz);
+    map.stroke();
+  }
+  for (const park of scene.city.parks) {
+    map.fillStyle = park.kind === "civic" ? "#b7b19a" : "#64845d";
+    map.fillRect(
+      park.x - (park.w ?? 38) / 2,
+      park.z - (park.d ?? 38) / 2,
+      park.w ?? 38,
+      park.d ?? 38,
+    );
   }
   map.fillStyle = "#c7c6b1";
   for (const b of scene.city.buildings)
@@ -209,52 +347,236 @@ function drawMap(p: Entity) {
 }
 async function boot() {
   try {
+    void audio.preload();
     await new Promise((r) => setTimeout(r, 30));
-    scene = new CityScene($<HTMLCanvasElement>("#world"));
+    const response = await fetch("/city", { cache: "no-store" });
+    if (!response.ok) throw Error("City download failed");
+    const world = mapManifestSchema.parse(await response.json());
+    let cityRenderer: CityRenderer;
+    cityStream = new CityStream(world, (chunks) => cityRenderer.sync(chunks));
+    scene = new CityScene($<HTMLCanvasElement>("#world"), cityStream.city, true);
+    cityMap = new CityMap(
+      $("#city-map"),
+      $<HTMLCanvasElement>("#city-map-canvas"),
+      $("#map-status"),
+      world,
+      () => {
+        controls.clear();
+        automation?.stop();
+        network?.input(idle());
+      },
+    );
+    cityRenderer = new CityRenderer(scene, world);
     loading("Painting storefronts and planting palms…", 55);
-    await scene.scene.whenReadyAsync();
+    await cityStream.prepare();
+    scene.engine.runRenderLoop(() => scene.scene.render());
+    let readinessTimer: ReturnType<typeof setTimeout>;
+    try {
+      await Promise.race([
+        scene.scene.whenReadyAsync(),
+        new Promise<never>((_, reject) => {
+          readinessTimer = setTimeout(
+            () => reject(Error("Rendering readiness timed out")),
+            30000,
+          );
+        }),
+      ]);
+    } finally {
+      clearTimeout(readinessTimer!);
+    }
+    scene.engine.stopRenderLoop();
     loading("City ready. Your story starts here.", 100);
     $("#play").textContent = "Enter the city →";
     $("#play").removeAttribute("disabled");
+    const profiler = import.meta.env.DEV ? new FrameProfiler() : undefined;
+    if (import.meta.env.DEV)
+      Object.defineProperty(window, "afterhours", {
+        configurable: true,
+        get: () => ({
+          playerId,
+          entities,
+          predicted: network?.prediction?.body,
+          pending: network?.prediction?.pending.length,
+          corrections: network?.prediction?.corrections,
+          latency: network?.latency,
+          skids: scene.effects.skidMarks.length,
+          particles: scene.effects.effects.length,
+          gpu: scene.engine.getGlInfo(),
+          fps: scene.engine.getFps(),
+          frameP95Ms: profiler!.stats.frameP95Ms,
+          frameStages: profiler!.stats.stagesP95Ms,
+          trailUploads: scene.effects.trails.uploads,
+          trailTiles: scene.effects.trails.residentTiles,
+          cityStreaming: cityStream.diagnostics,
+          trailUploadMs: scene.effects.trails.lastUploadMs,
+          audio: audio.diagnostics,
+          profile: async (seconds = 60) => {
+            if (!joined) throw Error("Join the city before profiling");
+            const viewport = [innerWidth, innerHeight];
+            const result = await profiler!.profile(seconds);
+            return {
+              ...result,
+              gpu: scene.engine.getGlInfo(),
+              viewport,
+              browser: navigator.userAgent,
+              pixelRatio: devicePixelRatio,
+              audio: audio.muted ? "muted" : "enabled",
+            };
+          },
+          meshes: scene.scene.meshes.length,
+          destruction: scene.destruction.diagnostics,
+        }),
+      });
     let last = performance.now(),
-      ui = 0;
+      ui = 0,
+      streamClock = 0;
     scene.engine.runRenderLoop(() => {
       const now = performance.now(),
         dt = Math.min(0.05, (now - last) / 1000);
+      const interval = now - last;
       last = now;
       if (!joined) scene.time += dt;
-      scene.update(entities, playerId, dt);
+      const rendered = network?.renderEntities(now) || entities;
+      const cameraInput =
+        cityMap?.open ||
+        ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName || "")
+          ? idle()
+          : automation?.input || controls.read();
+      scene.update(rendered, playerId, dt, cameraInput);
+      streamClock += dt;
+      if (streamClock >= 0.1) {
+        streamClock = 0;
+        const p = network?.entities.get(network.playerId),
+          body = p?.vehicle ? network?.entities.get(p.vehicle) : p,
+          forward = scene.camera.getForwardRay().direction,
+          groundDistance =
+            Math.max(0, scene.camera.position.y) / Math.max(0.15, -forward.y),
+          radius = Math.max(
+            160,
+            groundDistance *
+              Math.tan(scene.camera.fov / 2) *
+              Math.max(
+                1,
+                scene.engine.getRenderWidth() / scene.engine.getRenderHeight(),
+              ) *
+              2 +
+              64,
+          ),
+          center =
+            forward.y < -0.15
+              ? {
+                  x: scene.camera.position.x + forward.x * groundDistance,
+                  z: scene.camera.position.z + forward.z * groundDistance,
+                }
+              : scene.target;
+        cityStream.setView(body, center, radius);
+      }
+      const local = rendered.find((e) => e.id === playerId);
+      audio.update(rendered, local, dt);
+      const updated = profiler ? performance.now() : 0;
       scene.scene.render();
+      const renderedAt = profiler ? performance.now() : 0;
       ui += dt;
       if (ui > 0.1 && joined) {
         ui = 0;
-        const p = entities.find((e) => e.id === playerId);
+        const p = rendered.find((e) => e.id === playerId);
         if (!p) return;
-        const v = entities.find((e) => e.id === p.vehicle);
+        if (debugAllowed && scene.debugCamera.active)
+          send({
+            type: "debugView",
+            center: {
+              x: Math.max(-LIMIT, Math.min(LIMIT, scene.target.x)),
+              z: Math.max(-LIMIT, Math.min(LIMIT, scene.target.z)),
+            },
+          });
+        const v = rendered.find((e) => e.id === p.vehicle);
         $("#speed").textContent = String(
           Math.round(Math.hypot(v?.vx || 0, v?.vz || 0) * 3.6),
         );
-        $("#unit").textContent = v ? "KM/H" : "ON FOOT";
+        $("#unit").textContent = v ? "KM/H" : p.parachute ? "PARACHUTE" : "ON FOOT";
         $("#weapon").textContent = p.down
           ? "RECOVERING…"
           : (v?.kind || p.weapon || "fists").toUpperCase();
-        $("#health").style.width = `${p.health}%`;
+        $("#health").style.width =
+          `${Math.max(0, ((v?.health ?? p.health) / (v?.maxHealth ?? p.maxHealth ?? 100)) * 100)}%`;
+        const item = p.inventory?.[p.equipped || 0];
+        if (!v && item)
+          $("#weapon").textContent =
+            (p.reloadUntil ? "RELOADING" : item.kind.toUpperCase()) +
+            (item.kind === "pistol" || item.kind === "smg"
+              ? ` | ${item.ammo} / ${item.reserve}`
+              : "") +
+            ` | ${p.inventory?.map((w, i) => `${i + 1} ${w.kind}`).join(" / ")}`;
+        $("#health").style.background =
+          v?.burning !== undefined ? "#f47a44" : "#9fd3aa";
+        if (v?.burning !== undefined)
+          $("#weapon").textContent = `ON FIRE - EXIT! ${Math.ceil(v.burning)}s`;
+        else if (v?.kind === "helicopter")
+          $("#weapon").textContent =
+            `${v.takeoffDelay ? `BOARDING ${Math.ceil(v.takeoffDelay)}s` : v.flight?.toUpperCase()} | ${Math.round(v.y)} M`;
+        else if (p.parachute)
+          $("#weapon").textContent = `PARACHUTE | ${Math.round(p.y)} M`;
+        if (v && v.burning === undefined)
+          $("#weapon").textContent +=
+            ` | ${v.driver === p.id ? "DRIVER" : "PASSENGER"} | ${occupiedSeats(v)}/${seatCapacity(v)} SEATS`;
         $("#district").textContent = district(p.x, p.z);
         $("#street").textContent =
           `${Math.abs(p.x) < 12 ? "Paloma Avenue" : "Island streets"} · ${v ? "Cruising" : "On foot"}`;
         $("#clock").textContent =
           `${String(Math.floor(scene.day)).padStart(2, "0")}:${String(Math.floor((scene.day % 1) * 60)).padStart(2, "0")}`;
+        const nearVehicle = entities
+          .filter(
+            (e) =>
+              ["car", "helicopter", "plane"].includes(e.kind) &&
+              availableSeat(e) >= 0 &&
+              !e.wreck &&
+              e.burning === undefined &&
+              e.y < 0.5 &&
+              Math.abs(e.y - p.y) < 0.5 &&
+              Math.hypot(e.x - p.x, e.z - p.z) < 6,
+          )
+          .sort(
+            (a, b) =>
+              Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z),
+          )[0];
+        const nearPickup = pickups
+          .filter(
+            (e) => Math.abs(e.y - p.y) < 1.2 && Math.hypot(e.x - p.x, e.z - p.z) < 2.5,
+          )
+          .sort(
+            (a, b) =>
+              Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z),
+          )[0];
+        const action =
+          nearPickup &&
+          Math.hypot(nearPickup.x - p.x, nearPickup.z - p.z) <
+            (nearVehicle
+              ? Math.hypot(nearVehicle.x - p.x, nearVehicle.z - p.z)
+              : Infinity)
+            ? `Pick up ${nearPickup.item.kind.toUpperCase()}`
+            : nearVehicle
+              ? `${availableSeat(nearVehicle) === 0 ? "Drive" : "Ride in"} ${nearVehicle.model ? VEHICLES[nearVehicle.model].name : nearVehicle.kind} (${occupiedSeats(nearVehicle)}/${seatCapacity(nearVehicle)} seats)`
+              : "No nearby vehicle or weapon";
         $("#prompt").innerHTML = v
-          ? `<kbd>F</kbd> Exit ${v.kind}${v.kind !== "car" ? " · E / Q altitude" : ""}`
-          : "<kbd>F</kbd> Enter vehicle / pick up weapon";
+          ? v.y > 0.2 && (v.kind === "helicopter" || v.kind === "plane")
+            ? `<kbd>F</kbd> Exit and deploy parachute`
+            : `<kbd>F</kbd> Exit ${v.kind}${v.kind === "plane" ? " · E / Q altitude" : ""}`
+          : p.parachute
+            ? `<kbd>W A S D</kbd> Steer parachute`
+            : `<kbd>F</kbd> ${action}`;
         drawMap(p);
+        cityMap?.update(p, rendered);
       }
+      profiler?.record({
+        interval,
+        update: updated - now,
+        render: renderedAt - updated,
+        ui: performance.now() - renderedAt,
+      });
     });
   } catch (error) {
-    loading(
-      "Could not start 3D rendering. Try a browser with WebGL enabled.",
-      0,
-    );
+    scene?.engine.stopRenderLoop();
+    loading("Could not start 3D rendering. Try a browser with WebGL enabled.", 0);
     console.error(error);
   }
 }

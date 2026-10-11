@@ -1,0 +1,10 @@
+{
+  "id": "apartments",
+  "name": "Garden apartments",
+  "height": [10, 21],
+  "colors": ["#a7b998", "#e1c7a0", "#b8c9bd"],
+  "facade": "balconies",
+  "storefront": false,
+  "trim": "#e9dfc5",
+  "floorHeight": 3.3
+}

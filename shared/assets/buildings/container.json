@@ -1,0 +1,10 @@
+{
+  "id": "container",
+  "name": "Shipping container",
+  "height": [2.8, 3.2],
+  "colors": ["#b9674e", "#638b85", "#c6a45f"],
+  "facade": "industrial",
+  "storefront": false,
+  "trim": "#a6aa96",
+  "floorHeight": 4
+}

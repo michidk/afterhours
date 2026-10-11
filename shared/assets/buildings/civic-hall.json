@@ -1,0 +1,10 @@
+{
+  "id": "civic-hall",
+  "name": "Civic hall",
+  "height": [12, 18],
+  "colors": ["#d8d0b7", "#c1cbc1"],
+  "facade": "piers",
+  "storefront": false,
+  "trim": "#efe3c9",
+  "floorHeight": 4
+}

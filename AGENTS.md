@@ -1,6 +1,6 @@
 # AFTERHOURS development
 
-Keep gameplay authoritative in `server/`. Browser code may interpolate and render cosmetic effects, but must not decide positions, damage, pickups, or ownership. Keep generation deterministic and share its data contract in `shared/`.
+Keep gameplay authoritative in `server/`. Browser movement prediction is provisional and must reconcile with server snapshots; it must never decide final positions, damage, pickups, or ownership. Keep reusable movement and data contracts in `shared/`. Generate cities only through the manual offline script in `scripts/`, persist the versioned artifact, and load it on server startup. Clients receive the loaded city from the server.
 
 Run `bun run test` and `bun run build` after gameplay or protocol changes. Update README controls and limitations when behaviour changes. Production debug tools must remain explicitly opt-in.
 

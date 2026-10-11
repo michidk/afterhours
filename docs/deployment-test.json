@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-11T19:22:36.138Z",
+  "url": "https://localhost:8443",
+  "https": true,
+  "wss": true,
+  "artifactMatches": true,
+  "debugDisabled": true,
+  "debugRpcDenied": true,
+  "reconnectRestored": true,
+  "restartResetVerified": true,
+  "certificateValidation": "Local Caddy CA: verification bypass only for this localhost test; browser must trust local CA",
+  "health": {
+    "ok": true,
+    "version": 1,
+    "time": 0.13333333333333333,
+    "players": 1,
+    "entities": 114,
+    "traffic": {
+      "jamCount": 0,
+      "jammedCars": 0,
+      "despawned": 0,
+      "respawned": 0,
+      "pendingRespawns": 0
+    },
+    "ticks": 4,
+    "late": 0,
+    "tickP95Ms": 21.909246000000024,
+    "tickMaxMs": 21.909246000000024,
+    "bytesSent": 31941,
+    "rejectedMessages": 0,
+    "memoryMB": 106
+  }
+}

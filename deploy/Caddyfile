@@ -1,0 +1,12 @@
+{$DOMAIN:localhost} {
+ encode zstd gzip
+ reverse_proxy game:5173
+ header {
+  X-Content-Type-Options nosniff
+  Referrer-Policy same-origin
+ }
+ log {
+  output stdout
+  format json
+ }
+}

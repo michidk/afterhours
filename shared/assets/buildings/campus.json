@@ -1,0 +1,10 @@
+{
+  "id": "campus",
+  "name": "University faculty",
+  "height": [12, 22],
+  "colors": ["#d0b994", "#aabeb2"],
+  "facade": "glass",
+  "storefront": false,
+  "trim": "#e4ddc4",
+  "floorHeight": 4
+}

@@ -1,3 +1,9 @@
+import { buildRoad } from "./models/road.ts";
+import { buildBuilding } from "./models/buildings/index.ts";
+import "@babylonjs/core/Shaders/default.vertex";
+import "@babylonjs/core/Shaders/default.fragment";
+import "@babylonjs/core/Shaders/shadowMap.vertex";
+import "@babylonjs/core/Shaders/shadowMap.fragment";
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { Scene } from "@babylonjs/core/scene";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
@@ -13,14 +19,31 @@ import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import {
-  ROADS,
-  generateCity,
+  LIMIT,
   random,
   signal,
   type City,
   type Entity,
+  type WorldEvent,
 } from "../shared/world.ts";
+import type { Pickup } from "../shared/protocol.ts";
+import { VEHICLES, TUNING } from "../shared/catalog.ts";
+import { followCamera } from "./camera/index.ts";
+import { Plane } from "@babylonjs/core/Maths/math.plane";
+import "@babylonjs/core/Culling/ray";
+import { Effects } from "./effects/index.ts";
+import { DebugCamera } from "./camera/debug.ts";
+import { EnvironmentLighting } from "./lighting/index.ts";
+import { idle, type Input } from "../shared/world.ts";
+import { RAMP, rampSlope, carGrounded } from "../shared/physics/ramps.ts";
+import { rampMesh } from "./models/ramp.ts";
+import { TyreTracks } from "./effects/tyre-tracks.ts";
+import { CAR_WHEEL_MOUNTS } from "./models/car-wheels.ts";
+import type { GeometryOptions } from "./world/render.ts";
+import { destructibles } from "../shared/destruction.ts";
+import { DestructionRenderer } from "./world/destruction.ts";
 export class CityScene {
+  pickupNodes = new Map<string, TransformNode>();
   engine: Engine;
   scene: Scene;
   camera: FreeCamera;
@@ -31,45 +54,43 @@ export class CityScene {
   shadowTimer = 0;
   city: City;
   nodes = new Map<string, TransformNode>();
+  private parts = new Map<string, Mesh[]>();
   materials = new Map<string, StandardMaterial>();
   lights: { mesh: Mesh; axis: "x" | "z" }[] = [];
   streetGlow: StandardMaterial;
-  effects: { mesh: Mesh; life: number }[] = [];
+  lighting: EnvironmentLighting;
+  debugCamera = new DebugCamera();
+  destruction: DestructionRenderer;
+  effects: Effects;
+  private tyreTracks = new TyreTracks();
+  effectClock = 0;
   target = new Vector3(4, 0, 12);
   day = 16.5;
+  dayRate = 0;
   time = 0;
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, city: City, streamed = false) {
     this.engine = new Engine(canvas, true, {
       stencil: true,
-      preserveDrawingBuffer: true,
+      preserveDrawingBuffer: false,
     });
     this.engine.setHardwareScalingLevel(Math.max(1, devicePixelRatio / 1.6));
     this.scene = new Scene(this.engine);
+    this.scene.skipPointerMovePicking = true;
+    this.scene.skipPointerDownPicking = true;
+    this.scene.skipPointerUpPicking = true;
     this.scene.clearColor = Color4.FromHexString("#b8d0cfff");
     this.scene.fogMode = Scene.FOGMODE_EXP2;
     this.scene.fogDensity = 0.003;
     this.scene.fogColor = Color3.FromHexString("#b8d0cf");
-    this.camera = new FreeCamera(
-      "camera",
-      new Vector3(15, 68, -47),
-      this.scene,
-    );
+    this.camera = new FreeCamera("camera", new Vector3(15, 68, -47), this.scene);
     this.camera.fov = 0.72;
     this.camera.minZ = 0.5;
-    this.camera.maxZ = 650;
+    this.camera.maxZ = 3200;
     this.camera.setTarget(this.target);
-    this.ambient = new HemisphericLight(
-      "sky",
-      new Vector3(0, 1, 0),
-      this.scene,
-    );
+    this.ambient = new HemisphericLight("sky", new Vector3(0, 1, 0), this.scene);
     this.ambient.intensity = 0.7;
     this.ambient.groundColor = Color3.FromHexString("#617c7b");
-    this.sun = new DirectionalLight(
-      "sun",
-      new Vector3(-0.65, -1, 0.4),
-      this.scene,
-    );
+    this.sun = new DirectionalLight("sun", new Vector3(-0.65, -1, 0.4), this.scene);
     this.sun.position = new Vector3(65, 100, -45);
     this.sun.intensity = 1.9;
     this.sun.diffuse = Color3.FromHexString("#ffe4b9");
@@ -80,9 +101,22 @@ export class CityScene {
     this.sun.shadowMinZ = 1;
     this.sun.shadowMaxZ = 220;
     this.streetGlow = this.mat("#ffe5a1", true);
-    this.city = generateCity();
-    this.build(this.city);
+    this.lighting = new EnvironmentLighting(
+      this.scene,
+      this.sun,
+      this.ambient,
+      this.streetGlow,
+    );
+    this.city = city;
+    this.destruction = new DestructionRenderer(this);
+    this.build(this.city, { roads: !streamed, airport: !streamed });
     this.batchStatic();
+    if (!streamed) this.destruction.syncStatic(destructibles(city));
+    this.effects = new Effects(
+      this.scene,
+      (color, glow) => this.mat(color, glow),
+      this.city,
+    );
     this.shadowCandidates = [
       ...(this.shadows.getShadowMap()?.renderList || []),
     ] as Mesh[];
@@ -94,6 +128,7 @@ export class CityScene {
     const m = new StandardMaterial(key, this.scene);
     m.diffuseColor = Color3.FromHexString(color);
     m.specularColor = new Color3(0.08, 0.08, 0.08);
+    m.maxSimultaneousLights = 6;
     if (glow) m.emissiveColor = m.diffuseColor.scale(0.8);
     this.materials.set(key, m);
     return m;
@@ -143,33 +178,20 @@ export class CityScene {
     this.shadows.addShadowCaster(m);
     return m;
   }
-  sign(
-    text: string,
-    x: number,
-    y: number,
-    z: number,
-    color: string,
-    width = 9,
-  ) {
+  sign(text: string, x: number, y: number, z: number, color: string, width = 9) {
     const texture = new DynamicTexture(
       "sign",
       { width: 512, height: 128 },
       this.scene,
       false,
     );
-    texture.drawText(
-      text,
-      null,
-      91,
-      "bold 66px sans-serif",
-      "#fff5db",
-      color,
-      true,
-    );
+    texture.drawText(text, null, 91, "bold 66px sans-serif", "#fff5db", color, true);
     const m = new StandardMaterial("lettering", this.scene);
     m.diffuseTexture = texture;
     m.emissiveColor = new Color3(0.14, 0.14, 0.14);
     m.specularColor = Color3.Black();
+    m.maxSimultaneousLights = 6;
+    this.lighting.signs.push(m);
     const mesh = MeshBuilder.CreatePlane(
       "shop sign",
       { width, height: width / 4, sideOrientation: Mesh.DOUBLESIDE },
@@ -177,9 +199,9 @@ export class CityScene {
     );
     mesh.position.set(x, y, z);
     mesh.material = m;
+    return mesh;
   }
-  palm(x: number, z: number, r: () => number) {
-    const h = 5 + r() * 3;
+  palm(x: number, z: number, h: number) {
     this.cylinder("palm trunk", x, h / 2, z, h, 0.38, "#88775b");
     for (let j = 0; j < 7; j++) {
       const a = (j * Math.PI * 2) / 7;
@@ -195,310 +217,217 @@ export class CityScene {
       this.shadows.addShadowCaster(leaf);
     }
   }
-  build(city: City) {
-    const r = random(city.seed);
-    this.box("island", 0, -0.65, 0, 460, 1, 460, "#a9b29a");
-    this.box("ocean", 0, -1.2, 0, 1800, 0.2, 1800, "#669f9f");
-    for (const road of ROADS) {
-      this.box("asphalt", road, -0.04, 0, 18, 0.08, 436, "#555b5c");
-      this.box("asphalt", 0, -0.035, road, 436, 0.08, 18, "#555b5c");
+  build(city: City, options: GeometryOptions = {}) {
+    const r = random(city.seed + (options.index ?? 0) * 997);
+    if (options.base !== false) {
+      this.box("island", 0, -0.65, 0, LIMIT * 2 + 12, 1, LIMIT * 2 + 12, "#a9b29a");
+      this.box("ocean", 0, -1.2, 0, 6000, 0.2, 6000, "#669f9f");
       for (const side of [-1, 1]) {
-        this.box("sidewalk", road + side * 11, 0.1, 0, 4, 0.3, 430, "#c9c2ac");
-        this.box("sidewalk", 0, 0.1, road + side * 11, 430, 0.3, 4, "#c9c2ac");
+        this.box(
+          "coastal walk",
+          0,
+          0.03,
+          side * (LIMIT - 7),
+          LIMIT * 2 - 4,
+          0.12,
+          10,
+          "#d1c3a5",
+        );
+        this.box(
+          "coastal walk",
+          side * (LIMIT - 7),
+          0.03,
+          0,
+          10,
+          0.12,
+          LIMIT * 2 - 4,
+          "#d1c3a5",
+        );
+        this.box(
+          "sand shoreline",
+          0,
+          -0.12,
+          side * (LIMIT + 2),
+          LIMIT * 2 + 12,
+          0.12,
+          7,
+          "#ddcda6",
+        );
+        this.box(
+          "sand shoreline",
+          side * (LIMIT + 2),
+          -0.12,
+          0,
+          7,
+          0.12,
+          LIMIT * 2 + 12,
+          "#ddcda6",
+        );
       }
-      for (let p = -210; p < 210; p += 7) {
-        if (ROADS.some((v) => Math.abs(v - p) < 12)) continue;
-        this.box("lane", road, 0.025, p, 0.14, 0.025, 3, "#e0d9bd");
-        this.box("lane", p, 0.026, road, 3, 0.025, 0.14, "#e0d9bd");
+      this.box(
+        "sunset beach sand",
+        -LIMIT + 24,
+        -0.02,
+        0,
+        38,
+        0.12,
+        LIMIT * 2 - 8,
+        "#ddcda6",
+      );
+    }
+    for (const surface of city.surfaces || []) {
+      const colors = {
+        plaza: "#c3b89f",
+        parking: "#79817a",
+        service: "#686e68",
+        court: "#a1ad8b",
+        quay: "#94978b",
+      };
+      const elevation =
+        surface.kind === "parking" || surface.kind === "service" ? 0.12 : 0.04;
+      this.box(
+        surface.kind,
+        surface.x,
+        elevation,
+        surface.z,
+        surface.w,
+        0.06,
+        surface.d,
+        colors[surface.kind],
+      );
+      if (surface.kind === "parking")
+        for (let dx = -surface.w / 2 + 3; dx < surface.w / 2; dx += 3)
+          this.box(
+            "parking bay",
+            surface.x + dx,
+            0.16,
+            surface.z,
+            0.12,
+            0.025,
+            surface.d - 1,
+            "#ddd3b5",
+          );
+      if (surface.kind === "service") {
+        const alongX = surface.w > surface.d;
+        const length = alongX ? surface.w : surface.d;
+        for (let t = -length / 2 + 5; t < length / 2; t += 9)
+          this.box(
+            "service lane dash",
+            surface.x + (alongX ? t : 0),
+            0.16,
+            surface.z + (alongX ? 0 : t),
+            alongX ? 3 : 0.12,
+            0.025,
+            alongX ? 0.12 : 3,
+            "#c5bc9f",
+          );
       }
     }
-    for (const x of ROADS)
-      for (const z of ROADS) {
-        this.box("intersection", x, 0.28, z, 25, 0.06, 25, "#555b5c");
-        for (const side of [-1, 1])
-          for (let i = -3; i <= 3; i++) {
-            this.box(
-              "crosswalk",
-              x + i * 2,
-              0.32,
-              z + side * 9,
-              1,
-              0.025,
-              3,
-              "#dfdbc8",
-            );
-            this.box(
-              "crosswalk",
-              x + side * 9,
-              0.32,
-              z + i * 2,
-              3,
-              0.025,
-              1,
-              "#dfdbc8",
-            );
-          }
-        for (const side of [-1, 1]) {
+    if (options.airport !== false) {
+      const a = city.airport;
+      this.box("airfield apron", a.x, 0.03, a.z, a.w, 0.06, a.d, "#a3ab9b");
+      this.box("runway", a.x, 0.08, a.z, 22, 0.06, a.d - 8, "#4d585a");
+      for (let i = -a.d / 2 + 12; i <= a.d / 2 - 12; i += 10)
+        this.box("runway markings", a.x, 0.13, a.z + i, 0.4, 0.04, 3, "#f4e7c3");
+      for (const side of [-1, 1])
+        for (let i = -a.d / 2 + 8; i <= a.d / 2 - 8; i += 12)
           this.cylinder(
-            "signal pole",
-            x + side * 11,
-            2.1,
-            z - side * 11,
-            4.2,
-            0.18,
-            "#364747",
-          );
-          this.box(
-            "signal housing",
-            x + side * 11,
-            4,
-            z - side * 11,
-            0.65,
-            1.5,
-            0.6,
-            "#263739",
-          );
-          const mesh = this.box(
-            "signal",
-            x + side * 11,
-            4.2,
-            z - side * 11 - 0.32,
-            0.34,
-            0.34,
-            0.05,
-            "#88ca9e",
-          );
-          this.lights.push({ mesh, axis: side === 1 ? "z" : "x" });
-        }
-      }
-    city.buildings.forEach((b, i) => {
-      this.box(
-        "building",
-        b.x,
-        b.h / 2 + 0.25,
-        b.z,
-        b.w,
-        b.h,
-        b.d,
-        b.color,
-        undefined,
-        true,
-      );
-      this.box(
-        "roof rim",
-        b.x,
-        b.h + 0.45,
-        b.z,
-        b.w + 0.5,
-        0.5,
-        b.d + 0.5,
-        "#e0d5bd",
-        undefined,
-        true,
-      );
-      this.box(
-        "roof",
-        b.x,
-        b.h + 0.72,
-        b.z,
-        b.w - 1.1,
-        0.12,
-        b.d - 1.1,
-        "#9e9d90",
-      );
-      this.box(
-        "air conditioner",
-        b.x + 3,
-        b.h + 1.2,
-        b.z,
-        2.2,
-        1.1,
-        3,
-        "#acb0a7",
-        undefined,
-        true,
-      );
-      for (let y = 3; y < b.h - 1; y += 3.3)
-        for (let x = -b.w / 2 + 2; x < b.w / 2 - 1; x += 3.5) {
-          this.box(
-            "window",
-            b.x + x,
-            y,
-            b.z - b.d / 2 - 0.025,
-            1.5,
-            1.8,
-            0.06,
-            "#4c7779",
-          );
-          this.box(
-            "window frame",
-            b.x + x,
-            y - 0.95,
-            b.z - b.d / 2 - 0.09,
-            1.8,
-            0.14,
-            0.22,
-            "#ece0c6",
-          );
-        }
-      for (let y = 3; y < b.h - 1; y += 3.3)
-        for (let z = -b.d / 2 + 2; z < b.d / 2 - 1; z += 3.5)
-          this.box(
-            "side window",
-            b.x - b.w / 2 - 0.03,
-            y,
-            b.z + z,
-            0.06,
-            1.8,
-            1.5,
-            "#4c7779",
-          );
-      if (b.h < 18) {
-        const colors = ["#b85d49", "#548f7b", "#cc9f54"];
-        this.box(
-          "storefront",
-          b.x,
-          1.6,
-          b.z - b.d / 2 - 0.05,
-          b.w - 2,
-          2.5,
-          0.1,
-          "#385c5d",
-        );
-        for (let j = 0; j < 8; j++)
-          this.box(
-            "striped awning",
-            b.x - b.w / 2 + 1 + (j * (b.w - 2)) / 8,
-            3.4,
-            b.z - b.d / 2 - 0.7,
-            (b.w - 2) / 8,
-            0.22,
-            1.7,
-            j % 2 ? "#eaddc3" : colors[i % 3],
-            undefined,
-            true,
-          );
-        this.sign(
-          [
-            "24/7 MARKET",
-            "PALOMA",
-            "PIZZA",
-            "AUTO CLUB",
-            "CAFÉ SOL",
-            "RECORDS",
-          ][i % 6],
-          b.x,
-          4.6,
-          b.z - b.d / 2 - 0.09,
-          colors[i % 3],
-          Math.min(10, b.w - 2),
-        );
-      }
-    });
+            "runway light",
+            a.x + side * 11,
+            0.2,
+            a.z + i,
+            0.12,
+            0.25,
+            "#f1ca6a",
+          ).material = this.streetGlow;
+    }
+    for (const landmark of city.landmarks)
+      this.sign(landmark.name, landmark.x, 5, landmark.z - 13, "#467b72", 12);
+    if (options.roads !== false) for (const road of city.roads) buildRoad(this, road);
+    city.buildings.forEach((b, i) => buildBuilding(this, b, options.index ?? i, r));
     for (const p of city.parks) {
-      this.box("park", p.x, 0.24, p.z, 38, 0.3, 38, "#82936c");
-      for (let i = 0; i < 10; i++)
-        this.palm(p.x + (r() - 0.5) * 32, p.z + (r() - 0.5) * 32, r);
-      this.box("park path", p.x, 0.42, p.z, 3, 0.1, 38, "#c9baa0");
+      const pw = p.w ?? 38,
+        pd = p.d ?? 38;
+      this.box(
+        "park",
+        p.x,
+        0.24,
+        p.z,
+        pw,
+        0.3,
+        pd,
+        p.kind === "civic" ? "#c7bda6" : p.kind === "woodland" ? "#7e946d" : "#82936c",
+      );
+
+      this.box("park path", p.x, 0.42, p.z, 3, 0.1, pd, "#c9baa0");
+      this.box("cross path", p.x, 0.42, p.z, pw, 0.1, 3, "#c9baa0");
+      if (p.kind === "woodland") continue;
       this.cylinder("fountain", p.x, 1, p.z, 1.2, 7, "#c4c4b0");
       this.cylinder("fountain water", p.x, 1.65, p.z, 0.1, 5.8, "#71bdbe");
     }
-    for (const road of ROADS)
-      for (let p = -175; p < 200; p += 32) {
-        if (ROADS.some((v) => Math.abs(v - p) < 15)) continue;
-        this.palm(road + 11, p, r);
-        this.cylinder("streetlamp", road - 11, 3, p, 6, 0.16, "#46534e");
-        this.box("lamp arm", road - 10.4, 6, p, 1.5, 0.15, 0.15, "#46534e");
-        const lamp = this.box(
-          "lamp",
-          road - 9.7,
-          5.9,
-          p,
-          0.65,
-          0.2,
-          0.45,
-          "#ffe5a1",
-        );
-        lamp.material = this.streetGlow;
-        this.box(
-          "bench",
-          road + 11,
-          0.7,
-          p + 5,
-          1.1,
-          0.2,
-          2,
-          "#97785a",
-          undefined,
-          true,
-        );
-        this.box(
-          "bench back",
-          road + 11.5,
-          1.1,
-          p + 5,
-          0.15,
-          0.8,
-          2,
-          "#97785a",
-        );
-        this.cylinder("bin", road - 11, 0.5, p + 4, 1, 0.65, "#59675b");
-      }
     for (const ramp of city.ramps) {
-      const m = this.box(
-        "jump ramp",
-        ramp.x,
-        0.8,
-        ramp.z,
-        5,
-        0.25,
-        7,
-        "#b59263",
-        undefined,
-        true,
-      );
-      m.rotation.x = -0.22;
+      const m = rampMesh(this.scene, ramp.x, ramp.z);
+      m.material = this.mat("#b59263");
+      m.receiveShadows = true;
+      this.shadows.addShadowCaster(m);
       for (let i = -1; i <= 1; i++)
         this.box(
           "ramp stripe",
           ramp.x + i * 1.4,
-          0.9,
+          0.3 + RAMP.height / 2 + 0.02,
           ramp.z,
           0.3,
-          0.1,
-          6,
+          0.025,
+          Math.hypot(RAMP.length, RAMP.height) - 0.2,
           "#eac66d",
-        ).rotation.x = -0.22;
-    }
-    for (const item of city.pickups) {
-      const m = this.cylinder(
-        "weapon pickup",
-        item.x,
-        0.25,
-        item.z,
-        0.2,
-        1.7,
-        "#e4bc65",
-      );
-      m.material = this.mat("#e4bc65", true);
-      this.box(
-        "pickup weapon",
-        item.x,
-        0.7,
-        item.z,
-        0.2,
-        0.25,
-        item.weapon === "bat" ? 1.3 : 0.8,
-        "#27363b",
-      );
+        ).rotation.x = -Math.atan(rampSlope);
     }
   }
-  batchStatic() {
+  aimPoint(x: number, y: number) {
+    const ray = this.scene.createPickingRay(x, y, null, this.camera);
+    const distance = ray.intersectsPlane(new Plane(0, 1, 0, -0.3));
+    return distance === null
+      ? undefined
+      : ray.origin.add(ray.direction.scale(distance));
+  }
+  updatePickups(items: Pickup[]) {
+    const ids = new Set(items.map((e) => e.id));
+    for (const [id, n] of this.pickupNodes)
+      if (!ids.has(id)) {
+        n.dispose();
+        this.pickupNodes.delete(id);
+      }
+    for (const item of items)
+      if (!this.pickupNodes.has(item.id)) {
+        const root = new TransformNode(item.id, this.scene);
+        root.position.set(item.x, item.y, item.z);
+        const pad = this.cylinder("pickup", 0, 0.2, 0, 0.15, 1.6, "#e4bc65", root);
+        pad.material = this.mat("#e4bc65", true);
+        this.box(
+          "weapon",
+          0,
+          0.7,
+          0,
+          0.18,
+          0.2,
+          item.item.kind === "bat" ? 1.3 : 0.65,
+          "#27363b",
+          root,
+        );
+        this.pickupNodes.set(item.id, root);
+      }
+  }
+  batchStatic(meshes = this.scene.meshes) {
     const dynamic = new Set(this.lights.map((l) => l.mesh));
     const groups = new Map<string, Mesh[]>();
     const casters = new Set(this.shadows.getShadowMap()?.renderList || []);
-    for (const mesh of [...this.scene.meshes]) {
-      if (!(mesh instanceof Mesh) || dynamic.has(mesh) || !mesh.material)
+    for (const mesh of [...meshes]) {
+      if (
+        !(mesh instanceof Mesh) ||
+        dynamic.has(mesh) ||
+        !mesh.material ||
+        mesh.name === "sky dome"
+      )
         continue;
       const key =
         mesh.material.uniqueId +
@@ -516,14 +445,7 @@ export class CityScene {
       if (group.length < 2) continue;
       const cast = casters.has(group[0]);
       for (const mesh of group) this.shadows.removeShadowCaster(mesh);
-      const merged = Mesh.MergeMeshes(
-        group,
-        true,
-        true,
-        undefined,
-        false,
-        false,
-      );
+      const merged = Mesh.MergeMeshes(group, true, true, undefined, false, false);
       if (merged) {
         merged.receiveShadows = true;
         merged.freezeWorldMatrix();
@@ -539,32 +461,58 @@ export class CityScene {
       this.cylinder("head", 0, 1.65, 0, 0.4, 0.4, "#c79e7b", root);
       this.box("hair", 0, 1.87, 0, 0.43, 0.14, 0.4, "#473e35", root);
       for (const s of [-1, 1]) {
-        this.box(
-          "leg",
-          s * 0.17,
-          0.35,
-          0,
-          0.23,
-          0.65,
-          0.25,
-          "#354955",
-          root,
-          true,
-        );
-        this.box(
-          "shoe",
-          s * 0.17,
-          0.06,
-          0.08,
-          0.25,
-          0.15,
-          0.4,
-          "#e7e3d2",
-          root,
-        );
+        this.box("leg", s * 0.17, 0.35, 0, 0.23, 0.65, 0.25, "#354955", root, true);
+        this.box("shoe", s * 0.17, 0.06, 0.08, 0.25, 0.15, 0.4, "#e7e3d2", root);
         this.box("arm", s * 0.42, 1, 0, 0.18, 0.65, 0.22, e.color, root, true);
       }
       if (e.kind === "player") {
+        const canopy = MeshBuilder.CreateSphere(
+          "parachute canopy",
+          {
+            diameter: 1,
+            segments: 12,
+            slice: 0.5,
+            sideOrientation: Mesh.DOUBLESIDE,
+          },
+          this.scene,
+        );
+        canopy.scaling.set(5.2, 2.4, 3.6);
+        canopy.position.y = 4.3;
+        canopy.material = this.mat("#edaa54");
+        canopy.parent = root;
+        canopy.setEnabled(false);
+        this.shadows.addShadowCaster(canopy);
+        for (const x of [-2.2, 2.2])
+          for (const z of [-0.9, 0.9]) {
+            const line = MeshBuilder.CreateLines(
+              "parachute line",
+              {
+                points: [
+                  new Vector3(x, 4.3, z),
+                  new Vector3(Math.sign(x) * 0.35, 1.5, 0),
+                ],
+              },
+              this.scene,
+            );
+            line.color = Color3.FromHexString("#f4e8cb");
+            line.parent = root;
+            line.setEnabled(false);
+          }
+        for (const kind of ["bat", "pistol", "smg"]) {
+          const w = this.box(
+            "held:" + kind,
+            0.45,
+            1,
+            0.55,
+            kind === "bat" ? 0.12 : 0.15,
+            0.14,
+            kind === "bat" ? 1.25 : kind === "smg" ? 0.6 : 0.35,
+            "#263237",
+            root,
+          );
+          w.setEnabled(false);
+        }
+
         const ring = MeshBuilder.CreateTorus(
           "player ring",
           { diameter: 1.35, thickness: 0.055, tessellation: 24 },
@@ -581,20 +529,20 @@ export class CityScene {
       this.box("glass", 0, 1.15, -0.2, 1.62, 0.7, 1.9, "#304a52", root, true);
       this.box("roof", 0, 1.56, -0.3, 1.66, 0.16, 1.2, e.color, root, true);
       this.box("rear", 0, 0.91, -1.6, 1.88, 0.25, 1, e.color, root);
+      for (const mount of CAR_WHEEL_MOUNTS) {
+        const wheel = this.cylinder(
+          "wheel",
+          mount.x,
+          0.48,
+          mount.z,
+          0.25,
+          0.76,
+          "#273334",
+          root,
+        );
+        wheel.rotation.z = Math.PI / 2;
+      }
       for (const side of [-1, 1]) {
-        for (const z of [-1.25, 1.3]) {
-          const wheel = this.cylinder(
-            "wheel",
-            side * 1,
-            0.48,
-            z,
-            0.25,
-            0.76,
-            "#273334",
-            root,
-          );
-          wheel.rotation.z = Math.PI / 2;
-        }
         this.box(
           "headlight",
           side * 0.65,
@@ -617,17 +565,7 @@ export class CityScene {
           "#c95343",
           root,
         );
-        this.box(
-          "pillar",
-          side * 0.81,
-          1.2,
-          -0.25,
-          0.1,
-          0.7,
-          0.15,
-          e.color,
-          root,
-        );
+        this.box("pillar", side * 0.81, 1.2, -0.25, 0.1, 0.7, 0.15, e.color, root);
       }
       this.box("bumper", 0, 0.4, 2.2, 1.85, 0.17, 0.1, "#c5c8bd", root);
     } else if (e.kind === "helicopter") {
@@ -656,95 +594,191 @@ export class CityScene {
       this.box("tail fin", 0, 1.8, -2.8, 0.18, 1.5, 1, e.color, root);
       this.box("propeller", 0, 1, 3.6, 3, 0.15, 0.1, "#334343", root);
     }
+    if (e.kind === "car") {
+      const model = VEHICLES[e.model || "sedan"];
+      root.scaling.set(
+        model.width / 2,
+        e.model === "van" ? 1.35 : e.model === "sport" ? 0.8 : 1,
+        model.length / 4.3,
+      );
+      if (e.model === "van")
+        this.box("cargo", 0, 1.5, -0.6, 1.9, 1.5, 2.8, e.color, root, true);
+      if (e.model === "sport")
+        this.box("spoiler", 0, 1.1, -1.85, 2, 0.13, 0.4, "#26363b", root, true);
+    }
+    if (e.model === "utility") {
+      root.scaling.set(1.2, 1.15, 1.18);
+      this.box("cargo cabin", 0, 1.3, -0.5, 2, 1.5, 2.4, e.color, root, true);
+    }
+    root.position.set(e.x, e.y + 0.3, e.z);
     this.nodes.set(e.id, root);
-    this.shadowCandidates.push(...(root.getChildMeshes() as Mesh[]));
+    const parts = root.getChildMeshes() as Mesh[];
+    this.parts.set(e.id, parts);
+    this.shadowCandidates.push(...parts);
     return root;
   }
-  update(entities: Entity[], me: string | undefined, dt: number) {
+  update(
+    entities: Entity[],
+    me: string | undefined,
+    dt: number,
+    input: Input = idle(),
+  ) {
+    this.day = (this.day + this.dayRate * dt) % 24;
     const ids = new Set(entities.map((e) => e.id));
     for (const [id, n] of this.nodes)
       if (!ids.has(id)) {
         n.dispose();
         this.nodes.delete(id);
+        this.parts.delete(id);
       }
     for (const e of entities) {
       const n = this.nodes.get(e.id) || this.makeEntity(e);
       n.setEnabled(
-        !e.vehicle && Math.hypot(e.x - this.target.x, e.z - this.target.z) < 95,
+        !e.vehicle &&
+          (e.health > 0 || e.wreck !== undefined) &&
+          Math.hypot(e.x - this.target.x, e.z - this.target.z) < 95,
       );
-      const t = 1 - Math.exp(-dt * 18);
-      n.position.x += (e.x - n.position.x) * t;
-      n.position.z += (e.z - n.position.z) * t;
-      n.position.y += (e.y + 0.3 - n.position.y) * t;
-      let d = e.angle - n.rotation.y;
-      d = Math.atan2(Math.sin(d), Math.cos(d));
-      n.rotation.y += d * t;
+      // Networking already provides a continuous pose. Smoothing it a second
+      // time adds delay and makes turns trail behind authoritative traffic.
+      n.position.set(e.x, e.y + 0.3, e.z);
+      n.rotation.y = e.angle;
       n.rotation.z = e.down ? Math.PI / 2 : 0;
+      n.rotation.x = 0;
+      if (e.kind === "car" && e.y > 0.03 && carGrounded(e, this.city)) {
+        n.rotation.x = -Math.atan(rampSlope * Math.cos(e.angle));
+        n.rotation.z = Math.atan(rampSlope * Math.sin(e.angle));
+      }
+      const parts = this.parts.get(e.id)!;
+      for (const child of parts)
+        if (child.name.startsWith("held:"))
+          child.setEnabled(!e.parachute && child.name === "held:" + e.weapon);
+        else if (child.name.startsWith("parachute")) child.setEnabled(!!e.parachute);
+
+      for (const child of parts) {
+        child.visibility =
+          e.wreck === undefined
+            ? 1
+            : Math.max(0, Math.min(1, e.wreck / TUNING.debrisFadeSeconds));
+        if (e.wreck) child.material = this.mat("#30312e");
+        if (child.name === "wheel" && child.position.z > 0)
+          child.rotation.y = e.steering || 0;
+      }
       if (e.kind === "helicopter") {
-        for (const child of n.getChildMeshes())
+        n.rotation.z +=
+          (Math.sin(n.rotation.y) * e.vz - Math.cos(n.rotation.y) * e.vx) * 0.012;
+        n.rotation.x = Math.min(0.18, Math.hypot(e.vx, e.vz) * 0.012);
+        for (const child of parts)
           if (child.name.startsWith("rotor"))
-            child.rotation.y += dt * (e.driver ? 30 : 1);
+            child.rotation.y +=
+              dt *
+              (e.wreck || e.flight === "grounded" || !e.flight ? 0 : e.driver ? 38 : 8);
+      }
+      if (e.kind === "plane") {
+        n.rotation.z = -(e.angularVelocity || 0) * 0.2;
+        n.rotation.x = -Math.max(-0.2, Math.min(0.2, e.vy * 0.03));
+        for (const child of parts)
+          if (child.name === "propeller")
+            child.rotation.z += dt * (e.wreck || !e.driver ? 0 : 60);
       }
       if (e.kind === "player" || e.kind === "pedestrian") {
-        for (const child of n.getChildMeshes())
+        if (e.parachute) {
+          n.rotation.x = -e.vz * 0.025;
+          n.rotation.z += e.vx * 0.025;
+        }
+        for (const child of parts)
           if (child.name === "leg")
             child.rotation.x =
-              Math.sin(this.time * 12 + (child.position.x > 0 ? 0 : Math.PI)) *
+              (e.parachute
+                ? 0
+                : Math.sin(this.time * 12 + (child.position.x > 0 ? 0 : Math.PI))) *
               Math.min(0.6, Math.hypot(e.vx, e.vz) * 0.1);
       }
     }
-    const p = entities.find((e) => e.id === me);
-    if (p) {
-      const n = this.nodes.get(p.vehicle || p.id);
-      if (n)
-        this.target = Vector3.Lerp(
-          this.target,
-          n.position,
-          1 - Math.exp(-dt * 5),
-        );
+    this.effectClock += dt;
+    if (this.effectClock > 0.12) {
+      this.effectClock = 0;
+      for (const e of entities) {
+        if (Math.hypot(e.x - this.target.x, e.z - this.target.z) > 90) continue;
+        if (e.burning !== undefined) {
+          this.effect({
+            kind: "fire",
+            x: e.x + (Math.random() - 0.5) * 1.5,
+            y: e.y + 0.6,
+            z: e.z + (Math.random() - 0.5) * 2,
+          });
+          this.effect({ kind: "blackSmoke", x: e.x, y: e.y + 1.5, z: e.z });
+        } else if (
+          e.health < (e.maxHealth || 100) * 0.55 &&
+          !e.wreck &&
+          e.kind === "car"
+        )
+          this.effect({ kind: "blackSmoke", x: e.x, y: e.y + 1, z: e.z });
+      }
     }
-    const altitude = p?.y || 0;
-    const destination = this.target.add(
-      new Vector3(0, 46 + altitude * 0.25, -26),
+    this.tyreTracks.sample(
+      entities.filter((e) => Math.hypot(e.x - this.target.x, e.z - this.target.z) < 95),
+      (mark) => this.effects.trails.add(mark),
     );
-    this.camera.position = Vector3.Lerp(
-      this.camera.position,
-      destination,
-      1 - Math.exp(-dt * 4),
-    );
-    this.camera.setTarget(this.target.add(new Vector3(0, 0, 4)));
+    this.effects.update(dt, this.target);
+    this.destruction.update();
+    const p = entities.find((e) => e.id === me);
+    if (p && !this.debugCamera.active) {
+      const n = this.nodes.get(p.vehicle || p.id);
+      if (n) this.target = Vector3.Lerp(this.target, n.position, 1 - Math.exp(-dt * 5));
+    }
+    const body = entities.find((e) => e.id === p?.vehicle) || p;
+    if (this.debugCamera.active) {
+      this.debugCamera.update(input, dt);
+      const position = this.debugCamera.position,
+        target = this.debugCamera.target;
+      this.camera.position.set(position.x, position.y, position.z);
+      this.camera.setTarget(new Vector3(target.x, target.y, target.z));
+      this.camera.fov = this.debugCamera.fov;
+      this.camera.minZ =
+        this.debugCamera.mode === "free"
+          ? Math.max(0.05, Math.min(2, this.debugCamera.distance * 0.002))
+          : Math.max(0.05, Math.min(1, position.y / 100));
+      this.camera.maxZ = Math.max(
+        LIMIT * 4,
+        Math.hypot(
+          position.x - target.x,
+          position.y - target.y,
+          position.z - target.z,
+        ) + 650,
+      );
+      this.target = new Vector3(
+        target.x,
+        this.debugCamera.mode === "free" ? target.y : 0,
+        target.z,
+      );
+    } else {
+      this.camera.fov = 0.72;
+      this.camera.minZ = 0.5;
+      this.camera.maxZ = 650;
+      followCamera(
+        this.camera,
+        this.target,
+        p?.y || 0,
+        Math.hypot(body?.vx || 0, body?.vz || 0),
+        dt,
+      );
+    }
     this.shadowTimer += dt;
     if (this.shadowTimer > 0.3) {
       this.shadowTimer = 0;
-      this.shadowCandidates = this.shadowCandidates.filter(
-        (m) => !m.isDisposed(),
-      );
+      this.shadowCandidates = this.shadowCandidates.filter((m) => !m.isDisposed());
       const shadowMap = this.shadows.getShadowMap();
       if (shadowMap)
         shadowMap.renderList = this.shadowCandidates.filter((m) => {
           const c = m.getBoundingInfo().boundingSphere.centerWorld;
           return (
-            m.isEnabled() &&
-            Math.hypot(c.x - this.target.x, c.z - this.target.z) < 70
+            m.isEnabled() && Math.hypot(c.x - this.target.x, c.z - this.target.z) < 70
           );
         });
     }
-    const daylight = Math.max(
-      0.05,
-      Math.sin(((this.day - 6) / 24) * Math.PI * 2),
-    );
-    this.sun.intensity = daylight * 0.85;
-    this.ambient.intensity = 0.4 + daylight * 0.25;
-    this.streetGlow.emissiveColor = Color3.FromHexString("#ffe5a1").scale(
-      1 - daylight * 0.6,
-    );
-    const sky = Color3.Lerp(
-      Color3.FromHexString("#172b42"),
-      Color3.FromHexString("#bfd1c8"),
-      daylight,
-    );
-    this.scene.clearColor = new Color4(sky.r, sky.g, sky.b, 1);
-    this.scene.fogColor = sky;
+    this.lighting.update(this.day, this.target, dt);
+    if (this.debugCamera.mode === "free")
+      this.scene.fogDensity /= Math.max(1, this.debugCamera.distance / 53);
     for (const l of this.lights)
       l.mesh.material = this.mat(
         signal(this.time, l.axis) === "green"
@@ -754,30 +788,8 @@ export class CityScene {
             : "#e36353",
         true,
       );
-    for (let i = this.effects.length - 1; i >= 0; i--) {
-      const fx = this.effects[i];
-      fx.life -= dt;
-      fx.mesh.position.y += dt;
-      fx.mesh.scaling.scaleInPlace(1 + dt);
-      fx.mesh.visibility = Math.max(0, fx.life);
-      if (fx.life <= 0) {
-        fx.mesh.dispose();
-        this.effects.splice(i, 1);
-      }
-    }
   }
-  effect(e: { kind: string; x: number; y: number; z: number }) {
-    if (this.effects.length > 100) return;
-    const m = MeshBuilder.CreateSphere(
-      "particle",
-      { diameter: e.kind === "smoke" ? 0.65 : 0.35, segments: 3 },
-      this.scene,
-    );
-    m.position.set(e.x, e.y + 0.5, e.z);
-    m.material = this.mat(
-      e.kind === "smoke" ? "#c3c4b3" : "#ffce72",
-      e.kind !== "smoke",
-    );
-    this.effects.push({ mesh: m, life: e.kind === "smoke" ? 0.8 : 0.25 });
+  effect(e: WorldEvent) {
+    this.effects.effect(e);
   }
 }
