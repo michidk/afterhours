@@ -27,7 +27,7 @@ import {
   type WorldEvent,
 } from "../shared/world.ts";
 import type { Pickup } from "../shared/protocol.ts";
-import { VEHICLES, TUNING } from "../shared/catalog.ts";
+import { VEHICLES, WEAPONS, TUNING, isWeaponKind } from "../shared/catalog.ts";
 import { followCamera } from "./camera/index.ts";
 import { Plane } from "@babylonjs/core/Maths/math.plane";
 import "@babylonjs/core/Culling/ray";
@@ -44,8 +44,15 @@ import { destructibles } from "../shared/destruction.ts";
 import { DestructionRenderer } from "./world/destruction.ts";
 import { propulsionRunning } from "../shared/propulsion.ts";
 import { buildParachute } from "./models/parachute.ts";
+import { buildWeapon } from "./models/weapons.ts";
+import { WaterRenderer } from "./world/water.ts";
+import type { GrenadeState } from "../shared/grenades.ts";
 export class CityScene {
   pickupNodes = new Map<string, TransformNode>();
+  grenadeNodes = new Map<string, TransformNode>();
+  private grenades: GrenadeState[] = [];
+  private grenadeReceived = 0;
+  water: WaterRenderer;
   engine: Engine;
   scene: Scene;
   camera: FreeCamera;
@@ -113,6 +120,7 @@ export class CityScene {
     this.destruction = new DestructionRenderer(this);
     this.build(this.city, { roads: !streamed, airport: !streamed });
     this.batchStatic();
+    this.water = new WaterRenderer(this);
     if (!streamed) this.destruction.syncStatic(destructibles(city));
     this.effects = new Effects(
       this.scene,
@@ -222,7 +230,7 @@ export class CityScene {
   build(city: City, options: GeometryOptions = {}) {
     const r = random(city.seed + (options.index ?? 0) * 997);
     if (options.base !== false) {
-      this.box("island", 0, -0.65, 0, LIMIT * 2 + 12, 1, LIMIT * 2 + 12, "#a9b29a");
+      this.box("island", 0, -0.65, 0, LIMIT * 2, 1, LIMIT * 2, "#a9b29a");
       this.box("ocean", 0, -1.2, 0, 6000, 0.2, 6000, "#669f9f");
       for (const side of [-1, 1]) {
         this.box(
@@ -249,20 +257,20 @@ export class CityScene {
           "sand shoreline",
           0,
           -0.12,
-          side * (LIMIT + 2),
-          LIMIT * 2 + 12,
+          side * (LIMIT - 2),
+          LIMIT * 2,
           0.12,
-          7,
+          4,
           "#ddcda6",
         );
         this.box(
           "sand shoreline",
-          side * (LIMIT + 2),
+          side * (LIMIT - 2),
           -0.12,
           0,
-          7,
+          4,
           0.12,
-          LIMIT * 2 + 12,
+          LIMIT * 2,
           "#ddcda6",
         );
       }
@@ -405,18 +413,37 @@ export class CityScene {
         root.position.set(item.x, item.y, item.z);
         const pad = this.cylinder("pickup", 0, 0.2, 0, 0.15, 1.6, "#e4bc65", root);
         pad.material = this.mat("#e4bc65", true);
-        this.box(
-          "weapon",
-          0,
-          0.7,
-          0,
-          0.18,
-          0.2,
-          item.kind === "weapon" && item.item.kind === "bat" ? 1.3 : 0.65,
-          "#27363b",
-          root,
-        );
+        if (item.kind === "weapon") buildWeapon(this, root, item.item.kind);
+        else if (item.kind === "ammo") {
+          this.box("ammo crate", 0, 0.65, 0, 0.7, 0.45, 0.6, "#64794b", root);
+          this.box("ammo stripe", 0, 0.65, 0.31, 0.45, 0.1, 0.02, "#e4bc65", root);
+        } else {
+          for (const x of [-0.23, 0.23])
+            this.cylinder("jetpack supply", x, 0.8, 0, 0.8, 0.32, "#73858c", root);
+        }
         this.pickupNodes.set(item.id, root);
+      }
+  }
+  updateGrenades(items: GrenadeState[]) {
+    this.grenades = items;
+    this.grenadeReceived = performance.now();
+    const ids = new Set(items.map((g) => g.id));
+    for (const [id, node] of this.grenadeNodes)
+      if (!ids.has(id)) {
+        node.dispose();
+        this.grenadeNodes.delete(id);
+      }
+    for (const g of items)
+      if (!this.grenadeNodes.has(g.id)) {
+        const root = new TransformNode(g.id, this.scene);
+        const mesh = MeshBuilder.CreateSphere(
+          "thrown grenade",
+          { diameter: g.radius * 2, segments: 6 },
+          this.scene,
+        );
+        mesh.parent = root;
+        mesh.material = this.mat("#64794b");
+        this.grenadeNodes.set(g.id, root);
       }
   }
   batchStatic(meshes = this.scene.meshes) {
@@ -428,7 +455,8 @@ export class CityScene {
         !(mesh instanceof Mesh) ||
         dynamic.has(mesh) ||
         !mesh.material ||
-        mesh.name === "sky dome"
+        mesh.name === "sky dome" ||
+        mesh.name === "animated water"
       )
         continue;
       const key =
@@ -503,20 +531,10 @@ export class CityScene {
           flame.material = this.mat("#ffb544", true);
           flame.setEnabled(false);
         }
-        for (const kind of ["bat", "pistol", "smg"]) {
-          const w = this.box(
-            "held:" + kind,
-            0.45,
-            1,
-            0.55,
-            kind === "bat" ? 0.12 : 0.15,
-            0.14,
-            kind === "bat" ? 1.25 : kind === "smg" ? 0.6 : 0.35,
-            "#263237",
-            root,
-          );
-          w.setEnabled(false);
-        }
+        for (const kind of Object.keys(WEAPONS))
+          if (isWeaponKind(kind)) buildWeapon(this, root, kind, true);
+        for (const child of root.getChildMeshes())
+          if (child.name.startsWith("held:")) child.setEnabled(false);
 
         const ring = MeshBuilder.CreateTorus(
           "player ring",
@@ -629,6 +647,19 @@ export class CityScene {
     input: Input = idle(),
   ) {
     this.day = (this.day + this.dayRate * dt) % 24;
+    this.water.update(this.time, dt);
+    const extrapolation = Math.min(
+      TUNING.snapshot,
+      Math.max(0, (performance.now() - this.grenadeReceived) / 1000),
+    );
+    for (const g of this.grenades) {
+      const node = this.grenadeNodes.get(g.id);
+      node?.position.set(
+        g.x + g.vx * extrapolation,
+        g.y + g.vy * extrapolation,
+        g.z + g.vz * extrapolation,
+      );
+    }
     const ids = new Set(entities.map((e) => e.id));
     for (const [id, n] of this.nodes)
       if (!ids.has(id)) {

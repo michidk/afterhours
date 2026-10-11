@@ -1,4 +1,4 @@
-import { VEHICLES } from "../shared/catalog.ts";
+import { VEHICLES, WEAPONS } from "../shared/catalog.ts";
 import { availableSeat, occupiedSeats, seatCapacity } from "../shared/seats.ts";
 import type { Pickup } from "../shared/protocol.ts";
 import "./style.css";
@@ -115,6 +115,7 @@ $("#join").addEventListener("submit", (event) => {
         scene.day = m.day;
         scene.dayRate = m.dayRate ?? 1 / 75;
         scene.updatePickups(m.pickups);
+        scene.updateGrenades(m.grenades ?? []);
         scene.destruction.receive(m.debris ?? [], m.time);
         $("#population").textContent = String(m.players);
         const p = entities.find((e) => e.id === playerId);
@@ -515,7 +516,7 @@ async function boot() {
         if (!v && item)
           $("#weapon").textContent =
             (p.reloadUntil ? "RELOADING" : item.kind.toUpperCase()) +
-            (item.kind === "pistol" || item.kind === "smg"
+            (WEAPONS[item.kind].magazine > 0
               ? ` | ${item.ammo} / ${item.reserve}`
               : "") +
             ` | ${p.inventory?.map((w, i) => `${i + 1} ${w.kind}`).join(" / ")}`;
@@ -528,6 +529,9 @@ async function boot() {
             `${v.takeoffDelay ? `BOARDING ${Math.ceil(v.takeoffDelay)}s` : v.flight?.toUpperCase()} | ${Math.round(v.y)} M`;
         else if (p.parachute)
           $("#weapon").textContent = `PARACHUTE | ${Math.round(p.y)} M`;
+        if (!v && p.jetpack)
+          $("#weapon").textContent +=
+            ` | JETPACK ${p.jetpack.active ? "ON" : "OFF"} ${Math.ceil(p.jetpack.fuel)}s · B toggle · E thrust`;
         if (v && v.burning === undefined)
           $("#weapon").textContent +=
             ` | ${v.driver === p.id ? "DRIVER" : "PASSENGER"} | ${occupiedSeats(v)}/${seatCapacity(v)} SEATS`;

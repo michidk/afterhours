@@ -79,10 +79,11 @@ export class AgentInterface {
   spawn(model: VehicleModel) {
     return this.command({ kind: "spawn", model });
   }
-  action(type: "interact" | "drop" | "reload") {
+  action(type: "interact" | "drop" | "reload" | "jetpack") {
     if (this.scene.debugCamera.active)
       throw Error("Return to player-follow before gameplay actions");
-    if (!["interact", "drop", "reload"].includes(type)) throw Error("Unknown action");
+    if (!["interact", "drop", "reload", "jetpack"].includes(type))
+      throw Error("Unknown action");
     this.network.send({ type });
   }
   async move(input: Partial<Input>, seconds = 1) {

@@ -33,6 +33,16 @@ export class Effects {
     }
   }
   effect(e: WorldEvent) {
+    if (e.kind === "flame") {
+      for (let i = 1; i <= 6; i++)
+        this.effect({
+          kind: "fire",
+          x: e.x + (Math.sin(e.angle || 0) * i * (e.length || 9)) / 6,
+          y: e.y,
+          z: e.z + (Math.cos(e.angle || 0) * i * (e.length || 9)) / 6,
+        });
+      return;
+    }
     if (e.kind === "swing") return;
     if (e.kind === "skid") {
       this.trails.add(e);

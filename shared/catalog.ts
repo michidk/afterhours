@@ -198,6 +198,9 @@ export const WEAPONS = {
   },
 } as const;
 export type WeaponKind = keyof typeof WEAPONS;
+export function isWeaponKind(value: string): value is WeaponKind {
+  return Object.hasOwn(WEAPONS, value);
+}
 export type AmmoKind = NonNullable<(typeof WEAPONS)[WeaponKind]["ammoKind"]>;
 export interface WeaponItem {
   id: string;

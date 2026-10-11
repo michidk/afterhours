@@ -384,6 +384,17 @@ export class GameAudio {
       if (e.burning !== undefined) loop("fire:" + e.id, "fire", e);
     }
     if (listener) {
+      for (const e of entities) {
+        if (e.jetpack?.active && e.jetpack.fuel > 0 && e.vy > 0.1 && !e.vehicle)
+          loop("jetpack:" + e.id, "wind", e, 1.5, 0.7);
+        if (
+          e.weapon === "flamethrower" &&
+          (e.cooldown || 0) > 0 &&
+          !e.vehicle &&
+          e.health > 0
+        )
+          loop("flame:" + e.id, "fire", e, 1.2, 0.7);
+      }
       if (listener.parachute)
         loop("wind", "wind", listener, 1, Math.min(1, Math.abs(listener.vy) / 4));
       const shore = Math.max(Math.abs(listener.x), Math.abs(listener.z));

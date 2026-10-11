@@ -11,7 +11,7 @@ import {
   type PlayerSummary,
 } from "../shared/protocol.ts";
 import { idle, type Entity } from "../shared/world.ts";
-import { TUNING, type VehicleModel } from "../shared/catalog.ts";
+import { TUNING, isWeaponKind, type VehicleModel } from "../shared/catalog.ts";
 import { Simulation } from "./simulation.ts";
 import { executeDebug } from "./debug.ts";
 import type { MapManifest } from "../shared/city-stream.ts";
@@ -264,8 +264,8 @@ export class Sessions {
           }
         }
       }
-      if (m.kind === "pistol" || m.kind === "bat" || m.kind === "smg")
-        this.sim.inventory.give(p, m.kind);
+      if (isWeaponKind(m.kind)) this.sim.inventory.give(p, m.kind);
+      if (m.kind === "jetpack") p.jetpack = { fuel: 45, active: false };
       if (m.kind === "heal") {
         this.sim.repair(p);
         if (p.vehicle) {
