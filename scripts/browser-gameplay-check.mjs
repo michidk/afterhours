@@ -10,17 +10,26 @@ assert.ok(
   "Set BROWSER_CDP_HELPER to the fallback skill's cdp.mjs",
 );
 const { openPage } = await import(pathToFileURL(process.env.BROWSER_CDP_HELPER).href);
-const page = await openPage({ width: 1280, height: 900 });
+const viewport = [
+  Number(process.env.BROWSER_WIDTH || 1280),
+  Number(process.env.BROWSER_HEIGHT || 900),
+];
+assert.ok(viewport.every((n) => Number.isInteger(n) && n > 0 && n <= 8192));
+const page = await openPage({ width: viewport[0], height: viewport[1] });
 const browserUrl = process.env.BROWSER_GAME_URL || "http://172.17.0.1:35267/";
 const serverUrl = process.env.GAME_URL || "http://127.0.0.1:35267/";
 const output = resolve(process.env.BROWSER_OUTPUT || "/tmp/afterhours-gameplay-check");
 await mkdir(output, { recursive: true });
+const startedAt = new Date().toISOString();
+const aircraftOnly =
+  process.argv.includes("--aircraft-only") || process.argv.includes("--planes-only");
 let buddy;
 const evidence = {};
 async function capture(name) {
   evidence[name] = await page.evaluate("window.afterhoursDebug.inspect()");
   await writeFile(resolve(output, `${name}.png`), await page.screenshot());
   await writeFile(resolve(output, "evidence.json"), JSON.stringify(evidence, null, 2));
+  console.log(`Captured ${name}`);
 }
 async function action(type) {
   await pause(160);
@@ -67,7 +76,7 @@ try {
   await page.evaluate(
     'document.querySelector("#name").blur();document.activeElement?.blur()',
   );
-  if (!process.argv.includes("--transport-only")) {
+  if (!process.argv.includes("--transport-only") && !aircraftOnly) {
     buddy = await AgentClient.connect(serverUrl, "Nameplate buddy");
     await until(
       'document.querySelector(".nameplate")?.textContent==="Nameplate buddy"',
@@ -148,66 +157,71 @@ try {
     );
   }
   await page.evaluate("window.afterhoursDebug.time(12,0)");
-  await page.evaluate("window.afterhoursDebug.teleport(-819.5,-48)");
-  await action("interact");
-  await until(
-    "window.afterhoursDebug.inspect().player.vehicle",
-    "Boat boarding failed",
-  );
-  await page.evaluate("window.afterhoursDebug.move({up:true},2)");
-  await transportCapture("boat");
-  assert.equal(
-    evidence.boat.entities.find((e) => e.id === evidence.boat.player.vehicle).kind,
-    "boat",
-  );
-  await page.evaluate("window.afterhoursDebug.move({right:true,up:true},1)");
-  await page.evaluate("window.afterhoursDebug.move({brake:true},2)");
-  await action("interact");
-  await until("!window.afterhoursDebug.inspect().player.vehicle", "Boat exit failed");
-  for (const [kind, z] of [
-    ["jetski", -16],
-    ["speedboat", 16],
-  ]) {
-    await page.evaluate(`window.afterhoursDebug.teleport(-827,${z})`);
+  if (!aircraftOnly) {
+    await page.evaluate("window.afterhoursDebug.teleport(-819.5,-48)");
     await action("interact");
     await until(
-      `window.afterhoursDebug.inspect().entities.some(e=>e.id===window.afterhoursDebug.inspect().player.vehicle && e.kind===${JSON.stringify(kind)})`,
-      `${kind} boarding failed`,
+      "window.afterhoursDebug.inspect().player.vehicle",
+      "Boat boarding failed",
     );
     await page.evaluate("window.afterhoursDebug.move({up:true},2)");
-    await transportCapture(kind);
-    await page.evaluate("window.afterhoursDebug.move({up:true,right:true},0.8)");
+    await transportCapture("boat");
+    assert.equal(
+      evidence.boat.entities.find((e) => e.id === evidence.boat.player.vehicle).kind,
+      "boat",
+    );
+    await page.evaluate("window.afterhoursDebug.move({right:true,up:true},1)");
     await page.evaluate("window.afterhoursDebug.move({brake:true},2)");
     await action("interact");
-    await until(
-      "!window.afterhoursDebug.inspect().player.vehicle",
-      `${kind} exit failed`,
+    await until("!window.afterhoursDebug.inspect().player.vehicle", "Boat exit failed");
+    for (const [kind, z] of [
+      ["jetski", -16],
+      ["speedboat", 16],
+    ]) {
+      await page.evaluate(`window.afterhoursDebug.teleport(-827,${z})`);
+      await action("interact");
+      await until(
+        `window.afterhoursDebug.inspect().entities.some(e=>e.id===window.afterhoursDebug.inspect().player.vehicle && e.kind===${JSON.stringify(kind)})`,
+        `${kind} boarding failed`,
+      );
+      await page.evaluate("window.afterhoursDebug.move({up:true},2)");
+      await transportCapture(kind);
+      await page.evaluate("window.afterhoursDebug.move({up:true,right:true},0.8)");
+      await page.evaluate("window.afterhoursDebug.move({brake:true},2)");
+      await action("interact");
+      await until(
+        "!window.afterhoursDebug.inspect().player.vehicle",
+        `${kind} exit failed`,
+      );
+    }
+    await page.evaluate("window.afterhoursDebug.teleport(-950,0)");
+    const waterBefore = await page.evaluate(
+      'Array.from(window.afterhoursDebug.scene.scene.getMeshByName("animated water").getVerticesData("position")).slice(0,90)',
+    );
+    await pause(500);
+    const waterAfter = await page.evaluate(
+      'Array.from(window.afterhoursDebug.scene.scene.getMeshByName("animated water").getVerticesData("position")).slice(0,90)',
+    );
+    assert.notDeepEqual(waterBefore, waterAfter, "Water vertices did not animate");
+    await transportCapture("water");
+    const aiBefore = (
+      await page.evaluate("window.afterhoursDebug.state()")
+    ).entities.filter((e) => e.ai && ["boat", "jetski", "speedboat"].includes(e.kind));
+    await pause(2000);
+    const aiAfter = (await page.evaluate("window.afterhoursDebug.state()")).entities;
+    assert.ok(
+      aiBefore.some((e) =>
+        aiAfter.some(
+          (next) => next.id === e.id && Math.hypot(next.x - e.x, next.z - e.z) > 1,
+        ),
+      ),
+      "AI watercraft did not cruise",
     );
   }
-  await page.evaluate("window.afterhoursDebug.teleport(-950,0)");
-  const waterBefore = await page.evaluate(
-    'Array.from(window.afterhoursDebug.scene.scene.getMeshByName("animated water").getVerticesData("position")).slice(0,90)',
-  );
-  await pause(500);
-  const waterAfter = await page.evaluate(
-    'Array.from(window.afterhoursDebug.scene.scene.getMeshByName("animated water").getVerticesData("position")).slice(0,90)',
-  );
-  assert.notDeepEqual(waterBefore, waterAfter, "Water vertices did not animate");
-  await transportCapture("water");
-  const aiBefore = (
-    await page.evaluate("window.afterhoursDebug.state()")
-  ).entities.filter((e) => e.ai && ["boat", "jetski", "speedboat"].includes(e.kind));
-  await pause(2000);
-  const aiAfter = (await page.evaluate("window.afterhoursDebug.state()")).entities;
-  assert.ok(
-    aiBefore.some((e) =>
-      aiAfter.some(
-        (next) => next.id === e.id && Math.hypot(next.x - e.x, next.z - e.z) > 1,
-      ),
-    ),
-    "AI watercraft did not cruise",
-  );
-  for (const model of ["scout", "utility", "plane", "aerobatic"]) {
+  const aircraft = process.argv.includes("--planes-only")
+    ? ["plane", "aerobatic"]
+    : ["scout", "utility", "plane", "aerobatic"];
+  for (const model of aircraft) {
     // Spawn lookup comes from the actual authority, not a guessed screen target.
     const world = await page.evaluate("window.afterhoursDebug.state()");
     const craft = world.entities.find(
@@ -220,13 +234,25 @@ try {
       `window.afterhoursDebug.inspect().player.vehicle===${JSON.stringify(craft.id)}`,
       `${model} boarding failed`,
     );
-    await page.evaluate("window.afterhoursDebug.move({up:true,ascend:true},5)");
-    let flying = await page.evaluate("window.afterhoursDebug.inspect()");
-    assert.ok(
-      flying.entities.find((e) => e.id === craft.id).y > 5,
-      `${model} did not climb`,
+    await until(
+      "window.afterhoursDebug.network.worldReady()",
+      `${model} collision chunks did not load`,
     );
-    await transportCapture(model);
+    // Hold continuous controls through capture; an idle plane slows and stalls.
+    const thrust = await page.evaluate(
+      "(()=>{const d=window.afterhoursDebug;const hold=()=>void d.move({up:true,ascend:true},10);hold();return setInterval(hold,5000)})()",
+    );
+    try {
+      await until(
+        `window.afterhoursDebug.inspect().entities.some(e=>e.id===${JSON.stringify(craft.id)} && e.y>12)`,
+        `${model} did not climb`,
+      );
+      if (craft.kind === "plane") await capture(model);
+      else await transportCapture(model);
+    } finally {
+      await page.evaluate(`clearInterval(${thrust})`);
+      await page.evaluate("window.afterhoursDebug.stop()");
+    }
     await page.evaluate(
       "window.afterhoursDebug.move({up:true,right:true,descend:true},0.8)",
     );
@@ -249,7 +275,10 @@ try {
     resolve(output, "result.json"),
     JSON.stringify(
       {
-        viewport: [1280, 900],
+        startedAt,
+        completedAt: new Date().toISOString(),
+        mode: process.argv.slice(2),
+        viewport,
         state: await page.evaluate("window.afterhoursDebug.inspect()"),
         evidence,
         logs: page.logs,
