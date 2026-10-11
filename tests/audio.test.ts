@@ -43,6 +43,15 @@ test("every sound bank has distinct, unclipped PCM assets with smooth edges", as
   );
   const recipes = JSON.parse(await readFile("scripts/audio-clips.json", "utf8"));
   const hashes = JSON.parse(await readFile("public/audio/source-hashes.json", "utf8"));
+  const provenance = JSON.parse(await readFile("public/audio/sources.json", "utf8"));
+  const sourceFiles: string[] = [];
+  for (const source of provenance.sources) {
+    assert.equal(source.license, "CC0-1.0", source.page);
+    assert.match(source.page, /^https:\/\//);
+    assert.ok(source.author && source.licenseEvidence, source.page);
+    sourceFiles.push(...source.files);
+  }
+  assert.deepEqual(sourceFiles.sort(), Object.keys(hashes).sort());
   for (const recipe of recipes) assert.match(hashes[recipe.file], /^[a-f0-9]{64}$/);
   for (const [name, bank] of Object.entries(SOUND_BANKS)) {
     assert.ok(bank.files.length >= 2, name + " needs alternate takes");
@@ -179,4 +188,24 @@ test("engine playback follows operation rather than pushed vehicle speed", () =>
   assert.equal(engineSound(plane), undefined);
   assert.equal(engineSound({ ...plane, driver: "pilot" }), "plane");
   assert.equal(engineSound({ ...plane, flight: "falling" }), undefined);
+});
+
+test("confirmed firearm equips use gun handling and keep other handling local", () => {
+  const before = player();
+  before.inventory!.push(
+    { id: "pistol", kind: "pistol", ammo: 12, reserve: 48 },
+    { id: "smg", kind: "smg", ammo: 24, reserve: 96 },
+    { id: "bat", kind: "bat", ammo: 0, reserve: 0 },
+  );
+  for (const weapon of ["pistol", "smg"])
+    assert.deepEqual(transitionSounds(before, { ...before, weapon }, true), [
+      "equipGun",
+    ]);
+  assert.deepEqual(transitionSounds(before, { ...before, weapon: "bat" }, true), [
+    "equip",
+  ]);
+  const armed = { ...before, weapon: "pistol" };
+  assert.deepEqual(transitionSounds(armed, before, true), ["equip"]);
+  assert.deepEqual(transitionSounds(before, armed, false), []);
+  assert.deepEqual(transitionSounds(armed, structuredClone(armed), true), []);
 });

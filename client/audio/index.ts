@@ -395,8 +395,10 @@ export class GameAudio {
         )
           loop("flame:" + e.id, "fire", e, 1.2, 0.7);
       }
-      if (listener.parachute)
+      if (listener.parachute) {
         loop("wind", "wind", listener, 1, Math.min(1, Math.abs(listener.vy) / 4));
+        loop("canopy", "canopy", listener, 1, Math.min(1, Math.abs(listener.vy) / 4));
+      }
       const shore = Math.max(Math.abs(listener.x), Math.abs(listener.z));
       if (shore > 690)
         loop("coast", "coast", listener, 1, Math.min(1, (shore - 690) / 100));

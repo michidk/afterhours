@@ -1,8 +1,8 @@
 {
-  "browser": "Headless Chrome, real Web Audio; shared T3 browser repeatedly timed out",
+  "browser": "Headless Chrome, real Web Audio; shared T3 browser reported no automation host",
   "viewports": [1280, 390],
-  "decodedClips": 108,
-  "playedBanks": 33,
+  "decodedClips": 114,
+  "playedBanks": 35,
   "signal": "nonzero and below full scale in six engine, skid, and fire loops",
   "muteResumeAndCleanup": "passed",
   "pushedIdleVehicle": "silent",
@@ -14,7 +14,11 @@
     "authoritativePistolShots": "passed",
     "confirmedReload": "passed",
     "muteStopsLoops": "passed",
-    "unmuteResumesLoops": "passed",
-    "failedClips": 0
-  }
+    "unmuteResumesLoops": "passed in prior live check; follow-up had no active nearby loop, resume reverified in mixer",
+    "failedClips": 0,
+    "confirmedFirearmSlotSelection": "passed"
+  },
+  "canopyDescentMuteResumeAndLanding": "passed",
+  "confirmedFirearmEquipAndDeduplication": "passed",
+  "checkedOn": "2026-10-11"
 }
