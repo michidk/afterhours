@@ -17,6 +17,7 @@ import { CityRenderer } from "./world/render.ts";
 import { mapManifestSchema } from "../shared/city-stream.ts";
 import type { CameraMode } from "./camera/debug.ts";
 import { district, idle, LIMIT, type Entity } from "../shared/world";
+import { WORLD_LIMIT, isWater, watercraft, WATER_LEVEL } from "../shared/water.ts";
 mountUI();
 const nameplates = new Nameplates();
 let pickups: Pickup[] = [];
@@ -498,15 +499,21 @@ async function boot() {
           send({
             type: "debugView",
             center: {
-              x: Math.max(-LIMIT, Math.min(LIMIT, scene.target.x)),
-              z: Math.max(-LIMIT, Math.min(LIMIT, scene.target.z)),
+              x: Math.max(-WORLD_LIMIT, Math.min(WORLD_LIMIT, scene.target.x)),
+              z: Math.max(-WORLD_LIMIT, Math.min(WORLD_LIMIT, scene.target.z)),
             },
           });
         const v = rendered.find((e) => e.id === p.vehicle);
         $("#speed").textContent = String(
           Math.round(Math.hypot(v?.vx || 0, v?.vz || 0) * 3.6),
         );
-        $("#unit").textContent = v ? "KM/H" : p.parachute ? "PARACHUTE" : "ON FOOT";
+        $("#unit").textContent = v
+          ? "KM/H"
+          : p.parachute
+            ? "PARACHUTE"
+            : isWater(p.x, p.z) && p.y <= WATER_LEVEL + 0.1
+              ? "SWIMMING"
+              : "ON FOOT";
         $("#weapon").textContent = p.down
           ? "RECOVERING…"
           : (v?.kind || p.weapon || "fists").toUpperCase();
@@ -543,12 +550,13 @@ async function boot() {
         const nearVehicle = entities
           .filter(
             (e) =>
-              ["car", "helicopter", "plane"].includes(e.kind) &&
+              e.kind !== "player" &&
+              e.kind !== "pedestrian" &&
               availableSeat(e) >= 0 &&
               !e.wreck &&
               e.burning === undefined &&
               e.y < 0.5 &&
-              Math.abs(e.y - p.y) < 0.5 &&
+              Math.abs(e.y - p.y) < (watercraft(e.kind) ? 1.6 : 0.5) &&
               Math.hypot(e.x - p.x, e.z - p.z) < 6,
           )
           .sort(

@@ -296,6 +296,9 @@ export const VEHICLES = {
   },
 } as const;
 export type VehicleModel = keyof typeof VEHICLES;
+export function isVehicleModel(value: string): value is VehicleModel {
+  return Object.hasOwn(VEHICLES, value);
+}
 export const DEFAULT_MODELS = {
   car: "sedan",
   helicopter: "scout",

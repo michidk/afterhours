@@ -120,6 +120,7 @@ test("multiplayer authority, delta recovery, input sequences, jitter, reconnects
     for (let seq = 0; seq < 9; seq++) {
       a.send({ type: "input", seq, timestamp: Date.now(), ...idle(), up: true });
       await pause(seq % 3 === 0 ? 65 : 10);
+      await a.wait((m) => m.type === "state" && m.ack === seq);
     }
     await a.wait((m) => m.type === "state" && m.ack === 8);
     assert.ok(a.entities.get(a.welcome.id)!.z > before.z + 0.2);

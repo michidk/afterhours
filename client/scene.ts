@@ -46,6 +46,8 @@ import { propulsionRunning } from "../shared/propulsion.ts";
 import { buildParachute } from "./models/parachute.ts";
 import { buildWeapon } from "./models/weapons.ts";
 import { WaterRenderer } from "./world/water.ts";
+import { buildWatercraft } from "./models/watercraft.ts";
+import { watercraft } from "../shared/water.ts";
 import type { GrenadeState } from "../shared/grenades.ts";
 export class CityScene {
   pickupNodes = new Map<string, TransformNode>();
@@ -609,13 +611,17 @@ export class CityScene {
       this.box("rotor cross", 0, 2.71, 0, 0.3, 0.1, 9, "#334343", root, true);
       for (const side of [-1, 1])
         this.box("skid", side * 1, 0.3, 0, 0.16, 0.2, 3.8, "#364449", root);
-    } else {
+    } else if (watercraft(e.kind)) {
+      buildWatercraft(this, e, root);
+    } else if (e.kind === "plane") {
       this.box("fuselage", 0, 1, 0, 1.3, 1, 7, e.color, root, true);
       this.box("cockpit", 0, 1.6, 1, 1, 0.45, 1.5, "#35555e", root);
       this.box("wings", 0, 1, 0.2, 10, 0.18, 1.8, e.color, root, true);
       this.box("tail wings", 0, 1, -2.8, 4, 0.18, 1, e.color, root);
       this.box("tail fin", 0, 1.8, -2.8, 0.18, 1.5, 1, e.color, root);
       this.box("propeller", 0, 1, 3.6, 3, 0.15, 0.1, "#334343", root);
+      const model = VEHICLES[e.model || "plane"];
+      root.scaling.set(model.width / 10, 1, model.length / 7);
     }
     if (e.kind === "car") {
       const model = VEHICLES[e.model || "sedan"];
@@ -723,6 +729,17 @@ export class CityScene {
           if (child.name === "propeller")
             child.rotation.z += dt * (propulsionRunning(e) ? 60 : 0);
       }
+      if (watercraft(e.kind)) {
+        n.rotation.x = Math.sin(this.time * 2 + e.x * 0.1) * 0.025;
+        n.rotation.z =
+          -(e.angularVelocity || 0) * 0.12 +
+          Math.sin(this.time * 1.5 + e.z * 0.1) * 0.025;
+        for (const child of parts) {
+          if (child.name.startsWith("AI skipper")) child.setEnabled(!!e.ai);
+          if (child.name === "water propeller")
+            child.rotation.z += propulsionRunning(e) ? dt * 60 : 0;
+        }
+      }
       if (e.kind === "player" || e.kind === "pedestrian") {
         if (e.parachute) {
           n.rotation.x = -e.vz * 0.025;
@@ -742,6 +759,14 @@ export class CityScene {
       this.effectClock = 0;
       for (const e of entities) {
         if (Math.hypot(e.x - this.target.x, e.z - this.target.z) > 90) continue;
+        if (watercraft(e.kind) && Math.hypot(e.vx, e.vz) > 2 && !e.wreck) {
+          this.effect({
+            kind: "wake",
+            x: e.x - Math.sin(e.angle) * 3,
+            y: e.y,
+            z: e.z - Math.cos(e.angle) * 3,
+          });
+        }
         if (e.burning !== undefined) {
           this.effect({
             kind: "fire",

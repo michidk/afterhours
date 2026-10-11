@@ -1,4 +1,5 @@
-import { LIMIT, type City, type Entity } from "../shared/world.ts";
+import { type City, type Entity } from "../shared/world.ts";
+import { WORLD_LIMIT, groundLevel } from "../shared/water.ts";
 import type { GrenadeState } from "../shared/grenades.ts";
 import { staticGeometry } from "../shared/physics/static.ts";
 import { WEAPONS } from "../shared/catalog.ts";
@@ -63,16 +64,17 @@ export class Grenades {
           g.vz *= -0.5;
         }
       }
-      if (g.y < g.radius) {
-        g.y = g.radius;
+      const floor = groundLevel(g.x, g.z) + g.radius;
+      if (g.y < floor) {
+        g.y = floor;
         g.vy = Math.abs(g.vy) > 0.5 ? Math.abs(g.vy) * 0.4 : 0;
         const friction = Math.exp(-4 * dt);
         g.vx *= friction;
         g.vz *= friction;
       }
       for (const axis of ["x", "z"] as const)
-        if (Math.abs(g[axis]) > LIMIT - g.radius) {
-          g[axis] = Math.sign(g[axis]) * (LIMIT - g.radius);
+        if (Math.abs(g[axis]) > WORLD_LIMIT - g.radius) {
+          g[axis] = Math.sign(g[axis]) * (WORLD_LIMIT - g.radius);
           if (axis === "x") g.vx *= -0.5;
           else g.vz *= -0.5;
         }

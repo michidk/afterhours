@@ -163,7 +163,14 @@ test("script debug interface controls real transport and production rejects it",
         assert.equal(spawned.entities.length, after.entities.length + 1);
         assert.ok(spawned.entities.some((e) => e.model === "sport" && !e.ai));
         client.send({ type: "debugView", center: { x: -190, z: -190 } });
-        await pause(250);
+        const deadline = Date.now() + 5000;
+        while (
+          ![...client.entities.values()].some(
+            (e) => e.kind !== "player" && Math.hypot(e.x + 190, e.z + 190) < 110,
+          ) &&
+          Date.now() < deadline
+        )
+          await pause(20);
         assert.ok(client.entities.has(client.welcome.id));
         assert.ok(
           [...client.entities.values()].some(

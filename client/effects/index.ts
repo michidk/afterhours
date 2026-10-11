@@ -33,6 +33,18 @@ export class Effects {
     }
   }
   effect(e: WorldEvent) {
+    if (e.kind === "wake" && this.effects.length < 180) {
+      const mesh = MeshBuilder.CreateSphere(
+        "water wake",
+        { diameter: 1, segments: 4 },
+        this.scene,
+      );
+      mesh.scaling.set(1.8, 0.025, 1.8);
+      mesh.position.set(e.x, e.y + 0.12, e.z);
+      mesh.material = this.mat("#b4d8d8");
+      this.effects.push({ mesh, life: 1, maxLife: 1, rise: 0 });
+      return;
+    }
     if (e.kind === "flame") {
       for (let i = 1; i <= 6; i++)
         this.effect({
