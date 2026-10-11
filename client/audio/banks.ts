@@ -117,8 +117,7 @@ export function engineSound(entity: Entity): Sound | undefined {
       : entity.model === "van"
         ? "engineVan"
         : "engineSedan";
-  if (entity.kind === "helicopter")
-    return "helicopter";
+  if (entity.kind === "helicopter") return "helicopter";
   if (entity.kind === "plane" && entity.driver) return "plane";
 }
 

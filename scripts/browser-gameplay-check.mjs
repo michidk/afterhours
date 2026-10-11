@@ -46,6 +46,7 @@ try {
   );
   await writeFile(resolve(output, "names.png"), await page.screenshot());
   await buddy.command({ kind: "teleport", x: 6, z: 26 });
+  await pause(150);
   buddy.send({ type: "interact" });
   await until(
     'window.afterhoursDebug.inspect().entities.some(e=>e.name==="Nameplate buddy" && e.vehicle)',

@@ -25,7 +25,11 @@ test("pushing idle vehicles never starts engines; powering and shutdown control 
     Object.assign(audio, {
       context: { currentTime: 0, state: "running" },
       voice: (sound: string) => ({
-        sound, rate: 1, variation: 1, cutoff: 16000, filter: {frequency:parameter},
+        sound,
+        rate: 1,
+        variation: 1,
+        cutoff: 16000,
+        filter: { frequency: parameter },
         source: {
           buffer: { duration: 1 },
           start() {
