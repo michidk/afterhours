@@ -58,6 +58,7 @@ export interface Entity {
   equipped?: number;
   reloadUntil?: number;
   aim?: number;
+  jetpack?: { fuel: number; active: boolean };
 }
 export interface WorldEvent {
   kind: string;

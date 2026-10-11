@@ -7,8 +7,8 @@ Interpret the dictated "chatpack" as a jetpack, "Chetsky" as jet skis, and "M ge
 ## Remaining gameplay work
 
 - [x] Keep corpses for 180 seconds and fade them before removal. `TUNING.corpseSeconds` is separate from the 30-second `npcRecoverySeconds` in [shared/catalog.ts](shared/catalog.ts). Verified player respawn, NPC recovery, retained corpses, and wreck cleanup in [destruction regressions](tests/destruction.test.ts).
-- [ ] Show each other player's chosen name above their character in the world, including during shared rides. Joining and the connected-player list already preserve names, but [client/scene.ts](client/scene.ts) creates no overhead labels. Verify join, leave, reconnect, and removal when a character leaves view.
-- [x] Gate vehicle audio on engine, rotor, or propeller operation. `engineSound` in [sound banks](client/audio/banks.ts) follows drivers, AI traffic, and rotor animation. Pushed empty cars and planes, grounded helicopters, and wrecks stay silent. [Audio regressions](tests/audio.test.ts) cover push, boarding, falling rotors, shutdown, and wrecks; headless Chrome exercised the real mixer and loop cleanup.
+- [x] Show chosen overhead names with projected DOM labels, independent of hidden rider meshes. [Nameplate regressions](tests/nameplates.test.ts) cover passengers, reconnect/roster changes, offscreen removal, and plain-text names. A real headless browser join and disconnect check verified the visible name and removal; passenger live check is included in [browser verification](scripts/browser-gameplay-check.mjs).
+- [x] Gate engine audio and powered rotor/propeller animation on shared `propulsionRunning`. Pushed idle vehicles remain silent; abandoned helicopters can windmill silently. [Engine regressions](tests/engine-audio.test.ts) failed before the fix and pass for push, boarding, shutdown, and wreck cases. Audible listening remains part of the final playtest.
 - [ ] Refine and playtest helicopter and plane movement. Existing flight includes takeoff, obstacle clearance, lift, stalls, and abandoned-aircraft crashes, but the requested handling polish still needs an explicit review of acceleration, turning, braking, climbing, and descending for each model.
 - [ ] Put model-dependent movement parameters in the shared vehicle catalog and provide multiple variants of each vehicle kind. Sedan, sport, and van tuning and two helicopter models already exist. Plane thrust, lift threshold, damping, and turn response in [shared/physics/plane.ts](shared/physics/plane.ts), and most helicopter response values in [shared/physics/helicopter.ts](shared/physics/helicopter.ts), are hardcoded. There is only one plane model. Keep authority and prediction on the same algorithms and verify that variants handle differently.
 - [ ] Add ammunition pickups that replenish compatible weapons without requiring another weapon pickup. [server/inventory.ts](server/inventory.ts) currently supplies ammo only as part of weapon items. Finite magazines, reserves, reloading, and ammo-preserving weapon drops already work.
@@ -30,7 +30,7 @@ Interpret the dictated "chatpack" as a jetpack, "Chetsky" as jet skis, and "M ge
 
 ## Carried over from the old plan
 
-- [x] Add and publish the GitHub CI workflow for formatting, import boundaries, types, tests, and build. [.github/workflows/ci.yml](.github/workflows/ci.yml) is on `origin/main` in `332d07c`. This records publication, not a claim that a hosted run passed.
+- [x] Publish CI for formatting, import boundaries, types, tests, and build. [Workflow](.github/workflows/ci.yml) was pushed with managed authentication; [run 38177211233](https://github.com/michidk/afterhours/actions/runs/38177211233) passed on `332d07c`.
 
 `PLAN.md` is retired. Its completed foundation items remain documented in README and the linked documents and tests; its unfinished CI item is preserved above.
 

@@ -78,7 +78,11 @@ export class Prediction {
     this.offset.y *= decay;
     this.offset.angle *= decay;
     if (!this.body) return undefined;
-    const pose = { ...this.body, wheelSkids: this.body.wheelSkids?.slice() };
+    const pose = {
+      ...this.body,
+      wheelSkids: this.body.wheelSkids?.slice(),
+      jetpack: this.body.jetpack && { ...this.body.jetpack },
+    };
     // Fill the gap between 30 Hz inputs at display refresh rate. This copy never
     // changes the replay state or decides gameplay outcomes.
     if (this.lastInput) {

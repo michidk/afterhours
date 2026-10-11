@@ -173,7 +173,7 @@ test("engine playback follows operation rather than pushed vehicle speed", () =>
     engineSound({ ...helicopter, driver: "pilot", flight: "takingOff" }),
     "helicopter",
   );
-  assert.equal(engineSound({ ...helicopter, flight: "falling" }), "helicopter");
+  assert.equal(engineSound({ ...helicopter, flight: "falling" }), undefined);
   assert.equal(engineSound({ ...helicopter, flight: "grounded" }), undefined);
   const plane = { ...moving, kind: "plane" as const };
   assert.equal(engineSound(plane), undefined);

@@ -42,6 +42,8 @@ import { CAR_WHEEL_MOUNTS } from "./models/car-wheels.ts";
 import type { GeometryOptions } from "./world/render.ts";
 import { destructibles } from "../shared/destruction.ts";
 import { DestructionRenderer } from "./world/destruction.ts";
+import { propulsionRunning } from "../shared/propulsion.ts";
+import { buildParachute } from "./models/parachute.ts";
 export class CityScene {
   pickupNodes = new Map<string, TransformNode>();
   engine: Engine;
@@ -466,38 +468,41 @@ export class CityScene {
         this.box("arm", s * 0.42, 1, 0, 0.18, 0.65, 0.22, e.color, root, true);
       }
       if (e.kind === "player") {
-        const canopy = MeshBuilder.CreateSphere(
-          "parachute canopy",
-          {
-            diameter: 1,
-            segments: 12,
-            slice: 0.5,
-            sideOrientation: Mesh.DOUBLESIDE,
-          },
-          this.scene,
-        );
-        canopy.scaling.set(5.2, 2.4, 3.6);
-        canopy.position.y = 4.3;
-        canopy.material = this.mat("#edaa54");
-        canopy.parent = root;
-        canopy.setEnabled(false);
-        this.shadows.addShadowCaster(canopy);
-        for (const x of [-2.2, 2.2])
-          for (const z of [-0.9, 0.9]) {
-            const line = MeshBuilder.CreateLines(
-              "parachute line",
-              {
-                points: [
-                  new Vector3(x, 4.3, z),
-                  new Vector3(Math.sign(x) * 0.35, 1.5, 0),
-                ],
-              },
-              this.scene,
-            );
-            line.color = Color3.FromHexString("#f4e8cb");
-            line.parent = root;
-            line.setEnabled(false);
-          }
+        buildParachute(this, root);
+        for (const side of [-1, 1]) {
+          this.cylinder(
+            "jetpack tank",
+            side * 0.23,
+            1.1,
+            -0.38,
+            0.8,
+            0.28,
+            "#73858c",
+            root,
+          ).setEnabled(false);
+          this.cylinder(
+            "jetpack nozzle",
+            side * 0.23,
+            0.65,
+            -0.38,
+            0.16,
+            0.19,
+            "#263237",
+            root,
+          ).setEnabled(false);
+          const flame = this.cylinder(
+            "jetpack exhaust",
+            side * 0.23,
+            0.37,
+            -0.38,
+            0.5,
+            0.13,
+            "#ffb544",
+            root,
+          );
+          flame.material = this.mat("#ffb544", true);
+          flame.setEnabled(false);
+        }
         for (const kind of ["bat", "pistol", "smg"]) {
           const w = this.box(
             "held:" + kind,
@@ -653,6 +658,13 @@ export class CityScene {
         if (child.name.startsWith("held:"))
           child.setEnabled(!e.parachute && child.name === "held:" + e.weapon);
         else if (child.name.startsWith("parachute")) child.setEnabled(!!e.parachute);
+        else if (child.name.startsWith("jetpack"))
+          child.setEnabled(
+            !!e.jetpack &&
+              !e.parachute &&
+              (child.name !== "jetpack exhaust" ||
+                (!!e.jetpack.active && e.jetpack.fuel > 0 && e.vy > 0.1)),
+          );
 
       for (const child of parts) {
         child.visibility =
@@ -671,14 +683,14 @@ export class CityScene {
           if (child.name.startsWith("rotor"))
             child.rotation.y +=
               dt *
-              (e.wreck || e.flight === "grounded" || !e.flight ? 0 : e.driver ? 38 : 8);
+              (propulsionRunning(e) ? 38 : e.flight === "falling" && !e.wreck ? 8 : 0);
       }
       if (e.kind === "plane") {
         n.rotation.z = -(e.angularVelocity || 0) * 0.2;
         n.rotation.x = -Math.max(-0.2, Math.min(0.2, e.vy * 0.03));
         for (const child of parts)
           if (child.name === "propeller")
-            child.rotation.z += dt * (e.wreck || !e.driver ? 0 : 60);
+            child.rotation.z += dt * (propulsionRunning(e) ? 60 : 0);
       }
       if (e.kind === "player" || e.kind === "pedestrian") {
         if (e.parachute) {

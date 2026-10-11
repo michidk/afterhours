@@ -1,6 +1,7 @@
 import { staticGeometry } from "./static.ts";
 import { fallAircraft } from "./abandoned-aircraft.ts";
-import { LIMIT, type City, type Entity, type Input } from "../world.ts";
+import { jetpackThrust } from "./jetpack.ts";
+import { idle, LIMIT, type City, type Entity, type Input } from "../world.ts";
 import { TUNING, VEHICLES } from "../catalog.ts";
 import { flyPlane } from "./plane.ts";
 import { carForces, clamp, wrap } from "./vehicle.ts";
@@ -25,7 +26,13 @@ export function characterForces(
   const length = Math.hypot(x, z),
     speed =
       direction?.speed ??
-      (e.parachute ? 6 : input.sprint || input.brake ? TUNING.sprint : TUNING.walk);
+      (e.jetpack?.active && e.y > 0.2
+        ? 10
+        : e.parachute
+          ? 6
+          : input.sprint || input.brake
+            ? TUNING.sprint
+            : TUNING.walk);
   if (length) {
     x = (x / length) * speed;
     z = (z / length) * speed;
@@ -48,7 +55,13 @@ export function characterForces(
 }
 // Only roofs under the character's feet can support it. A wall beside a
 // descending player must never pull them upward onto its roof.
-export function characterAltitude(e: Entity, city: City, dt: number) {
+export function characterAltitude(
+  e: Entity,
+  city: City,
+  dt: number,
+  input: Input = idle(),
+) {
+  if (jetpackThrust(e, input, dt)) return;
   let floor = 0;
   for (const b of staticGeometry(city).query(e.x, e.z, 1)) {
     const roof = b.h + 1.8;
@@ -125,7 +138,7 @@ export function predictStep(
     e.x += e.vx * h;
     e.z += e.vz * h;
     if (e.kind === "car") carAltitude(e, previous, city, h);
-    if (!vehicle(e)) characterAltitude(e, city, h);
+    if (!vehicle(e)) characterAltitude(e, city, h, input);
     if (vehicle(e)) e.angle = wrap(e.angle + (e.angularVelocity || 0) * h);
     // Remote controls are unknown: coast private neighbours between corrections.
     for (const b of shadows) {

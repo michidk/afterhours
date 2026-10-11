@@ -273,6 +273,7 @@ export class Simulation {
       const seat = availableSeat(v);
       if (seat < 0) return;
       p.vehicle = v.id;
+      if (p.jetpack) p.jetpack.active = false;
       p.seat = seat;
       v.seats = vehicleSeats(v);
       v.seats[seat] = id;
@@ -429,6 +430,7 @@ export class Simulation {
           e.z = pos.z;
           if (e.ai) this.ai.assign(e, this.serial++ % 36);
           if (e.kind === "player") this.inventory.initialize(e);
+          e.jetpack = undefined;
           e.y = 0;
           e.parachute = undefined;
           e.vx = e.vz = e.vy = 0;
@@ -502,7 +504,7 @@ export class Simulation {
       e.x += e.vx * dt;
       e.z += e.vz * dt;
       if (e.kind === "car") carAltitude(e, previous, this.city, dt);
-      if (!vehicle(e)) characterAltitude(e, this.city, dt);
+      if (!vehicle(e)) characterAltitude(e, this.city, dt, input);
       if (vehicle(e)) e.angle = wrap(e.angle + (e.angularVelocity || 0) * dt);
     }
     for (let pass = 0; pass < 3; pass++) {

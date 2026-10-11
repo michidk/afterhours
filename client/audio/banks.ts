@@ -1,4 +1,5 @@
 import type { WorldEvent, Entity } from "../../shared/world.ts";
+import { propulsionRunning } from "../../shared/propulsion.ts";
 
 export interface SoundBank {
   files: string[];
@@ -109,14 +110,14 @@ export const SOUND_BANKS = {
 export type Sound = keyof typeof SOUND_BANKS;
 
 export function engineSound(entity: Entity): Sound | undefined {
-  if (entity.wreck) return;
+  if (!propulsionRunning(entity)) return;
   if (entity.kind === "car" && (entity.driver || entity.ai))
     return entity.model === "sport"
       ? "engineSport"
       : entity.model === "van"
         ? "engineVan"
         : "engineSedan";
-  if (entity.kind === "helicopter" && entity.flight && entity.flight !== "grounded")
+  if (entity.kind === "helicopter")
     return "helicopter";
   if (entity.kind === "plane" && entity.driver) return "plane";
 }

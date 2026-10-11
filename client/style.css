@@ -558,3 +558,21 @@ kbd {
     font-size: 24px;
   }
 }
+.nameplates {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.nameplate {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  background: #18282bd9;
+  color: #fff5dc;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font:
+    600 12px system-ui,
+    sans-serif;
+  white-space: nowrap;
+}

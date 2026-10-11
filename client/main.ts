@@ -5,6 +5,7 @@ import "./style.css";
 import { mountUI } from "./ui/index.ts";
 import { CityMap } from "./ui/city-map.ts";
 import { PlayerList } from "./ui/player-list.ts";
+import { Nameplates } from "./ui/nameplates.ts";
 import { GameNetwork } from "./network/index.ts";
 import { Controls } from "./input/index.ts";
 import { GameAudio } from "./audio/index.ts";
@@ -17,6 +18,7 @@ import { mapManifestSchema } from "../shared/city-stream.ts";
 import type { CameraMode } from "./camera/debug.ts";
 import { district, idle, LIMIT, type Entity } from "../shared/world";
 mountUI();
+const nameplates = new Nameplates();
 let pickups: Pickup[] = [];
 const $ = <T extends HTMLElement = HTMLElement>(s: string) =>
   document.querySelector<T>(s)!;
@@ -132,6 +134,7 @@ $("#join").addEventListener("submit", (event) => {
       },
       roster(players) {
         playerList.update(players, playerId);
+        nameplates.roster(players);
       },
       destruction(ids) {
         scene.destruction.setBroken(ids);
@@ -140,6 +143,7 @@ $("#join").addEventListener("submit", (event) => {
         loading(state, 90);
         if (state !== "connected") {
           audio.reset();
+          nameplates.clear();
           playerList.clear(state === "reconnecting" ? "Reconnecting…" : "Connecting…");
           controls.clear();
           automation?.stop();
@@ -202,6 +206,7 @@ window.addEventListener("keydown", (event) => {
   if (!scene.debugCamera.active && event.code === "KeyF") send({ type: "interact" });
   if (!scene.debugCamera.active && event.code === "KeyG") send({ type: "drop" });
   if (!scene.debugCamera.active && event.code === "KeyR") send({ type: "reload" });
+  if (!scene.debugCamera.active && event.code === "KeyB") send({ type: "jetpack" });
   if (!scene.debugCamera.active && /^Digit[1-4]$/.test(event.code))
     send({ type: "equip", slot: Number(event.code.slice(-1)) - 1 });
   if (event.code === "KeyN") {
@@ -481,6 +486,7 @@ async function boot() {
       audio.update(rendered, local, dt, scene.city);
       const updated = profiler ? performance.now() : 0;
       scene.scene.render();
+      nameplates.update(scene, rendered, playerId);
       const renderedAt = profiler ? performance.now() : 0;
       ui += dt;
       if (ui > 0.1 && joined) {

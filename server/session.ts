@@ -225,6 +225,8 @@ export class Sessions {
     if (m.type === "drop") this.sim.inventory.drop(p, this.sim.time);
     if (m.type === "reload") this.sim.inventory.reload(p, this.sim.time);
     if (m.type === "equip") this.sim.inventory.equip(p, m.slot);
+    if (m.type === "jetpack" && p.jetpack && !p.vehicle && !p.down)
+      p.jetpack.active = !p.jetpack.active;
     if (m.type === "chat")
       for (const peer of this.clients.keys())
         this.send(peer, { type: "chat", name: p.name, text: m.text });
