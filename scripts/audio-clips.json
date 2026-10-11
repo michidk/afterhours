@@ -127,21 +127,21 @@
   },
   {
     "name": "water-1",
-    "file": "water.mp3",
+    "file": "water-leak.mp3",
     "start": 5,
     "duration": 5,
     "loop": true
   },
   {
     "name": "water-2",
-    "file": "water.mp3",
+    "file": "water-leak.mp3",
     "start": 20,
     "duration": 5,
     "loop": true
   },
   {
     "name": "water-3",
-    "file": "water.mp3",
+    "file": "water-leak.mp3",
     "start": 40,
     "duration": 5,
     "loop": true
@@ -402,15 +402,21 @@
   },
   {
     "name": "parachute-1",
-    "file": "rpg-audio/Audio/cloth1.ogg"
+    "file": "parachute-coat.mp3",
+    "start": 0.25,
+    "duration": 1.1
   },
   {
     "name": "parachute-2",
-    "file": "rpg-audio/Audio/cloth2.ogg"
+    "file": "parachute-coat.mp3",
+    "start": 2.15,
+    "duration": 1.1
   },
   {
     "name": "parachute-3",
-    "file": "rpg-audio/Audio/cloth3.ogg"
+    "file": "parachute-rope.mp3",
+    "start": 0.15,
+    "duration": 1.6
   },
   {
     "name": "drop-1",
@@ -486,15 +492,21 @@
   },
   {
     "name": "dry-fire-1",
-    "file": "rpg-audio/Audio/metalClick.ogg"
+    "file": "dry-fire-taurus.mp3",
+    "start": 0.04,
+    "duration": 0.65
   },
   {
     "name": "dry-fire-2",
-    "file": "rpg-audio/Audio/metalLatch.ogg"
+    "file": "dry-fire-taurus.mp3",
+    "start": 1.8,
+    "duration": 0.65
   },
   {
     "name": "dry-fire-3",
-    "file": "rpg-audio/Audio/beltHandle2.ogg"
+    "file": "dry-fire-taurus.mp3",
+    "start": 3.7,
+    "duration": 0.65
   },
   {
     "name": "reload-pistol-1",
@@ -534,5 +546,44 @@
     "name": "explosion-3",
     "file": "explosion4.ogg",
     "duration": 3
+  },
+  {
+    "name": "equip-gun-1",
+    "file": "gun-handling.mp3",
+    "start": 0.95,
+    "duration": 0.75
+  },
+  {
+    "name": "equip-gun-2",
+    "file": "gun-handling.mp3",
+    "start": 2.7,
+    "duration": 0.75
+  },
+  {
+    "name": "equip-gun-3",
+    "file": "gun-handling.mp3",
+    "start": 4.85,
+    "duration": 0.75
+  },
+  {
+    "name": "canopy-1",
+    "file": "canopy1.mp3",
+    "start": 20,
+    "duration": 5,
+    "loop": true
+  },
+  {
+    "name": "canopy-2",
+    "file": "canopy1.mp3",
+    "start": 40,
+    "duration": 5,
+    "loop": true
+  },
+  {
+    "name": "canopy-3",
+    "file": "canopy2.mp3",
+    "start": 28,
+    "duration": 5,
+    "loop": true
   }
 ]

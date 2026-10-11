@@ -79,6 +79,16 @@
     "voices": 5,
     "loop": true
   },
+  "canopy": {
+    "files": ["canopy-1", "canopy-2", "canopy-3"],
+    "volume": 0.08,
+    "pitch": 0.5,
+    "gainVariation": 0.12,
+    "range": 0,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": true
+  },
   "water": {
     "files": ["water-1", "water-2", "water-3"],
     "volume": 0.18,
@@ -293,6 +303,16 @@
   },
   "equip": {
     "files": ["equip-1", "equip-2", "equip-3"],
+    "volume": 0.2,
+    "pitch": 0.6,
+    "gainVariation": 0.12,
+    "range": 0,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": false
+  },
+  "equipGun": {
+    "files": ["equip-gun-1", "equip-gun-2", "equip-gun-3"],
     "volume": 0.2,
     "pitch": 0.6,
     "gainVariation": 0.12,

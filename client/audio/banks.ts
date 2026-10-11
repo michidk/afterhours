@@ -55,6 +55,7 @@ export const SOUND_BANKS = {
   skid: bank(clips("skid", 3), { loop: true, volume: 0.22, pitch: 1.5, range: 45 }),
   fire: bank(clips("fire", 3), { loop: true, volume: 0.22, pitch: 0.5, range: 25 }),
   wind: bank(clips("wind", 3), { loop: true, volume: 0.12, pitch: 0.5, range: 0 }),
+  canopy: bank(clips("canopy", 3), { loop: true, volume: 0.08, pitch: 0.5, range: 0 }),
   water: bank(clips("water", 3), { loop: true, volume: 0.18, pitch: 0.5, range: 22 }),
   coast: bank(clips("coast", 3), { loop: true, volume: 0.12, pitch: 0.35, range: 0 }),
   pistol: bank(clips("pistol", 3), { volume: 0.55, pitch: 0.6, range: 90, voices: 8 }),
@@ -100,6 +101,7 @@ export const SOUND_BANKS = {
   pickup: bank(clips("pickup", 3), { volume: 0.2, pitch: 0.4, range: 0 }),
   drop: bank(clips("drop", 3), { volume: 0.22, pitch: 0.8, range: 0 }),
   equip: bank(clips("equip", 3), { volume: 0.2, pitch: 0.6, range: 0 }),
+  equipGun: bank(clips("equip-gun", 3), { volume: 0.2, pitch: 0.6, range: 0 }),
   parachute: bank(clips("parachute", 3), { volume: 0.3, pitch: 0.6, range: 20 }),
   death: bank(clips("death", 3), { volume: 0.25, pitch: 0.5, range: 0 }),
   respawn: bank(clips("respawn", 3), { volume: 0.2, pitch: 0.3, range: 0 }),
@@ -169,7 +171,10 @@ export function transitionSounds(
       result.push("pickup");
     else if (before.some((item) => !after.some((next) => next.id === item.id)))
       result.push("drop");
-    else if (previous.weapon !== current.weapon) result.push("equip");
+    else if (previous.weapon !== current.weapon)
+      result.push(
+        current.weapon === "pistol" || current.weapon === "smg" ? "equipGun" : "equip",
+      );
   }
   return result;
 }

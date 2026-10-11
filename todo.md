@@ -24,9 +24,10 @@ Interpret the dictated "chatpack" as a jetpack, "Chetsky" as jet skis, and "M ge
 
 ## Audio replacement
 
+- [x] Complete the follow-up CC0 source audit and integrate dedicated dry-fire, gun-handling, parachute-deployment, canopy-flutter, and pressurized-water recordings. Nine clips replace proxies and six add gun handling and canopy flutter, bringing the library to 114 clips across 35 banks. All 29 source pages explicitly identify CC0; [source provenance](public/audio/sources.json) covers all 90 downloaded originals or archive members and matches the hashes. Headless Chrome decoded every clip, played every bank, and verified confirmed equips and canopy start, mute, resume, landing, and cleanup.
 - [x] Research and replace the eleven old clips with 108 CC0 clips across 33 sound banks. Each bank has alternate takes, no immediate sample repeat, and bounded pitch, gain, and tone variation. Add missing footsteps, handling, boarding, parachute, fire, water, coast, and life-state cues. See [inventory and future sounds](docs/audio.md), [source credits](public/audio/CREDITS.md), and the listening page at `/audio.html`.
 - [x] Verify every clip's manifest coverage, distinct waveform, headroom, fades, and loop seam. Headless Chrome decoded all 108 files, played all 33 banks, measured a nonzero unclipped mix, and confirmed mute, resume, and cleanup. Listening-page screenshots covered 1280 and 390 px widths.
-- [ ] Listen on real speakers or headphones and refine recording choices and the mix. Wall occlusion, layered RPM recordings, dedicated aircraft doors and parachute snaps, voices, and more footstep surfaces remain documented limits. Sound needs for the pending weapons, jetpack, watercraft, and weather are listed in [audio research](docs/audio.md).
+- [ ] Listen on real speakers or headphones and refine recording choices and the mix. Wall occlusion, layered RPM recordings, dedicated aircraft doors, voices, and more footstep surfaces remain documented limits. Sound needs for the pending weapons, jetpack, watercraft, and weather are listed in [audio research](docs/audio.md).
 
 ## Carried over from the old plan
 
@@ -55,3 +56,7 @@ Live browser appearance, subjective vehicle handling, and listening checks have 
 The audio and combat regressions pass, as do `bun run build` and `bun run check`. The full suite reports 107 passing tests and one failing debug transport test. The failure at `tests/debug.test.ts:168` also reproduces in an untouched checkout of `3f500a0`; its fixed 250 ms snapshot wait is sensitive to this environment. A second run failed at its fixed-duration movement assertion instead. Keep that existing transport-test issue open rather than treating audio verification as a full-suite pass.
 
 Headless Chrome evidence is recorded in [audio browser check](docs/audio-browser-check.json). A live game session confirmed pickup, authoritative pistol shots, reload, and N muting and resuming loops with no failed clips. After merging `332d07c`, all 14 targeted audio, combat, and destruction tests pass, along with build and check. No real-device listening or subjective approval is claimed.
+
+## CC0 follow-up verification
+
+The follow-up full run reports 108 passing tests and two transport failures. The debug test fails at its known snapshot wait at `tests/debug.test.ts:168`. The multiplayer test times out waiting for input acknowledgement at `tests/network.test.ts:124`; it passes when run separately. Audio asset and selection checks pass, including exact CC0 provenance coverage. Headless checks cover 1280 and 390 px listening-page widths with no horizontal overflow. All 15 targeted audio, combat, and destruction tests pass, as do build, formatting, types, and import boundaries. A fresh live game decoded 114 clips and confirmed pickup, shots, slot-based firearm handling, reload, and N muting. Loop resume is verified by the separate mixer check. Real-device listening remains open.
