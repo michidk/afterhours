@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import { Simulation } from "../server/simulation.ts";
 import { loadCity } from "../server/city-loader.ts";
 import { idle } from "../shared/world.ts";
-import { predictStep } from "../shared/physics/movement.ts";
+import {
+  predictStep,
+  characterForces,
+  characterAltitude,
+} from "../shared/physics/movement.ts";
 import { Prediction } from "../client/network/prediction.ts";
 import { applyPatch } from "../shared/codec.ts";
 
@@ -67,4 +71,59 @@ test("disabled packs and render extrapolation cannot spend replay fuel", async (
   const states = new Map([[p.id, structuredClone(p)]]);
   applyPatch(states, { id: p.id, jetpack: null });
   assert.equal(states.get(p.id)!.jetpack, undefined);
+});
+
+test("empty packs cannot retain powered horizontal speed and parachutes take precedence", async () => {
+  const city = await loadCity();
+  const sim = new Simulation(city);
+  sim.entities.clear();
+  const p = sim.join("Flyer", "#ffffff");
+  p.y = 10;
+  p.jetpack = { fuel: 0, active: true };
+  characterForces(p, { ...idle(), right: true }, 1);
+  assert.equal(p.vx, 4.5);
+  p.jetpack.fuel = 10;
+  p.parachute = true;
+  p.vx = 0;
+  characterForces(p, { ...idle(), right: true }, 1);
+  assert.equal(p.vx, 6);
+  p.parachute = undefined;
+  characterForces(p, { ...idle(), right: true }, 1);
+  assert.equal(p.vx, 10);
+});
+
+test("Q descends under power identically in authority and prediction and lands safely on roofs", async () => {
+  const city = await loadCity();
+  city.buildings = [{ x: 0, z: 0, w: 20, d: 20, h: 8, color: "#ffffff", style: 0 }];
+  city.props = [];
+  city.parks = [];
+  city.ramps = [];
+  const sim = new Simulation(city);
+  city.roads = [];
+  sim.entities.clear();
+  const p = sim.join("Flyer", "#ffffff");
+  p.x = p.z = 0;
+  p.y = 16;
+  p.jetpack = { fuel: 10, active: true };
+  const predicted = structuredClone(p);
+  const input = { ...idle(), descend: true };
+  sim.inputs.set(p.id, input);
+  for (let i = 0; i < 60; i++) {
+    sim.tick(1 / 30);
+    predictStep(predicted, input, city, [], 1 / 30);
+    assert.ok(Math.abs(p.y - predicted.y) < 1e-8);
+    assert.ok(Math.abs(p.jetpack.fuel - predicted.jetpack!.fuel) < 1e-8);
+    assert.equal(p.parachute, undefined);
+  }
+  assert.equal(p.y, 9.8);
+  assert.equal(p.vy, 0);
+  assert.ok(p.jetpack.fuel < 10);
+  const fuel = p.jetpack.fuel;
+  characterAltitude(p, city, 1, input);
+  assert.equal(p.jetpack.fuel, fuel);
+  assert.equal(p.y, 9.8);
+  p.y = 15;
+  p.jetpack.fuel = 0;
+  characterAltitude(p, city, 1 / 30, input);
+  assert.equal(p.parachute, true);
 });

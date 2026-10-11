@@ -118,7 +118,9 @@ test("flame cone consumes fuel, damages multiple targets and is blocked by walls
   p.cooldown = 0;
   const events = s.events.length;
   s.attack(p);
-  assert.equal(s.events.length, events);
+  assert.equal(s.events.length, events + 1);
+  assert.equal(s.events.at(-1)?.kind, "dryFire");
+  assert.equal(s.events.at(-1)?.sound, "dryFire");
   assert.equal(a.health, 95);
   assert.equal(fuel.ammo, 0);
 });
@@ -221,6 +223,46 @@ test("grenade blasts hit seated occupants exactly once and vehicle wreck blasts 
   assert.equal(p.vehicle, undefined);
   assert.equal(rider.vehicle, undefined);
   assert.equal(s.events.filter((e) => e.kind === "explosion").length, 2);
+  s.destruction.dispose();
+});
+
+test("lethal grenade damage releases riders from a surviving utility helicopter and allows respawn", () => {
+  const { s, p } = setup();
+  const rider = s.join("B", "#ffffff");
+  rider.x = rider.z = 0;
+  const helicopter = s.spawn("helicopter", 0, 0, undefined, "utility");
+  s.interact(p.id);
+  s.interact(rider.id);
+  assert.equal(p.vehicle, helicopter.id);
+  assert.equal(rider.vehicle, helicopter.id);
+  const thrower = s.spawn("player", 20, 0);
+  s.grenades.throw(thrower, s.time);
+  const grenade = [...s.grenades.active.values()][0];
+  grenade.x = grenade.z = grenade.y = 0;
+  grenade.detonateAt = s.time;
+  s.tick(1 / 120);
+  assert.equal(helicopter.health, 70);
+  assert.equal(helicopter.wreck, undefined);
+  assert.equal(helicopter.driver, undefined);
+  assert.ok(helicopter.seats!.every((id) => id === null));
+  for (const player of [p, rider]) {
+    assert.equal(player.health, 0);
+    assert.ok(player.down! > 0);
+    assert.equal(player.vehicle, undefined);
+    assert.equal(player.seat, undefined);
+  }
+  assert.equal(
+    [...s.destruction.active.values()].filter(
+      (body) => body.state.source.kind === "corpse",
+    ).length,
+    2,
+  );
+  for (let i = 0; i < 100; i++) s.tick(1 / 30);
+  for (const player of [p, rider]) {
+    assert.equal(player.health, 100);
+    assert.equal(player.down, 0);
+    assert.equal(player.vehicle, undefined);
+  }
   s.destruction.dispose();
 });
 

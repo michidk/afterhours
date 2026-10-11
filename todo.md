@@ -56,6 +56,8 @@ Source, existing tests, and recorded project evidence were reviewed at the basel
 
 Live browser appearance, subjective vehicle handling, and listening checks have not been repeated for this audit. Keep those checks open where requested above.
 
+Review regression progress: lethal grenade damage now frees driver/passenger seats even when the vehicle survives, and both riders can respawn. Empty jetpacks cannot retain powered horizontal speed; parachutes take movement priority. Q provides finite-fuel controlled descent and lands safely on roofs using the same authority/prediction solver. [Weapon](tests/weapons.test.ts) and [jetpack](tests/jetpack.test.ts) regressions cover these cases.
+
 ## Audio verification result
 
 The audio and combat regressions pass, as do `bun run build` and `bun run check`. The full suite reports 107 passing tests and one failing debug transport test. The failure at `tests/debug.test.ts:168` also reproduces in an untouched checkout of `3f500a0`; its fixed 250 ms snapshot wait is sensitive to this environment. A second run failed at its fixed-duration movement assertion instead. Keep that existing transport-test issue open rather than treating audio verification as a full-suite pass.

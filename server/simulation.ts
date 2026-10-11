@@ -383,6 +383,19 @@ export class Simulation {
       )
         e.burning = TUNING.fireSeconds;
     } else if (e.health <= 0) {
+      const seated = e.vehicle ? this.entities.get(e.vehicle) : undefined;
+      if (seated) {
+        e.x = seated.x;
+        e.z = seated.z;
+        e.y = seated.y;
+        e.angle = seated.angle;
+        e.vx = seated.vx;
+        e.vz = seated.vz;
+        e.vy = Math.min(0, seated.vy);
+        this.releaseSeat(e, seated);
+      }
+      if (e.jetpack) e.jetpack.active = false;
+      e.parachute = undefined;
       e.down = e.kind === "player" ? 3 : TUNING.npcRecoverySeconds;
       this.destruction.corpse(e, this.time);
     }

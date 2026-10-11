@@ -1,6 +1,6 @@
 import { staticGeometry } from "./static.ts";
 import { fallAircraft } from "./abandoned-aircraft.ts";
-import { jetpackThrust } from "./jetpack.ts";
+import { JETPACK, jetpackThrust } from "./jetpack.ts";
 import { idle, type City, type Entity, type Input } from "../world.ts";
 import {
   groundLevel,
@@ -33,10 +33,10 @@ export function characterForces(
   const length = Math.hypot(x, z),
     speed =
       direction?.speed ??
-      (e.jetpack?.active && e.y > 0.2
-        ? 10
-        : e.parachute
-          ? 6
+      (e.parachute
+        ? 6
+        : e.jetpack?.active && e.jetpack.fuel > 0 && e.y > 0.2 && !e.vehicle && !e.down
+          ? JETPACK.speed
           : isWater(e.x, e.z) && e.y <= WATER_LEVEL + 0.1
             ? 2.8
             : input.sprint || input.brake
@@ -70,7 +70,6 @@ export function characterAltitude(
   dt: number,
   input: Input = idle(),
 ) {
-  if (jetpackThrust(e, input, dt)) return;
   let floor = groundLevel(e.x, e.z);
   // The quay's shallow step is traversable from swimming height.
   if (floor === 0 && e.y >= WATER_LEVEL - 0.02 && e.y < 0) e.y = 0;
@@ -84,6 +83,7 @@ export function characterAltitude(
     )
       floor = Math.max(floor, roof);
   }
+  if (jetpackThrust(e, input, dt, floor)) return;
   if (e.y > floor + 0.02) {
     // Walking off a roof is also a safe descent, rather than an invisible fall.
     if (e.kind === "player" && e.y - floor > 1.5) e.parachute = true;
