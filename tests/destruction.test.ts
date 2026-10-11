@@ -15,6 +15,56 @@ import { LIMIT } from "../shared/world.ts";
 import { WATER_LEVEL } from "../shared/water.ts";
 import { decodeSnapshot } from "../shared/codec.ts";
 
+test("saturated airborne corpses keep falling and lie on roofs, land or water until expiry", () => {
+  const city = fixture();
+  city.parks = [];
+  city.props = [];
+  city.buildings = [{ x: 0, z: 0, w: 16, d: 16, h: 10, color: "#ffffff", style: 0 }];
+  const sim = new Simulation(fixture()),
+    d = new Destruction(city);
+  try {
+    const person = sim.spawn("player", 0, 0);
+    person.y = 20;
+    const sites = [
+      { x: 0, z: 0, floor: 12.1 },
+      { x: 50, z: 0, floor: 0.3 },
+      { x: -900, z: 0, floor: -1.1 },
+    ];
+    for (let i = 0; i < 131; i++) {
+      person.x = i < 3 ? sites[i].x : 250 + (i % 16) * 4;
+      person.z = i < 3 ? sites[i].z : 250 + Math.floor(i / 16) * 4;
+      d.corpse(person, 0);
+    }
+    assert.equal(d.active.size, 128);
+    const airborne = [...d.retained.values()];
+    assert.equal(airborne.length, 3);
+    for (const state of airborne) assert.equal(state.position.y, 21);
+    d.update(1 / 30, 1 / 30, []);
+    for (const state of airborne)
+      assert.ok(state.position.y < 21, "retired bodies still fall");
+    for (let i = 2; i <= 90; i++) d.update(i / 30, 1 / 30, []);
+    for (const [i, state] of airborne.entries()) {
+      assert.ok(
+        Math.abs(state.position.y - sites[i].floor) < 1e-6,
+        `supporting height ${state.position.y}`,
+      );
+      assert.ok(
+        Math.abs(state.rotation.w) < 0.8,
+        "corpse lies down instead of floating upright",
+      );
+      assert.deepEqual(state.velocity, { x: 0, y: 0, z: 0 });
+    }
+    d.update(179.99, 1 / 30, []);
+    for (const state of airborne)
+      assert.ok(d.snapshot(state.source, 2).some((s) => s.id === state.id));
+    d.update(180, 1 / 30, []);
+    assert.equal(d.snapshot({ x: 0, z: 0 }, 2000).length, 0);
+  } finally {
+    d.dispose();
+    sim.destruction.dispose();
+  }
+});
+
 test("corpses retain their entire lifetime when dynamic debris capacity is full", () => {
   const city = fixture();
   city.parks = [];

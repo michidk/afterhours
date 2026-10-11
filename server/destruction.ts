@@ -7,7 +7,7 @@ import {
   type Vec3,
 } from "../shared/destruction.ts";
 import { LIMIT, type City, type Entity } from "../shared/world.ts";
-import { WATER_LEVEL, WORLD_LIMIT } from "../shared/water.ts";
+import { WATER_LEVEL, WORLD_LIMIT, isWater } from "../shared/water.ts";
 import { TUNING } from "../shared/catalog.ts";
 import { SpatialGrid } from "../shared/spatial.ts";
 import { staticGeometry } from "../shared/physics/static.ts";
@@ -31,6 +31,7 @@ export class Destruction {
   readonly fixtures: Map<string, Destructible>;
   readonly active = new Map<string, Body>();
   readonly retained = new Map<string, DebrisState>();
+  private settling = new Set<string>();
   readonly broken = new Set<string>();
   readonly maxBodies = 128;
   private grid = new SpatialGrid<Destructible>(32);
@@ -123,14 +124,51 @@ export class Destruction {
     return true;
   }
   private retire(id: string, entry: Body) {
-    // shortcut: retired debris is visual-only until expiry; revisit if it must react to later impacts.
+    // shortcut: retired debris ignores later impacts; revisit if long-lived bodies must remain interactive.
     entry.state.position = { ...entry.body.translation() };
     entry.state.rotation = { ...entry.body.rotation() };
-    entry.state.velocity = { x: 0, y: 0, z: 0 };
+    const falling = entry.state.source.kind === "corpse" && !entry.body.isSleeping();
+    entry.state.velocity = falling ? { ...entry.body.linvel() } : { x: 0, y: 0, z: 0 };
+    if (falling) this.settling.add(id);
     entry.state.angularVelocity = { x: 0, y: 0, z: 0 };
     this.physics?.removeRigidBody(entry.body);
     this.active.delete(id);
     this.retained.set(id, entry.state);
+  }
+  private settle(state: DebrisState, dt: number) {
+    const previousY = state.position.y;
+    state.velocity.x *= Math.exp(-0.6 * dt);
+    state.velocity.z *= Math.exp(-0.6 * dt);
+    state.velocity.y -= 18 * dt;
+    state.position.x += state.velocity.x * dt;
+    state.position.z += state.velocity.z * dt;
+    state.position.y += state.velocity.y * dt;
+    let floor = isWater(state.position.x, state.position.z) ? WATER_LEVEL : 0.3;
+    for (const b of staticGeometry(this.city).query(
+      state.position.x,
+      state.position.z,
+      2,
+    )) {
+      const roof = b.h + 2.1;
+      if (
+        !b.obstacle &&
+        roof <= previousY + 0.02 &&
+        Math.abs(state.position.x - b.x) < b.w / 2 &&
+        Math.abs(state.position.z - b.z) < b.d / 2
+      )
+        floor = Math.max(floor, roof);
+    }
+    for (const p of this.city.parks)
+      if (
+        Math.abs(state.position.x - p.x) < (p.w ?? 38) / 2 &&
+        Math.abs(state.position.z - p.z) < (p.d ?? 38) / 2
+      )
+        floor = Math.max(floor, 0.7);
+    if (state.position.y > floor) return;
+    state.position.y = floor;
+    state.rotation = { x: Math.SQRT1_2, y: 0, z: 0, w: Math.SQRT1_2 };
+    state.velocity = { x: 0, y: 0, z: 0 };
+    this.settling.delete(state.id);
   }
   hit(id: string, amount: number, time: number, velocity: Vec3) {
     const p = this.fixtures.get(id);
@@ -232,9 +270,12 @@ export class Destruction {
       if (entry) this.physics?.removeRigidBody(entry.body);
       this.active.delete(state.id);
       this.retained.delete(state.id);
+      this.settling.delete(state.id);
       this.broken.delete(state.id);
     }
     setBrokenProps(this.city, this.broken);
+    for (const state of this.retained.values())
+      if (this.settling.has(state.id)) this.settle(state, dt);
     if (!this.physics) return;
     const world = this.physics;
     if (!this.active.size) {
@@ -337,6 +378,7 @@ export class Destruction {
     this.physics = undefined;
     this.active.clear();
     this.retained.clear();
+    this.settling.clear();
     this.broken.clear();
     this.fixed.clear();
     this.proxies.clear();
