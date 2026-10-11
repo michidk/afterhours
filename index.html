@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#121c25" />
+    <title>AFTERHOURS — The city is yours</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #14202a;
+      }
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: grid;
+        place-content: center;
+        color: #f5e9cc;
+        text-align: center;
+        font: 14px system-ui;
+        background: #14202a;
+      }
+      #boot strong {
+        font-size: 34px;
+        letter-spacing: 5px;
+      }
+      #boot .bar {
+        height: 4px;
+        margin-top: 20px;
+        background: repeating-linear-gradient(
+          120deg,
+          #f0b862 0 14px,
+          #896942 14px 28px
+        );
+        background-size: 56px 100%;
+        animation: bands 1s linear infinite;
+      }
+      @keyframes bands {
+        to {
+          background-position: 56px 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="boot" role="status" aria-live="polite">
+      <strong>AFTERHOURS</strong>
+      <p>A living city. A story worth sharing.</p>
+      <div class="bar"></div>
+      <p>Loading the engine…</p>
+      <noscript>Enable JavaScript to enter the city.</noscript>
+    </div>
+    <canvas id="world"></canvas>
+    <div id="app"></div>
+    <script type="module" src="/client/main.ts"></script>
+  </body>
+</html>
