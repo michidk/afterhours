@@ -412,7 +412,7 @@ export class CityScene {
           0,
           0.18,
           0.2,
-          item.item.kind === "bat" ? 1.3 : 0.65,
+          item.kind === "weapon" && item.item.kind === "bat" ? 1.3 : 0.65,
           "#27363b",
           root,
         );

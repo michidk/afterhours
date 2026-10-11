@@ -109,6 +109,8 @@ export const VEHICLES = {
 export type VehicleModel = keyof typeof VEHICLES;
 export const WEAPONS = {
   fists: {
+    mode: "melee",
+    ammoKind: null,
     name: "Fists",
     damage: 20,
     range: 2.1,
@@ -118,6 +120,8 @@ export const WEAPONS = {
     reload: 0,
   },
   bat: {
+    mode: "melee",
+    ammoKind: null,
     name: "Bat",
     damage: 30,
     range: 3,
@@ -127,6 +131,8 @@ export const WEAPONS = {
     reload: 0,
   },
   pistol: {
+    mode: "hitscan",
+    ammoKind: "handgun",
     name: "Pistol",
     damage: 25,
     range: 40,
@@ -136,6 +142,8 @@ export const WEAPONS = {
     reload: 1.4,
   },
   smg: {
+    mode: "hitscan",
+    ammoKind: "light",
     name: "SMG",
     damage: 12,
     range: 32,
@@ -144,8 +152,53 @@ export const WEAPONS = {
     reserve: 96,
     reload: 1.8,
   },
+  knife: {
+    mode: "melee",
+    ammoKind: null,
+    name: "Knife",
+    damage: 35,
+    range: 1.7,
+    cooldown: 0.35,
+    magazine: 0,
+    reserve: 0,
+    reload: 0,
+  },
+  machinegun: {
+    mode: "hitscan",
+    ammoKind: "rifle",
+    name: "Machine gun",
+    damage: 19,
+    range: 55,
+    cooldown: 0.08,
+    magazine: 60,
+    reserve: 180,
+    reload: 3,
+  },
+  flamethrower: {
+    mode: "flame",
+    ammoKind: "fuel",
+    name: "Flamethrower",
+    damage: 5,
+    range: 9,
+    cooldown: 0.1,
+    magazine: 100,
+    reserve: 200,
+    reload: 2.5,
+  },
+  grenade: {
+    mode: "throw",
+    ammoKind: "grenade",
+    name: "Grenades",
+    damage: 130,
+    range: 12,
+    cooldown: 0.7,
+    magazine: 3,
+    reserve: 0,
+    reload: 0,
+  },
 } as const;
 export type WeaponKind = keyof typeof WEAPONS;
+export type AmmoKind = NonNullable<(typeof WEAPONS)[WeaponKind]["ammoKind"]>;
 export interface WeaponItem {
   id: string;
   kind: WeaponKind;

@@ -2,7 +2,8 @@ import { LIMIT } from "./world.ts";
 import { z } from "zod";
 import type { Entity, WorldEvent, Input } from "./world.ts";
 import type { MapManifest } from "./city-stream.ts";
-import type { WeaponItem } from "./catalog.ts";
+import type { WeaponItem, AmmoKind } from "./catalog.ts";
+import type { GrenadeState } from "./grenades.ts";
 import type { DebrisState } from "./destruction.ts";
 import { VERSION } from "./version.ts";
 import { debugCommandSchema } from "./debug.ts";
@@ -104,14 +105,17 @@ export interface InputFrame {
   timestamp: number;
   input: Input;
 }
-export interface Pickup {
+export type PickupPayload =
+  | { kind: "weapon"; item: WeaponItem }
+  | { kind: "ammo"; ammoKind: AmmoKind; amount: number }
+  | { kind: "jetpack"; fuel: number };
+export type Pickup = PickupPayload & {
   id: string;
   x: number;
   z: number;
   y: number;
-  item: WeaponItem;
   expires: number;
-}
+};
 import type { EntityPatch } from "./codec.ts";
 export interface Snapshot {
   type: "state";
@@ -129,6 +133,7 @@ export interface Snapshot {
   pickups: Pickup[];
   players: number;
   debris?: DebrisState[];
+  grenades?: GrenadeState[];
 }
 export interface Welcome {
   type: "welcome";

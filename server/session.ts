@@ -382,6 +382,7 @@ export class Sessions {
         ),
         players: roster.players.length,
         debris: this.sim.destruction.snapshot(center, TUNING.interestRadius),
+        grenades: this.sim.grenades.snapshot(center.x, center.z, TUNING.interestRadius),
       };
       if (ws.readyState === WebSocket.OPEN && ws.bufferedAmount < 256_000) {
         if (c.rosterKey !== rosterKey) {

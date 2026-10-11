@@ -565,7 +565,7 @@ async function boot() {
             (nearVehicle
               ? Math.hypot(nearVehicle.x - p.x, nearVehicle.z - p.z)
               : Infinity)
-            ? `Pick up ${nearPickup.item.kind.toUpperCase()}`
+            ? `Pick up ${nearPickup.kind === "weapon" ? nearPickup.item.kind.toUpperCase() : nearPickup.kind === "ammo" ? `${nearPickup.ammoKind.toUpperCase()} AMMO` : "JETPACK"}`
             : nearVehicle
               ? `${availableSeat(nearVehicle) === 0 ? "Drive" : "Ride in"} ${nearVehicle.model ? VEHICLES[nearVehicle.model].name : nearVehicle.kind} (${occupiedSeats(nearVehicle)}/${seatCapacity(nearVehicle)} seats)`
               : "No nearby vehicle or weapon";

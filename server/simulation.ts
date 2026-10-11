@@ -43,6 +43,8 @@ import { safeSpawn } from "./lifecycle.ts";
 import { availableSeat, vehicleSeats } from "../shared/seats.ts";
 import { Destruction } from "./destruction.ts";
 import type { Vec3 } from "../shared/destruction.ts";
+import { Grenades } from "./grenades.ts";
+import type { PickupPayload } from "../shared/protocol.ts";
 export class Simulation {
   city: City;
   entities = new Map<string, Entity>();
@@ -55,6 +57,7 @@ export class Simulation {
   events: WorldEvent[] = [];
   serial = 0;
   inventory = new Inventory();
+  grenades = new Grenades();
   spatial = new SpatialGrid<Entity>();
   destruction: Destruction;
 
@@ -89,6 +92,52 @@ export class Simulation {
     this.spawn("helicopter", -64, 30, undefined, "utility");
     for (const p of this.city.pickups)
       this.inventory.addSource(p.x, p.z, p.weapon as "bat" | "pistol" | "smg");
+    this.addSupplies();
+  }
+  private addSupplies() {
+    const payloads: PickupPayload[] = [
+      ...(["knife", "machinegun", "flamethrower", "grenade"] as const).map((kind) => ({
+        kind: "weapon" as const,
+        item: this.inventory.item(kind),
+      })),
+      ...(["handgun", "light", "rifle", "fuel", "grenade"] as const).map(
+        (ammoKind) => ({
+          kind: "ammo" as const,
+          ammoKind,
+          amount: ammoKind === "grenade" ? 3 : 60,
+        }),
+      ),
+      { kind: "jetpack", fuel: 30 },
+    ];
+    for (const payload of payloads) {
+      let placed = false;
+      for (const pad of this.city.pickups) {
+        for (const [dx, dz] of [
+          [3, 0],
+          [-3, 0],
+          [0, 3],
+          [0, -3],
+          [6, 0],
+          [-6, 0],
+          [0, 6],
+          [0, -6],
+        ]) {
+          const x = pad.x + dx!,
+            z = pad.z + dz!;
+          if (
+            this.blocked(x, z, 0) ||
+            [...this.inventory.pickups.values()].some(
+              (p) => Math.hypot(p.x - x, p.z - z) < 2.8,
+            )
+          )
+            continue;
+          this.inventory.addSupplySource(x, z, payload);
+          placed = true;
+          break;
+        }
+        if (placed) break;
+      }
+    }
   }
   spawn(kind: Kind, x: number, z: number, color?: string, model?: VehicleModel) {
     model ??=
@@ -342,7 +391,7 @@ export class Simulation {
     e.ai = false;
     e.skidding = false;
     e.wheelSkids?.fill(false);
-    this.events.push({ kind: "explosion", x: e.x, y: e.y + 1, z: e.z });
+    const excluded = new Set([e.id]);
     for (const p of this.entities.values())
       if (p.vehicle === e.id) {
         this.releaseSeat(p, e);
@@ -350,24 +399,39 @@ export class Simulation {
         p.z = e.z;
         p.y = e.y;
         this.damage(p, 150);
+        excluded.add(p.id);
       }
     e.driver = undefined;
     e.seats = vehicleSeats(e).map(() => null);
+    this.blast(e.x, e.y, e.z, TUNING.explosionRadius, TUNING.explosionDamage, excluded);
+  }
+  blast(
+    x: number,
+    y: number,
+    z: number,
+    radius: number,
+    damage: number,
+    excluded = new Set<string>(),
+  ) {
+    this.events.push({ kind: "explosion", x, y: y + 1, z });
     for (const other of this.entities.values()) {
-      if (other.id === e.id || other.vehicle || other.wreck) continue;
-      const dx = other.x - e.x,
-        dz = other.z - e.z,
-        dy = other.y - e.y,
+      if (excluded.has(other.id) || other.wreck) continue;
+      const pose = other.vehicle ? this.entities.get(other.vehicle) : other;
+      if (!pose) continue;
+      const dx = pose.x - x,
+        dz = pose.z - z,
+        dy = pose.y - y,
         d = Math.hypot(dx, dz, dy);
-      if (d >= TUNING.explosionRadius) continue;
-      this.damage(other, (1 - d / TUNING.explosionRadius) * TUNING.explosionDamage);
-      const impulse = (1 - d / 12) * 12,
+      if (d >= radius) continue;
+      this.damage(other, (1 - d / radius) * damage);
+      if (other.vehicle) continue;
+      const impulse = (1 - d / radius) * 12,
         flat = Math.hypot(dx, dz) || 1;
       other.vx += (dx / flat) * impulse;
       other.vz += (dz / flat) * impulse;
       if (!vehicle(other)) other.down = Math.max(other.down || 0, 1.5);
     }
-    this.destruction.blast(e.x, e.y, e.z, this.time);
+    this.destruction.blast(x, y, z, this.time);
   }
   combat = new Combat();
   attack(p: Entity) {
@@ -395,6 +459,9 @@ export class Simulation {
   }
   private step(dt: number) {
     this.time += dt;
+    this.grenades.step(this.city, this.time, dt, (x, y, z, radius, damage) =>
+      this.blast(x, y, z, radius, damage),
+    );
     this.day = (this.day + dt * this.dayRate) % 24;
     const list = [...this.entities.values()];
     this.spatial.clear();

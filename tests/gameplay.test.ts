@@ -280,7 +280,9 @@ test("nearer weapons take priority over vehicles, limits hold and pads restock",
   s.inventory.cleanup(22);
   assert.equal(s.inventory.pickups.size, 1);
   s.inventory.drop(p, 22);
-  const drop = [...s.inventory.pickups.values()].find((e) => e.item.kind === "smg")!;
+  const drop = [...s.inventory.pickups.values()].find(
+    (e) => e.kind === "weapon" && e.item.kind === "smg",
+  )!;
   assert.ok(drop);
   s.inventory.cleanup(143);
   assert.equal(s.inventory.pickups.has(drop.id), false);
