@@ -1,4 +1,4 @@
-import { LIMIT } from "./world.ts";
+import { WORLD_LIMIT } from "./water.ts";
 import { z } from "zod";
 import type { Entity, Input } from "./world.ts";
 import type { Destructible, DebrisState } from "./destruction.ts";
@@ -16,17 +16,31 @@ export const debugCommandSchema = z.discriminatedUnion("kind", [
     x: z
       .number()
       .finite()
-      .min(-LIMIT + 4)
-      .max(LIMIT - 4),
+      .min(-WORLD_LIMIT + 4)
+      .max(WORLD_LIMIT - 4),
     z: z
       .number()
       .finite()
-      .min(-LIMIT + 4)
-      .max(LIMIT - 4),
+      .min(-WORLD_LIMIT + 4)
+      .max(WORLD_LIMIT - 4),
   }),
   z.object({
     kind: z.literal("spawn"),
-    model: z.enum(["sedan", "sport", "van", "scout", "utility", "plane"]),
+    model: z.enum([
+      "sedan",
+      "sport",
+      "van",
+      "scout",
+      "utility",
+      "plane",
+      "aerobatic",
+      "boat",
+      "launch",
+      "jetski",
+      "racer",
+      "speedboat",
+      "offshore",
+    ]),
   }),
 ]);
 export type DebugCommand = z.infer<typeof debugCommandSchema>;

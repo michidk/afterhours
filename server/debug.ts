@@ -2,6 +2,9 @@ import type { DebugCommand, DebugState } from "../shared/debug.ts";
 import { VEHICLES } from "../shared/catalog.ts";
 import { idle, type Entity } from "../shared/world.ts";
 import type { Simulation } from "./simulation.ts";
+import { groundLevel, isWater, watercraft } from "../shared/water.ts";
+import { contact } from "../shared/physics/collision.ts";
+import { LIMIT } from "../shared/world.ts";
 
 export function debugState(sim: Simulation, player: Entity): DebugState {
   return {
@@ -59,7 +62,8 @@ export function executeDebug(sim: Simulation, player: Entity, command: DebugComm
       throw Error("Teleport destination is obstructed");
     player.x = command.x;
     player.z = command.z;
-    player.y = player.vx = player.vz = player.vy = 0;
+    player.y = groundLevel(player.x, player.z);
+    player.vx = player.vz = player.vy = 0;
     sim.inputs.set(player.id, idle());
   }
   if (command.kind === "spawn") {
@@ -73,6 +77,12 @@ export function executeDebug(sim: Simulation, player: Entity, command: DebugComm
         const z = player.z + Math.cos((i * Math.PI) / 8) * radius;
         if (
           sim.blocked(x, z, clearance) ||
+          (watercraft(model.kind)
+            ? contact(
+                { x, z, w: model.width / 2, d: model.length / 2, angle: 0 },
+                { x: 0, z: 0, w: LIMIT, d: LIMIT, angle: 0 },
+              )
+            : model.kind === "car" && isWater(x, z)) ||
           [...sim.entities.values()].some(
             (e) => !e.vehicle && Math.hypot(e.x - x, e.z - z) < clearance + 2,
           )

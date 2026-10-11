@@ -1,7 +1,15 @@
 import { staticGeometry } from "./static.ts";
 import { fallAircraft } from "./abandoned-aircraft.ts";
 import { jetpackThrust } from "./jetpack.ts";
-import { idle, LIMIT, type City, type Entity, type Input } from "../world.ts";
+import { idle, type City, type Entity, type Input } from "../world.ts";
+import {
+  groundLevel,
+  isWater,
+  WATER_LEVEL,
+  watercraft,
+  resolveWorldBounds,
+} from "../water.ts";
+import { watercraftForces } from "./watercraft.ts";
 import { TUNING, VEHICLES } from "../catalog.ts";
 import { flyPlane } from "./plane.ts";
 import { carForces, clamp, wrap } from "./vehicle.ts";
@@ -13,7 +21,6 @@ import {
   contact,
   resolveContact,
   vehicle,
-  shape,
 } from "./collision.ts";
 export function characterForces(
   e: Entity,
@@ -30,9 +37,11 @@ export function characterForces(
         ? 10
         : e.parachute
           ? 6
-          : input.sprint || input.brake
-            ? TUNING.sprint
-            : TUNING.walk);
+          : isWater(e.x, e.z) && e.y <= WATER_LEVEL + 0.1
+            ? 2.8
+            : input.sprint || input.brake
+              ? TUNING.sprint
+              : TUNING.walk);
   if (length) {
     x = (x / length) * speed;
     z = (z / length) * speed;
@@ -62,7 +71,9 @@ export function characterAltitude(
   input: Input = idle(),
 ) {
   if (jetpackThrust(e, input, dt)) return;
-  let floor = 0;
+  let floor = groundLevel(e.x, e.z);
+  // The quay's shallow step is traversable from swimming height.
+  if (floor === 0 && e.y >= WATER_LEVEL - 0.02 && e.y < 0) e.y = 0;
   for (const b of staticGeometry(city).query(e.x, e.z, 1)) {
     const roof = b.h + 1.8;
     if (
@@ -125,10 +136,20 @@ export function predictStep(
         h,
         carGrounded(e, city),
       );
-    } else if (!e.driver && (e.y > 0.2 || e.flight === "falling"))
+    } else if (watercraft(e.kind))
+      watercraftForces(
+        e,
+        {
+          throttle: Number(input.up) - Number(input.down),
+          steer: Number(input.right) - Number(input.left),
+          brake: input.brake,
+        },
+        h,
+      );
+    else if (!e.driver && (e.y > 0.2 || e.flight === "falling"))
       fallAircraft(e, city, h);
     else if (e.kind === "helicopter") flyHelicopter(e, input, city, nearby, h);
-    else flyPlane(e, input, h);
+    else if (e.kind === "plane") flyPlane(e, input, h);
     const speed = Math.hypot(e.vx, e.vz),
       limit = e.model ? VEHICLES[e.model].speed : 52;
     if (vehicle(e) && speed > limit) {
@@ -145,11 +166,13 @@ export function predictStep(
       const previous = { ...b };
       if (b.kind === "car" && !b.driver && !b.ai)
         carForces(b, { throttle: 0, steer: 0, brake: false }, h, carGrounded(b, city));
+      if (watercraft(b.kind) && !b.driver && !b.ai)
+        watercraftForces(b, { throttle: 0, steer: 0, brake: false }, h);
       b.x += b.vx * h;
       b.z += b.vz * h;
       if (vehicle(b)) b.angle = wrap(b.angle + (b.angularVelocity || 0) * h);
       if (b.kind === "car") carAltitude(b, previous, city, h);
-      else b.y = Math.max(0, b.y + b.vy * h);
+      else b.y = Math.max(groundLevel(b.x, b.z), b.y + b.vy * h);
     }
     resolveMovementContacts(bodies, city);
   }
@@ -177,6 +200,7 @@ export function resolveMovementContacts(bodies: Entity[], city: City) {
         if (c) resolveContact(a, b, c);
       }
   }
+  for (const body of bodies) resolveWorldBounds(body);
 }
 
 function resolveStaticContacts(body: Entity, city: City) {
@@ -191,16 +215,7 @@ function resolveStaticContacts(body: Entity, city: City) {
     if (c) resolveContact(body, undefined, c);
   }
   for (const c of rampContacts(body, city)) resolveContact(body, undefined, c);
-  const s = shape(body),
-    r = Math.max(s.w, s.d);
-  if (Math.abs(body.x) > LIMIT - r) {
-    body.x = clamp(body.x, -LIMIT + r, LIMIT - r);
-    body.vx *= -0.15;
-  }
-  if (Math.abs(body.z) > LIMIT - r) {
-    body.z = clamp(body.z, -LIMIT + r, LIMIT - r);
-    body.vz *= -0.15;
-  }
+  resolveWorldBounds(body);
 }
 
 /** Cosmetic correction cannot displace the neighbours shown by the renderer. */
@@ -221,4 +236,5 @@ export function constrainRenderPose(pose: Entity, city: City, nearby: Entity[]) 
       if (c) resolveContact(pose, undefined, c);
     }
   }
+  resolveWorldBounds(pose);
 }

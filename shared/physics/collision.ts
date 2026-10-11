@@ -1,34 +1,19 @@
 import type { Entity, Building } from "../world.ts";
-import { CAR } from "./vehicle.ts";
-import { VEHICLES } from "../catalog.ts";
+import { DEFAULT_MODELS, VEHICLES } from "../catalog.ts";
 export const vehicle = (e: Entity) => e.kind !== "player" && e.kind !== "pedestrian";
 export function shape(e: Entity) {
-  if (e.model)
-    return { w: VEHICLES[e.model].width / 2, d: VEHICLES[e.model].length / 2 };
-  return e.kind === "car"
-    ? { w: 1, d: 2.15 }
-    : e.kind === "helicopter"
-      ? { w: 1.5, d: 3.4 }
-      : e.kind === "plane"
-        ? { w: 4.8, d: 3.5 }
-        : { w: 0.42, d: 0.42 };
+  if (e.kind === "player" || e.kind === "pedestrian") return { w: 0.42, d: 0.42 };
+  const model = VEHICLES[e.model || DEFAULT_MODELS[e.kind]];
+  return { w: model.width / 2, d: model.length / 2 };
 }
 export const mass = (e: Entity) =>
-  !vehicle(e)
+  e.kind === "player" || e.kind === "pedestrian"
     ? 80
-    : e.model
-      ? VEHICLES[e.model].mass
-      : e.kind === "car"
-        ? CAR.mass
-        : 1800;
+    : VEHICLES[e.model || DEFAULT_MODELS[e.kind]].mass;
 export const inertia = (e: Entity) =>
   !vehicle(e)
     ? Infinity
-    : e.model
-      ? (mass(e) * (VEHICLES[e.model].width ** 2 + VEHICLES[e.model].length ** 2)) / 12
-      : e.kind === "car"
-        ? CAR.inertia
-        : 9000;
+    : (mass(e) * ((shape(e).w * 2) ** 2 + (shape(e).d * 2) ** 2)) / 12;
 export type Box = { x: number; z: number; angle: number; w: number; d: number };
 export function rayDistance(
   x: number,

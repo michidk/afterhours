@@ -31,7 +31,22 @@ import { CityAI } from "./ai.ts";
 import { TrafficManager } from "./traffic.ts";
 import { flyHelicopter, landingSite } from "../shared/physics/index.ts";
 import { characterForces, characterAltitude } from "../shared/physics/index.ts";
-import { VEHICLES, WEAPONS, TUNING, type VehicleModel } from "../shared/catalog.ts";
+import {
+  VEHICLES,
+  WEAPONS,
+  TUNING,
+  DEFAULT_MODELS,
+  type VehicleModel,
+} from "../shared/catalog.ts";
+import {
+  groundLevel,
+  isWater,
+  WATER_LEVEL,
+  WORLD_LIMIT,
+  watercraft,
+  resolveWorldBounds,
+} from "../shared/water.ts";
+import { watercraftForces } from "../shared/physics/watercraft.ts";
 import { Inventory } from "./inventory.ts";
 import { SpatialGrid } from "../shared/spatial.ts";
 import type { Building } from "../shared/world.ts";
@@ -90,6 +105,21 @@ export class Simulation {
       this.city.airport.z - this.city.airport.d / 2 + 14,
     );
     this.spawn("helicopter", -64, 30, undefined, "utility");
+    this.spawn(
+      "plane",
+      this.city.airport.x - 22,
+      this.city.airport.z - this.city.airport.d / 2 + 14,
+      undefined,
+      "aerobatic",
+    );
+    for (const [i, model] of (
+      ["boat", "launch", "jetski", "racer", "speedboat", "offshore"] as const
+    ).entries()) {
+      // Saved geometry stays immutable; craft use the fixed navigable shoreline.
+      this.spawn(VEHICLES[model].kind, -LIMIT - 7, -48 + i * 16, undefined, model);
+      const craft = this.spawn(VEHICLES[model].kind, 0, 0, undefined, model);
+      this.ai.assignWatercraft(craft, i);
+    }
     for (const p of this.city.pickups)
       this.inventory.addSource(p.x, p.z, p.weapon as "bat" | "pistol" | "smg");
     this.addSupplies();
@@ -141,19 +171,15 @@ export class Simulation {
   }
   spawn(kind: Kind, x: number, z: number, color?: string, model?: VehicleModel) {
     model ??=
-      kind === "car"
-        ? "sedan"
-        : kind === "helicopter"
-          ? "scout"
-          : kind === "plane"
-            ? "plane"
-            : undefined;
+      kind === "player" || kind === "pedestrian" ? undefined : DEFAULT_MODELS[kind];
+    if (model && VEHICLES[model].kind !== kind)
+      throw Error("Vehicle model does not match entity kind");
     const e: Entity = {
       id: `e${++this.serial}`,
       kind,
       x,
       z,
-      y: 0,
+      y: groundLevel(x, z),
       angle: 0,
       vx: 0,
       vz: 0,
@@ -203,8 +229,8 @@ export class Simulation {
   }
   blocked(x: number, z: number, r = 0.6) {
     return (
-      Math.abs(x) > LIMIT - r ||
-      Math.abs(z) > LIMIT - r ||
+      Math.abs(x) > WORLD_LIMIT - r ||
+      Math.abs(z) > WORLD_LIMIT - r ||
       staticGeometry(this.city)
         .query(x, z, r + 3)
         .some(
@@ -254,8 +280,8 @@ export class Simulation {
           z = v.z - Math.sin(v.angle) * distance * side + Math.cos(v.angle) * offset;
         if (
           (airborne
-            ? Math.abs(x) > LIMIT - 0.6 ||
-              Math.abs(z) > LIMIT - 0.6 ||
+            ? Math.abs(x) > WORLD_LIMIT - 0.6 ||
+              Math.abs(z) > WORLD_LIMIT - 0.6 ||
               staticGeometry(this.city)
                 .query(x, z, 1)
                 .some(
@@ -269,14 +295,14 @@ export class Simulation {
               e.id !== p.id &&
               e.id !== v.id &&
               !e.vehicle &&
-              Math.abs(e.y - (airborne ? v.y : 0)) < 2 &&
+              Math.abs(e.y - (airborne ? v.y : groundLevel(x, z))) < 2 &&
               Math.hypot(e.x - x, e.z - z) < (vehicle(e) ? 2 : 0.8),
           )
         )
           continue;
         p.x = x;
         p.z = z;
-        p.y = airborne ? v.y : 0;
+        p.y = airborne ? v.y : groundLevel(x, z);
         p.vx = airborne ? clamp(v.vx, -6, 6) : 0;
         p.vz = airborne ? clamp(v.vz, -6, 6) : 0;
         p.vy = airborne ? -1 : 0;
@@ -304,7 +330,7 @@ export class Simulation {
           !e.wreck &&
           !e.burning &&
           e.y < 0.5 &&
-          Math.abs(e.y - p.y) < 0.5 &&
+          Math.abs(e.y - p.y) < (watercraft(e.kind) ? 1.3 : 0.5) &&
           Math.hypot(e.x - p.x, e.z - p.z) < 6,
       )
       .sort(
@@ -335,6 +361,7 @@ export class Simulation {
         v.driver = id;
         v.ai = false;
         this.ai.routes.delete(v.id);
+        this.ai.waterRoutes.delete(v.id);
         if (v.kind === "helicopter") {
           v.flight = "takingOff";
           v.takeoffDelay = TUNING.helicopterBoardingSeconds;
@@ -475,6 +502,7 @@ export class Simulation {
           const route = this.ai.routes.get(e.id);
           this.entities.delete(e.id);
           this.ai.routes.delete(e.id);
+          this.ai.waterRoutes.delete(e.id);
           if (route) {
             this.traffic.scheduleReplacement(e, this.time);
           }
@@ -541,6 +569,16 @@ export class Simulation {
                 brake: input.brake,
               };
         carForces(e, drive, dt, carGrounded(e, this.city));
+      } else if (watercraft(e.kind)) {
+        const drive =
+          e.ai && !e.wreck
+            ? this.ai.watercraft(e, this.spatial.query(e.x, e.z, 30))
+            : {
+                throttle: Number(input.up) - Number(input.down),
+                steer: Number(input.right) - Number(input.left),
+                brake: input.brake || !!e.wreck,
+              };
+        watercraftForces(e, drive, dt);
       } else if (!e.driver && (e.y > 0.2 || e.flight === "falling")) {
         const impact = fallAircraft(e, this.city, dt);
         if (impact > 3) {
@@ -554,14 +592,15 @@ export class Simulation {
           });
         }
       } else if (e.kind === "helicopter" && !e.wreck) {
-        if (e.burning !== undefined && e.flight !== "landing") this.requestLanding(e);
+        if (e.driver && e.burning !== undefined && e.flight !== "landing")
+          this.requestLanding(e);
         const wasLanding = e.flight === "landing";
         flyHelicopter(e, input, this.city, list, dt);
         if (wasLanding && e.flight === "grounded" && e.driver) {
           const p = this.entities.get(e.driver);
           if (p) this.exit(p, e);
         }
-      } else flyPlane(e, input, dt);
+      } else if (e.kind === "plane") flyPlane(e, input, dt);
       const speed = Math.hypot(e.vx, e.vz),
         limit = e.model ? VEHICLES[e.model].speed : 52;
       if (vehicle(e) && speed > limit) {
@@ -570,6 +609,21 @@ export class Simulation {
       }
       e.x += e.vx * dt;
       e.z += e.vz * dt;
+      if (
+        (e.kind === "plane" || e.kind === "helicopter") &&
+        isWater(e.x, e.z) &&
+        e.y <= WATER_LEVEL + 0.02 &&
+        e.health > 0
+      ) {
+        this.damage(e, e.maxHealth || 100);
+        this.events.push({
+          kind: "hit",
+          sound: "impact",
+          x: e.x,
+          y: WATER_LEVEL,
+          z: e.z,
+        });
+      }
       if (e.kind === "car") carAltitude(e, previous, this.city, dt);
       if (!vehicle(e)) characterAltitude(e, this.city, dt, input);
       if (vehicle(e)) e.angle = wrap(e.angle + (e.angularVelocity || 0) * dt);
@@ -622,22 +676,9 @@ export class Simulation {
             this.events.push({ kind: "hit", x: c.x, z: c.z, y: e.y + 0.5 });
           }
         }
-        const s = shape(e),
-          r = Math.max(s.w, s.d);
-        if (Math.abs(e.x) > LIMIT - r) {
-          const impact = Math.abs(e.vx);
-          e.x = clamp(e.x, -LIMIT + r, LIMIT - r);
-          e.vx *= -0.15;
-          if (vehicle(e) && pass === 0)
-            this.damage(e, Math.max(0, impact - 3) ** 2 * TUNING.wallDamage);
-        }
-        if (Math.abs(e.z) > LIMIT - r) {
-          const impact = Math.abs(e.vz);
-          e.z = clamp(e.z, -LIMIT + r, LIMIT - r);
-          e.vz *= -0.15;
-          if (vehicle(e) && pass === 0)
-            this.damage(e, Math.max(0, impact - 3) ** 2 * TUNING.wallDamage);
-        }
+        const impact = resolveWorldBounds(e);
+        if (vehicle(e) && pass === 0)
+          this.damage(e, Math.max(0, impact - 3) ** 2 * TUNING.wallDamage);
       }
       for (let i = 0; i < list.length; i++)
         for (const b of this.spatial.query(list[i].x, list[i].z, 10)) {
@@ -684,6 +725,8 @@ export class Simulation {
           }
         }
     }
+    // Pair impulses can displace a hull after the last static pass.
+    for (const e of list) if (!e.vehicle) resolveWorldBounds(e);
     for (const p of list)
       if (p.vehicle) {
         const v = this.entities.get(p.vehicle);

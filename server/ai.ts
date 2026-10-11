@@ -3,6 +3,9 @@ import type { City } from "../shared/world.ts";
 import { signal, type Entity, type Input } from "../shared/world.ts";
 import { clamp, wrap, type Drive } from "../shared/physics/index.ts";
 import { Navigation, type Waypoint } from "../shared/navigation.ts";
+import { VEHICLES, DEFAULT_MODELS } from "../shared/catalog.ts";
+import { LIMIT } from "../shared/world.ts";
+import { watercraft, WATER_LEVEL } from "../shared/water.ts";
 type Point = Waypoint;
 interface Route {
   points: Point[];
@@ -17,6 +20,56 @@ export class CityAI {
   constructor(readonly navigation: Navigation) {}
   props: { x: number; z: number }[] = [];
   routes = new Map<string, Route>();
+  waterRoutes = new Map<string, { points: Point[]; index: number }>();
+  assignWatercraft(e: Entity, index: number) {
+    const coast = LIMIT + 76 + (index % 3) * 22;
+    const points = [
+      { x: -coast, z: -coast },
+      { x: coast, z: -coast },
+      { x: coast, z: coast },
+      { x: -coast, z: coast },
+    ];
+    if (index % 2) points.reverse();
+    const start = index % 4,
+      a = points[start],
+      b = points[(start + 1) % 4];
+    const fraction = index < 4 ? 0.55 : 0.7;
+    e.x = a.x + (b.x - a.x) * fraction;
+    e.z = a.z + (b.z - a.z) * fraction;
+    e.y = WATER_LEVEL;
+    e.angle = Math.atan2(b.x - a.x, b.z - a.z);
+    e.ai = true;
+    this.waterRoutes.set(e.id, { points, index: (start + 1) % 4 });
+  }
+  watercraft(e: Entity, entities: Entity[]): Drive {
+    const route = this.waterRoutes.get(e.id);
+    if (!route || !watercraft(e.kind)) return { throttle: 0, steer: 0, brake: false };
+    if (
+      Math.hypot(route.points[route.index].x - e.x, route.points[route.index].z - e.z) <
+      24
+    )
+      route.index = (route.index + 1) % route.points.length;
+    const target = route.points[route.index],
+      model = VEHICLES[e.model || DEFAULT_MODELS[e.kind]];
+    if (!("water" in model)) return { throttle: 0, steer: 0, brake: false };
+    const error = wrap(Math.atan2(target.x - e.x, target.z - e.z) - e.angle);
+    let desired = Math.abs(error) > 0.3 ? 4 : model.water.cruise;
+    for (const other of entities) {
+      if (other.id === e.id || !watercraft(other.kind)) continue;
+      const x = other.x - e.x,
+        z = other.z - e.z;
+      const ahead = x * Math.sin(e.angle) + z * Math.cos(e.angle);
+      const side = x * Math.cos(e.angle) - z * Math.sin(e.angle);
+      if (ahead > 0 && ahead < 24 && Math.abs(side) < 4)
+        desired = Math.min(desired, Math.max(0, ahead - 10) * 0.5);
+    }
+    const forward = e.vx * Math.sin(e.angle) + e.vz * Math.cos(e.angle);
+    return {
+      throttle: clamp((desired - forward) * 0.7, 0, 1),
+      steer: clamp(error * 1.8 - (e.angularVelocity || 0) * 0.4, -1, 1),
+      brake: forward > desired + 1,
+    };
+  }
   assignCar(e: Entity, from: number, to: number, fraction: number, trip: number) {
     const a = this.navigation.roads[from],
       b = this.navigation.roads[to];

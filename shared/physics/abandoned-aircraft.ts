@@ -1,6 +1,7 @@
 import type { City, Entity } from "../world.ts";
 import { staticGeometry } from "./static.ts";
 import { buildingBox, contact, entityBox } from "./collision.ts";
+import { groundLevel } from "../water.ts";
 
 /** Unpiloted aircraft keep their course, lose altitude, and hit the world. */
 export function fallAircraft(e: Entity, city: City, dt: number) {
@@ -8,7 +9,7 @@ export function fallAircraft(e: Entity, city: City, dt: number) {
   e.vx *= Math.exp(-0.05 * dt);
   e.vz *= Math.exp(-0.05 * dt);
   e.angularVelocity = (e.angularVelocity || 0) * Math.exp(-2 * dt);
-  let floor = 0;
+  let floor = groundLevel(e.x, e.z);
   for (const b of staticGeometry(city).query(e.x, e.z, 6)) {
     const top = b.obstacle ? b.h : b.h + 1.8;
     if (top <= e.y + 0.02 && contact(entityBox(e), buildingBox(b)))

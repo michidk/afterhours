@@ -1,14 +1,12 @@
-import { VEHICLES } from "./catalog.ts";
+import { DEFAULT_MODELS, VEHICLES } from "./catalog.ts";
 import type { Entity } from "./world.ts";
 
 export function seatCapacity(vehicle: Entity) {
   const model =
     vehicle.model ||
-    (vehicle.kind === "helicopter"
-      ? "scout"
-      : vehicle.kind === "plane"
-        ? "plane"
-        : "sedan");
+    (vehicle.kind === "player" || vehicle.kind === "pedestrian"
+      ? "sedan"
+      : DEFAULT_MODELS[vehicle.kind]);
   return VEHICLES[model].seatCount;
 }
 

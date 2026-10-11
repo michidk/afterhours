@@ -20,9 +20,9 @@ Interpret the dictated "chatpack" as a jetpack, "Chetsky" as jet skis, and "M ge
 Combat implementation progress: [weapon regressions](tests/weapons.test.ts) verify new catalog weapons, finite ammo/fuel/grenade charges, compatible ammo with full inventory and retained surplus, shared blasts with exact-once occupant damage, projectile bounces/fuse, and supplies derived from the immutable saved city. Tagged jetpack pickup/drop preserves fuel independently of weapon slots. Weapon and pickup presentation, effects, and integrated browser verification are still pending; keep the related items open until those checks finish.
 
 - [ ] Add a usable jetpack with pickup, equip, movement, visual feedback, and multiplayer state. It is absent from the shared entity and input contracts.
-- [ ] Add animated, usable water and the shared water boundaries needed by watercraft. The ocean in [client/scene.ts](client/scene.ts) is a static box, and island bounds currently block travel beyond land. Hydrant spray is implemented, but does not provide navigable water.
-- [ ] Add boats, jet skis, and speedboats, with distinct variants, model parameters, boarding, and shared authoritative and predicted movement. [shared/world.ts](shared/world.ts) has no watercraft entity kinds.
-- [ ] Add AI that uses watercraft and cruises along navigable water routes. [server/ai.ts](server/ai.ts) currently supports street traffic and pedestrians only.
+- [ ] Add animated, usable water and the shared water boundaries needed by watercraft. Shared offshore boundaries, swimming, and shoreline step-up now work in authority and prediction. Animated water rendering remains open.
+- [ ] Add boats, jet skis, and speedboats, with distinct variants, model parameters, boarding, and shared authoritative and predicted movement. Six models and swimmer boarding/exit behavior pass [water regressions](tests/water.test.ts). Craft rendering and live transport review remain open.
+- [ ] Add AI that uses watercraft and cruises along navigable water routes. Six models now cruise bounded offshore routes in [server/ai.ts](server/ai.ts), with a three-minute progress regression. Browser integration review remains open.
 - [ ] Remodel and visually review parachutes. [client/scene.ts](client/scene.ts) currently uses a half-sphere canopy and four suspension lines. Automatic deployment, steering, and rooftop descent already work; the requested nicer appearance remains an art task.
 
 ## Audio replacement
@@ -30,6 +30,8 @@ Combat implementation progress: [weapon regressions](tests/weapons.test.ts) veri
 - [x] Research and replace the eleven old clips with 108 CC0 clips across 33 sound banks. Each bank has alternate takes, no immediate sample repeat, and bounded pitch, gain, and tone variation. Add missing footsteps, handling, boarding, parachute, fire, water, coast, and life-state cues. See [inventory and future sounds](docs/audio.md), [source credits](public/audio/CREDITS.md), and the listening page at `/audio.html`.
 - [x] Verify every clip's manifest coverage, distinct waveform, headroom, fades, and loop seam. Headless Chrome decoded all 108 files, played all 33 banks, measured a nonzero unclipped mix, and confirmed mute, resume, and cleanup. Listening-page screenshots covered 1280 and 390 px widths.
 - [ ] Listen on real speakers or headphones and refine recording choices and the mix. Wall occlusion, layered RPM recordings, dedicated aircraft doors and parachute snaps, voices, and more footstep surfaces remain documented limits. Sound needs for the pending weapons, jetpack, watercraft, and weather are listed in [audio research](docs/audio.md).
+
+Water and handling implementation is ready for integration: shared water boundaries, swimming and shore exits, six watercraft models, cruising AI, a second plane, model-dependent flight controls, and water ditching are covered by [water and aircraft regressions](docs/water.md). The saved city remains unchanged. Keep the related items open until their rendering, controls, audio, and browser handling review are integrated and verified.
 
 ## Carried over from the old plan
 

@@ -1,4 +1,4 @@
-import { LIMIT } from "./world.ts";
+import { WORLD_LIMIT } from "./water.ts";
 import { z } from "zod";
 import type { Entity, WorldEvent, Input } from "./world.ts";
 import type { MapManifest } from "./city-stream.ts";
@@ -58,8 +58,8 @@ export const messageSchema = z.discriminatedUnion("type", [
     type: z.literal("debugView"),
     center: z
       .object({
-        x: z.number().finite().min(-LIMIT).max(LIMIT),
-        z: z.number().finite().min(-LIMIT).max(LIMIT),
+        x: z.number().finite().min(-WORLD_LIMIT).max(WORLD_LIMIT),
+        z: z.number().finite().min(-WORLD_LIMIT).max(WORLD_LIMIT),
       })
       .nullable(),
   }),

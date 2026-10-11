@@ -3,6 +3,7 @@ import { LIMIT, type Entity, type City, type Input } from "../world.ts";
 import { clamp, wrap } from "./vehicle.ts";
 import { TUNING, VEHICLES } from "../catalog.ts";
 import { shape } from "./collision.ts";
+import { groundLevel } from "../water.ts";
 function rotorRadius(e: Entity) {
   const model = e.model && VEHICLES[e.model];
   return model && model.kind === "helicopter" ? model.rotorRadius : 4.7;
@@ -18,7 +19,7 @@ function landingBlocked(e: Entity, other: Entity, x: number, z: number) {
   );
 }
 export function surface(city: City, x: number, z: number, radius = 0) {
-  let top = 0;
+  let top = groundLevel(x, z);
   for (const b of staticGeometry(city).query(x, z, radius + 4)) {
     if (b.obstacle) {
       const r = radius + (b.obstacle === "lamp" ? 0.5 : 4);
@@ -61,12 +62,15 @@ export function flyHelicopter(
   entities: Entity[],
   dt: number,
 ) {
+  const model = VEHICLES[e.model || "scout"];
+  if (model.kind !== "helicopter") return;
+  const tuning = model.flight;
   if (e.flight === "takingOff" && e.takeoffDelay !== undefined) {
     e.takeoffDelay -= dt;
     if (e.takeoffDelay <= 0 || input.up || input.down || input.left || input.right)
       e.takeoffDelay = undefined;
   }
-  if (!e.flight || e.flight === "grounded" || (e.takeoffDelay || 0) > 0) {
+  if (!e.driver || !e.flight || e.flight === "grounded" || (e.takeoffDelay || 0) > 0) {
     e.vx *= Math.exp(-6 * dt);
     e.vz *= Math.exp(-6 * dt);
     e.angularVelocity = (e.angularVelocity || 0) * Math.exp(-6 * dt);
@@ -117,22 +121,38 @@ export function flyHelicopter(
       under = Math.max(under, other.y + 2);
   // Look ahead and climb before advancing over a roof; never teleport through it.
   const ahead = surface(city, e.x + dx * 12, e.z + dz * 12, footprint);
-  let target = Math.max(under, ahead) + TUNING.clearance;
+  const clearance = Math.max(under, ahead) + TUNING.clearance;
+  let target = e.targetAltitude ?? clearance;
+  if (input.ascend || input.descend)
+    target =
+      e.y +
+      (Number(input.ascend) * tuning.climb - Number(input.descend) * tuning.descend) /
+        tuning.response;
+  if (!input.descend && e.flight !== "landing") target = Math.max(target, clearance);
+  target = clamp(Math.max(target, Math.max(under, ahead) + 2), 0, tuning.ceiling);
+  if (!input.ascend && !input.descend && e.flight === "takingOff")
+    target = Math.max(target, clearance);
   const atLanding =
     e.flight === "landing" &&
     Math.hypot((e.landingX ?? e.x) - e.x, (e.landingZ ?? e.z) - e.z) < 0.7;
   if (atLanding) target = surface(city, e.x, e.z, footprint);
   e.targetAltitude = target;
-  const desiredVertical = clamp((target - e.y) * 2, -5, 9);
-  e.vy += (desiredVertical - e.vy) * (1 - Math.exp(-5 * dt));
-  e.y = Math.max(0, e.y + e.vy * dt);
+  const desiredVertical = clamp(
+    (target - e.y) * tuning.response,
+    -tuning.descend,
+    tuning.climb,
+  );
+  e.vy += (desiredVertical - e.vy) * (1 - Math.exp(-tuning.vertical * dt));
+  e.y = Math.max(groundLevel(e.x, e.z), e.y + e.vy * dt);
   if (e.flight === "takingOff" && e.y >= 9) e.flight = "cruising";
-  if (!atLanding && e.y < ahead + 9) maxSpeed = 0;
-  e.vx += (dx * maxSpeed - e.vx) * (1 - Math.exp(-3 * dt));
-  e.vz += (dz * maxSpeed - e.vz) * (1 - Math.exp(-3 * dt));
+  if (!atLanding && e.y < ahead + (input.descend ? 1.8 : TUNING.clearance - 1))
+    maxSpeed = 0;
+  if (input.brake) maxSpeed = 0;
+  e.vx += (dx * maxSpeed - e.vx) * (1 - Math.exp(-tuning.acceleration * dt));
+  e.vz += (dz * maxSpeed - e.vz) * (1 - Math.exp(-tuning.acceleration * dt));
   if (length > 0.01) {
     const error = wrap(Math.atan2(dx, dz) - e.angle);
-    e.angularVelocity = clamp(error * 4, -2.5, 2.5);
+    e.angularVelocity = clamp(error * tuning.yaw, -tuning.turn, tuning.turn);
   } else e.angularVelocity = (e.angularVelocity || 0) * Math.exp(-5 * dt);
   if (atLanding && e.y < 0.12 && Math.abs(e.vy) < 0.5) {
     e.y = 0;

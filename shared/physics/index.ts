@@ -4,3 +4,4 @@ export * from "./helicopter.ts";
 export * from "./movement.ts";
 export * from "./plane.ts";
 export * from "./ramps.ts";
+export * from "./watercraft.ts";

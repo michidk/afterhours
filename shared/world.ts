@@ -15,7 +15,15 @@ export interface Road {
   signalA?: boolean;
   signalB?: boolean;
 }
-export type Kind = "player" | "pedestrian" | "car" | "helicopter" | "plane";
+export type Kind =
+  | "player"
+  | "pedestrian"
+  | "car"
+  | "helicopter"
+  | "plane"
+  | "boat"
+  | "jetski"
+  | "speedboat";
 export interface Entity {
   id: string;
   kind: Kind;
