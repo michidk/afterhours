@@ -1,0 +1,538 @@
+[
+  {
+    "name": "engine-1",
+    "file": "engine-sedan.mp3",
+    "loop": true,
+    "start": 1,
+    "duration": 3
+  },
+  {
+    "name": "engine-2",
+    "file": "engine-sedan-alt.mp3",
+    "loop": true,
+    "start": 0.8,
+    "duration": 2
+  },
+  {
+    "name": "engine-3",
+    "file": "engine-sport.mp3",
+    "loop": true,
+    "start": 13,
+    "duration": 3
+  },
+  {
+    "name": "engine-4",
+    "file": "engine-sport.mp3",
+    "loop": true,
+    "start": 16,
+    "duration": 3
+  },
+  {
+    "name": "engine-5",
+    "file": "engine-van.mp3",
+    "loop": true,
+    "start": 4,
+    "duration": 4
+  },
+  {
+    "name": "engine-6",
+    "file": "engine-van-alt.mp3",
+    "start": 4,
+    "duration": 4,
+    "loop": true
+  },
+  {
+    "name": "helicopter-1",
+    "file": "helicopter.mp3",
+    "start": 5,
+    "duration": 4,
+    "loop": true
+  },
+  {
+    "name": "helicopter-2",
+    "file": "helicopter.mp3",
+    "start": 14,
+    "duration": 4,
+    "loop": true
+  },
+  {
+    "name": "helicopter-3",
+    "file": "helicopter.mp3",
+    "start": 24,
+    "duration": 4,
+    "loop": true
+  },
+  {
+    "name": "plane-1",
+    "file": "plane.mp3",
+    "start": 8,
+    "duration": 3,
+    "loop": true
+  },
+  {
+    "name": "plane-2",
+    "file": "plane.mp3",
+    "start": 16,
+    "duration": 3,
+    "loop": true
+  },
+  {
+    "name": "plane-3",
+    "file": "plane.mp3",
+    "start": 20,
+    "duration": 3,
+    "loop": true
+  },
+  {
+    "name": "skid-1",
+    "file": "skid.mp3",
+    "start": 0.35,
+    "duration": 0.65,
+    "loop": true
+  },
+  {
+    "name": "skid-2",
+    "file": "skid.mp3",
+    "start": 7.05,
+    "duration": 0.65,
+    "loop": true
+  },
+  {
+    "name": "skid-3",
+    "file": "skid.mp3",
+    "start": 17.9,
+    "duration": 0.65,
+    "loop": true
+  },
+  {
+    "name": "fire-1",
+    "file": "fire.mp3",
+    "start": 3,
+    "duration": 4,
+    "loop": true
+  },
+  {
+    "name": "fire-2",
+    "file": "fire.mp3",
+    "start": 9,
+    "duration": 4,
+    "loop": true
+  },
+  {
+    "name": "fire-3",
+    "file": "fire.mp3",
+    "start": 17,
+    "duration": 4,
+    "loop": true
+  },
+  {
+    "name": "water-1",
+    "file": "water.mp3",
+    "start": 5,
+    "duration": 5,
+    "loop": true
+  },
+  {
+    "name": "water-2",
+    "file": "water.mp3",
+    "start": 20,
+    "duration": 5,
+    "loop": true
+  },
+  {
+    "name": "water-3",
+    "file": "water.mp3",
+    "start": 40,
+    "duration": 5,
+    "loop": true
+  },
+  {
+    "name": "coast-1",
+    "file": "coast.mp3",
+    "start": 7,
+    "duration": 7,
+    "loop": true
+  },
+  {
+    "name": "coast-2",
+    "file": "coast.mp3",
+    "start": 23,
+    "duration": 7,
+    "loop": true
+  },
+  {
+    "name": "coast-3",
+    "file": "coast.mp3",
+    "start": 39,
+    "duration": 7,
+    "loop": true
+  },
+  {
+    "name": "wind-1",
+    "file": "wind/wind/Wind.ogg",
+    "loop": true
+  },
+  {
+    "name": "wind-2",
+    "file": "wind/wind/Wind2.ogg",
+    "loop": true
+  },
+  {
+    "name": "wind-3",
+    "file": "wind/wind/Wind3.ogg",
+    "loop": true
+  },
+  {
+    "name": "pistol-1",
+    "file": "firearms/Prepared SFX Library/Walther PPQ/X_39P.wav",
+    "start": 1.35,
+    "duration": 0.65
+  },
+  {
+    "name": "pistol-2",
+    "file": "firearms/Prepared SFX Library/Walther PPQ/X_39P.wav",
+    "start": 6.35,
+    "duration": 0.65
+  },
+  {
+    "name": "pistol-3",
+    "file": "firearms/Prepared SFX Library/Walther PPQ/X_39P.wav",
+    "start": 10.55,
+    "duration": 0.65
+  },
+  {
+    "name": "smg-1",
+    "file": "firearms/Prepared SFX Library/Carl Gustav M45/G_31P.wav",
+    "start": 0.22,
+    "duration": 0.28
+  },
+  {
+    "name": "smg-2",
+    "file": "firearms/Prepared SFX Library/Carl Gustav M45/G_31P.wav",
+    "start": 3.46,
+    "duration": 0.28
+  },
+  {
+    "name": "smg-3",
+    "file": "firearms/Prepared SFX Library/Carl Gustav M45/G_31P.wav",
+    "start": 6.6,
+    "duration": 0.28
+  },
+  {
+    "name": "punch-1",
+    "file": "impact-sounds/Audio/impactPunch_medium_000.ogg"
+  },
+  {
+    "name": "punch-2",
+    "file": "impact-sounds/Audio/impactPunch_medium_001.ogg"
+  },
+  {
+    "name": "punch-3",
+    "file": "impact-sounds/Audio/impactPunch_medium_002.ogg"
+  },
+  {
+    "name": "punch-4",
+    "file": "impact-sounds/Audio/impactPunch_medium_003.ogg"
+  },
+  {
+    "name": "punch-5",
+    "file": "impact-sounds/Audio/impactPunch_medium_004.ogg"
+  },
+  {
+    "name": "bat-1",
+    "file": "impact-sounds/Audio/impactPunch_heavy_000.ogg"
+  },
+  {
+    "name": "bat-2",
+    "file": "impact-sounds/Audio/impactPunch_heavy_001.ogg"
+  },
+  {
+    "name": "bat-3",
+    "file": "impact-sounds/Audio/impactPunch_heavy_002.ogg"
+  },
+  {
+    "name": "bat-4",
+    "file": "impact-sounds/Audio/impactPunch_heavy_003.ogg"
+  },
+  {
+    "name": "bat-5",
+    "file": "impact-sounds/Audio/impactPunch_heavy_004.ogg"
+  },
+  {
+    "name": "impact-1",
+    "file": "impact-sounds/Audio/impactMetal_heavy_000.ogg"
+  },
+  {
+    "name": "impact-2",
+    "file": "impact-sounds/Audio/impactMetal_heavy_001.ogg"
+  },
+  {
+    "name": "impact-3",
+    "file": "impact-sounds/Audio/impactMetal_heavy_002.ogg"
+  },
+  {
+    "name": "impact-4",
+    "file": "impact-sounds/Audio/impactMetal_heavy_003.ogg"
+  },
+  {
+    "name": "impact-5",
+    "file": "impact-sounds/Audio/impactMetal_heavy_004.ogg"
+  },
+  {
+    "name": "wood-1",
+    "file": "impact-sounds/Audio/impactWood_heavy_000.ogg"
+  },
+  {
+    "name": "wood-2",
+    "file": "impact-sounds/Audio/impactWood_heavy_001.ogg"
+  },
+  {
+    "name": "wood-3",
+    "file": "impact-sounds/Audio/impactWood_heavy_002.ogg"
+  },
+  {
+    "name": "wood-4",
+    "file": "impact-sounds/Audio/impactWood_heavy_003.ogg"
+  },
+  {
+    "name": "wood-5",
+    "file": "impact-sounds/Audio/impactWood_heavy_004.ogg"
+  },
+  {
+    "name": "body-1",
+    "file": "impact-sounds/Audio/impactSoft_heavy_000.ogg"
+  },
+  {
+    "name": "body-2",
+    "file": "impact-sounds/Audio/impactSoft_heavy_001.ogg"
+  },
+  {
+    "name": "body-3",
+    "file": "impact-sounds/Audio/impactSoft_heavy_002.ogg"
+  },
+  {
+    "name": "body-4",
+    "file": "impact-sounds/Audio/impactSoft_heavy_003.ogg"
+  },
+  {
+    "name": "body-5",
+    "file": "impact-sounds/Audio/impactSoft_heavy_004.ogg"
+  },
+  {
+    "name": "foot-concrete-1",
+    "file": "impact-sounds/Audio/footstep_concrete_000.ogg"
+  },
+  {
+    "name": "foot-concrete-2",
+    "file": "impact-sounds/Audio/footstep_concrete_001.ogg"
+  },
+  {
+    "name": "foot-concrete-3",
+    "file": "impact-sounds/Audio/footstep_concrete_002.ogg"
+  },
+  {
+    "name": "foot-concrete-4",
+    "file": "impact-sounds/Audio/footstep_concrete_003.ogg"
+  },
+  {
+    "name": "foot-concrete-5",
+    "file": "impact-sounds/Audio/footstep_concrete_004.ogg"
+  },
+  {
+    "name": "foot-grass-1",
+    "file": "impact-sounds/Audio/footstep_grass_000.ogg"
+  },
+  {
+    "name": "foot-grass-2",
+    "file": "impact-sounds/Audio/footstep_grass_001.ogg"
+  },
+  {
+    "name": "foot-grass-3",
+    "file": "impact-sounds/Audio/footstep_grass_002.ogg"
+  },
+  {
+    "name": "foot-grass-4",
+    "file": "impact-sounds/Audio/footstep_grass_003.ogg"
+  },
+  {
+    "name": "foot-grass-5",
+    "file": "impact-sounds/Audio/footstep_grass_004.ogg"
+  },
+  {
+    "name": "landing-1",
+    "file": "impact-sounds/Audio/impactSoft_medium_000.ogg"
+  },
+  {
+    "name": "landing-2",
+    "file": "impact-sounds/Audio/impactSoft_medium_001.ogg"
+  },
+  {
+    "name": "landing-3",
+    "file": "impact-sounds/Audio/impactSoft_medium_002.ogg"
+  },
+  {
+    "name": "swing-1",
+    "file": "rpg-audio/Audio/knifeSlice.ogg"
+  },
+  {
+    "name": "swing-2",
+    "file": "rpg-audio/Audio/knifeSlice2.ogg"
+  },
+  {
+    "name": "swing-3",
+    "file": "rpg-audio/Audio/cloth4.ogg"
+  },
+  {
+    "name": "door-1",
+    "file": "door1.mp3",
+    "start": 0,
+    "duration": 0.9
+  },
+  {
+    "name": "door-2",
+    "file": "door2.mp3",
+    "start": 0,
+    "duration": 0.9
+  },
+  {
+    "name": "door-3",
+    "file": "door3.mp3",
+    "start": 2.1,
+    "duration": 0.9
+  },
+  {
+    "name": "parachute-1",
+    "file": "rpg-audio/Audio/cloth1.ogg"
+  },
+  {
+    "name": "parachute-2",
+    "file": "rpg-audio/Audio/cloth2.ogg"
+  },
+  {
+    "name": "parachute-3",
+    "file": "rpg-audio/Audio/cloth3.ogg"
+  },
+  {
+    "name": "drop-1",
+    "file": "impact-sounds/Audio/impactMetal_light_000.ogg"
+  },
+  {
+    "name": "drop-2",
+    "file": "impact-sounds/Audio/impactMetal_light_001.ogg"
+  },
+  {
+    "name": "drop-3",
+    "file": "impact-sounds/Audio/impactMetal_light_002.ogg"
+  },
+  {
+    "name": "equip-1",
+    "file": "rpg-audio/Audio/drawKnife1.ogg"
+  },
+  {
+    "name": "equip-2",
+    "file": "rpg-audio/Audio/drawKnife2.ogg"
+  },
+  {
+    "name": "equip-3",
+    "file": "rpg-audio/Audio/drawKnife3.ogg"
+  },
+  {
+    "name": "pickup-1",
+    "file": "interface-sounds/Audio/confirmation_001.ogg"
+  },
+  {
+    "name": "pickup-2",
+    "file": "interface-sounds/Audio/confirmation_002.ogg"
+  },
+  {
+    "name": "pickup-3",
+    "file": "interface-sounds/Audio/confirmation_003.ogg"
+  },
+  {
+    "name": "ui-1",
+    "file": "interface-sounds/Audio/select_001.ogg"
+  },
+  {
+    "name": "ui-2",
+    "file": "interface-sounds/Audio/select_002.ogg"
+  },
+  {
+    "name": "ui-3",
+    "file": "interface-sounds/Audio/select_003.ogg"
+  },
+  {
+    "name": "death-1",
+    "file": "interface-sounds/Audio/close_001.ogg"
+  },
+  {
+    "name": "death-2",
+    "file": "interface-sounds/Audio/close_002.ogg"
+  },
+  {
+    "name": "death-3",
+    "file": "interface-sounds/Audio/close_003.ogg"
+  },
+  {
+    "name": "respawn-1",
+    "file": "interface-sounds/Audio/open_001.ogg"
+  },
+  {
+    "name": "respawn-2",
+    "file": "interface-sounds/Audio/open_002.ogg"
+  },
+  {
+    "name": "respawn-3",
+    "file": "interface-sounds/Audio/open_003.ogg"
+  },
+  {
+    "name": "dry-fire-1",
+    "file": "rpg-audio/Audio/metalClick.ogg"
+  },
+  {
+    "name": "dry-fire-2",
+    "file": "rpg-audio/Audio/metalLatch.ogg"
+  },
+  {
+    "name": "dry-fire-3",
+    "file": "rpg-audio/Audio/beltHandle2.ogg"
+  },
+  {
+    "name": "reload-pistol-1",
+    "file": "reload1.mp3",
+    "start": 0,
+    "duration": 1
+  },
+  {
+    "name": "reload-pistol-2",
+    "file": "reload2.mp3",
+    "start": 0,
+    "duration": 1
+  },
+  {
+    "name": "reload-smg-1",
+    "file": "reload-rifle.wav",
+    "start": 0,
+    "duration": 1.35
+  },
+  {
+    "name": "reload-smg-2",
+    "file": "reload2.mp3",
+    "start": 0,
+    "duration": 1
+  },
+  {
+    "name": "explosion-1",
+    "file": "explosion2.ogg",
+    "duration": 3
+  },
+  {
+    "name": "explosion-2",
+    "file": "explosion3.ogg",
+    "duration": 3
+  },
+  {
+    "name": "explosion-3",
+    "file": "explosion4.ogg",
+    "duration": 3
+  }
+]

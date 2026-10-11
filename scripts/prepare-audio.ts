@@ -1,78 +1,90 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { resolve, join } from "node:path";
 import ffmpeg from "ffmpeg-static";
-// Offline asset editing only. See public/audio/CREDITS.md for source downloads.
+import { z } from "zod";
+import { SOUND_BANKS } from "../client/audio/banks.ts";
+
 const index = process.argv.indexOf("--source-dir");
 if (index < 0 || !process.argv[index + 1])
   throw Error(
-    "Pass --source-dir containing original recordings and selected/ extracts",
+    "Pass --source-dir containing the originals described in public/audio/CREDITS.md",
   );
 if (!ffmpeg) throw Error("FFmpeg is unavailable on this platform");
 const source = resolve(process.argv[index + 1]);
+const clips = z
+  .array(
+    z.object({
+      name: z.string().regex(/^[a-z0-9-]+$/),
+      file: z.string().min(1),
+      start: z.number().nonnegative().default(0),
+      duration: z.number().positive().optional(),
+      loop: z.boolean().default(false),
+    }),
+  )
+  .parse(JSON.parse(await readFile("scripts/audio-clips.json", "utf8")));
+const expected = new Set(Object.values(SOUND_BANKS).flatMap((bank) => bank.files));
+if (
+  expected.size !== clips.length ||
+  clips.some((clip) => !expected.has(clip.name)) ||
+  new Set(clips.map((clip) => clip.name)).size !== clips.length
+)
+  throw Error("Clip recipes must match the sound banks exactly");
 await mkdir("public/audio", { recursive: true });
-const clips = [
-  { name: "engine", file: "engine.wav", loop: true },
-  { name: "helicopter", file: "helicopter.mp3", start: 0.2, duration: 3, loop: true },
-  { name: "plane", file: "plane.mp3", start: 12, duration: 4, loop: true },
-  { name: "skid", file: "skid.mp3", start: 4, duration: 1.5, loop: true },
-  { name: "pistol", file: "selected/A_34P.wav", start: 1, duration: 0.8 },
-  { name: "smg", file: "selected/G_20P.wav", duration: 0.4 },
-  { name: "punch", file: "selected/hit01.mp3.flac", duration: 0.45 },
-  { name: "bat", file: "selected/hit04.mp3.flac", duration: 0.5 },
-  { name: "impact", file: "impact.wav", duration: 0.55 },
-  { name: "explosion", file: "explosion.ogg", duration: 2.5 },
-  { name: "reload", file: "reload.wav", duration: 1.4 },
-];
+const hashes: Record<string, string> = {};
 for (const clip of clips) {
-  const args = [
-    "-v",
-    "error",
-    "-ss",
-    String(clip.start || 0),
-    "-i",
-    join(source, clip.file),
-  ];
+  const file = join(source, clip.file);
+  hashes[clip.file] ??= createHash("sha256")
+    .update(await readFile(file))
+    .digest("hex");
+  const args = ["-v", "error", "-ss", String(clip.start), "-i", file];
   if (clip.duration) args.push("-t", String(clip.duration));
   args.push(
     "-af",
-    (clip.loop
-      ? ""
-      : "silenceremove=start_periods=1:start_duration=0.001:start_threshold=-42dB,") +
-      "loudnorm=I=-18:TP=-3:LRA=7",
+    "highpass=f=35" +
+      (clip.loop
+        ? ""
+        : ",silenceremove=start_periods=1:start_duration=0.001:start_threshold=-48dB"),
     "-ac",
     "1",
     "-ar",
     "44100",
     "-f",
-    "s16le",
+    "f32le",
     "-",
   );
-  let pcm = execFileSync(ffmpeg, args, { maxBuffer: 20e6 });
-  if (pcm.length < 2000) throw Error(clip.name + " has no usable audio");
+  const raw = execFileSync(ffmpeg, args, { maxBuffer: 20e6 });
+  const frames = raw.length / 4;
+  if (frames < 882) throw Error(clip.name + " has no usable audio");
+  const samples = Array.from({ length: frames }, (_, i) => raw.readFloatLE(i * 4));
   if (clip.loop) {
-    const fade = Math.min(4410, Math.floor(pcm.length / 8));
-    const frames = pcm.length / 2;
-    const output = Buffer.alloc(pcm.length - fade * 2);
-    pcm.copy(output, 0, fade * 2);
+    const fade = Math.min(4410, Math.floor(frames / 4));
     for (let i = 0; i < fade; i++) {
       const alpha = i / fade;
-      output.writeInt16LE(
-        Math.round(
-          pcm.readInt16LE((frames - fade + i) * 2) * (1 - alpha) +
-            pcm.readInt16LE(i * 2) * alpha,
-        ),
-        (frames - 2 * fade + i) * 2,
-      );
+      samples[frames - fade + i] =
+        samples[frames - fade + i] * (1 - alpha) + samples[i] * alpha;
     }
-    pcm = output;
+    samples.splice(0, fade);
   } else {
-    const fade = Math.min(882, pcm.length / 2);
-    for (let i = 0; i < fade; i++) {
-      const offset = pcm.length - 2 * (fade - i);
-      pcm.writeInt16LE(Math.round(pcm.readInt16LE(offset) * (1 - i / fade)), offset);
-    }
+    const attack = Math.min(88, Math.floor(frames / 4)),
+      tail = Math.min(882, Math.floor(frames / 4));
+    for (let i = 0; i < attack; i++) samples[i] *= i / attack;
+    for (let i = 0; i < tail; i++) samples[samples.length - 1 - i] *= i / tail;
   }
+  let peak = 0,
+    square = 0;
+  for (const sample of samples) {
+    peak = Math.max(peak, Math.abs(sample));
+    square += sample * sample;
+  }
+  if (!Number.isFinite(peak) || peak < 0.00001)
+    throw Error(clip.name + " is silent or invalid");
+  const rms = Math.sqrt(square / samples.length);
+  const gain = Math.min(0.5 / peak, (clip.loop ? 0.1 : 0.16) / rms);
+  const pcm = Buffer.alloc(samples.length * 2);
+  for (let i = 0; i < samples.length; i++)
+    pcm.writeInt16LE(Math.round(samples[i] * gain * 32767), i * 2);
   const header = Buffer.alloc(44);
   header.write("RIFF");
   header.writeUInt32LE(36 + pcm.length, 4);
@@ -90,7 +102,13 @@ for (const clip of clips) {
     resolve("public/audio/" + clip.name + ".wav"),
     Buffer.concat([header, pcm]),
   );
-  console.log(
-    "Prepared " + clip.name + ".wav (" + (pcm.length / 88200).toFixed(2) + "s)",
-  );
+  console.log("Prepared " + clip.name + " (" + (pcm.length / 88200).toFixed(2) + "s)");
 }
+await writeFile(
+  "public/audio/source-hashes.json",
+  JSON.stringify(hashes, null, 2) + "\n",
+);
+await writeFile(
+  "public/audio/manifest.json",
+  JSON.stringify(SOUND_BANKS, null, 2) + "\n",
+);

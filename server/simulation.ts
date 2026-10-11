@@ -314,7 +314,16 @@ export class Simulation {
     const broken = this.destruction.hit(id, amount, this.time, velocity);
     if (broken) {
       const p = this.destruction.fixtures.get(id)!;
-      this.events.push({ kind: "propBreak", sound: "impact", x: p.x, y: 0.5, z: p.z });
+      this.events.push({
+        kind: "propBreak",
+        sound:
+          p.kind === "palm" || p.kind === "tree" || p.kind === "bench"
+            ? "impactWood"
+            : "impact",
+        x: p.x,
+        y: 0.5,
+        z: p.z,
+      });
     }
     return broken;
   }

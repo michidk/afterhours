@@ -116,6 +116,7 @@ $("#join").addEventListener("submit", (event) => {
         scene.destruction.receive(m.debris ?? [], m.time);
         $("#population").textContent = String(m.players);
         const p = entities.find((e) => e.id === playerId);
+        audio.snapshot(entities, p, m.debris);
         for (const e of m.events) {
           scene.effect(e);
           audio.event(e, p);
@@ -138,6 +139,7 @@ $("#join").addEventListener("submit", (event) => {
       status(state) {
         loading(state, 90);
         if (state !== "connected") {
+          audio.reset();
           playerList.clear(state === "reconnecting" ? "Reconnecting…" : "Connecting…");
           controls.clear();
           automation?.stop();
@@ -187,6 +189,7 @@ window.addEventListener("keydown", (event) => {
   keys.add(event.code);
   if (event.repeat) return;
   if (event.code === "KeyM") {
+    audio.ui();
     cityMap?.setOpen(!cityMap.open);
     return;
   }
@@ -209,7 +212,10 @@ window.addEventListener("keydown", (event) => {
     if (debugAllowed) $("#debug").classList.toggle("hidden");
     else toast("The development garage is disabled on this server.");
   }
-  if (event.code === "KeyH") $("#help").classList.toggle("hidden");
+  if (event.code === "KeyH") {
+    audio.ui();
+    $("#help").classList.toggle("hidden");
+  }
   if (event.code === "Enter") {
     $<HTMLInputElement>("#chat").focus();
     keys.clear();
@@ -472,7 +478,7 @@ async function boot() {
         cityStream.setView(body, center, radius);
       }
       const local = rendered.find((e) => e.id === playerId);
-      audio.update(rendered, local, dt);
+      audio.update(rendered, local, dt, scene.city);
       const updated = profiler ? performance.now() : 0;
       scene.scene.render();
       const renderedAt = profiler ? performance.now() : 0;

@@ -8,7 +8,7 @@ Interpret the dictated "chatpack" as a jetpack, "Chetsky" as jet skis, and "M ge
 
 - [x] Keep corpses for 180 seconds and fade them before removal. `TUNING.corpseSeconds` is separate from the 30-second `npcRecoverySeconds` in [shared/catalog.ts](shared/catalog.ts). Verified player respawn, NPC recovery, retained corpses, and wreck cleanup in [destruction regressions](tests/destruction.test.ts).
 - [ ] Show each other player's chosen name above their character in the world, including during shared rides. Joining and the connected-player list already preserve names, but [client/scene.ts](client/scene.ts) creates no overhead labels. Verify join, leave, reconnect, and removal when a character leaves view.
-- [ ] Gate vehicle engine audio on actual engine, rotor, or propeller operation. [client/audio/index.ts](client/audio/index.ts) currently accepts any vehicle moving faster than 0.4 m/s, even without a driver. Pushing an idle car, grounded helicopter, or plane starts its engine loop. Match aircraft audio to the animation state in [client/scene.ts](client/scene.ts), and cover push, boarding, shutdown, and wreck cases with regressions.
+- [x] Gate vehicle audio on engine, rotor, or propeller operation. `engineSound` in [sound banks](client/audio/banks.ts) follows drivers, AI traffic, and rotor animation. Pushed empty cars and planes, grounded helicopters, and wrecks stay silent. [Audio regressions](tests/audio.test.ts) cover push, boarding, falling rotors, shutdown, and wrecks; headless Chrome exercised the real mixer and loop cleanup.
 - [ ] Refine and playtest helicopter and plane movement. Existing flight includes takeoff, obstacle clearance, lift, stalls, and abandoned-aircraft crashes, but the requested handling polish still needs an explicit review of acceleration, turning, braking, climbing, and descending for each model.
 - [ ] Put model-dependent movement parameters in the shared vehicle catalog and provide multiple variants of each vehicle kind. Sedan, sport, and van tuning and two helicopter models already exist. Plane thrust, lift threshold, damping, and turn response in [shared/physics/plane.ts](shared/physics/plane.ts), and most helicopter response values in [shared/physics/helicopter.ts](shared/physics/helicopter.ts), are hardcoded. There is only one plane model. Keep authority and prediction on the same algorithms and verify that variants handle differently.
 - [ ] Add ammunition pickups that replenish compatible weapons without requiring another weapon pickup. [server/inventory.ts](server/inventory.ts) currently supplies ammo only as part of weapon items. Finite magazines, reserves, reloading, and ammo-preserving weapon drops already work.
@@ -22,9 +22,15 @@ Interpret the dictated "chatpack" as a jetpack, "Chetsky" as jet skis, and "M ge
 - [ ] Add AI that uses watercraft and cruises along navigable water routes. [server/ai.ts](server/ai.ts) currently supports street traffic and pedestrians only.
 - [ ] Remodel and visually review parachutes. [client/scene.ts](client/scene.ts) currently uses a half-sphere canopy and four suspension lines. Automatic deployment, steering, and rooftop descent already work; the requested nicer appearance remains an art task.
 
+## Audio replacement
+
+- [x] Research and replace the eleven old clips with 108 CC0 clips across 33 sound banks. Each bank has alternate takes, no immediate sample repeat, and bounded pitch, gain, and tone variation. Add missing footsteps, handling, boarding, parachute, fire, water, coast, and life-state cues. See [inventory and future sounds](docs/audio.md), [source credits](public/audio/CREDITS.md), and the listening page at `/audio.html`.
+- [x] Verify every clip's manifest coverage, distinct waveform, headroom, fades, and loop seam. Headless Chrome decoded all 108 files, played all 33 banks, measured a nonzero unclipped mix, and confirmed mute, resume, and cleanup. Listening-page screenshots covered 1280 and 390 px widths.
+- [ ] Listen on real speakers or headphones and refine recording choices and the mix. Wall occlusion, layered RPM recordings, dedicated aircraft doors and parachute snaps, voices, and more footstep surfaces remain documented limits. Sound needs for the pending weapons, jetpack, watercraft, and weather are listed in [audio research](docs/audio.md).
+
 ## Carried over from the old plan
 
-- [ ] Add and publish the GitHub CI workflow for formatting, import boundaries, types, tests, and build. `PLAN.md` left this open, and this checkout contains no `.github/workflows/ci.yml`. Its old credential limitation has not been rechecked. Use managed GitHub App authentication and report an actual permission failure if publication is blocked.
+- [x] Add and publish the GitHub CI workflow for formatting, import boundaries, types, tests, and build. [.github/workflows/ci.yml](.github/workflows/ci.yml) is on `origin/main` in `332d07c`. This records publication, not a claim that a hosted run passed.
 
 `PLAN.md` is retired. Its completed foundation items remain documented in README and the linked documents and tests; its unfinished CI item is preserved above.
 
@@ -43,3 +49,9 @@ Source, existing tests, and recorded project evidence were reviewed at the basel
 `bun run test` passed all 104 tests. `bun run build` and `bun run check` passed, including formatting, import boundaries, and types. Local Markdown links and removal of `PLAN.md` were checked. The existing suite verifies the implemented destruction, inventory, collision prediction, and parachute behavior; a passing suite does not cover the open features above.
 
 Live browser appearance, subjective vehicle handling, and listening checks have not been repeated for this audit. Keep those checks open where requested above.
+
+## Audio verification result
+
+The audio and combat regressions pass, as do `bun run build` and `bun run check`. The full suite reports 107 passing tests and one failing debug transport test. The failure at `tests/debug.test.ts:168` also reproduces in an untouched checkout of `3f500a0`; its fixed 250 ms snapshot wait is sensitive to this environment. A second run failed at its fixed-duration movement assertion instead. Keep that existing transport-test issue open rather than treating audio verification as a full-suite pass.
+
+Headless Chrome evidence is recorded in [audio browser check](docs/audio-browser-check.json). A live game session confirmed pickup, authoritative pistol shots, reload, and N muting and resuming loops with no failed clips. After merging `332d07c`, all 14 targeted audio, combat, and destruction tests pass, along with build and check. No real-device listening or subjective approval is claimed.

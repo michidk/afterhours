@@ -1,0 +1,344 @@
+{
+  "engineSedan": {
+    "files": ["engine-1", "engine-2"],
+    "volume": 0.2,
+    "pitch": 0.5,
+    "gainVariation": 0.12,
+    "range": 55,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": true
+  },
+  "engineSport": {
+    "files": ["engine-3", "engine-4"],
+    "volume": 0.22,
+    "pitch": 0.5,
+    "gainVariation": 0.12,
+    "range": 55,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": true
+  },
+  "engineVan": {
+    "files": ["engine-5", "engine-6"],
+    "volume": 0.2,
+    "pitch": 0.5,
+    "gainVariation": 0.12,
+    "range": 55,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": true
+  },
+  "helicopter": {
+    "files": ["helicopter-1", "helicopter-2", "helicopter-3"],
+    "volume": 0.3,
+    "pitch": 0.35,
+    "gainVariation": 0.12,
+    "range": 80,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": true
+  },
+  "plane": {
+    "files": ["plane-1", "plane-2", "plane-3"],
+    "volume": 0.28,
+    "pitch": 0.35,
+    "gainVariation": 0.12,
+    "range": 80,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": true
+  },
+  "skid": {
+    "files": ["skid-1", "skid-2", "skid-3"],
+    "volume": 0.22,
+    "pitch": 1.5,
+    "gainVariation": 0.12,
+    "range": 45,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": true
+  },
+  "fire": {
+    "files": ["fire-1", "fire-2", "fire-3"],
+    "volume": 0.22,
+    "pitch": 0.5,
+    "gainVariation": 0.12,
+    "range": 25,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": true
+  },
+  "wind": {
+    "files": ["wind-1", "wind-2", "wind-3"],
+    "volume": 0.12,
+    "pitch": 0.5,
+    "gainVariation": 0.12,
+    "range": 0,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": true
+  },
+  "water": {
+    "files": ["water-1", "water-2", "water-3"],
+    "volume": 0.18,
+    "pitch": 0.5,
+    "gainVariation": 0.12,
+    "range": 22,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": true
+  },
+  "coast": {
+    "files": ["coast-1", "coast-2", "coast-3"],
+    "volume": 0.12,
+    "pitch": 0.35,
+    "gainVariation": 0.12,
+    "range": 0,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": true
+  },
+  "pistol": {
+    "files": ["pistol-1", "pistol-2", "pistol-3"],
+    "volume": 0.55,
+    "pitch": 0.6,
+    "gainVariation": 0.12,
+    "range": 90,
+    "cooldown": 0.035,
+    "voices": 8,
+    "loop": false
+  },
+  "smg": {
+    "files": ["smg-1", "smg-2", "smg-3"],
+    "volume": 0.45,
+    "pitch": 0.6,
+    "gainVariation": 0.12,
+    "range": 80,
+    "cooldown": 0.035,
+    "voices": 8,
+    "loop": false
+  },
+  "reloadPistol": {
+    "files": ["reload-pistol-1", "reload-pistol-2"],
+    "volume": 0.28,
+    "pitch": 0.35,
+    "gainVariation": 0.12,
+    "range": 15,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": false
+  },
+  "reloadSmg": {
+    "files": ["reload-smg-1", "reload-smg-2"],
+    "volume": 0.28,
+    "pitch": 0.35,
+    "gainVariation": 0.12,
+    "range": 15,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": false
+  },
+  "dryFire": {
+    "files": ["dry-fire-1", "dry-fire-2", "dry-fire-3"],
+    "volume": 0.25,
+    "pitch": 0.5,
+    "gainVariation": 0.12,
+    "range": 12,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": false
+  },
+  "swing": {
+    "files": ["swing-1", "swing-2", "swing-3"],
+    "volume": 0.22,
+    "pitch": 1.5,
+    "gainVariation": 0.12,
+    "range": 12,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": false
+  },
+  "punch": {
+    "files": ["punch-1", "punch-2", "punch-3", "punch-4", "punch-5"],
+    "volume": 0.42,
+    "pitch": 1.4,
+    "gainVariation": 0.12,
+    "range": 25,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": false
+  },
+  "bat": {
+    "files": ["bat-1", "bat-2", "bat-3", "bat-4", "bat-5"],
+    "volume": 0.48,
+    "pitch": 1.2,
+    "gainVariation": 0.12,
+    "range": 30,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": false
+  },
+  "impact": {
+    "files": ["impact-1", "impact-2", "impact-3", "impact-4", "impact-5"],
+    "volume": 0.52,
+    "pitch": 1.8,
+    "gainVariation": 0.12,
+    "range": 55,
+    "cooldown": 0.08,
+    "voices": 5,
+    "loop": false
+  },
+  "impactWood": {
+    "files": ["wood-1", "wood-2", "wood-3", "wood-4", "wood-5"],
+    "volume": 0.5,
+    "pitch": 1.5,
+    "gainVariation": 0.12,
+    "range": 45,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": false
+  },
+  "impactBody": {
+    "files": ["body-1", "body-2", "body-3", "body-4", "body-5"],
+    "volume": 0.35,
+    "pitch": 1.2,
+    "gainVariation": 0.12,
+    "range": 25,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": false
+  },
+  "explosion": {
+    "files": ["explosion-1", "explosion-2", "explosion-3"],
+    "volume": 0.7,
+    "pitch": 0.6,
+    "gainVariation": 0.12,
+    "range": 110,
+    "cooldown": 0.035,
+    "voices": 4,
+    "loop": false
+  },
+  "footConcrete": {
+    "files": [
+      "foot-concrete-1",
+      "foot-concrete-2",
+      "foot-concrete-3",
+      "foot-concrete-4",
+      "foot-concrete-5"
+    ],
+    "volume": 0.16,
+    "pitch": 1,
+    "gainVariation": 0.12,
+    "range": 14,
+    "cooldown": 0.035,
+    "voices": 6,
+    "loop": false
+  },
+  "footGrass": {
+    "files": [
+      "foot-grass-1",
+      "foot-grass-2",
+      "foot-grass-3",
+      "foot-grass-4",
+      "foot-grass-5"
+    ],
+    "volume": 0.13,
+    "pitch": 1,
+    "gainVariation": 0.12,
+    "range": 12,
+    "cooldown": 0.035,
+    "voices": 6,
+    "loop": false
+  },
+  "landing": {
+    "files": ["landing-1", "landing-2", "landing-3"],
+    "volume": 0.3,
+    "pitch": 1,
+    "gainVariation": 0.12,
+    "range": 20,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": false
+  },
+  "door": {
+    "files": ["door-1", "door-2", "door-3"],
+    "volume": 0.3,
+    "pitch": 0.6,
+    "gainVariation": 0.12,
+    "range": 20,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": false
+  },
+  "pickup": {
+    "files": ["pickup-1", "pickup-2", "pickup-3"],
+    "volume": 0.2,
+    "pitch": 0.4,
+    "gainVariation": 0.12,
+    "range": 0,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": false
+  },
+  "drop": {
+    "files": ["drop-1", "drop-2", "drop-3"],
+    "volume": 0.22,
+    "pitch": 0.8,
+    "gainVariation": 0.12,
+    "range": 0,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": false
+  },
+  "equip": {
+    "files": ["equip-1", "equip-2", "equip-3"],
+    "volume": 0.2,
+    "pitch": 0.6,
+    "gainVariation": 0.12,
+    "range": 0,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": false
+  },
+  "parachute": {
+    "files": ["parachute-1", "parachute-2", "parachute-3"],
+    "volume": 0.3,
+    "pitch": 0.6,
+    "gainVariation": 0.12,
+    "range": 20,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": false
+  },
+  "death": {
+    "files": ["death-1", "death-2", "death-3"],
+    "volume": 0.25,
+    "pitch": 0.5,
+    "gainVariation": 0.12,
+    "range": 0,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": false
+  },
+  "respawn": {
+    "files": ["respawn-1", "respawn-2", "respawn-3"],
+    "volume": 0.2,
+    "pitch": 0.3,
+    "gainVariation": 0.12,
+    "range": 0,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": false
+  },
+  "ui": {
+    "files": ["ui-1", "ui-2", "ui-3"],
+    "volume": 0.12,
+    "pitch": 0.3,
+    "gainVariation": 0.12,
+    "range": 0,
+    "cooldown": 0.035,
+    "voices": 5,
+    "loop": false
+  }
+}

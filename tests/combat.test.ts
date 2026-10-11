@@ -49,3 +49,29 @@ test("lag compensation rewinds moving targets, but never beyond 200 ms", () => {
   s.attack(p);
   assert.equal(target.health, 100);
 });
+
+test("missed melee attacks emit a swing and empty weapons emit rate-limited dry fire", () => {
+  const { s, p } = setup();
+  s.inventory.equip(p, 0);
+  s.attack(p);
+  assert.deepEqual(
+    s.drainEvents().map((event) => event.sound),
+    ["swing"],
+  );
+  p.cooldown = 0;
+  s.inventory.equip(p, 1);
+  const gun = s.inventory.equipped(p)!;
+  gun.ammo = gun.reserve = 0;
+  s.attack(p);
+  s.attack(p);
+  assert.deepEqual(
+    s.drainEvents().map((event) => event.sound),
+    ["dryFire"],
+  );
+  assert.equal(p.reloadUntil, undefined);
+  p.cooldown = 0;
+  gun.reserve = 12;
+  s.attack(p);
+  assert.ok(p.reloadUntil);
+  assert.deepEqual(s.drainEvents(), []);
+});

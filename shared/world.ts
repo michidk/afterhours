@@ -66,7 +66,16 @@ export interface WorldEvent {
   z: number;
   angle?: number;
   length?: number;
-  sound?: "pistol" | "smg" | "punch" | "bat" | "impact";
+  sound?:
+    | "pistol"
+    | "smg"
+    | "punch"
+    | "bat"
+    | "impact"
+    | "impactWood"
+    | "impactBody"
+    | "swing"
+    | "dryFire";
 }
 export interface Input {
   up: boolean;

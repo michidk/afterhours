@@ -34,6 +34,16 @@ export class Combat {
     if (spec.magazine && item) {
       if (item.ammo <= 0) {
         sim.inventory.reload(p, sim.time);
+        if (!p.reloadUntil) {
+          p.cooldown = spec.cooldown;
+          sim.events.push({
+            kind: "dryFire",
+            sound: "dryFire",
+            x: p.x,
+            y: p.y + 1,
+            z: p.z,
+          });
+        }
         return;
       }
       item.ammo--;
@@ -89,7 +99,7 @@ export class Combat {
         : 0;
     sim.events.push({
       kind: spec.magazine ? "shot" : "swing",
-      sound: item?.kind === "smg" ? "smg" : spec.magazine ? "pistol" : undefined,
+      sound: item?.kind === "smg" ? "smg" : spec.magazine ? "pistol" : "swing",
       x: p.x,
       z: p.z,
       y: p.y + 1,
@@ -100,7 +110,12 @@ export class Combat {
       sim.damageProp(propHit.prop.id, spec.damage, { x: dx * 4, y: 1, z: dz * 4 });
       sim.events.push({
         kind: "hit",
-        sound: "impact",
+        sound:
+          propHit.prop.kind === "palm" ||
+          propHit.prop.kind === "tree" ||
+          propHit.prop.kind === "bench"
+            ? "impactWood"
+            : "impact",
         x: propHit.prop.x,
         y: p.y + 1,
         z: propHit.prop.z,
@@ -113,7 +128,13 @@ export class Combat {
       hit.e.vz += dz * push;
       sim.events.push({
         kind: "hit",
-        sound: vehicle(hit.e) ? "impact" : item?.kind === "bat" ? "bat" : "punch",
+        sound: vehicle(hit.e)
+          ? "impact"
+          : spec.magazine
+            ? "impactBody"
+            : item?.kind === "bat"
+              ? "bat"
+              : "punch",
         x: p.x + dx * hit.distance,
         z: p.z + dz * hit.distance,
         y: p.y + 1,
