@@ -2,7 +2,7 @@
 
 A living city. A stolen car. A story worth sharing.
 
-A desktop browser urban sandbox: Babylon.js renders the city, and a CPU-only Node server owns gameplay in one shared world. [PLAN.md](PLAN.md) tracks acceptance and outstanding validation. This release provides a playable foundation with 16-player local load-test coverage; it is not a large-scale persistent MMO.
+A desktop browser urban sandbox: Babylon.js renders the city, and a CPU-only Node server owns gameplay in one shared world. [todo.md](todo.md) tracks remaining work and verification. This release provides a playable foundation with 16-player local load-test coverage; it is not a large-scale persistent MMO.
 
 ## Run
 
