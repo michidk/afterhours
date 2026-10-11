@@ -11,7 +11,119 @@ import { WebSocket } from "ws";
 import { Sessions } from "../server/session.ts";
 import { CityStore } from "../server/city-stream.ts";
 import { VERSION } from "../shared/protocol.ts";
+import { LIMIT } from "../shared/world.ts";
+import { WATER_LEVEL } from "../shared/water.ts";
 import { decodeSnapshot } from "../shared/codec.ts";
+
+test("corpses retain their entire lifetime when dynamic debris capacity is full", () => {
+  const city = fixture();
+  city.parks = [];
+  city.roads = [];
+  city.props = Array.from({ length: 128 }, (_, i) => ({
+    x: 200 + i * 3,
+    z: 200,
+    h: 6,
+    kind: "lamp" as const,
+  }));
+  const d = new Destruction(city),
+    sim = new Simulation(fixture());
+  try {
+    for (const p of d.fixtures.values())
+      assert.equal(d.hit(p.id, 100, 0, { x: 0, y: 0, z: 0 }), true);
+    assert.equal(d.active.size, 128);
+    const person = sim.spawn("player", 50, 50);
+    person.vx = 3;
+    d.corpse(person, 1);
+    let states = d.snapshot({ x: 0, z: 0 }, 2000);
+    const corpse = states.find((s) => s.source.kind === "corpse");
+    assert.ok(corpse, "full prop budget must not omit a corpse");
+    assert.equal(corpse.expiresAt, 181);
+    assert.equal(
+      states.length,
+      129,
+      "retiring physics must not remove the old prop snapshot",
+    );
+    assert.ok(d.active.size <= 128);
+    d.update(1 + 1 / 30, 1 / 30, []);
+    assert.ok(
+      d.snapshot({ x: 0, z: 0 }, 2000).find((s) => s.id === corpse.id)!.position.x > 50,
+      "new corpses receive physical motion",
+    );
+    d.update(30, 1 / 30, []);
+    states = d.snapshot({ x: 0, z: 0 }, 2000);
+    assert.equal(states.length, 1, "frozen props restore on their original timer");
+    d.update(180.99, 1 / 30, []);
+    assert.equal(d.snapshot({ x: 0, z: 0 }, 2000).length, 1);
+    d.update(181, 1 / 30, []);
+    assert.equal(d.snapshot({ x: 0, z: 0 }, 2000).length, 0);
+  } finally {
+    d.dispose();
+    sim.destruction.dispose();
+  }
+});
+
+test("repeated deaths retain snapshots beyond the Rapier cap with independent expiry", () => {
+  const city = fixture(),
+    sim = new Simulation(city),
+    d = new Destruction(city);
+  try {
+    const person = sim.spawn("player", 250, 250);
+    for (let i = 0; i < 1400; i++) d.corpse(person, i / 10);
+    assert.ok(d.active.size <= 128);
+    assert.equal(d.snapshot(person, 10).length, 1400);
+    d.update(179.99, 1 / 30, []);
+    assert.equal(d.snapshot(person, 100).length, 1400);
+    d.update(180, 1 / 30, []);
+    assert.equal(d.snapshot(person, 100).length, 1399);
+    d.update(250, 1 / 30, []);
+    assert.equal(d.snapshot(person, 100).length, 699);
+    d.update(320, 1 / 30, []);
+    assert.equal(d.snapshot(person, 100).length, 0);
+  } finally {
+    d.dispose();
+    sim.destruction.dispose();
+  }
+});
+
+test("corpses preserve their spawn altitude, settle on water and roofs, and freeze after physics", () => {
+  const city = fixture();
+  city.parks = [];
+  city.props = [];
+  city.roads = [];
+  city.buildings = [{ x: 0, z: 0, w: 12, d: 12, h: 10, color: "#ffffff", style: 0 }];
+  const sim = new Simulation(fixture()),
+    d = new Destruction(city);
+  try {
+    const swimmer = sim.spawn("player", -LIMIT - 50, 0);
+    swimmer.y = WATER_LEVEL;
+    d.corpse(swimmer, 0);
+    const rooftop = sim.spawn("player", 0, 0);
+    rooftop.y = 11.8;
+    d.corpse(rooftop, 0);
+    const fresh = d.snapshot(swimmer, 5)[0];
+    assert.ok(
+      Math.abs(fresh.position.y + 0.1) < 1e-6,
+      "initial snapshot starts at the actual water pose",
+    );
+    for (let i = 1; i <= 360; i++) d.update(i / 30, 1 / 30, []);
+    const sea = d.snapshot(swimmer, 20)[0],
+      roof = d.snapshot(rooftop, 20)[0];
+    assert.ok(
+      sea.position.y > -1.2 && sea.position.y < -0.9,
+      `water resting height ${sea.position.y}`,
+    );
+    assert.ok(roof.position.y > 11.8 && roof.position.y < 12.3);
+    assert.deepEqual(sea.velocity, { x: 0, y: 0, z: 0 });
+    assert.equal(d.active.size, 0, "settled corpses release their dynamic bodies");
+    d.update(179.99, 1 / 30, []);
+    assert.equal(d.snapshot(swimmer, 20).length, 1);
+    d.update(180, 1 / 30, []);
+    assert.equal(d.snapshot(swimmer, 20).length, 0);
+  } finally {
+    d.dispose();
+    sim.destruction.dispose();
+  }
+});
 
 const fixture = () => {
   const city = emptyCity({ seed: 42, airport: { x: 640, z: -640, w: 220, d: 220 } });
@@ -264,9 +376,9 @@ test("NPC recovery stays at thirty seconds while its corpse lasts three minutes"
     for (let i = 0; i < 31 * 30; i++) sim.tick(1 / 30);
     assert.equal(npc.health, 100);
     assert.equal(npc.down, 0);
-    const body = [...sim.destruction.active.values()][0].state;
+    const body = sim.destruction.snapshot(npc, 1000)[0];
     assert.equal(body.expiresAt - body.brokenAt, 180);
-    assert.equal(sim.destruction.active.size, 1);
+    assert.equal(sim.destruction.snapshot(npc, 1000).length, 1);
   } finally {
     sim.destruction.dispose();
   }
@@ -288,8 +400,12 @@ test("fatal characters leave one timed body while players respawn and wrecks las
     );
     for (let i = 0; i < 4 * 30; i++) sim.tick(1 / 30);
     assert.equal(p.health, 100);
-    assert.equal(sim.destruction.active.size, 1, "body survives player respawn");
-    const body = [...sim.destruction.active.values()][0].state;
+    assert.equal(
+      sim.destruction.snapshot({ x: 250, z: 250 }, 100).length,
+      1,
+      "body survives player respawn",
+    );
+    const body = sim.destruction.snapshot({ x: 250, z: 250 }, 100)[0];
     assert.equal(body.expiresAt - body.brokenAt, 180);
     const car = sim.spawn("car", 300, 300);
     sim.damage(car, 200);

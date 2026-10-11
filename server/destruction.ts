@@ -6,7 +6,8 @@ import {
   type DebrisState,
   type Vec3,
 } from "../shared/destruction.ts";
-import type { City, Entity } from "../shared/world.ts";
+import { LIMIT, type City, type Entity } from "../shared/world.ts";
+import { WATER_LEVEL, WORLD_LIMIT } from "../shared/water.ts";
 import { TUNING } from "../shared/catalog.ts";
 import { SpatialGrid } from "../shared/spatial.ts";
 import { staticGeometry } from "../shared/physics/static.ts";
@@ -29,6 +30,7 @@ type Body = { state: DebrisState; body: RAPIER.RigidBody };
 export class Destruction {
   readonly fixtures: Map<string, Destructible>;
   readonly active = new Map<string, Body>();
+  readonly retained = new Map<string, DebrisState>();
   readonly broken = new Set<string>();
   readonly maxBodies = 128;
   private grid = new SpatialGrid<Destructible>(32);
@@ -46,8 +48,13 @@ export class Destruction {
     if (!this.physics) {
       this.physics = new RAPIER.World({ x: 0, y: -18, z: 0 });
       this.physics.createCollider(
-        RAPIER.ColliderDesc.cuboid(4096, 0.1, 4096)
-          .setTranslation(0, 0, 0)
+        RAPIER.ColliderDesc.cuboid(LIMIT, 0.1, LIMIT)
+          .setTranslation(0, -0.1, 0)
+          .setFriction(0.85),
+      );
+      this.physics.createCollider(
+        RAPIER.ColliderDesc.cuboid(WORLD_LIMIT, 0.1, WORLD_LIMIT)
+          .setTranslation(0, WATER_LEVEL - 0.4, 0)
           .setFriction(0.85),
       );
       for (const p of this.city.parks)
@@ -65,7 +72,14 @@ export class Destruction {
     velocity: Vec3,
     seconds: number,
   ) {
-    if (this.active.size >= this.maxBodies) return false;
+    if (this.active.size >= this.maxBodies) {
+      if (source.kind !== "corpse") return false;
+      const oldest =
+        [...this.active.entries()].find(
+          ([, entry]) => entry.state.source.kind === "corpse",
+        ) ?? this.active.entries().next().value;
+      if (oldest) this.retire(oldest[0], oldest[1]);
+    }
     const world = this.world(),
       h = source.h,
       corpse = source.kind === "corpse";
@@ -108,6 +122,16 @@ export class Destruction {
     this.active.set(source.id, { state, body });
     return true;
   }
+  private retire(id: string, entry: Body) {
+    // shortcut: retired debris is visual-only until expiry; revisit if it must react to later impacts.
+    entry.state.position = { ...entry.body.translation() };
+    entry.state.rotation = { ...entry.body.rotation() };
+    entry.state.velocity = { x: 0, y: 0, z: 0 };
+    entry.state.angularVelocity = { x: 0, y: 0, z: 0 };
+    this.physics?.removeRigidBody(entry.body);
+    this.active.delete(id);
+    this.retained.set(id, entry.state);
+  }
   hit(id: string, amount: number, time: number, velocity: Vec3) {
     const p = this.fixtures.get(id);
     if (!p || this.broken.has(id) || !Number.isFinite(amount) || amount <= 0)
@@ -138,7 +162,10 @@ export class Destruction {
       TUNING.corpseSeconds,
     );
     const entry = this.active.get(id);
-    if (entry) entry.body.setTranslation({ x: e.x, y: e.y + 1, z: e.z }, true);
+    if (entry) {
+      entry.body.setTranslation({ x: e.x, y: e.y + 1, z: e.z }, true);
+      entry.state.position = { ...entry.body.translation() };
+    }
   }
   ray(x: number, z: number, y: number, dx: number, dz: number, range: number) {
     return this.grid
@@ -183,12 +210,12 @@ export class Destruction {
     }
   }
   update(time: number, dt: number, entities: Entity[]) {
-    if (!this.physics) return;
-    const world = this.physics;
-    for (const [id, entry] of this.active) {
-      if (time < entry.state.expiresAt) continue;
+    for (const state of [...this.active.values()]
+      .map((entry) => entry.state)
+      .concat([...this.retained.values()])) {
+      if (time < state.expiresAt) continue;
       // Wait, faded out, if an actor is occupying a fixture's reset position.
-      const p = entry.state.source;
+      const p = state.source;
       if (
         p.kind !== "corpse" &&
         entities.some(
@@ -201,11 +228,15 @@ export class Destruction {
         )
       )
         continue;
-      world.removeRigidBody(entry.body);
-      this.active.delete(id);
-      this.broken.delete(id);
+      const entry = this.active.get(state.id);
+      if (entry) this.physics?.removeRigidBody(entry.body);
+      this.active.delete(state.id);
+      this.retained.delete(state.id);
+      this.broken.delete(state.id);
     }
     setBrokenProps(this.city, this.broken);
+    if (!this.physics) return;
+    const world = this.physics;
     if (!this.active.size) {
       world.free();
       this.physics = undefined;
@@ -276,16 +307,22 @@ export class Destruction {
       }
     world.timestep = dt;
     world.step();
-    for (const entry of this.active.values()) {
+    for (const [id, entry] of this.active) {
       entry.state.position = { ...entry.body.translation() };
       entry.state.rotation = { ...entry.body.rotation() };
       entry.state.velocity = { ...entry.body.linvel() };
       entry.state.angularVelocity = { ...entry.body.angvel() };
+      if (
+        entry.state.source.kind === "corpse" &&
+        (entry.body.isSleeping() || time - entry.state.brokenAt >= 10)
+      )
+        this.retire(id, entry);
     }
   }
   snapshot(center: { x: number; z: number }, radius: number) {
     return [...this.active.values()]
       .map((entry) => entry.state)
+      .concat([...this.retained.values()])
       .filter(
         (s) =>
           Math.min(
@@ -299,6 +336,7 @@ export class Destruction {
     this.physics?.free();
     this.physics = undefined;
     this.active.clear();
+    this.retained.clear();
     this.broken.clear();
     this.fixed.clear();
     this.proxies.clear();
