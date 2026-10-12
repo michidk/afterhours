@@ -8,6 +8,7 @@ import type { Entity } from "../shared/world.ts";
 import { VERSION } from "../shared/version.ts";
 import { CityStore } from "../server/city-stream.ts";
 import { cityFileSchema } from "../shared/city-schema.ts";
+import { unpackCity } from "../shared/city-pack.ts";
 const base = new URL(process.env.DEPLOY_URL || "https://localhost:8443"),
   local = base.hostname === "localhost";
 const get = (path: string) =>
@@ -72,7 +73,7 @@ try {
   if (!html.includes("AFTERHOURS")) throw Error("Production HTML missing");
   const city = JSON.parse(await get("/city")),
     file = cityFileSchema.parse(JSON.parse(await readFile("data/city.json", "utf8"))),
-    expected = new CityStore(file.city);
+    expected = new CityStore(unpackCity(file.city));
   if (city.mapId !== expected.manifest.mapId) throw Error("Artifact mismatch");
   const sample = JSON.parse(await get(`/city/chunks/${city.mapId}/0/0`));
   if (JSON.stringify(sample) !== JSON.stringify(expected.chunks.get("0,0")))

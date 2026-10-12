@@ -18,6 +18,7 @@ import { Simulation } from "../server/simulation.ts";
 import { predictStep, entityBox } from "../shared/physics/index.ts";
 import { CityStore } from "../server/city-stream.ts";
 import { emptyCity, mapManifestSchema } from "../shared/city-stream.ts";
+import { packHeights, unpackHeights } from "../shared/city-pack.ts";
 
 const city = generateCity();
 const body = (kind: Entity["kind"], x: number, z: number): Entity => ({
@@ -61,7 +62,20 @@ test("saved island is reproducible, larger, varied and surrounded by ocean", () 
       for (const dz of [-1, 1])
         assert.equal(groundLevel(b.x + (dx * b.w) / 2, b.z + (dz * b.d) / 2, city), 0);
   const manifest = mapManifestSchema.parse(new CityStore(city).manifest);
-  assert.deepEqual(emptyCity(manifest).terrain, city.terrain);
+  assert.equal(manifest.hasTerrain, true);
+  assert.equal(
+    "terrain" in manifest,
+    false,
+    "heights travel on their own binary route",
+  );
+  const restored = unpackHeights(packHeights(city.terrain.heights));
+  assert.equal(restored.length, city.terrain.heights.length);
+  for (let i = 0; i < restored.length; i++)
+    assert.ok(Math.abs(restored[i] - city.terrain.heights[i]) <= 0.005);
+  assert.equal(
+    emptyCity({ ...manifest, terrain: { heights: restored } }).terrain?.heights,
+    restored,
+  );
   const mesh = terrainMesh(city.terrain);
   assert.equal(mesh.positions.length, TERRAIN_SIDE ** 2 * 3);
   for (let i = 0; i < mesh.indices.length; i += 3) {

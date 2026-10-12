@@ -5,7 +5,7 @@ import {
   STATIC_FIELDS,
   CITY_CHUNK_SIZE,
   type CityChunk,
-  type MapManifest,
+  type ClientMap,
 } from "../../shared/city-stream.ts";
 import { spawnOrigin } from "../../shared/world.ts";
 import { TUNING } from "../../shared/catalog.ts";
@@ -25,7 +25,7 @@ export class CityStream {
   private retries = new Map<string, number>();
   error = "";
   constructor(
-    readonly map: MapManifest,
+    readonly map: ClientMap,
     private changed: (chunks: CityChunk[]) => void,
     private download: typeof fetch = (...args) => fetch(...args),
   ) {

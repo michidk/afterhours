@@ -52,7 +52,6 @@ import { buildWeapon } from "./models/weapons.ts";
 import { WaterRenderer } from "./world/water.ts";
 import { buildWatercraft } from "./models/watercraft.ts";
 import { groundLevel, watercraft } from "../shared/water.ts";
-import { buildSurface } from "./models/surface.ts";
 import type { GrenadeState } from "../shared/grenades.ts";
 export class CityScene {
   pickupNodes = new Map<string, TransformNode>();
@@ -90,6 +89,9 @@ export class CityScene {
       stencil: true,
       preserveDrawingBuffer: false,
     });
+    // Parallel shader compilation queries programs before they finish linking,
+    // which the browser reports as WebGL warnings during the first frames.
+    this.engine.getCaps().parallelShaderCompile = undefined;
     this.engine.setHardwareScalingLevel(Math.max(1, devicePixelRatio / 1.6));
     this.scene = new Scene(this.engine);
     this.carLights = new CarLights(this.scene);
@@ -253,8 +255,6 @@ export class CityScene {
     if (options.base !== false) {
       if (city.terrain) buildTerrain(this, city.terrain);
       else this.box("island", 0, -0.65, 0, LIMIT * 2, 1, LIMIT * 2, "#a9b29a");
-      // Generated cities ship road surfaces as polygons with their own profile heights.
-      if (city.surface) buildSurface(this, city.surface);
     }
     for (const surface of city.surfaces || []) {
       const colors = {
@@ -332,9 +332,8 @@ export class CityScene {
         "#467b72",
         12,
       );
-    // Surface polygons already cover every street of a generated city.
-    if (options.roads !== false && !city.surface)
-      for (const road of city.roads) buildRoad(this, road);
+    // Generated cities stream street polygons per chunk instead (client/world/render.ts).
+    if (options.roads !== false) for (const road of city.roads) buildRoad(this, road);
     city.buildings.forEach((b, i) => buildBuilding(this, b, options.index ?? i, r));
     for (const p of city.parks) {
       const pw = p.w ?? 38,

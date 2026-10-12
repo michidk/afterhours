@@ -69,6 +69,7 @@ import {
   BUILDING_ASSET_IDS,
 } from "../shared/assets/buildings/index.ts";
 import { CITY_FORMAT_VERSION, cityFileSchema } from "../shared/city-schema.ts";
+import { packCity } from "../shared/city-pack.ts";
 import { LIMIT, district } from "../shared/world.ts";
 
 test("district composition keeps streets, alleys, parks and airfield clear across seeds", () => {
@@ -78,7 +79,7 @@ test("district composition keeps streets, alleys, parks and airfield clear acros
     cityFileSchema.parse({
       format: "afterhours-city",
       version: CITY_FORMAT_VERSION,
-      city,
+      city: packCity(city),
     });
     assert.ok(city.parks.length >= 20);
     assert.ok(city.buildings.length >= 250);
@@ -154,7 +155,7 @@ test("asset catalog and v4 references remain valid and old artifacts fail explic
     assert.ok(asset.colors.every((color) => /^#[0-9a-f]{6}$/i.test(color)));
     assert.ok(asset.floorHeight >= 3);
   }
-  const city = generateCity();
+  const city = packCity(generateCity());
   assert.equal(
     cityFileSchema.safeParse({ format: "afterhours-city", version: 1, city }).success,
     false,
@@ -162,10 +163,19 @@ test("asset catalog and v4 references remain valid and old artifacts fail explic
   assert.equal(
     cityFileSchema.safeParse({
       format: "afterhours-city",
-      version: 2,
+      version: CITY_FORMAT_VERSION,
       city: { ...city, buildings: [{ ...city.buildings[0], asset: "missing-model" }] },
     }).success,
     false,
+  );
+  assert.equal(
+    cityFileSchema.safeParse({
+      format: "afterhours-city",
+      version: CITY_FORMAT_VERSION,
+      city: { ...city, terrain: { cm: city.terrain.cm.slice(0, -8) } },
+    }).success,
+    false,
+    "a truncated height grid is rejected",
   );
 });
 

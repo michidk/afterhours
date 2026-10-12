@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { gzipSync } from "node:zlib";
 import {
   CITY_CHUNK_SIZE,
   STATIC_FIELDS,
@@ -8,16 +9,38 @@ import {
   type MapManifest,
   type CityAtlas,
 } from "../shared/city-stream.ts";
+import { packHeights } from "../shared/city-pack.ts";
 import { LIMIT, type City } from "../shared/world.ts";
+
+/** A response body kept both raw and gzip-compressed, picked per request. */
+class Body {
+  readonly raw: Buffer;
+  readonly gzip: Buffer;
+  constructor(
+    data: string | Uint8Array,
+    readonly type: string,
+  ) {
+    this.raw = typeof data === "string" ? Buffer.from(data) : Buffer.from(data);
+    this.gzip = gzipSync(this.raw, { level: 6 });
+  }
+  send(req: IncomingMessage, res: ServerResponse) {
+    const accepts = /\bgzip\b/.test(String(req.headers["accept-encoding"] ?? ""));
+    res.setHeader("Content-Type", this.type);
+    // No browser-persisted map: geometry lives only in the active client's memory.
+    res.setHeader("Cache-Control", "no-store");
+    if (accepts) res.setHeader("Content-Encoding", "gzip");
+    res.end(accepts ? this.gzip : this.raw);
+  }
+}
 
 /** Index the loaded artifact once. This does not generate or modify the map. */
 export class CityStore {
   readonly manifest: MapManifest;
   readonly chunks = new Map<string, CityChunk>();
   readonly atlas: CityAtlas;
-  private atlasBody: string;
-  private bodies = new Map<string, string>();
-  private surfaceBody?: string;
+  private atlasBody: Body;
+  private bodies = new Map<string, Body>();
+  private terrainBody?: Body;
   constructor(city: City) {
     this.manifest = {
       version: 1,
@@ -26,12 +49,16 @@ export class CityStore {
       limit: LIMIT,
       chunkSize: CITY_CHUNK_SIZE,
       airport: city.airport,
-      terrain: city.terrain,
       centre: city.centre,
+      hasTerrain: city.terrain ? true : undefined,
       surface: city.surface ? true : undefined,
     };
-    // Streets are a few megabytes; they travel on their own route, not in the welcome.
-    this.surfaceBody = city.surface ? JSON.stringify(city.surface) : undefined;
+    // Heights travel as little-endian int16 centimetres, not as JSON numbers.
+    if (city.terrain)
+      this.terrainBody = new Body(
+        packHeights(city.terrain.heights),
+        "application/octet-stream",
+      );
     this.atlas = {
       mapId: this.manifest.mapId,
       roads: city.roads.map(({ ax, az, bx, bz, width }) => ({ ax, az, bx, bz, width })),
@@ -39,7 +66,7 @@ export class CityStore {
       landmarks: city.landmarks,
       ramps: city.ramps,
     };
-    this.atlasBody = JSON.stringify(this.atlas);
+    this.atlasBody = new Body(JSON.stringify(this.atlas), "application/json");
     for (const key of chunksAround(0, 0, LIMIT))
       this.chunks.set(key, {
         mapId: this.manifest.mapId,
@@ -51,6 +78,7 @@ export class CityStore {
         surfaces: [],
         ramps: [],
         landmarks: [],
+        surface: city.surface?.[key],
       });
     for (const field of STATIC_FIELDS)
       (city[field] ?? []).forEach((value, id) => {
@@ -80,7 +108,8 @@ export class CityStore {
               });
           }
       });
-    for (const [key, chunk] of this.chunks) this.bodies.set(key, JSON.stringify(chunk));
+    for (const [key, chunk] of this.chunks)
+      this.bodies.set(key, new Body(JSON.stringify(chunk), "application/json"));
   }
   serve(req: IncomingMessage, res: ServerResponse) {
     const path = req.url?.split("?")[0];
@@ -91,27 +120,13 @@ export class CityStore {
       return true;
     }
     if (!path?.startsWith("/city/")) return false;
-    const surface = /^\/city\/surface\/([0-9a-f]{64})$/.exec(path);
-    if (surface) {
-      if (surface[1] !== this.manifest.mapId)
+    const named = /^\/city\/(terrain|atlas)\/([0-9a-f]{64})$/.exec(path);
+    if (named) {
+      if (named[2] !== this.manifest.mapId)
         res.writeHead(409).end("Map changed; reload the city");
-      else if (!this.surfaceBody) res.writeHead(404).end("No street surface");
-      else {
-        res.setHeader("Content-Type", "application/json");
-        res.setHeader("Cache-Control", "no-store");
-        res.end(this.surfaceBody);
-      }
-      return true;
-    }
-    const atlas = /^\/city\/atlas\/([0-9a-f]{64})$/.exec(path);
-    if (atlas) {
-      if (atlas[1] !== this.manifest.mapId) {
-        res.writeHead(409).end("Map changed; reload the city");
-        return true;
-      }
-      res.setHeader("Content-Type", "application/json");
-      res.setHeader("Cache-Control", "no-store");
-      res.end(this.atlasBody);
+      else if (named[1] === "atlas") this.atlasBody.send(req, res);
+      else if (this.terrainBody) this.terrainBody.send(req, res);
+      else res.writeHead(404).end("No terrain");
       return true;
     }
     const match = /^\/city\/chunks\/([0-9a-f]{64})\/(-?\d+)\/(-?\d+)$/.exec(path);
@@ -128,10 +143,7 @@ export class CityStore {
       res.writeHead(404).end("Outside the city");
       return true;
     }
-    res.setHeader("Content-Type", "application/json");
-    // No browser-persisted map: chunks live only in the active client's memory.
-    res.setHeader("Cache-Control", "no-store");
-    res.end(body);
+    body.send(req, res);
     return true;
   }
 }

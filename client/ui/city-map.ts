@@ -2,7 +2,7 @@ import { TERRAIN_SIDE, TERRAIN_STEP } from "../../shared/terrain.ts";
 import {
   cityAtlasSchema,
   type CityAtlas,
-  type MapManifest,
+  type ClientMap,
 } from "../../shared/city-stream.ts";
 import { district, type Entity } from "../../shared/world.ts";
 
@@ -60,7 +60,7 @@ export class CityMap {
     private root: HTMLElement,
     private canvas: HTMLCanvasElement,
     private status: HTMLElement,
-    private manifest: MapManifest,
+    private manifest: ClientMap,
     private onToggle: (open: boolean) => void,
     private download: typeof fetch = (...args) => fetch(...args),
   ) {

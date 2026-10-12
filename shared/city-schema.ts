@@ -2,15 +2,10 @@ import { LIMIT } from "./world.ts";
 import { TERRAIN_SIDE } from "./terrain.ts";
 import { BUILDING_ASSET_IDS } from "./assets/buildings/index.ts";
 import { z } from "zod";
+import { packedSurfaceChunksSchema, packedTerrainSchema } from "./city-pack.ts";
 const coordinate = z.number().finite().min(-LIMIT).max(LIMIT),
   size = z.number().finite().positive().max(256);
 const point = { x: coordinate, z: coordinate };
-/** Flat [x, y, z, ...] polygon with at least three vertices. */
-const polygon = z
-  .array(z.number().finite())
-  .min(9)
-  .max(3000)
-  .refine((p) => p.length % 3 === 0, "polygon needs x, y, z triples");
 export const citySchema = z.object({
   seed: z.number().int(),
   terrain: z
@@ -21,15 +16,8 @@ export const citySchema = z.object({
     })
     .optional(),
   centre: z.object(point).optional(),
-  surface: z
-    .object({
-      asphalt: z.array(polygon).max(20000),
-      sidewalks: z.array(polygon).max(40000),
-      markings: z
-        .array(z.object({ color: z.enum(["white", "yellow"]), polygon }))
-        .max(60000),
-    })
-    .optional(),
+  /** Street polygons packed per 128 m chunk; see shared/city-pack.ts. */
+  surface: packedSurfaceChunksSchema.optional(),
   roads: z
     .array(
       z
@@ -106,9 +94,19 @@ export const citySchema = z.object({
     )
     .max(100),
 });
-export const CITY_FORMAT_VERSION = 5;
+export const CITY_FORMAT_VERSION = 6;
+/** On disk the terrain is base64 int16 centimetres; see shared/city-pack.ts. */
+const TERRAIN_BYTES = TERRAIN_SIDE * TERRAIN_SIDE * 2;
 export const cityFileSchema = z.object({
   format: z.literal("afterhours-city"),
   version: z.literal(CITY_FORMAT_VERSION),
-  city: citySchema.extend({ terrain: citySchema.shape.terrain.unwrap() }),
+  city: citySchema.omit({ terrain: true }).extend({
+    terrain: packedTerrainSchema.refine(
+      (t) =>
+        (t.cm.length * 3) / 4 -
+          (t.cm.endsWith("==") ? 2 : t.cm.endsWith("=") ? 1 : 0) ===
+        TERRAIN_BYTES,
+      "terrain must hold one 16-bit height per grid cell",
+    ),
+  }),
 });

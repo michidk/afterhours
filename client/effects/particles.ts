@@ -1,4 +1,9 @@
 import { ParticleSystem } from "@babylonjs/core/Particles/particleSystem";
+// Babylon loads these lazily with a relative dynamic import. Under the Vite dev
+// server that resolves to a second copy of the shader store, so the effect
+// compiled against an empty entry. Registering them here keeps one store.
+import "@babylonjs/core/Shaders/particles.vertex";
+import "@babylonjs/core/Shaders/particles.fragment";
 import { RawTexture } from "@babylonjs/core/Materials/Textures/rawTexture";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { Color4 } from "@babylonjs/core/Maths/math.color";

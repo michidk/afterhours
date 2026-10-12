@@ -17,7 +17,9 @@ import { FrameProfiler } from "./performance/index.ts";
 import { AgentInterface } from "./debug/index.ts";
 import { CityStream, SCENERY_RADIUS } from "./world/stream.ts";
 import { CityRenderer } from "./world/render.ts";
-import { mapManifestSchema, surfaceSchema } from "../shared/city-stream.ts";
+import { mapManifestSchema, type ClientMap } from "../shared/city-stream.ts";
+import { unpackHeights } from "../shared/city-pack.ts";
+import { TERRAIN_SIDE } from "../shared/terrain.ts";
 import type { CameraMode } from "./camera/debug.ts";
 import { district, idle, LIMIT, type Entity } from "../shared/world";
 import {
@@ -421,18 +423,21 @@ async function boot() {
       signal: AbortSignal.timeout(30000),
     });
     if (!response.ok) throw Error("City download failed");
-    const world = mapManifestSchema.parse(await response.json());
-    let cityRenderer: CityRenderer | undefined;
-    cityStream = new CityStream(world, (chunks) => cityRenderer?.sync(chunks));
-    if (world.surface) {
-      loading("Downloading the streets…");
-      const streets = await fetch(`/city/surface/${world.mapId}`, {
+    const world: ClientMap = mapManifestSchema.parse(await response.json());
+    if (world.hasTerrain) {
+      loading("Downloading the terrain…");
+      const terrain = await fetch(`/city/terrain/${world.mapId}`, {
         cache: "no-store",
         signal: AbortSignal.timeout(30000),
       });
-      if (!streets.ok) throw Error("Street surface download failed");
-      cityStream.city.surface = surfaceSchema.parse(await streets.json());
+      if (!terrain.ok) throw Error("Terrain download failed");
+      const heights = unpackHeights(new Uint8Array(await terrain.arrayBuffer()));
+      if (heights.length !== TERRAIN_SIDE * TERRAIN_SIDE)
+        throw Error("Terrain download is incomplete");
+      world.terrain = { heights };
     }
+    let cityRenderer: CityRenderer | undefined;
+    cityStream = new CityStream(world, (chunks) => cityRenderer?.sync(chunks));
     loading("Starting 3D rendering…");
     scene = new CityScene($<HTMLCanvasElement>("#world"), cityStream.city, true);
     cityMap = new CityMap(

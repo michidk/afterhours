@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { citySchema } from "./city-schema.ts";
+import { packedSurfaceSchema } from "./city-pack.ts";
 import { LIMIT, type City } from "./world.ts";
 
 export const CITY_CHUNK_SIZE = 128;
@@ -20,12 +21,12 @@ export const mapManifestSchema = z.object({
   limit: z.literal(LIMIT),
   chunkSize: z.literal(CITY_CHUNK_SIZE),
   airport: citySchema.shape.airport,
-  terrain: citySchema.shape.terrain,
   centre: citySchema.shape.centre,
-  /** Street polygons are fetched separately from /city/surface/<mapId> when set. */
+  /** Set when /city/terrain/<mapId> serves 16-bit centimetre heights. */
+  hasTerrain: z.boolean().optional(),
+  /** Set when chunks carry packed street polygons instead of road boxes. */
   surface: z.boolean().optional(),
 });
-export const surfaceSchema = citySchema.shape.surface.unwrap();
 export type MapManifest = z.infer<typeof mapManifestSchema>;
 /** A navigation drawing, separate from streamed collision/render geometry. */
 export const cityAtlasSchema = z.object({
@@ -58,10 +59,14 @@ export const cityChunkSchema = z.object({
   surfaces: z.array(entry(citySchema.shape.surfaces.unwrap().element)).max(2000),
   ramps: z.array(entry(citySchema.shape.ramps.element)).max(100),
   landmarks: z.array(entry(citySchema.shape.landmarks.element)).max(100),
+  /** Street polygons whose centroid lies in this chunk (generated cities). */
+  surface: packedSurfaceSchema.optional(),
 });
 export type CityChunk = z.infer<typeof cityChunkSchema>;
+/** The manifest plus the height grid fetched from /city/terrain/<mapId>. */
+export type ClientMap = MapManifest & { terrain?: City["terrain"] };
 export function emptyCity(
-  map: Pick<MapManifest, "seed" | "airport" | "terrain" | "centre">,
+  map: Pick<ClientMap, "seed" | "airport" | "terrain" | "centre">,
 ): City {
   return {
     seed: map.seed,

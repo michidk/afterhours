@@ -1,3 +1,4 @@
+import type { PackedSurfaceChunks } from "./city-pack.ts";
 import type { Character } from "./character.ts";
 import type { BuildingAssetId } from "./assets/buildings/index.ts";
 export const BLOCK = 64;
@@ -146,7 +147,8 @@ export interface City {
   terrain?: { heights: number[] };
   /** Downtown reference point for spawns; generated cities are not centred on 0,0. */
   centre?: { x: number; z: number };
-  surface?: RoadSurface;
+  /** Street polygons packed per 128 m chunk; see shared/city-pack.ts. */
+  surface?: PackedSurfaceChunks;
   roads: Road[];
   seed: number;
   props: { x: number; z: number; h: number; kind: "palm" | "lamp" | "tree" }[];

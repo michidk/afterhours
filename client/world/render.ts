@@ -4,10 +4,12 @@ import {
   emptyCity,
   chunkBounds,
   type CityChunk,
-  type MapManifest,
+  type ClientMap,
 } from "../../shared/city-stream.ts";
+import { chunkOrigin, unpackSurface } from "../../shared/city-pack.ts";
 import type { City } from "../../shared/world.ts";
 import type { CityScene } from "../scene.ts";
+import { buildSurface } from "../models/surface.ts";
 import { destructibles } from "../../shared/destruction.ts";
 export type GeometryOptions = {
   base?: boolean;
@@ -21,12 +23,26 @@ type Group = { dispose(): void };
 /** Reference-count by stable feature IDs so objects crossing chunk seams are drawn once. */
 export class CityRenderer {
   private features = new Map<string, Group>();
+  /** Street polygons per chunk key; a chunk's streets never cross its seam. */
+  private streets = new Map<string, Mesh[]>();
   private airport?: Group;
   constructor(
     private host: CityScene,
-    private map: MapManifest,
+    private map: ClientMap,
   ) {}
   sync(chunks: CityChunk[]) {
+    const present = new Set(chunks.map((chunk) => chunk.key));
+    for (const [key, meshes] of this.streets)
+      if (!present.has(key)) {
+        for (const mesh of meshes) mesh.dispose(false, true);
+        this.streets.delete(key);
+      }
+    for (const chunk of chunks)
+      if (chunk.surface && !this.streets.has(chunk.key))
+        this.streets.set(
+          chunk.key,
+          buildSurface(this.host, unpackSurface(chunk.surface, chunkOrigin(chunk.key))),
+        );
     const wanted = new Map<
         string,
         { field: (typeof STATIC_FIELDS)[number]; id: number; value: unknown }

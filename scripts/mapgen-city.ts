@@ -13,8 +13,10 @@ import {
 } from "../mapgen/geom.ts";
 import { simplifyPolyline } from "../mapgen/roadgeometry.ts";
 import { sample } from "../mapgen/field.ts";
+import { packSurfaceChunks } from "../shared/city-pack.ts";
 
-const round = (v: number) => Math.round(v * 100) / 100;
+// `+ 0` turns -0 into 0 so packed and parsed artifacts compare equal.
+const round = (v: number) => Math.round(v * 100) / 100 + 0;
 const KIND: Record<RoadKind, Road["kind"]> = {
   highway: "avenue",
   avenue: "avenue",
@@ -100,36 +102,60 @@ export function cityFromMap(map: GeneratedMap): City {
   const g = map.geometry;
   const asphalt: number[][] = [],
     sidewalks: number[][] = [],
-    markings: City["surface"] extends infer S
-      ? S extends { markings: infer M }
-        ? M
-        : never
-      : never = [];
+    markings: RoadSurface["markings"] = [];
   const usable = (points: Point[]) => points.length >= 3 && points.length <= 1000;
+  // Strips along an edge (bands, kerb-side sidewalks, solid lines) are cut into
+  // pieces of at most STRIP metres so each polygon fits one streaming chunk.
+  const STRIP = 16;
+  const pieces = (left: Point[], right: Point[]) => {
+    if (left.length !== right.length || left.length < 2)
+      return [[...left, ...[...right].reverse()]];
+    const out: Point[][] = [];
+    let start = 0,
+      run = 0;
+    for (let i = 1; i < left.length; i++) {
+      run += dist(left[i - 1], left[i]);
+      if (run >= STRIP || i === left.length - 1) {
+        out.push([...left.slice(start, i + 1), ...right.slice(start, i + 1).reverse()]);
+        start = i;
+        run = 0;
+      }
+    }
+    return out;
+  };
+  /** Edge polygons are `[...left, ...right reversed]` with equal halves. */
+  const halves = (polygon: Point[]) => {
+    if (polygon.length <= 4 || polygon.length % 2) return [polygon];
+    const n = polygon.length / 2;
+    return pieces(polygon.slice(0, n), polygon.slice(n).reverse());
+  };
   for (const band of g.bands) {
     const e = map.roads.edges[band.edge];
-    if (usable(band.polygon))
-      asphalt.push(flat(band.polygon, (p) => edgeHeightAt(e, p)));
+    for (const piece of pieces(band.left, band.right))
+      if (usable(piece)) asphalt.push(flat(piece, (p) => edgeHeightAt(e, p)));
   }
   for (const j of g.junctions) {
     const y = map.roads.nodes[j.node].y;
     if (usable(j.polygon)) asphalt.push(flat(j.polygon, () => y));
   }
   for (const s of g.sidewalks) {
-    if (!usable(s.polygon)) continue;
-    const y =
-      s.node !== undefined
-        ? () => map.roads.nodes[s.node!].y
-        : (p: Point) => edgeHeightAt(map.roads.edges[s.edge!], p);
-    sidewalks.push(flat(s.polygon, y));
+    if (s.node !== undefined) {
+      const y = map.roads.nodes[s.node].y;
+      if (usable(s.polygon)) sidewalks.push(flat(s.polygon, () => y));
+      continue;
+    }
+    const e = map.roads.edges[s.edge!];
+    for (const piece of halves(s.polygon))
+      if (usable(piece)) sidewalks.push(flat(piece, (p) => edgeHeightAt(e, p)));
   }
   for (const m of g.markings) {
-    if (!usable(m.polygon)) continue;
     const e = map.roads.edges[m.edge];
-    markings.push({
-      color: m.color,
-      polygon: flat(m.polygon, (p) => edgeHeightAt(e, p)),
-    });
+    for (const piece of halves(m.polygon))
+      if (usable(piece))
+        markings.push({
+          color: m.color,
+          polygon: flat(piece, (p) => edgeHeightAt(e, p)),
+        });
   }
 
   // Buildings: oriented boxes with pad and roof altitudes.
@@ -251,7 +277,7 @@ export function cityFromMap(map: GeneratedMap): City {
     seed: map.options.seed,
     terrain: { heights },
     centre,
-    surface: { asphalt, sidewalks, markings },
+    surface: packSurfaceChunks({ asphalt, sidewalks, markings }),
     roads,
     buildings,
     props,

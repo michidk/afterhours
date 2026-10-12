@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { cityFileSchema } from "../shared/city-schema.ts";
+import { unpackCity } from "../shared/city-pack.ts";
 export async function loadCity(path = process.env.CITY_PATH || "data/city.json") {
   let source: string;
   try {
@@ -19,5 +20,5 @@ export async function loadCity(path = process.env.CITY_PATH || "data/city.json")
   const result = cityFileSchema.safeParse(artifact);
   if (!result.success)
     throw new Error(`Invalid city file ${path}: ${result.error.message}`);
-  return result.data.city;
+  return unpackCity(result.data.city);
 }
