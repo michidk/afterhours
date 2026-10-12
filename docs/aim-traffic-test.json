@@ -266,5 +266,131 @@
   "citizenIntegrationTests": {
     "passed": 195,
     "failed": 0
-  }
+  },
+  "finalRevision": "835042e591842c2cb8ac96b8072ed7e0624ee4e6",
+  "finalUnitTests": {
+    "passed": 206,
+    "failed": 0,
+    "environment": "isolated Docker build-stage image, Node 24"
+  },
+  "finalBrowserRuns": [
+    {
+      "snapshotDelayMs": 0,
+      "displacement": 6.378,
+      "elapsedSeconds": 3.182800000000745,
+      "health": {
+        "ok": true,
+        "version": 5,
+        "time": 26.299999999999148,
+        "players": 1,
+        "entities": 239,
+        "traffic": {
+          "jamCount": 0,
+          "jammedCars": 0,
+          "honks": 3,
+          "respawned": 0,
+          "pendingRespawns": 0
+        },
+        "ticks": 789,
+        "late": 96,
+        "tickP95Ms": 107.6943199999987,
+        "tickMaxMs": 308.26648600000044,
+        "bytesSent": 359712,
+        "rejectedMessages": 0,
+        "memoryMB": 517
+      },
+      "errors": []
+    },
+    {
+      "snapshotDelayMs": 150,
+      "displacement": 5.327999999999999,
+      "elapsedSeconds": 3.1485,
+      "health": {
+        "ok": true,
+        "version": 5,
+        "time": 56.66666666666409,
+        "players": 1,
+        "entities": 239,
+        "traffic": {
+          "jamCount": 0,
+          "jammedCars": 0,
+          "honks": 15,
+          "respawned": 0,
+          "pendingRespawns": 0
+        },
+        "ticks": 1700,
+        "late": 280,
+        "tickP95Ms": 127.58402300000307,
+        "tickMaxMs": 234.1784750000079,
+        "bytesSent": 795067,
+        "rejectedMessages": 0,
+        "memoryMB": 526
+      },
+      "errors": []
+    }
+  ],
+  "sharedBrowserPublicCheck": "HTTP startup succeeded; WebSocket rejected by the T3 browser local-network-access check (ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS)",
+  "publicFunctionalCheck": {
+    "before": {
+      "id": "e239",
+      "z": 25,
+      "seq": 8
+    },
+    "after": {
+      "z": 29.972,
+      "stats": {
+        "connected": true,
+        "rtt": 162.5,
+        "jitter": 290.3675292971566,
+        "snapshotAge": 166.80000000074506,
+        "snapshotInterval": 57,
+        "snapshotsPerSecond": 8,
+        "inputsPerSecond": 16,
+        "seq": 32,
+        "ack": 25,
+        "ackAge": 251.39999999850988,
+        "pending": 7,
+        "prediction": "predicting",
+        "correction": 0,
+        "angle": 0,
+        "offset": 0.6051135994279974,
+        "corrections": 5,
+        "buffered": 0,
+        "resyncs": 0,
+        "serverTime": 55.66666666666415
+      }
+    },
+    "aim": {
+      "walkingYaw": -1.5708,
+      "weaponAim": 1.7628946332598256,
+      "upperWorldYaw": -4.520290673919761
+    },
+    "restored": {
+      "id": "e239",
+      "stats": {
+        "connected": true,
+        "rtt": 139.69999999925494,
+        "jitter": 218.32500000018626,
+        "snapshotAge": 9.800000000745058,
+        "snapshotInterval": 166.89999999850988,
+        "snapshotsPerSecond": 15,
+        "inputsPerSecond": 27,
+        "seq": 42,
+        "ack": 38,
+        "ackAge": 195.10000000149012,
+        "pending": 4,
+        "prediction": "predicting",
+        "correction": 0,
+        "angle": 0,
+        "offset": 0,
+        "corrections": 0,
+        "buffered": 0,
+        "resyncs": 0,
+        "serverTime": 70.00000000000178
+      }
+    },
+    "errors": [],
+    "scope": "Existing project headless browser harness against the authenticated canonical public URL. Checks entry, held input delivery, independent walking/upper-body yaw, F1 stats and reconnect; does not replace the failing real-time speed assertions."
+  },
+  "publicHornPlayback": "Shared T3 browser successfully played the horn bank through https://afterhours.preview.k8s.lohr.dev/audio.html after restoring the managed route."
 }
