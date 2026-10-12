@@ -1,6 +1,6 @@
 # Collision prediction and reconciliation
 
-The server owns movement outcomes, damage, knockdown, seats and inventory. Clients predict kinematics with the shared solver, then replace that state with each authoritative snapshot and replay the remaining inputs. Prediction runs at 30 Hz with 120 Hz contact substeps. Render extrapolation and correction offsets never modify the replay state.
+The server owns movement outcomes, damage, knockdown, seats and inventory. Clients predict kinematics with the shared solver, then replace that state with the latest authoritative snapshot and replay the remaining inputs before the next input or render. Every snapshot still updates authority and the remote interpolation timeline; queued snapshots do not each trigger an obsolete replay. Controls are sent before reconciliation runs. Prediction runs at 30 Hz with 120 Hz contact substeps. Render extrapolation and correction offsets never modify the replay state.
 
 ## Input scheduling
 
@@ -44,7 +44,7 @@ The stepped-walking investigation reproduced only 1.8 m of movement in three sec
 
 Both managed previews now run immutable production Docker images outside the development shell's CPU quota. `PUBLIC_ORIGIN` permits the exact public origin behind container NAT without trusting forwarded headers from arbitrary peers. Prediction remains bounded and server authority is unchanged. Sustained overload still slows the simulation; yielding does not manufacture CPU capacity.
 
-The [browser harness](movement-testing.md) checks held keyboard input, authoritative and rendered movement, release, and 150 ms delayed snapshots. The runtime, spatial-cache and real-socket origin regressions pass with the full 175-test suite. The browser suite passes both cases after gameplay shader readiness. It does not establish cold-start or hardware GPU performance.
+The [browser harness](movement-testing.md) checks held keyboard input, authoritative and rendered movement, release, and 150 ms delayed snapshots. It also records prediction, reconciliation, scene update/render, and engine frame-boundary timings. Full-scene software-rendered Chrome still fails the movement gate; passing socket and simulation tests does not establish browser playability or hardware GPU performance.
 
 ## Research and dependency decision
 

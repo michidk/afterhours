@@ -10,7 +10,7 @@ import { generateCity } from "../scripts/city-generator.ts";
 import { idle } from "../shared/world.ts";
 import { messageSchema } from "../shared/protocol.ts";
 
-test("network diagnostics measure real RTT, timestamped inputs and applied acknowledgements", async () => {
+test("network diagnostics measure real RTT, timestamped inputs and applied acknowledgements", async (t) => {
   const sim = new Simulation(generateCity());
   sim.entities.clear();
   sim.city.buildings = [];
@@ -107,6 +107,36 @@ test("network diagnostics measure real RTT, timestamped inputs and applied ackno
     assert.equal(future.inputsPerSecond, 0, "rates fall to zero without traffic");
     assert.equal(future.snapshotsPerSecond, 0);
     assert.ok(future.snapshotAge! >= 2000);
+    const prediction = network.prediction!;
+    const reconcile = t.mock.method(prediction, "reconcile");
+    for (let i = 0; i < 3; i++) {
+      p.x += 1;
+      await snapshot();
+    }
+    assert.equal(
+      reconcile.mock.callCount(),
+      0,
+      "snapshot bursts do not replay obsolete states",
+    );
+    network.renderEntities();
+    assert.equal(
+      reconcile.mock.callCount(),
+      1,
+      "render reconciles the newest snapshot once",
+    );
+    assert.ok(
+      Math.abs(prediction.body!.x - p.x) < 0.01,
+      "the latest authoritative position wins",
+    );
+    network.renderEntities();
+    assert.equal(reconcile.mock.callCount(), 1, "unchanged authority needs no replay");
+    await snapshot();
+    network.input(idle());
+    assert.equal(
+      reconcile.mock.callCount(),
+      2,
+      "input consumes authority even without rendering",
+    );
     network.close();
     assert.equal(network.stats().connected, false);
   } finally {

@@ -122,6 +122,7 @@ for (const delay of [0, 150, 360]) {
       };
     }
     let held = false;
+    let climbing = false;
     for (const [i, client] of clients.entries()) {
       const clock = new InputClock();
       intervals.push(
@@ -129,7 +130,12 @@ for (const delay of [0, 150, 360]) {
           () =>
             clock.advance(performance.now(), (timestamp) =>
               client.input(
-                { ...idle(), up: i === 0 && held, aim: Math.PI / 2 },
+                {
+                  ...idle(),
+                  up: i === 0 && held,
+                  ascend: i === 0 && climbing,
+                  aim: Math.PI / 2,
+                },
                 timestamp,
               ),
             ),
@@ -266,10 +272,12 @@ for (const delay of [0, 150, 360]) {
       () => walker.entities.get(walker.playerId)?.vehicle === helicopter.id,
       "pilot boards",
     );
+    climbing = true;
     await until(
       () => walker.entities.get(helicopter.id)?.flight === "cruising",
       "helicopter takes off",
     );
+    climbing = false;
     await measureRun("helicopter", helicopter.id);
   } catch (error) {
     failures.push(error instanceof Error ? error : new Error(String(error)));

@@ -40,6 +40,7 @@ export class GameNetwork {
   snapshotInterval = 0;
   resyncs = 0;
   private welcomed = false;
+  private authorityPending = false;
   private heartbeat: ReturnType<typeof setInterval> | undefined;
   private inputTimes: number[] = [];
   private snapshotTimes: number[] = [];
@@ -128,6 +129,7 @@ export class GameNetwork {
         this.prediction = new Prediction(this.city ?? emptyCity(m.map), (point) =>
           this.worldReady(point),
         );
+        this.authorityPending = false;
         this.seq = 0;
         this.frame = 0;
         this.entities.clear();
@@ -160,8 +162,8 @@ export class GameNetwork {
         this.ackTimestamp = snapshot.ackTimestamp;
         const entities = [...this.entities.values()];
         this.timeline.push(snapshot.time, entities, this.received);
-        const p = this.entities.get(this.playerId);
-        if (p) this.prediction?.reconcile(p, entities, snapshot.ack, now);
+        this.authorityPending = true;
+        if (!this.prediction?.body) this.reconcile(now);
         this.hooks.state({ ...snapshot, entities });
       }
       if (m.type === "chat") this.hooks.chat(m.name, m.text);
@@ -188,6 +190,7 @@ export class GameNetwork {
         request.reject(Error("Connection closed"));
       }
       this.debugRequests.clear();
+      this.authorityPending = false;
       this.prediction?.reset();
       if (this.closed) return;
       this.hooks.status("reconnecting");
@@ -198,6 +201,13 @@ export class GameNetwork {
   send(data: object) {
     if (this.socket?.readyState === WebSocket.OPEN)
       this.socket.send(JSON.stringify({ timestamp: performance.now(), ...data }));
+  }
+  private reconcile(now: number) {
+    if (!this.authorityPending) return;
+    this.authorityPending = false;
+    const player = this.entities.get(this.playerId);
+    if (player)
+      this.prediction?.reconcile(player, [...this.entities.values()], this.ack, now);
   }
   input(input: Input, timestamp = performance.now()) {
     if (
@@ -218,6 +228,8 @@ export class GameNetwork {
       },
     };
     this.send({ type: "input", seq: frame.seq, timestamp, ...frame.input });
+    // Send controls first, then consume the latest authority before predicting.
+    this.reconcile(performance.now());
     this.prediction.input(frame, [...this.entities.values()]);
     this.inputTimes.push(timestamp);
     this.inputTimes = this.inputTimes.filter((at) => at >= timestamp - 1000);
@@ -238,7 +250,7 @@ export class GameNetwork {
         this.ackTimestamp === undefined
           ? undefined
           : Math.max(0, now - this.ackTimestamp),
-      pending: p?.pending.length ?? 0,
+      pending: p?.pending.filter((frame) => frame.seq > this.ack).length ?? 0,
       prediction: p?.status ?? "waiting for authority",
       correction: p?.lastCorrection.distance ?? 0,
       angle: ((p?.lastCorrection.angle ?? 0) * 180) / Math.PI,
@@ -263,6 +275,7 @@ export class GameNetwork {
     });
   }
   renderEntities(now = performance.now()) {
+    this.reconcile(now);
     const result = this.timeline.sample(now);
     const currentPlayer = this.entities.get(this.playerId);
     if (currentPlayer) {
