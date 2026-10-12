@@ -3,6 +3,7 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial";
+import { CameraDither } from "../world/camera-dither.ts";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { PointLight } from "@babylonjs/core/Lights/pointLight";
 import type { Scene } from "@babylonjs/core/scene";
@@ -36,6 +37,7 @@ export class EnvironmentLighting {
     this.windows.diffuseColor = Color3.FromHexString("#587c80");
     this.windows.specularColor = Color3.Black();
     this.windows.maxSimultaneousLights = 6;
+    new CameraDither(this.windows);
     this.pool = new StandardMaterial("street light pools", scene);
     this.pool.disableLighting = true;
     this.pool.emissiveColor = Color3.FromHexString("#ffd79b");

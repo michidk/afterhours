@@ -5,6 +5,7 @@ import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTextur
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { MeshGroup } from "../../shared/city-mesh.ts";
 import type { CityScene } from "../scene.ts";
+import { CameraDither } from "./camera-dither.ts";
 
 /** Upload saved vertex buffers; no procedural builders or merging on this path. */
 export function uploadMeshes(host: CityScene, group: MeshGroup) {
@@ -45,6 +46,7 @@ export function uploadMeshes(host: CityScene, group: MeshGroup) {
       material.specularColor = Color3.FromHexString(m.specular);
       material.maxSimultaneousLights = 6;
       host.lighting.signs.push(material);
+      new CameraDither(material);
       mesh.material = material;
     } else {
       const key = `saved:${m.color}:${m.emissive}:${m.specular}:${m.backFaceCulling}`;
@@ -56,6 +58,7 @@ export function uploadMeshes(host: CityScene, group: MeshGroup) {
         material.emissiveColor = Color3.FromHexString(m.emissive);
         material.specularColor = Color3.FromHexString(m.specular);
         material.maxSimultaneousLights = 6;
+        new CameraDither(material);
         host.materials.set(key, material);
       }
       mesh.material = material;

@@ -1,4 +1,6 @@
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
+import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { segmentHitsBox } from "./occluders.ts";
 import {
   STATIC_FIELDS,
   emptyCity,
@@ -20,7 +22,7 @@ export type GeometryOptions = {
   bounds?: ReturnType<typeof chunkBounds>;
   index?: number;
 };
-type Group = { dispose(): void };
+type Group = { meshes: Mesh[]; dispose(): void };
 
 /** Reference-count by stable feature IDs so objects crossing chunk seams are drawn once. */
 export class CityRenderer {
@@ -126,6 +128,25 @@ export class CityRenderer {
       this.airport = undefined;
     }
   }
+  /** Dither out buildings crossing the camera→player line so the player stays visible. */
+  fadeOccluders(camera: Vector3, target: Vector3, dt: number) {
+    const dir = camera.subtract(target).normalize(),
+      start = target.add(dir.scale(6)),
+      blend = 1 - Math.exp(-dt * 10);
+    for (const [key, group] of this.features) {
+      if (!key.startsWith("buildings:")) continue;
+      const hit = group.meshes.some((mesh) => {
+          const box = mesh.getBoundingInfo().boundingBox;
+          return segmentHitsBox(start, camera, box.minimumWorld, box.maximumWorld, 4);
+        }),
+        goal = hit ? 0 : 1;
+      for (const mesh of group.meshes)
+        mesh.visibility =
+          Math.abs(goal - mesh.visibility) < 0.01
+            ? goal
+            : mesh.visibility + (goal - mesh.visibility) * blend;
+    }
+  }
   private group(city: City, options: GeometryOptions, saved?: MeshGroup): Group {
     const h = this.host,
       meshStart = h.scene.meshes.length,
@@ -148,6 +169,7 @@ export class CityRenderer {
     if (!this.map.geometryVersion)
       h.shadowCandidates.push(...meshes.filter((mesh) => casters.has(mesh)));
     return {
+      meshes,
       dispose() {
         for (const mesh of meshes) {
           h.shadows.removeShadowCaster(mesh);
