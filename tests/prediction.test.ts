@@ -5,6 +5,7 @@ import { Prediction, interpolate } from "../client/network/prediction.ts";
 import { Simulation } from "../server/simulation.ts";
 import { idle, type Entity } from "../shared/world.ts";
 import { SnapshotTimeline } from "../client/network/timeline.ts";
+import { GameNetwork } from "../client/network/index.ts";
 import { CityStore } from "../server/city-stream.ts";
 import { CityStream } from "../client/world/stream.ts";
 import { emptyCity } from "../shared/city-stream.ts";
@@ -14,6 +15,241 @@ import {
   contact,
   entityBox,
 } from "../shared/physics/index.ts";
+
+test("rendered neighbours respond to predicted impacts before the next snapshot", () => {
+  const s = new Simulation(generateCity());
+  s.entities.clear();
+  s.city.buildings = [];
+  s.city.props = [];
+  const p = s.join("Driver", "#ffffff");
+  p.x = p.z = 0;
+  const car = s.spawn("car", 0, 0),
+    obstacle = s.spawn("car", 0.4, 4.3);
+  s.interact(p.id);
+  car.vz = 16;
+  const passenger: Entity = {
+    ...p,
+    id: "passenger",
+    vehicle: obstacle.id,
+    seat: 1,
+    x: obstacle.x,
+    z: obstacle.z,
+  };
+  const snapshots = structuredClone([p, car, obstacle, passenger]);
+  const network = new GameNetwork(
+    { welcome() {}, state() {}, chat() {}, status() {} },
+    "Test",
+    "#ffffff",
+    s.city,
+  );
+  network.playerId = p.id;
+  for (const e of snapshots) network.entities.set(e.id, e);
+  const timeline: unknown = Reflect.get(network, "timeline");
+  assert.ok(timeline instanceof SnapshotTimeline);
+  timeline.push(0, snapshots, 0);
+  const prediction = (network.prediction = new Prediction(s.city));
+  prediction.reconcile(p, snapshots, -1);
+  for (let seq = 0; seq < 6; seq++) {
+    prediction.input({ seq, timestamp: (seq * 1000) / 30, input: idle() }, snapshots);
+    s.tick(1 / 30);
+  }
+  const state = structuredClone(prediction.body);
+  const rendered = network.renderEntities((6 * 1000) / 30 - 1);
+  const hit = rendered.find((e) => e.id === obstacle.id);
+  assert.ok(hit, "the predicted contact body must be rendered");
+  assert.ok(hit.vz > 0, "show the provisional impulse without a server round trip");
+  const local = rendered.find((e) => e.id === car.id)!;
+  const overlap = contact(entityBox(local), entityBox(hit));
+  assert.ok(!overlap || overlap.depth < 0.015, "visible collision hulls agree");
+  assert.deepEqual(prediction.body, state, "rendering cannot advance replay state");
+  assert.deepEqual(
+    [...network.entities.values()],
+    snapshots,
+    "snapshots stay authoritative",
+  );
+  assert.equal(hit.health, 100, "no speculative damage");
+  const rider = rendered.find((e) => e.id === passenger.id)!;
+  assert.deepEqual(
+    [rider.x, rider.z, rider.y, rider.angle],
+    [hit.x, hit.z, hit.y, hit.angle],
+  );
+});
+
+for (const delay of [0, 50, 100, 200]) {
+  test(`collision replay and display stay aligned with ${delay} ms delayed, jittered snapshots`, () => {
+    const s = new Simulation(generateCity());
+    s.entities.clear();
+    s.city.props = [];
+    s.city.buildings = [];
+    const p = s.join("Driver", "#ffffff");
+    p.x = p.z = 0;
+    const car = s.spawn("car", 0, 0),
+      obstacle = s.spawn("car", 0.4, 4.3);
+    s.interact(p.id);
+    car.vz = 12;
+    const prediction = new Prediction(s.city);
+    prediction.reconcile(p, [p, car, obstacle], -1);
+    const packets: { due: number; ack: number; entities: Entity[] }[] = [];
+    let visibleContacts = 0,
+      fallbacks = 0;
+    for (let seq = 0; seq < 90; seq++) {
+      const now = (seq * 1000) / 30;
+      prediction.input({ seq, timestamp: now, input: idle() }, [p, car, obstacle]);
+      s.tick(1 / 30);
+      if (seq % 2 === 0)
+        packets.push({
+          due: now + delay + [0, 12, -8][seq % 3],
+          ack: seq,
+          entities: structuredClone([p, car, obstacle]),
+        });
+      while (packets[0]?.due <= now) {
+        const packet = packets.shift()!;
+        prediction.reconcile(packet.entities[0], packet.entities, packet.ack);
+      }
+      if (prediction.render(now))
+        assert.ok(
+          Math.hypot(prediction.body!.x - car.x, prediction.body!.z - car.z) < 0.02,
+          `replay drift at step ${seq}`,
+        );
+      const replay = structuredClone(prediction.body);
+      for (const fraction of [0, 0.5, 0.95]) {
+        const rendered = prediction.render(now + (fraction * 1000) / 30);
+        if (!rendered) {
+          assert.equal(delay, 200, "ordinary delay must retain prediction");
+          fallbacks++;
+          continue;
+        }
+        const other = rendered.neighbours.find((e) => e.id === obstacle.id)!;
+        const overlap = contact(entityBox(rendered.body), entityBox(other));
+        assert.ok(!overlap || overlap.depth < 0.02, `render penetrated at step ${seq}`);
+        if (other.vz > 0.1) visibleContacts++;
+      }
+      assert.deepEqual(prediction.body, replay);
+      assert.ok(prediction.pending.every((frame) => frame.seq <= seq));
+    }
+    assert.ok(visibleContacts > 0, "the scenario must actually collide");
+    if (delay === 200)
+      assert.ok(fallbacks > 0, "excess jitter uses the bounded fallback");
+    prediction.reconcile(p, [p, car, obstacle], 89);
+    assert.equal(prediction.pending.length, 0);
+    assert.deepEqual(prediction.body, car, "final authority replaces all speculation");
+  });
+}
+
+test("approaching bodies outside 24 m are included before they can reach the player", () => {
+  const city = emptyCity({ seed: 42, airport: { x: 640, z: -640, w: 128, d: 200 } });
+  const a: Entity = {
+    id: "a",
+    kind: "car",
+    model: "sport",
+    x: 0,
+    z: 0,
+    y: 0,
+    vx: 0,
+    vz: 52,
+    vy: 0,
+    angle: 0,
+    health: 100,
+    color: "#fff",
+  };
+  const b: Entity = { ...a, id: "b", z: 27, vz: -52, angle: Math.PI, driver: "remote" };
+  const shadows = predictionWorld(a, [a, b]);
+  for (let step = 0; step < 7; step++)
+    predictStep(a, { ...idle(), up: true }, city, [a, b], 1 / 30, shadows);
+  const hit = shadows.find((e) => e.id === b.id);
+  assert.ok(hit, "closing traffic cannot be omitted from prediction");
+  assert.ok(
+    a.vz < 20 && hit.vz > -20,
+    "the collision is resolved within the prediction horizon",
+  );
+});
+
+test("prediction fallback keeps the local player and nearby cars on the same authoritative timeline", () => {
+  const city = emptyCity({ seed: 42, airport: { x: 640, z: -640, w: 128, d: 200 } });
+  const old: Entity = {
+    id: "p",
+    kind: "player",
+    x: 0,
+    z: 0,
+    y: 0,
+    vx: 0,
+    vz: 0,
+    vy: 0,
+    angle: 0,
+    health: 100,
+    color: "#fff",
+  };
+  const car: Entity = { ...old, id: "car", kind: "car", model: "sedan", z: 3 };
+  const p = { ...old, z: 2 },
+    moved = { ...car, z: 5 };
+  const network = new GameNetwork(
+    { welcome() {}, state() {}, chat() {}, status() {} },
+    "Test",
+    "#ffffff",
+    city,
+  );
+  network.playerId = p.id;
+  network.entities = new Map([
+    [p.id, p],
+    [car.id, moved],
+  ]);
+  const timeline: unknown = Reflect.get(network, "timeline");
+  assert.ok(timeline instanceof SnapshotTimeline);
+  timeline.push(0, [old, car], 0);
+  network.prediction = new Prediction(city);
+  network.prediction.reconcile(p, [p, moved], -1);
+  for (let seq = 0; seq < 9; seq++)
+    network.prediction.input({ seq, timestamp: seq * 33, input: idle() }, [p, moved]);
+  assert.equal(network.prediction.render(300), undefined);
+  const result = network.renderEntities(300),
+    local = result.find((e) => e.id === p.id)!,
+    neighbour = result.find((e) => e.id === car.id)!;
+  assert.equal(local.z, 2);
+  assert.equal(
+    neighbour.z,
+    5,
+    "fallback cannot retain a neighbour from an older clock",
+  );
+  assert.equal(contact(entityBox(local), entityBox(neighbour)), undefined);
+});
+
+test("stalled acknowledgements stop prediction before neighbours leave collision coverage", () => {
+  const city = emptyCity({ seed: 42, airport: { x: 640, z: -640, w: 128, d: 200 } });
+  const p: Entity = {
+    id: "p",
+    kind: "player",
+    x: 0,
+    z: 0,
+    y: 0,
+    vx: 0,
+    vz: 0,
+    vy: 0,
+    angle: 0,
+    health: 100,
+    color: "#fff",
+  };
+  const prediction = new Prediction(city);
+  prediction.reconcile(p, [p], -1);
+  for (let seq = 0; seq < 9; seq++)
+    prediction.input(
+      { seq, timestamp: (seq * 1000) / 30, input: { ...idle(), up: true } },
+      [p],
+    );
+  assert.equal(
+    prediction.render(300),
+    undefined,
+    "fall back to authority after 250 ms of pending simulation",
+  );
+  for (let seq = 9; seq < 50; seq++)
+    prediction.input(
+      { seq, timestamp: (seq * 1000) / 30, input: { ...idle(), up: true } },
+      [p],
+    );
+  assert.ok(prediction.pending.length <= 8, "history stays bounded");
+  prediction.reconcile({ ...p, z: 1 }, [{ ...p, z: 1 }], 49);
+  assert.ok(prediction.render(1700), "resume from fresh authority");
+  assert.equal(prediction.pending.length, 0);
+});
 
 test("missing collision chunks disable input, replay and extrapolation until loaded", async () => {
   const city = emptyCity({ seed: 42, airport: { x: 640, z: -640, w: 128, d: 200 } });
@@ -65,9 +301,15 @@ test("missing collision chunks disable input, replay and extrapolation until loa
     const input = { ...frame, seq, timestamp: 1000 + seq * 33 };
     prediction.input(input, [p]);
     full.input(input, [p]);
+    if (seq % 3 === 2) {
+      const authoritative = structuredClone(full.body!);
+      prediction.reconcile(authoritative, [authoritative], seq);
+      full.reconcile(authoritative, [authoritative], seq);
+    }
   }
   assert.deepEqual(prediction.body, full.body);
   assert.ok(prediction.body!.x < 124, "same wall blocks full and streamed prediction");
+  assert.ok(prediction.body!.x > 123.5, "the scenario reaches the wall");
   stream.setView(undefined, { x: 650, z: 650 }, 48);
   prediction.reconcile(p, [p], -1);
   assert.deepEqual(prediction.body, p);
@@ -113,7 +355,7 @@ test("prediction checks the replayed and displayed positions, not only the snaps
   prediction.reconcile(p, [p, car], -1);
   assert.deepEqual(prediction.body, car, "incomplete replay falls back to authority");
   assert.equal(prediction.pending.length, 0);
-  const pose = prediction.render(1050)!;
+  const pose = prediction.render(1050)!.body;
   assert.equal(pose.x, 0, "discard the extrapolation input after an incomplete replay");
 });
 
@@ -162,7 +404,7 @@ test("correction smoothing cannot pull the displayed player through a parked car
   prediction.reconcile(p, [p, obstacle], -1);
   prediction.offset.z = 2;
   const original = structuredClone(prediction.body),
-    pose = prediction.render(16)!;
+    pose = prediction.render(16)!.body;
   const overlap = contact(entityBox(pose), entityBox(obstacle));
   assert.ok(!overlap || overlap.depth < 0.012);
   assert.deepEqual(prediction.body, original);
@@ -228,7 +470,7 @@ test("authoritative corrections replace speculative contacts and smooth the shor
   car.angle = -Math.PI + 0.1;
   prediction.reconcile(p, [p, car], -1);
   assert.ok(Math.abs(prediction.offset.angle + 0.2) < 1e-8);
-  const pose = prediction.render(1016)!;
+  const pose = prediction.render(1016)!.body;
   assert.ok(Math.abs(pose.angle) > 3);
   car.x += 10;
   prediction.reconcile(p, [p, car], 99);
@@ -291,13 +533,15 @@ test("local driving renders between input ticks without advancing replay state",
     car,
   ]);
   const authoritativePrediction = structuredClone(prediction.body);
-  const positions = [0, 6, 12, 18, 24, 30].map((dt) => prediction.render(1000 + dt)!.z);
+  const positions = [0, 6, 12, 18, 24, 30].map(
+    (dt) => prediction.render(1000 + dt)!.body.z,
+  );
   assert.ok(positions.every((z, i) => i === 0 || z > positions[i - 1]));
   assert.deepEqual(prediction.body, authoritativePrediction);
   assert.equal(prediction.pending.length, 1);
   assert.equal(
-    prediction.render(2000)!.z,
-    prediction.render(3000)!.z,
+    prediction.render(2000)!.body.z,
+    prediction.render(3000)!.body.z,
     "extrapolation is bounded",
   );
 });

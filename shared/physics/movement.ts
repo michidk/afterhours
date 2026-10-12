@@ -106,7 +106,8 @@ export function predictionWorld(e: Entity, nearby: Entity[]) {
         b.id !== e.id &&
         !b.vehicle &&
         (vehicle(b) || b.health > 0) &&
-        Math.hypot(b.x - e.x, b.z - e.z) < 24,
+        // Cover closing motion at 52 m/s each over the bounded prediction horizon.
+        Math.hypot(b.x - e.x, b.z - e.z) < 40,
     )
     .map((b) => structuredClone(b));
 }

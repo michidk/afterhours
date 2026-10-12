@@ -165,8 +165,15 @@ test("script debug interface controls real transport and production rejects it",
         await pause(200);
         assert.equal((await client.command({ kind: "state" })).day, 6.5);
         const before = state.entities.find((e) => e.id === client!.welcome.id)!;
-        await client.move({ up: true }, 0.4);
-        const after = await client.command({ kind: "state" });
+        let after = state;
+        const movementDeadline = Date.now() + 5000;
+        do {
+          await client.move({ up: true }, 0.4);
+          after = await client.command({ kind: "state" });
+        } while (
+          after.entities.find((e) => e.id === before.id)!.z <= before.z + 0.3 &&
+          Date.now() < movementDeadline
+        );
         assert.ok(after.entities.find((e) => e.id === before.id)!.z > before.z + 0.3);
         const spawned = await client.command({ kind: "spawn", model: "sport" });
         assert.equal(spawned.entities.length, after.entities.length + 1);

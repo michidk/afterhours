@@ -17,6 +17,8 @@ export class Prediction {
   private lastInput: InputFrame | undefined;
   private nearby: Entity[] = [];
   private shadows: Entity[] = [];
+  private suspended = false;
+  private discardedThrough = -1;
   constructor(
     readonly city: City,
     private worldReady = (_point: { x: number; z: number }) => true,
@@ -29,6 +31,8 @@ export class Prediction {
     this.lastInput = undefined;
     this.nearby = [];
     this.shadows = [];
+    this.suspended = false;
+    this.discardedThrough = -1;
   }
   reconcile(player: Entity, entities: Entity[], ack: number) {
     const authoritative = entities.find((e) => e.id === (player.vehicle || player.id));
@@ -47,6 +51,19 @@ export class Prediction {
     this.body = structuredClone(authoritative);
     this.nearby = entities;
     this.shadows = predictionWorld(this.body, entities);
+    if (!this.worldReady(this.body)) {
+      this.pending = [];
+      this.lastInput = undefined;
+      this.offset = { x: 0, z: 0, y: 0, angle: 0 };
+      return;
+    }
+    this.suspended =
+      ack < this.discardedThrough || this.pending.length * TUNING.tick > 0.25;
+    if (this.suspended) {
+      this.offset = { x: 0, z: 0, y: 0, angle: 0 };
+      this.lastInput = undefined;
+      return;
+    }
     for (const frame of this.pending) {
       if (!this.worldReady(this.body)) break;
       predictStep(
@@ -90,12 +107,13 @@ export class Prediction {
     this.offset.z *= decay;
     this.offset.y *= decay;
     this.offset.angle *= decay;
-    if (!this.body || !this.worldReady(this.body)) return undefined;
+    if (!this.body || this.suspended || !this.worldReady(this.body)) return undefined;
     const pose = {
       ...this.body,
       wheelSkids: this.body.wheelSkids?.slice(),
       jetpack: this.body.jetpack && { ...this.body.jetpack },
     };
+    const neighbours = structuredClone(this.shadows);
     // Fill the gap between 30 Hz inputs at display refresh rate. This copy never
     // changes the replay state or decides gameplay outcomes.
     if (this.lastInput) {
@@ -110,7 +128,7 @@ export class Prediction {
           this.city,
           this.nearby,
           partial,
-          structuredClone(this.shadows),
+          neighbours,
         );
     }
     pose.x += this.offset.x;
@@ -123,8 +141,8 @@ export class Prediction {
       Math.hypot(this.offset.x, this.offset.z) > 0.001 ||
       Math.abs(this.offset.angle) > 0.001
     )
-      constrainRenderPose(pose, this.city, this.shadows);
-    return pose;
+      constrainRenderPose(pose, this.city, neighbours);
+    return { body: pose, neighbours };
   }
   input(frame: InputFrame, nearby: Entity[]) {
     if (!this.body) return;
@@ -136,7 +154,12 @@ export class Prediction {
     this.lastInput = frame;
     this.nearby = nearby;
     this.pending.push(frame);
-    if (this.pending.length > 90) this.pending.shift();
+    if (this.pending.length > 8) this.discardedThrough = this.pending.shift()!.seq;
+    if (this.suspended || this.pending.length * TUNING.tick > 0.25) {
+      this.suspended = true;
+      this.lastInput = undefined;
+      return;
+    }
     if (this.body)
       predictStep(this.body, frame.input, this.city, nearby, TUNING.tick, this.shadows);
   }

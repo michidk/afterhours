@@ -6,6 +6,8 @@ The original audit used `c2da9ed` after pulling `origin/main`. The dictated "cha
 
 ## Gameplay implementation
 
+- [x] Fix delayed entity contact rendering and bound reconciliation. Nearby bodies share the player's predicted clock and use one authoritative clock during fallback. A 250 ms pending horizon, 40 m neighbour coverage and a two-tick input FIFO prevent runaway speculation and stale commands displacing newer stops. All 167 tests, formatting, boundaries, types and the production build pass. Tests cover jittered/delayed snapshots, approaching traffic, overflow and acknowledgement recovery, snapshot immutability, passengers and collision-safe fallback. Headless Chrome at 1280 by 900 verified walking into a parked car, delayed snapshots, driving impacts, and reconnecting with the same player identity through the direct managed preview, with no browser exceptions or HTTP failures. Evidence is local at `/tmp/afterhours-collision-browser/evidence.json` and `/tmp/afterhours-collision-reconnect/evidence.json`. Research evaluates Gambetta, Fiedler, Colyseus 0.18, Geckos and Rapier; no dependency was added. See [networking](docs/networking.md).
+
 - [x] Temporary destructible plants, benches, lamps, signals, and hydrants. Server-owned debris lasts 30 seconds, fades, and restores fixtures at their original positions once clear. Hydrants spray until restoration. The saved city is unchanged. See [destruction](docs/destruction.md).
 - [x] Three-minute corpses and wrecks with independent player recovery after three seconds and NPC recovery after 30 seconds. Water and rooftop corpses retain valid altitude. Saturation retains all corpse snapshots within a 128-body physical budget; retired airborne bodies settle instead of hanging. See [lifecycle tests](tests/destruction.test.ts).
 - [x] Chosen overhead player names, including riders. Labels use plain text, follow projected seat poses, and clear on disconnect, reconnect, death, or view loss. Unit tests and headless browser join, seated-name, and disconnect checks pass. See [nameplates](tests/nameplates.test.ts).
@@ -21,6 +23,8 @@ The original audit used `c2da9ed` after pulling `origin/main`. The dictated "cha
 - [x] AI watercraft cruising bounded offshore routes. Three-minute progress tests cover all models; stealing the driver seat removes the AI route.
 - [x] Panelled ram-air parachutes with alternating cells, twelve suspension lines, and a harness. Aircraft exits, rooftops, released jetpack thrust, and fuel exhaustion deploy automatically. Renderer tests and inspected browser screenshots verify the new canopy.
 - [x] CI for formatting, import boundaries, types, tests, and production build. [Workflow](.github/workflows/ci.yml) is published. Tests run serially so real-time transport servers do not compete with CPU-heavy simulations.
+
+- [ ] Investigate live server tick overruns and preview gateway stability. During collision testing, `/health` repeatedly reported tick p95 above the 33.33 ms target on this shared host. Public headless sessions also saw HTTP 502 asset responses and a dropped WebSocket, while the direct managed listener remained healthy. These are unresolved environment/runtime observations, not proof that collision prediction causes the load.
 
 ## City streaming and startup
 

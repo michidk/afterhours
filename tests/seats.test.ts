@@ -189,7 +189,7 @@ test("passenger controls never predict a vehicle; role changes reset pending inp
   passenger.x = passenger.z = 0;
   s.interact(passenger.id);
   prediction.reconcile(passenger, [passenger, v], 1);
-  assert.equal(prediction.render(100)?.id, v.id);
+  assert.equal(prediction.render(100)?.body.id, v.id);
   assert.equal(prediction.ownership, v.id);
   assert.equal(prediction.pending.length, 0);
 });

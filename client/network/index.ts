@@ -8,7 +8,7 @@ import type {
 } from "../../shared/protocol.ts";
 import type { Entity, Input, City } from "../../shared/world.ts";
 import { decodeSnapshot, applyPatch } from "../../shared/codec.ts";
-import { Prediction } from "./prediction.ts";
+import { Prediction, interpolate } from "./prediction.ts";
 import { SnapshotTimeline } from "./timeline.ts";
 import { emptyCity } from "../../shared/city-stream.ts";
 import { setBrokenProps } from "../../shared/destruction.ts";
@@ -187,19 +187,44 @@ export class GameNetwork {
       if (i >= 0) result[i] = { ...currentPlayer };
       else result.push({ ...currentPlayer });
     }
-    const predicted = this.prediction?.render(now);
+    const prediction = this.prediction?.render(now);
+    const controlled = currentPlayer?.vehicle
+      ? this.entities.get(currentPlayer.vehicle)
+      : currentPlayer;
+    const predicted =
+      prediction?.body ??
+      (!currentPlayer?.vehicle || controlled?.driver === this.playerId
+        ? controlled
+        : undefined);
     if (predicted) {
+      // Nearby contacts share the player's clock; distant traffic stays buffered.
+      for (const neighbour of prediction?.neighbours ?? this.entities.values()) {
+        if (neighbour.id === predicted.id || neighbour.vehicle) continue;
+        const index = result.findIndex((e) => e.id === neighbour.id);
+        const remote = index >= 0 ? result[index] : this.entities.get(neighbour.id);
+        if (!remote) continue;
+        const distance = Math.min(
+          Math.hypot(remote.x - predicted.x, remote.z - predicted.z),
+          Math.hypot(neighbour.x - predicted.x, neighbour.z - predicted.z),
+        );
+        const weight = Math.max(0, Math.min(1, (24 - distance) / 12));
+        if (weight === 0) continue;
+        const pose = interpolate(remote, neighbour, weight);
+        if (index >= 0) result[index] = pose;
+        else result.push(pose);
+      }
       const index = result.findIndex((e) => e.id === predicted.id);
       if (index >= 0) result[index] = { ...predicted };
       else result.push({ ...predicted });
     }
-    const p = result.find((e) => e.id === this.playerId);
-    const v = p?.vehicle && result.find((e) => e.id === p.vehicle);
-    if (p && v) {
-      p.x = v.x;
-      p.z = v.z;
-      p.y = v.y;
-      p.angle = v.angle;
+    for (const p of result) {
+      const v = p.vehicle && result.find((e) => e.id === p.vehicle);
+      if (v) {
+        p.x = v.x;
+        p.z = v.z;
+        p.y = v.y;
+        p.angle = v.angle;
+      }
     }
     return result;
   }
