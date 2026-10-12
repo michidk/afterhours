@@ -91,7 +91,7 @@ for (const delay of [0, 50, 100, 200]) {
     prediction.reconcile(p, [p, car, obstacle], -1);
     const packets: { due: number; ack: number; entities: Entity[] }[] = [];
     let visibleContacts = 0,
-      fallbacks = 0;
+      capped = 0;
     for (let seq = 0; seq < 90; seq++) {
       const now = (seq * 1000) / 30;
       prediction.input({ seq, timestamp: now, input: idle() }, [p, car, obstacle]);
@@ -106,7 +106,7 @@ for (const delay of [0, 50, 100, 200]) {
         const packet = packets.shift()!;
         prediction.reconcile(packet.entities[0], packet.entities, packet.ack);
       }
-      if (prediction.render(now))
+      if (prediction.status === "predicting")
         assert.ok(
           Math.hypot(prediction.body!.x - car.x, prediction.body!.z - car.z) < 0.02,
           `replay drift at step ${seq}`,
@@ -114,11 +114,8 @@ for (const delay of [0, 50, 100, 200]) {
       const replay = structuredClone(prediction.body);
       for (const fraction of [0, 0.5, 0.95]) {
         const rendered = prediction.render(now + (fraction * 1000) / 30);
-        if (!rendered) {
-          assert.equal(delay, 200, "ordinary delay must retain prediction");
-          fallbacks++;
-          continue;
-        }
+        assert.ok(rendered, "a capped prediction must not switch to old authority");
+        if (prediction.status === "waiting for acknowledgements") capped++;
         const other = rendered.neighbours.find((e) => e.id === obstacle.id)!;
         const overlap = contact(entityBox(rendered.body), entityBox(other));
         assert.ok(!overlap || overlap.depth < 0.02, `render penetrated at step ${seq}`);
@@ -128,8 +125,7 @@ for (const delay of [0, 50, 100, 200]) {
       assert.ok(prediction.pending.every((frame) => frame.seq <= seq));
     }
     assert.ok(visibleContacts > 0, "the scenario must actually collide");
-    if (delay === 200)
-      assert.ok(fallbacks > 0, "excess jitter uses the bounded fallback");
+    if (delay === 200) assert.ok(capped > 0, "excess jitter caps the prediction lead");
     prediction.reconcile(p, [p, car, obstacle], 89);
     assert.equal(prediction.pending.length, 0);
     assert.deepEqual(prediction.body, car, "final authority replaces all speculation");
@@ -164,7 +160,7 @@ test("approaching bodies outside 24 m are included before they can reach the pla
   );
 });
 
-test("prediction fallback keeps the local player and nearby cars on the same authoritative timeline", () => {
+test("capped prediction keeps the local player and nearby cars on the same timeline", () => {
   const city = emptyCity({ seed: 42, airport: { x: 640, z: -640, w: 128, d: 200 } });
   const old: Entity = {
     id: "p",
@@ -200,7 +196,8 @@ test("prediction fallback keeps the local player and nearby cars on the same aut
   network.prediction.reconcile(p, [p, moved], -1);
   for (let seq = 0; seq < 9; seq++)
     network.prediction.input({ seq, timestamp: seq * 33, input: idle() }, [p, moved]);
-  assert.equal(network.prediction.render(300), undefined);
+  assert.equal(network.prediction.status, "waiting for acknowledgements");
+  assert.ok(network.prediction.render(300));
   const result = network.renderEntities(300),
     local = result.find((e) => e.id === p.id)!,
     neighbour = result.find((e) => e.id === car.id)!;
@@ -208,7 +205,7 @@ test("prediction fallback keeps the local player and nearby cars on the same aut
   assert.equal(
     neighbour.z,
     5,
-    "fallback cannot retain a neighbour from an older clock",
+    "capped prediction cannot retain a neighbour from an older clock",
   );
   assert.equal(contact(entityBox(local), entityBox(neighbour)), undefined);
 });
@@ -235,19 +232,25 @@ test("stalled acknowledgements stop prediction before neighbours leave collision
       { seq, timestamp: (seq * 1000) / 30, input: { ...idle(), up: true } },
       [p],
     );
-  assert.equal(
-    prediction.render(300),
-    undefined,
-    "fall back to authority after 250 ms of pending simulation",
-  );
-  for (let seq = 9; seq < 50; seq++)
+  const held = prediction.render(300)!.body.z;
+  assert.ok(held > 0 && held < 1.2, "prediction stops within its lead budget");
+  assert.equal(prediction.status, "waiting for acknowledgements");
+  for (let seq = 9; seq < 100; seq++)
     prediction.input(
       { seq, timestamp: (seq * 1000) / 30, input: { ...idle(), up: true } },
       [p],
     );
-  assert.ok(prediction.pending.length <= 8, "history stays bounded");
-  prediction.reconcile({ ...p, z: 1 }, [{ ...p, z: 1 }], 49);
-  assert.ok(prediction.render(1700), "resume from fresh authority");
+  assert.equal(
+    prediction.render(3400)!.body.z,
+    held,
+    "a stalled link holds the bounded pose instead of rewinding",
+  );
+  assert.ok(prediction.pending.length <= 60, "history stays bounded");
+  prediction.reconcile(p, [p], 20, 3400);
+  assert.deepEqual(prediction.body, p, "never replay an incomplete history suffix");
+  assert.equal(prediction.status, "waiting for acknowledgements");
+  prediction.reconcile({ ...p, z: 1 }, [{ ...p, z: 1 }], 99, 3433);
+  assert.ok(prediction.render(3450), "resume from fresh authority");
   assert.equal(prediction.pending.length, 0);
 });
 

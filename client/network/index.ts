@@ -156,7 +156,7 @@ export class GameNetwork {
         const entities = [...this.entities.values()];
         this.timeline.push(snapshot.time, entities, this.received);
         const p = this.entities.get(this.playerId);
-        if (p) this.prediction?.reconcile(p, entities, snapshot.ack);
+        if (p) this.prediction?.reconcile(p, entities, snapshot.ack, now);
         this.hooks.state({ ...snapshot, entities });
       }
       if (m.type === "chat") this.hooks.chat(m.name, m.text);
