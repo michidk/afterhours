@@ -80,14 +80,19 @@ export function chunkBounds(key: string) {
 }
 export function chunksAround(x: number, z: number, radius: number) {
   const keys: string[] = [];
+  const minX = Math.max(-LIMIT, x - radius),
+    maxX = Math.min(LIMIT, x + radius),
+    minZ = Math.max(-LIMIT, z - radius),
+    maxZ = Math.min(LIMIT, z + radius);
+  if (minX > maxX || minZ > maxZ) return keys;
   for (
-    let cx = Math.floor(Math.max(-LIMIT, x - radius) / CITY_CHUNK_SIZE);
-    cx <= Math.floor(Math.min(LIMIT, x + radius) / CITY_CHUNK_SIZE);
+    let cx = Math.floor(minX / CITY_CHUNK_SIZE);
+    cx <= Math.floor(maxX / CITY_CHUNK_SIZE);
     cx++
   )
     for (
-      let cz = Math.floor(Math.max(-LIMIT, z - radius) / CITY_CHUNK_SIZE);
-      cz <= Math.floor(Math.min(LIMIT, z + radius) / CITY_CHUNK_SIZE);
+      let cz = Math.floor(minZ / CITY_CHUNK_SIZE);
+      cz <= Math.floor(maxZ / CITY_CHUNK_SIZE);
       cz++
     )
       keys.push(`${cx},${cz}`);

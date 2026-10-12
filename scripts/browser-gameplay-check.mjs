@@ -235,7 +235,7 @@ try {
       `${model} boarding failed`,
     );
     await until(
-      "window.afterhoursDebug.network.worldReady()",
+      "(()=>{const n=window.afterhoursDebug.network,p=n.entities.get(n.playerId),body=p?.vehicle?n.entities.get(p.vehicle):p;return !!body && n.worldReady(body)})()",
       `${model} collision chunks did not load`,
     );
     // Hold continuous controls through capture; an idle plane slows and stalls.

@@ -50,7 +50,7 @@ export class GameNetwork {
     private color: string,
     private city?: City,
   ) {}
-  worldReady = () => true;
+  worldReady = (_point: { x: number; z: number }) => true;
   connect() {
     this.closed = false;
     this.hooks.status("connecting");
@@ -96,7 +96,9 @@ export class GameNetwork {
         }
         this.playerId = m.id;
         this.token = m.token;
-        this.prediction = new Prediction(this.city ?? emptyCity(m.map));
+        this.prediction = new Prediction(this.city ?? emptyCity(m.map), (point) =>
+          this.worldReady(point),
+        );
         this.seq = 0;
         this.frame = 0;
         this.entities.clear();
@@ -120,7 +122,6 @@ export class GameNetwork {
         const entities = [...this.entities.values()];
         this.timeline.push(snapshot.time, entities, this.received);
         const p = this.entities.get(this.playerId);
-        if (!this.worldReady() && this.prediction) this.prediction.pending.length = 0;
         if (p) this.prediction?.reconcile(p, entities, snapshot.ack);
         this.hooks.state({ ...snapshot, entities });
       }
@@ -162,7 +163,7 @@ export class GameNetwork {
         },
       };
     this.send({ type: "input", seq: frame.seq, timestamp, ...frame.input });
-    if (this.worldReady()) this.prediction.input(frame, [...this.entities.values()]);
+    this.prediction.input(frame, [...this.entities.values()]);
     if (frame.seq % 60 === 0) this.send({ type: "ping", timestamp });
   }
   debug(command: DebugCommand): Promise<DebugState> {
@@ -186,7 +187,7 @@ export class GameNetwork {
       if (i >= 0) result[i] = { ...currentPlayer };
       else result.push({ ...currentPlayer });
     }
-    const predicted = this.worldReady() ? this.prediction?.render(now) : undefined;
+    const predicted = this.prediction?.render(now);
     if (predicted) {
       const index = result.findIndex((e) => e.id === predicted.id);
       if (index >= 0) result[index] = { ...predicted };

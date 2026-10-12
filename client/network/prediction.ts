@@ -17,7 +17,10 @@ export class Prediction {
   private lastInput: InputFrame | undefined;
   private nearby: Entity[] = [];
   private shadows: Entity[] = [];
-  constructor(readonly city: City) {}
+  constructor(
+    readonly city: City,
+    private worldReady = (_point: { x: number; z: number }) => true,
+  ) {}
   reset() {
     this.pending = [];
     this.body = undefined;
@@ -44,7 +47,8 @@ export class Prediction {
     this.body = structuredClone(authoritative);
     this.nearby = entities;
     this.shadows = predictionWorld(this.body, entities);
-    for (const frame of this.pending)
+    for (const frame of this.pending) {
+      if (!this.worldReady(this.body)) break;
       predictStep(
         this.body,
         frame.input,
@@ -53,6 +57,15 @@ export class Prediction {
         TUNING.tick,
         this.shadows,
       );
+    }
+    if (!this.worldReady(this.body)) {
+      this.pending = [];
+      this.lastInput = undefined;
+      this.body = structuredClone(authoritative);
+      this.shadows = predictionWorld(this.body, entities);
+      this.offset = { x: 0, z: 0, y: 0, angle: 0 };
+      return;
+    }
     if (previous) {
       const dx = previous.x - this.body.x,
         dz = previous.z - this.body.z,
@@ -77,7 +90,7 @@ export class Prediction {
     this.offset.z *= decay;
     this.offset.y *= decay;
     this.offset.angle *= decay;
-    if (!this.body) return undefined;
+    if (!this.body || !this.worldReady(this.body)) return undefined;
     const pose = {
       ...this.body,
       wheelSkids: this.body.wheelSkids?.slice(),
@@ -104,6 +117,7 @@ export class Prediction {
     pose.z += this.offset.z;
     pose.y += this.offset.y;
     pose.angle = wrap(pose.angle + this.offset.angle);
+    if (!this.worldReady(pose)) return undefined;
     // A visual correction must not pull the controlled body through an obstacle.
     if (
       Math.hypot(this.offset.x, this.offset.z) > 0.001 ||
@@ -114,6 +128,11 @@ export class Prediction {
   }
   input(frame: InputFrame, nearby: Entity[]) {
     if (!this.body) return;
+    if (!this.worldReady(this.body)) {
+      this.pending = [];
+      this.lastInput = undefined;
+      return;
+    }
     this.lastInput = frame;
     this.nearby = nearby;
     this.pending.push(frame);

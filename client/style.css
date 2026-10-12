@@ -157,17 +157,7 @@ input:focus-visible {
   font-size: 12px;
   color: #f0bc6d;
 }
-.progress {
-  height: 3px;
-  background: #ffffff20;
-  margin-top: 10px;
-}
-.progress i {
-  display: block;
-  height: 100%;
-  background: #f0bc6d;
-  transition: width 0.3s;
-}
+
 .hud {
   position: absolute;
   inset: 0;

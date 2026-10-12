@@ -54,7 +54,6 @@ const controls = new Controls(),
   keys = controls.keys,
   audio = new GameAudio();
 let toastTimer: ReturnType<typeof setTimeout>;
-document.querySelector("#boot")?.remove();
 function toast(message: string) {
   $("#toast").textContent = message;
   $("#toast").classList.remove("hidden");
@@ -74,9 +73,9 @@ for (const swatch of document.querySelectorAll<HTMLButtonElement>(".swatch"))
     swatch.classList.add("selected");
     swatch.setAttribute("aria-pressed", "true");
   };
-function loading(text: string, progress: number) {
-  $("#loading").innerHTML =
-    `${text}<div class="progress"><i style="width:${progress}%"></i></div>`;
+function loading(text: string) {
+  const status = document.querySelector("#boot-status") ?? $("#loading");
+  status.textContent = text;
 }
 $("#join").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -142,7 +141,7 @@ $("#join").addEventListener("submit", (event) => {
         scene.destruction.setBroken(ids);
       },
       status(state) {
-        loading(state, 90);
+        loading(state);
         if (state !== "connected") {
           audio.reset();
           nameplates.clear();
@@ -164,11 +163,7 @@ $("#join").addEventListener("submit", (event) => {
     selected,
     scene.city,
   );
-  network.worldReady = () => {
-    const p = network?.entities.get(network.playerId),
-      body = p?.vehicle ? network?.entities.get(p.vehicle) : p;
-    return !body || cityStream.ready(body);
-  };
+  network.worldReady = (point) => cityStream.ready(point);
   network.connect();
 });
 window.addEventListener("keydown", (event) => {
@@ -372,9 +367,14 @@ async function boot() {
   try {
     void audio.preload();
     await new Promise((r) => setTimeout(r, 30));
-    const response = await fetch("/city", { cache: "no-store" });
+    loading("Downloading the city map…");
+    const response = await fetch("/city", {
+      cache: "no-store",
+      signal: AbortSignal.timeout(30000),
+    });
     if (!response.ok) throw Error("City download failed");
     const world = mapManifestSchema.parse(await response.json());
+    loading("Starting 3D rendering…");
     let cityRenderer: CityRenderer;
     cityStream = new CityStream(world, (chunks) => cityRenderer.sync(chunks));
     scene = new CityScene($<HTMLCanvasElement>("#world"), cityStream.city, true);
@@ -390,8 +390,9 @@ async function boot() {
       },
     );
     cityRenderer = new CityRenderer(scene, world);
-    loading("Painting storefronts and planting palms…", 55);
+    loading("Loading the spawn neighbourhood…");
     await cityStream.prepare();
+    loading("Preparing the first frame…");
     scene.engine.runRenderLoop(() => scene.scene.render());
     let readinessTimer: ReturnType<typeof setTimeout>;
     try {
@@ -408,9 +409,10 @@ async function boot() {
       clearTimeout(readinessTimer!);
     }
     scene.engine.stopRenderLoop();
-    loading("City ready. Your story starts here.", 100);
     $("#play").textContent = "Enter the city →";
     $("#play").removeAttribute("disabled");
+    $("#app").removeAttribute("inert");
+    document.querySelector("#boot")?.remove();
     const profiler = import.meta.env.DEV ? new FrameProfiler() : undefined;
     if (import.meta.env.DEV)
       Object.defineProperty(window, "afterhours", {
@@ -467,7 +469,7 @@ async function boot() {
           : automation?.input || controls.read();
       scene.update(rendered, playerId, dt, cameraInput);
       streamClock += dt;
-      if (streamClock >= 0.1) {
+      if (joined && streamClock >= 0.1) {
         streamClock = 0;
         const p = network?.entities.get(network.playerId),
           body = p?.vehicle ? network?.entities.get(p.vehicle) : p,
@@ -610,7 +612,7 @@ async function boot() {
     });
   } catch (error) {
     scene?.engine.stopRenderLoop();
-    loading("Could not start 3D rendering. Try a browser with WebGL enabled.", 0);
+    loading("Could not load the city. Check your connection and WebGL, then refresh.");
     console.error(error);
   }
 }

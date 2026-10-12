@@ -3,14 +3,119 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Prediction, interpolate } from "../client/network/prediction.ts";
 import { Simulation } from "../server/simulation.ts";
-import { idle } from "../shared/world.ts";
+import { idle, type Entity } from "../shared/world.ts";
 import { SnapshotTimeline } from "../client/network/timeline.ts";
+import { CityStore } from "../server/city-stream.ts";
+import { CityStream } from "../client/world/stream.ts";
+import { emptyCity } from "../shared/city-stream.ts";
 import {
   predictStep,
   predictionWorld,
   contact,
   entityBox,
 } from "../shared/physics/index.ts";
+
+test("missing collision chunks disable input, replay and extrapolation until loaded", async () => {
+  const city = emptyCity({ seed: 42, airport: { x: 640, z: -640, w: 128, d: 200 } });
+  city.buildings = [{ x: 128, z: 64, w: 8, d: 10, h: 20, color: "#ffffff", style: 0 }];
+  const p: Entity = {
+    id: "walker",
+    kind: "player",
+    x: 120,
+    z: 64,
+    y: 0,
+    vx: 0,
+    vz: 0,
+    vy: 0,
+    angle: 0,
+    health: 100,
+    color: "#ffffff",
+  };
+  const store = new CityStore(city);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const stream = new CityStream(
+    store.manifest,
+    () => {},
+    async (url) => {
+      const parts = String(url).split("/"),
+        key = `${parts.at(-2)},${parts.at(-1)}`;
+      if (key === "2,0") await gate;
+      return new Response(JSON.stringify(store.chunks.get(key)));
+    },
+  );
+  for (let i = 0; i < 20; i++) {
+    stream.setView(p, p);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.equal(stream.ready(p), false);
+  const prediction = new Prediction(stream.city, (point) => stream.ready(point)),
+    frame = { seq: 0, timestamp: 1000, input: { ...idle(), right: true } };
+  prediction.reconcile(p, [p], -1);
+  prediction.input(frame, [p]);
+  assert.deepEqual(prediction.body, p);
+  assert.equal(prediction.pending.length, 0);
+  assert.equal(prediction.render(1016), undefined);
+  release();
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(stream.ready(p), true);
+  const full = new Prediction(city);
+  full.reconcile(p, [p], -1);
+  for (let seq = 0; seq < 30; seq++) {
+    const input = { ...frame, seq, timestamp: 1000 + seq * 33 };
+    prediction.input(input, [p]);
+    full.input(input, [p]);
+  }
+  assert.deepEqual(prediction.body, full.body);
+  assert.ok(prediction.body!.x < 124, "same wall blocks full and streamed prediction");
+  stream.setView(undefined, { x: 650, z: 650 }, 48);
+  prediction.reconcile(p, [p], -1);
+  assert.deepEqual(prediction.body, p);
+  assert.equal(prediction.pending.length, 0, "do not replay through an unloaded wall");
+  assert.equal(prediction.render(2016), undefined);
+});
+
+test("prediction checks the replayed and displayed positions, not only the snapshot", () => {
+  const city = emptyCity({ seed: 42, airport: { x: 640, z: -640, w: 128, d: 200 } });
+  const car: Entity = {
+    id: "car",
+    kind: "car",
+    model: "sedan",
+    driver: "p",
+    x: 0,
+    z: 0,
+    y: 0,
+    vx: 42,
+    vz: 0,
+    vy: 0,
+    angle: 0,
+    health: 100,
+    color: "#fff",
+  };
+  const p: Entity = {
+    ...car,
+    id: "p",
+    kind: "player",
+    model: undefined,
+    driver: undefined,
+    vehicle: car.id,
+  };
+  const prediction = new Prediction(city, (point) => point.x < 1.8);
+  prediction.reconcile(p, [p, car], -1);
+  prediction.input({ seq: 0, timestamp: 1000, input: idle() }, [p, car]);
+  assert.ok(prediction.body!.x > 1);
+  assert.equal(
+    prediction.render(1016),
+    undefined,
+    "display extrapolation exceeds data",
+  );
+  prediction.input({ seq: 1, timestamp: 1033, input: idle() }, [p, car]);
+  prediction.reconcile(p, [p, car], -1);
+  assert.deepEqual(prediction.body, car, "incomplete replay falls back to authority");
+  assert.equal(prediction.pending.length, 0);
+  const pose = prediction.render(1050)!;
+  assert.equal(pose.x, 0, "discard the extrapolation input after an incomplete replay");
+});
 
 test("delayed collision snapshots replay pending inputs once and replace provisional damage", () => {
   const s = new Simulation(generateCity());

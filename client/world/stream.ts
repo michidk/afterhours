@@ -3,15 +3,22 @@ import {
   cityChunkSchema,
   emptyCity,
   STATIC_FIELDS,
+  CITY_CHUNK_SIZE,
   type CityChunk,
   type MapManifest,
 } from "../../shared/city-stream.ts";
+import { TUNING } from "../../shared/catalog.ts";
+
+// Cover snapshot neighbours and their local physics queries before predicting.
+export const COLLISION_RADIUS = TUNING.interestRadius + 32;
+const PREFETCH_RADIUS = COLLISION_RADIUS + CITY_CHUNK_SIZE;
 
 /** Memory-only neighborhood cache shared by rendering and provisional collisions. */
 export class CityStream {
   readonly city;
   readonly chunks = new Map<string, CityChunk>();
   private wanted = new Set<string>();
+  private visible = new Set<string>();
   private pending = new Map<string, AbortController>();
   private retries = new Map<string, number>();
   error = "";
@@ -28,8 +35,18 @@ export class CityStream {
     camera: { x: number; z: number },
     radius = 160,
   ) {
-    const wanted = new Set(chunksAround(camera.x, camera.z, radius));
-    if (player) for (const key of chunksAround(player.x, player.z, 96)) wanted.add(key);
+    const visible = new Set(chunksAround(camera.x, camera.z, radius)),
+      visibilityChanged =
+        visible.size !== this.visible.size ||
+        [...visible].some((key) => !this.visible.has(key)),
+      required = new Set(
+        player ? chunksAround(player.x, player.z, COLLISION_RADIUS) : [],
+      ),
+      wanted = new Set(visible);
+    this.visible = visible;
+    if (player)
+      for (const key of chunksAround(player.x, player.z, PREFETCH_RADIUS))
+        wanted.add(key);
     this.wanted = wanted;
     let changed = false;
     for (const [key, controller] of this.pending)
@@ -42,6 +59,7 @@ export class CityStream {
     for (const key of this.retries.keys())
       if (!wanted.has(key)) this.retries.delete(key);
     if (changed) this.publish();
+    else if (visibilityChanged) this.changed(this.renderChunks());
     const order = [...wanted].sort((a, b) => {
       const distance = (key: string) => {
         const [x, z] = key.split(",").map(Number);
@@ -50,7 +68,9 @@ export class CityStream {
           (z + 0.5) * this.map.chunkSize - (player?.z ?? camera.z),
         );
       };
-      return distance(a) - distance(b);
+      const priority = (key: string) =>
+        required.has(key) ? 0 : visible.has(key) ? 1 : 2;
+      return priority(a) - priority(b) || distance(a) - distance(b);
     });
     for (const key of order) {
       if (this.pending.size >= 4) break;
@@ -63,13 +83,13 @@ export class CityStream {
       void this.load(key);
     }
   }
-  ready(point: { x: number; z: number }, radius = 48) {
+  ready(point: { x: number; z: number }, radius = COLLISION_RADIUS) {
     return chunksAround(point.x, point.z, radius).every((key) => this.chunks.has(key));
   }
   async prepare(center = { x: 11, z: 25 }) {
     const deadline = Date.now() + 30000;
     do {
-      this.setView(center, center, 160);
+      this.setView(undefined, center);
       if ([...this.wanted].every((key) => this.chunks.has(key))) return;
       if (Date.now() > deadline)
         throw Error(this.error || "Neighborhood download timed out");
@@ -119,12 +139,16 @@ export class CityStream {
         [field]: [...values].sort((a, b) => a[0] - b[0]).map((entry) => entry[1]),
       });
     }
-    this.changed(chunks);
+    this.changed(this.renderChunks());
+  }
+  private renderChunks() {
+    return [...this.chunks.values()].filter((chunk) => this.visible.has(chunk.key));
   }
   get diagnostics() {
     return {
       mapId: this.map.mapId,
       resident: this.chunks.size,
+      rendered: this.renderChunks().length,
       wanted: this.wanted.size,
       pending: this.pending.size,
       error: this.error,

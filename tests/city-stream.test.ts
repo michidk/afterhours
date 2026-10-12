@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { CityStore } from "../server/city-stream.ts";
-import { CityStream } from "../client/world/stream.ts";
+import { CityStream, COLLISION_RADIUS } from "../client/world/stream.ts";
+import { TUNING } from "../shared/catalog.ts";
 import { Simulation } from "../server/simulation.ts";
 import { emptyCity, chunksAround, STATIC_FIELDS } from "../shared/city-stream.ts";
 const fixture = () => {
@@ -29,6 +30,11 @@ const fixture = () => {
   return city;
 };
 const settle = () => new Promise((r) => setTimeout(r, 5));
+test("offshore coverage excludes land chunks when the clipped bounds do not overlap", () => {
+  assert.deepEqual(chunksAround(-1030, 0, COLLISION_RADIUS), []);
+  assert.deepEqual(chunksAround(0, 1030, COLLISION_RADIUS), []);
+  assert.deepEqual(chunksAround(-820, 0, 48), ["-7,-1", "-7,0"]);
+});
 test("saved map identity is stable and chunks duplicate only boundary features with stable IDs", () => {
   const city = fixture(),
     a = new CityStore(city),
@@ -62,6 +68,11 @@ test("client fetches nearby chunks, deduplicates seams, evicts distant data and 
   }) as typeof fetch;
   const stream = new CityStream(store.manifest, () => {}, download);
   await stream.prepare();
+  assert.deepEqual(
+    [...stream.chunks.keys()].sort(),
+    chunksAround(11, 25, 160).sort(),
+    "startup downloads only spawn scenery, without the outer prefetch ring",
+  );
   assert.ok(stream.chunks.size < store.chunks.size / 4);
   assert.equal(stream.city.buildings.length, 1);
   assert.equal(stream.city.buildings[0].x, 127);
@@ -71,7 +82,7 @@ test("client fetches nearby chunks, deduplicates seams, evicts distant data and 
     await settle();
   }
   assert.equal(stream.ready({ x: 11, z: 25 }), true);
-  assert.equal(stream.ready({ x: 650, z: 650 }), true);
+  assert.equal(stream.ready({ x: 650, z: 650 }, 96), true);
   assert.equal(stream.city.buildings.length, 2);
   for (let i = 0; i < 12; i++) {
     stream.setView({ x: 650, z: 650 }, { x: 650, z: 650 }, 96);
@@ -84,6 +95,50 @@ test("client fetches nearby chunks, deduplicates seams, evicts distant data and 
   assert.ok(
     urls.every((url) => url.startsWith(`/city/chunks/${store.manifest.mapId}/`)),
   );
+});
+test("collision coverage exceeds snapshots while rendering only camera chunks", async () => {
+  const store = new CityStore(fixture()),
+    player = { x: 128, z: 128 },
+    camera = { x: 650, z: 650 },
+    requests: string[] = [];
+  let rendered: string[] = [];
+  const stream = new CityStream(
+    store.manifest,
+    (chunks) => {
+      rendered = chunks.map((chunk) => chunk.key).sort();
+    },
+    async (url) => {
+      const parts = String(url).split("/"),
+        key = `${parts.at(-2)},${parts.at(-1)}`;
+      requests.push(key);
+      return new Response(JSON.stringify(store.chunks.get(key)));
+    },
+  );
+  assert.ok(COLLISION_RADIUS > TUNING.interestRadius);
+  stream.setView(player, camera, 48);
+  assert.ok(requests.length > 0);
+  assert.ok(
+    requests.every((key) => chunksAround(128, 128, COLLISION_RADIUS).includes(key)),
+    "player collision requests precede distant camera requests",
+  );
+  for (let i = 0; i < 20; i++) {
+    stream.setView(player, camera, 48);
+    await settle();
+  }
+  assert.equal(stream.ready(player), true);
+  assert.equal(stream.ready({ x: 180, z: 128 }), true, "movement uses prefetched data");
+  assert.deepEqual(rendered, ["4,4", "4,5", "5,4", "5,5"]);
+  assert.equal(stream.city.buildings.length, 2, "unrendered geometry remains physical");
+  assert.ok(stream.chunks.size > rendered.length);
+  const downloads = requests.length;
+  stream.setView(player, player, 48);
+  assert.deepEqual(rendered, ["0,0", "0,1", "1,0", "1,1"]);
+  assert.equal(
+    requests.length,
+    downloads,
+    "cached collision chunks can become scenery",
+  );
+  assert.equal(stream.city.buildings[0].x, 127);
 });
 test("late responses cannot repopulate an evicted neighborhood", async () => {
   const store = new CityStore(fixture());
@@ -105,7 +160,7 @@ test("late responses cannot repopulate an evicted neighborhood", async () => {
     stream.setView(undefined, { x: 650, z: 650 }, 48);
     await settle();
   }
-  assert.equal(stream.ready({ x: 650, z: 650 }), true);
+  assert.equal(stream.ready({ x: 650, z: 650 }, 48), true);
   assert.ok(
     [...stream.chunks.keys()].every((key) => chunksAround(650, 650, 48).includes(key)),
   );
@@ -144,7 +199,7 @@ test("failed or wrong-map chunks remain unavailable and retry without accepting 
   await new Promise((r) => setTimeout(r, 1010));
   stream.setView(undefined, { x: 20, z: 20 }, 48);
   await settle();
-  assert.equal(stream.ready({ x: 20, z: 20 }), true);
+  assert.equal(stream.ready({ x: 20, z: 20 }, 48), true);
   assert.equal(stream.error, "");
   const wrong = new CityStream(store.manifest, () => {}, (async (url) => {
     const parts = String(url).split("/"),
