@@ -37,7 +37,7 @@ import { Effects } from "./effects/index.ts";
 import { DebugCamera } from "./camera/debug.ts";
 import { EnvironmentLighting } from "./lighting/index.ts";
 import { idle, type Input } from "../shared/world.ts";
-import { RAMP, rampSlope, carGrounded } from "../shared/physics/ramps.ts";
+import { rampSlope, carGrounded } from "../shared/physics/ramps.ts";
 import { rampMesh } from "./models/ramp.ts";
 import { TyreTracks } from "./effects/tyre-tracks.ts";
 import { CAR_WHEEL_MOUNTS } from "./models/car-wheels.ts";
@@ -383,20 +383,9 @@ export class CityScene {
     }
     for (const ramp of city.ramps) {
       const m = rampMesh(this.scene, ramp.x, ramp.z);
-      m.material = this.mat("#b59263");
+      m.material = this.mat("#ffffff");
       m.receiveShadows = true;
       this.shadows.addShadowCaster(m);
-      for (let i = -1; i <= 1; i++)
-        this.box(
-          "ramp stripe",
-          ramp.x + i * 1.4,
-          0.3 + RAMP.height / 2 + 0.02,
-          ramp.z,
-          0.3,
-          0.025,
-          Math.hypot(RAMP.length, RAMP.height) - 0.2,
-          "#eac66d",
-        ).rotation.x = -Math.atan(rampSlope);
     }
   }
   aimPoint(x: number, y: number) {
