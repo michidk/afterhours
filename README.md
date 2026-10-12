@@ -48,22 +48,22 @@ After generating or changing the saved city or static rendering recipes, run `bu
 
 ## Controls
 
-| Key                | Action                                                                                      |
-| ------------------ | ------------------------------------------------------------------------------------------- |
+| Key                | Action                                                                                                                       |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
 | WASD / arrows      | Walk, swim, or fly helicopters; cars and watercraft use W/S throttle and A/D steer; planes use W throttle, S brake, A/D turn |
-| Shift              | Sprint on foot (left or right Shift)                                                        |
-| Space              | Sprint / car and watercraft handbrake / aircraft climb                                      |
-| Ctrl               | Aircraft descend / jetpack descent                                                          |
-| F                  | Take a seat, exit, or collect a weapon, ammo, or jetpack; airborne exits deploy a parachute |
-| Mouse              | Aim the upper body independently of walking; left click attacks                             |
-| J                  | Punch / swing / fire                                                                        |
-| 1–4                | Equip inventory slot                                                                        |
-| G / R              | Drop active jetpack or equipped weapon / reload                                             |
-| E / Q              | Same as Space / Ctrl: aircraft climb / descend; enabled jetpack thrust / descent            |
-| B                  | Enable or disable equipped jetpack                                                          |
-| L                  | Toggle car headlights and taillights from the driver seat                                   |
-| Enter / H / Escape | Chat / help / close panels                                                                  |
-| M / N / F1         | Island map / mute sound / development menu with tools, clock, and camera selection          |
+| Shift              | Sprint on foot (left or right Shift)                                                                                         |
+| Space              | Sprint / car and watercraft handbrake / aircraft climb                                                                       |
+| Ctrl               | Aircraft descend / jetpack descent                                                                                           |
+| F                  | Take a seat, exit, or collect a weapon, ammo, or jetpack; airborne exits deploy a parachute                                  |
+| Mouse              | Aim the upper body independently of walking; left click attacks                                                              |
+| J                  | Punch / swing / fire                                                                                                         |
+| 1–4                | Equip inventory slot                                                                                                         |
+| G / R              | Drop active jetpack or equipped weapon / reload                                                                              |
+| E / Q              | Same as Space / Ctrl: aircraft climb / descend; enabled jetpack thrust / descent                                             |
+| B                  | Enable or disable equipped jetpack                                                                                           |
+| L                  | Toggle car headlights and taillights from the driver seat                                                                    |
+| Enter / H / Escape | Chat / help / close panels                                                                                                   |
+| M / N / F1         | Island map / mute sound / development menu with tools, clock, and camera selection                                           |
 
 Standard gamepads use the left stick to move and steer, LT/RT to reverse/accelerate, A to brake or sprint, X to attack, Y to enter/exit, LB/RB to descend/ascend, B to reload, and the D-pad for inventory slots. View opens the map, Menu opens help, and the stick clicks toggle the jetpack and vehicle lights. Analog sticks and triggers retain proportional input. Keyboard car steering builds to full lock over about a third of a second and recentres faster when released instead of snapping between extremes.
 
@@ -112,7 +112,7 @@ Walking or sprinting into a parked car blocks/slides the character without damag
 
 `client/` separates rendering, effects, input, camera, networking/prediction, audio, and UI. `server/` separates hosting, city loading, sessions, scheduling, simulation, AI, combat, inventory, and lifecycle. `shared/` contains contracts, schemas, data catalogs, spatial queries, binary codec, navigation, and prediction-safe movement. Automated import checks enforce these boundaries.
 
-The server steps at 30 Hz with 120 Hz contact substeps, and snapshots at 15 Hz. Inputs have sequence/timestamp metadata and acknowledgements. An elapsed-time input clock preserves 30 Hz prediction across delayed browser callbacks and resets after long stalls. Clients predict local movement and contacts against private copies of nearby bodies, replay unacknowledged inputs, smooth position/yaw corrections, interpolate remote state with a 100 ms buffer and playback matched to measured server-time cadence, and cap extrapolation. Prediction replays up to one second of pending controls, with collision coverage sized for closing speeds; longer outages hold the bounded pose until acknowledgements resume. Damage, knockdowns, combat, and ownership remain server decisions. Tyre trails are cosmetic: they follow rendered wheel slip immediately, including local prediction and remote interpolation, without waiting for server events. New marks upload in the same frame; fading stays batched and bounded. Ranged and melee hits use up to 200 ms of validated target rewind; ranged hits also use footprint rays and walls.
+The server steps at 30 Hz with 120 Hz contact substeps, and snapshots at 15 Hz. AI chooses controls once per server tick and holds them across contact substeps. Inputs have sequence/timestamp metadata and acknowledgements. An elapsed-time input clock preserves 30 Hz prediction across delayed browser callbacks and resets after long stalls. Clients predict local movement and contacts against private copies of nearby bodies, replay unacknowledged inputs, smooth position/yaw corrections, interpolate remote state with a 100 ms buffer and playback matched to measured server-time cadence, and cap extrapolation. Prediction replays up to one second of pending controls, with collision coverage sized for closing speeds; longer outages hold the bounded pose until acknowledgements resume. Damage, knockdowns, combat, and ownership remain server decisions. Tyre trails are cosmetic: they follow rendered wheel slip immediately, including local prediction and remote interpolation, without waiting for server events. New marks upload in the same frame; fading stays batched and bounded. Ranged and melee hits use up to 200 ms of validated target rewind; ranged hits also use footprint rays and walls.
 
 Snapshots use MessagePack, integer pose quantization, changed-field deltas, periodic full recovery, and a 220 m interest radius. Origin/schema/payload/action/message limits, idle input release, exclusive driver ownership and seat assignment, and 15-second reconnect tokens protect session consistency.
 

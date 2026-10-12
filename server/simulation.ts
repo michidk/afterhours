@@ -13,6 +13,7 @@ import {
   type WorldEvent,
 } from "../shared/world.ts";
 import {
+  type Drive,
   carForces,
   carAltitude,
   carGrounded,
@@ -65,6 +66,7 @@ import { Destruction } from "./destruction.ts";
 import type { Vec3 } from "../shared/destruction.ts";
 import { Grenades } from "./grenades.ts";
 import type { PickupPayload } from "../shared/protocol.ts";
+import type { Intent } from "./citizens.ts";
 export class Simulation {
   city: City;
   entities = new Map<string, Entity>();
@@ -617,7 +619,16 @@ export class Simulation {
   tick(dt: number) {
     const steps = Math.max(1, Math.ceil(dt / (1 / 120))),
       h = dt / steps;
-    for (let i = 0; i < steps; i++) this.step(h);
+    // Choose AI controls at 30 Hz; keep contact integration at 120 Hz.
+    const intents = new Map<Entity, Intent>();
+    const drives = new Map<Entity, Drive>();
+    for (let i = 0; i < steps; i++) {
+      if (i % 4 === 0) {
+        intents.clear();
+        drives.clear();
+      }
+      this.step(h, Math.min(4, steps - i) * h, intents, drives);
+    }
     this.traffic.update(this);
     // Publish current positions, including contact corrections and replenished traffic.
     this.spatial.clear();
@@ -628,7 +639,12 @@ export class Simulation {
     this.combat.record(this);
     if (this.events.length > 512) this.events.splice(0, this.events.length - 512);
   }
-  private step(dt: number) {
+  private step(
+    dt: number,
+    decisionDt: number,
+    intents: Map<Entity, Intent>,
+    drives: Map<Entity, Drive>,
+  ) {
     this.time += dt;
     this.grenades.step(
       this.city,
@@ -673,14 +689,16 @@ export class Simulation {
       if (!vehicle(e)) {
         if (!e.down) {
           const aiDirection = e.ai
-            ? this.ai.pedestrian(
+            ? (intents.get(e) ??
+              this.ai.pedestrian(
                 e,
                 this.spatial.query(e.x, e.z, 30),
-                dt,
+                decisionDt,
                 this.time,
                 this.entities,
-              )
+              ))
             : undefined;
+          if (aiDirection) intents.set(e, aiDirection);
           characterForces(
             e,
             input,
@@ -710,22 +728,25 @@ export class Simulation {
         const drive = e.wreck
           ? { throttle: 0, steer: 0, brake: true }
           : e.ai
-            ? this.ai.car(e, this.spatial.query(e.x, e.z, 24), this.time, dt)
+            ? (drives.get(e) ??
+              this.ai.car(e, this.spatial.query(e.x, e.z, 24), this.time, decisionDt))
             : {
                 throttle: inputY(input),
                 steer: inputX(input),
                 brake: input.brake,
               };
+        if (e.ai) drives.set(e, drive);
         carForces(e, drive, dt, carGrounded(e, this.city));
       } else if (watercraft(e.kind)) {
         const drive =
           e.ai && !e.wreck
-            ? this.ai.watercraft(e, this.spatial.query(e.x, e.z, 30))
+            ? (drives.get(e) ?? this.ai.watercraft(e, this.spatial.query(e.x, e.z, 30)))
             : {
                 throttle: inputY(input),
                 steer: inputX(input),
                 brake: input.brake || !!e.wreck,
               };
+        if (e.ai) drives.set(e, drive);
         watercraftForces(e, drive, dt);
       } else if (
         !e.driver &&
