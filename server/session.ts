@@ -20,12 +20,13 @@ interface Client {
   token: string;
   queue: InputFrame[];
   ack: number;
+  ackTimestamp?: number;
   lastSeq: number;
   last: number;
   lastInput: number;
   count: number;
   window: number;
-  action: number;
+  actions: Map<string, number>;
   frame: number;
   known: Map<string, string>;
   view?: { x: number; z: number };
@@ -87,7 +88,7 @@ export class Sessions {
         lastInput: 0,
         count: 0,
         window: Date.now(),
-        action: 0,
+        actions: new Map(),
         frame: 0,
         known: new Map(),
       };
@@ -102,8 +103,9 @@ export class Sessions {
       });
     });
   }
-  send(ws: WebSocket, data: unknown) {
+  send(ws: WebSocket, data: object) {
     if (ws.readyState !== WebSocket.OPEN || ws.bufferedAmount > 256_000) return;
+    data = { time: this.sim.time, ...data };
     const payload =
       (data as Snapshot).type === "state"
         ? encodeSnapshot(data as Snapshot)
@@ -213,7 +215,7 @@ export class Sessions {
       return;
     }
     if (m.type === "debugCommand") {
-      if (now - c.action < 100) {
+      if (now - (c.actions.get(m.type) ?? -Infinity) < 100) {
         this.send(ws, {
           type: "debugResult",
           requestId: m.requestId,
@@ -221,7 +223,7 @@ export class Sessions {
         });
         return;
       }
-      c.action = now;
+      c.actions.set(m.type, now);
       try {
         const state = executeDebug(this.sim, p, m.command);
         if (m.command.kind === "teleport") c.queue = [];
@@ -235,8 +237,8 @@ export class Sessions {
       }
       return;
     }
-    if (now - c.action < 100) return;
-    c.action = now;
+    if (now - (c.actions.get(m.type) ?? -Infinity) < 100) return;
+    c.actions.set(m.type, now);
     if (m.type === "lights") this.sim.toggleLights(c.id);
     if (m.type === "interact") this.sim.interact(c.id);
     if (m.type === "drop") this.sim.inventory.drop(p, this.sim.time);
@@ -309,6 +311,7 @@ export class Sessions {
       const frame = c.queue.shift();
       if (frame) {
         c.ack = frame.seq;
+        c.ackTimestamp = frame.timestamp;
         this.sim.inputs.set(c.id, frame.input);
       } else if (now - c.lastInput > 250) this.sim.inputs.set(c.id, idle());
     }
@@ -389,6 +392,7 @@ export class Sessions {
         day: this.sim.day,
         dayRate: this.sim.dayRate,
         ack: c.ack,
+        ackTimestamp: c.ackTimestamp,
         entities,
         removed: [...c.known.keys()].filter((id) => !known.has(id)),
         events: events.filter(

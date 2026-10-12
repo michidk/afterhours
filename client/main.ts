@@ -5,6 +5,7 @@ import type { Pickup } from "../shared/protocol.ts";
 import "./style.css";
 import { mountUI } from "./ui/index.ts";
 import { CityMap } from "./ui/city-map.ts";
+import { updateNetworkStats } from "./ui/network-stats.ts";
 import { PlayerList } from "./ui/player-list.ts";
 import { Nameplates } from "./ui/nameplates.ts";
 import { GameNetwork } from "./network/index.ts";
@@ -61,7 +62,7 @@ function toast(message: string) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => $("#toast").classList.add("hidden"), 4000);
 }
-function send(data: unknown) {
+function send(data: object) {
   network?.send(data);
 }
 function loading(text: string) {
@@ -83,6 +84,7 @@ $("#join").addEventListener("submit", (event) => {
         }
         playerId = m.id;
         debugAllowed = m.debug;
+        if (!debugAllowed) $("#debug").classList.add("hidden");
         document.querySelector(".debug-hint")?.classList.toggle("hidden", !m.debug);
         if (debugAllowed && network) {
           automation = new AgentInterface(network, scene, setCamera);
@@ -181,7 +183,7 @@ window.addEventListener("keydown", (event) => {
     )
   )
     event.preventDefault();
-  keys.add(event.code);
+  controls.press(event.code);
   if (event.repeat) return;
   if (event.code === "KeyM") {
     audio.ui();
@@ -190,7 +192,7 @@ window.addEventListener("keydown", (event) => {
   }
   if (cityMap?.open) {
     if (event.code === "Escape") cityMap.setOpen(false);
-    keys.clear();
+    controls.clear();
     return;
   }
   if (event.code === "Escape" && scene.debugCamera.active) setCamera("follow");
@@ -215,7 +217,7 @@ window.addEventListener("keydown", (event) => {
   }
   if (event.code === "Enter") {
     $<HTMLInputElement>("#chat").focus();
-    keys.clear();
+    controls.clear();
   }
   if (event.code === "Escape") {
     $("#debug").classList.add("hidden");
@@ -267,15 +269,13 @@ canvas.addEventListener("pointermove", (e) => {
     if (e.buttons & 2) scene.debugCamera.look(e.movementX, e.movementY);
     return;
   }
-  const point = scene?.aimPoint(e.clientX, e.clientY),
-    p = network?.prediction?.body;
-  if (point && p && !p.driver) controls.aim = Math.atan2(point.x - p.x, point.z - p.z);
+  controls.pointer = { x: e.clientX, y: e.clientY };
 });
 canvas.addEventListener("pointerdown", (event) => {
   if (joined) {
     audio.unlock();
     if (!cityMap?.open && !scene.debugCamera.active && event.button === 0)
-      controls.mouseDown = true;
+      controls.click();
   }
 });
 canvas.addEventListener("contextmenu", (event) => {
@@ -293,15 +293,27 @@ canvas.addEventListener(
 );
 window.addEventListener("pointerup", () => (controls.mouseDown = false));
 setInterval(() => {
+  const pointer = controls.pointer;
+  const p = network?.entities.get(network.playerId);
+  const position = p && scene?.nodes.get(p.id)?.position;
+  const point = pointer && scene?.aimPoint(pointer.x, pointer.y);
+  controls.aim =
+    point && position && !p?.vehicle
+      ? Math.atan2(point.x - position.x, point.z - position.z)
+      : undefined;
   if (joined && !document.hidden)
     network?.input(
       cityMap?.open ||
         scene.debugCamera.active ||
         ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName || "")
         ? idle()
-        : automation?.input || controls.read(),
+        : automation?.input || controls.sample(),
     );
 }, 1000 / 30);
+setInterval(() => {
+  if (debugAllowed && network && !$("#debug").classList.contains("hidden"))
+    updateNetworkStats($("#network-stats"), network);
+}, 250);
 const map = $<HTMLCanvasElement>("#minimap").getContext("2d")!;
 function drawMap(p: Entity) {
   const scale = 0.9;

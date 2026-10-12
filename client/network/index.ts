@@ -32,6 +32,16 @@ export class GameNetwork {
   serverTime = 0;
   received = 0;
   latency = 0;
+  rtt: number | undefined;
+  jitter = 0;
+  ack = -1;
+  ackTimestamp: number | undefined;
+  snapshotInterval = 0;
+  resyncs = 0;
+  private welcomed = false;
+  private heartbeat: ReturnType<typeof setInterval> | undefined;
+  private inputTimes: number[] = [];
+  private snapshotTimes: number[] = [];
   token = "";
   private timeline = new SnapshotTimeline();
   private retry: ReturnType<typeof setTimeout> | undefined;
@@ -55,6 +65,14 @@ export class GameNetwork {
   worldReady = (_point: { x: number; z: number }) => true;
   connect() {
     this.closed = false;
+    this.welcomed = false;
+    this.rtt = undefined;
+    this.jitter = this.latency = this.received = this.snapshotInterval = 0;
+    this.ack = -1;
+    this.ackTimestamp = undefined;
+    this.inputTimes = [];
+    this.snapshotTimes = [];
+    this.resyncs = 0;
     this.hooks.status("connecting");
     this.socket = new WebSocket(
       `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`,
@@ -97,6 +115,11 @@ export class GameNetwork {
           this.close();
           return;
         }
+        this.welcomed = true;
+        clearInterval(this.heartbeat);
+        const ping = () => this.send({ type: "ping", timestamp: performance.now() });
+        ping();
+        this.heartbeat = setInterval(ping, 1000);
         this.playerId = m.id;
         this.token = m.token;
         this.prediction = new Prediction(this.city ?? emptyCity(m.map), (point) =>
@@ -110,9 +133,11 @@ export class GameNetwork {
         this.hooks.status("connected");
       }
       if (m.type === "state") {
+        if (!this.welcomed) return;
         const snapshot = m as Snapshot;
         if (snapshot.version !== VERSION || snapshot.frame <= this.frame) return;
         if (!snapshot.full && snapshot.base !== this.frame) {
+          this.resyncs++;
           this.send({ type: "resync" });
           return;
         }
@@ -121,7 +146,13 @@ export class GameNetwork {
         for (const e of snapshot.entities) applyPatch(this.entities, e);
         this.frame = snapshot.frame;
         this.serverTime = snapshot.time;
-        this.received = performance.now();
+        const now = performance.now();
+        this.snapshotInterval = this.received ? now - this.received : 0;
+        this.received = now;
+        this.snapshotTimes.push(now);
+        this.snapshotTimes = this.snapshotTimes.filter((at) => at >= now - 1000);
+        this.ack = snapshot.ack;
+        this.ackTimestamp = snapshot.ackTimestamp;
         const entities = [...this.entities.values()];
         this.timeline.push(snapshot.time, entities, this.received);
         const p = this.entities.get(this.playerId);
@@ -134,9 +165,19 @@ export class GameNetwork {
         if (this.city) setBrokenProps(this.city, m.brokenProps);
         this.hooks.destruction?.(m.brokenProps);
       }
-      if (m.type === "pong") this.latency = (performance.now() - m.timestamp) / 2;
+      if (m.type === "pong" && Number.isFinite(m.timestamp)) {
+        const rtt = Math.max(0, performance.now() - m.timestamp);
+        this.jitter =
+          this.rtt === undefined
+            ? 0
+            : this.jitter * 0.75 + Math.abs(rtt - this.rtt) * 0.25;
+        this.rtt = rtt;
+        this.latency = rtt / 2;
+      }
     };
     this.socket.onclose = () => {
+      this.welcomed = false;
+      clearInterval(this.heartbeat);
       for (const request of this.debugRequests.values()) {
         clearTimeout(request.timer);
         request.reject(Error("Connection closed"));
@@ -149,25 +190,60 @@ export class GameNetwork {
     };
     this.socket.onerror = () => this.hooks.status("connection error");
   }
-  send(data: unknown) {
+  send(data: object) {
     if (this.socket?.readyState === WebSocket.OPEN)
-      this.socket.send(JSON.stringify(data));
+      this.socket.send(JSON.stringify({ timestamp: performance.now(), ...data }));
   }
   input(input: Input) {
-    if (this.socket?.readyState !== WebSocket.OPEN || !this.prediction) return;
+    if (
+      this.socket?.readyState !== WebSocket.OPEN ||
+      !this.welcomed ||
+      !this.prediction
+    )
+      return;
     const timestamp = performance.now(),
       frame: InputFrame = {
         seq: this.seq++,
         timestamp,
         input: {
           ...input,
-          shotTime:
+          shotTime: Math.max(
+            0,
             this.serverTime + (timestamp - this.received) / 1000 - this.latency / 1000,
+          ),
         },
       };
     this.send({ type: "input", seq: frame.seq, timestamp, ...frame.input });
     this.prediction.input(frame, [...this.entities.values()]);
-    if (frame.seq % 60 === 0) this.send({ type: "ping", timestamp });
+    this.inputTimes.push(timestamp);
+    this.inputTimes = this.inputTimes.filter((at) => at >= timestamp - 1000);
+  }
+  stats(now = performance.now()) {
+    const p = this.prediction;
+    return {
+      connected: this.welcomed && this.socket?.readyState === WebSocket.OPEN,
+      rtt: this.rtt,
+      jitter: this.jitter,
+      snapshotAge: this.received ? Math.max(0, now - this.received) : undefined,
+      snapshotInterval: this.snapshotInterval,
+      snapshotsPerSecond: this.snapshotTimes.filter((at) => at >= now - 1000).length,
+      inputsPerSecond: this.inputTimes.filter((at) => at >= now - 1000).length,
+      seq: this.seq - 1,
+      ack: this.ack,
+      ackAge:
+        this.ackTimestamp === undefined
+          ? undefined
+          : Math.max(0, now - this.ackTimestamp),
+      pending: p?.pending.length ?? 0,
+      prediction: p?.status ?? "waiting for authority",
+      correction: p?.lastCorrection.distance ?? 0,
+      angle: ((p?.lastCorrection.angle ?? 0) * 180) / Math.PI,
+      offset: p ? Math.hypot(p.offset.x, p.offset.z, p.offset.y) : 0,
+      corrections: p?.corrections ?? 0,
+      buffered: this.socket?.bufferedAmount ?? 0,
+      resyncs: this.resyncs,
+      serverTime: this.serverTime,
+    };
   }
   debug(command: DebugCommand): Promise<DebugState> {
     if (this.socket?.readyState !== WebSocket.OPEN)
@@ -233,6 +309,8 @@ export class GameNetwork {
   }
   close() {
     this.closed = true;
+    this.welcomed = false;
+    clearInterval(this.heartbeat);
     clearTimeout(this.retry);
     this.socket?.close();
   }

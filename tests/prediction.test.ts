@@ -575,3 +575,50 @@ test("remote traffic remains continuous under uneven snapshot delivery", () => {
     "a lost connection stops extrapolation",
   );
 });
+
+test("corrections restore physics immediately and ease position and wrapped yaw only in render", () => {
+  const s = new Simulation(generateCity());
+  s.entities.clear();
+  s.city.buildings = [];
+  s.city.props = [];
+  const p = s.join("Correction", "#ffffff");
+  p.x = p.z = 0;
+  p.angle = Math.PI - 0.05;
+  const prediction = new Prediction(s.city);
+  prediction.reconcile(p, [p], -1);
+  prediction.render(1000);
+  const corrected = { ...p, x: 0.1, angle: -Math.PI + 0.05 };
+  prediction.reconcile(corrected, [corrected], -1);
+  assert.equal(prediction.body!.x, 0.1);
+  assert.equal(prediction.body!.angle, corrected.angle);
+  const initial = prediction.render(1000)!.body;
+  assert.ok(Math.abs(initial.x) < 1e-8, "retain the old displayed position at arrival");
+  assert.ok(
+    Math.abs(prediction.offset.angle + 0.1) < 1e-8,
+    "turn along shortest arc across pi",
+  );
+  const state = structuredClone(prediction.body);
+  const smallBefore = Math.abs(prediction.offset.x);
+  prediction.render(1050);
+  const smallFraction = Math.abs(prediction.offset.x) / smallBefore;
+  assert.ok(smallFraction > 0.5 && smallFraction < 1);
+  assert.deepEqual(prediction.body, state, "visual easing never changes physics");
+  const larger = { ...corrected, x: 1.1 };
+  prediction.reconcile(larger, [larger], -1);
+  const largeBefore = Math.abs(prediction.offset.x);
+  prediction.render(1100);
+  assert.ok(
+    Math.abs(prediction.offset.x) / largeBefore < smallFraction,
+    "large errors settle faster",
+  );
+  prediction.render(10000);
+  assert.equal(
+    prediction.offset.x,
+    0,
+    "background pause must not retain stale correction",
+  );
+  const teleport = { ...larger, x: 20 };
+  prediction.reconcile(teleport, [teleport], -1);
+  assert.equal(prediction.render(10000)!.body.x, 20, "teleports snap immediately");
+  s.destruction.dispose();
+});

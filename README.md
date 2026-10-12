@@ -54,6 +54,8 @@ Startup downloads the spawn chunks before building their 3D scenery, so mesh con
 | Enter / H / Escape | Chat / help / close panels                                                                  |
 | M / N / F1         | Island map / mute sound / development menu with tools, clock, and camera selection          |
 
+On debug-enabled servers, F1 shows a live networking panel: round-trip ping, ping variation, snapshot age/gap and rate, sent/applied input sequence numbers, applied input age, pending replay, prediction status, correction distance/yaw, visual offset, outgoing socket buffer, and resync count. Production servers require `ALLOW_DEBUG=1`.
+
 F1 also selects an elevated free camera or first-person fly camera. Both move independently of the player: WASD/arrows move, E/Q raise/lower, Shift or Space moves faster, and the wheel zooms without fixed zoom caps. Right-drag looks around in fly mode. Escape returns to player follow and restores gameplay controls. In debug camera mode the server receives idle player controls while the city keeps simulating. [Detailed controls and recorded day/night comparisons](docs/debugging.md).
 
 M toggles the full island map; Escape or the Close button dismisses it. Drag to pan, scroll or use +/- to zoom, and Find me recentres on your live position. Island restores the full overview. The server sends a compact road/park/landmark overview on demand, separate from 3D chunk streaming. The map shows nearby players within normal snapshot interest; it does not reveal the entire server population. Opening it releases movement/attack controls while the world continues running. N toggles sound. Both Shift keys sprint on foot without applying a vehicle handbrake.

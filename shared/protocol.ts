@@ -22,7 +22,7 @@ const controls = {
   aim: z.number().finite().min(-Math.PI).max(Math.PI).optional(),
   shotTime: z.number().finite().nonnegative().optional(),
 };
-export const messageSchema = z.discriminatedUnion("type", [
+const incomingMessageSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("join"),
     version: z.literal(VERSION),
@@ -98,6 +98,9 @@ export const messageSchema = z.discriminatedUnion("type", [
     timestamp: z.number().finite().nonnegative(),
   }),
 ]);
+export const messageSchema = incomingMessageSchema.and(
+  z.object({ timestamp: z.number().finite().nonnegative().optional() }),
+);
 export type ClientMessage = z.infer<typeof messageSchema>;
 export interface PlayerSummary {
   id: string;
@@ -135,6 +138,7 @@ export interface Snapshot {
   day: number;
   dayRate?: number;
   ack: number;
+  ackTimestamp?: number;
   entities: EntityPatch[];
   removed: string[];
   events: WorldEvent[];

@@ -158,6 +158,53 @@ for (const delay of [0, 150]) {
       return p && { speed: Math.hypot(p.vx, p.vz), z: p.z };
     });
     expect(stopped?.speed).toBeLessThan(0.05);
+    await page.keyboard.press("F1");
+    await expect(page.locator("#debug")).toBeVisible();
+    await expect(page.locator("#network-stats")).toContainText("Server ping (RTT)");
+    await expect(
+      page
+        .locator("#network-stats dt", { hasText: "Server ping (RTT)" })
+        .locator("+ dd"),
+    ).toHaveText(/\d+ ms/);
+    await expect(
+      page
+        .locator("#network-stats dt", { hasText: "Sent / applied input" })
+        .locator("+ dd"),
+    ).toHaveText(/\d+ \/ \d+/);
+    await page.screenshot({ path: testInfo.outputPath("networking.png") });
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#debug")).toBeHidden();
+    await page.mouse.move(500, 300);
+    await page.waitForFunction(() => {
+      const d = window.afterhoursDebug;
+      const p = d?.network.entities.get(d.network.playerId);
+      const node = p && d?.scene.nodes.get(p.id);
+      const point = d?.scene.aimPoint(500, 300);
+      if (!p || !node || !point) return false;
+      const target = Math.atan2(point.x - node.position.x, point.z - node.position.z);
+      const difference = (a: number, b: number) =>
+        Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+      return (
+        difference(p.angle, target) < 0.15 &&
+        difference(node.rotation.y, p.angle) < 0.15
+      );
+    });
+    await page.keyboard.down("a");
+    await page.waitForTimeout(1000);
+    await page.keyboard.up("a");
+    await page.waitForFunction(() => {
+      const d = window.afterhoursDebug;
+      const p = d?.network.entities.get(d.network.playerId);
+      const node = p && d?.scene.nodes.get(p.id);
+      const point = d?.scene.aimPoint(500, 300);
+      if (!p || !node || !point) return false;
+      const target = Math.atan2(point.x - node.position.x, point.z - node.position.z);
+      return (
+        Math.abs(Math.atan2(Math.sin(p.angle - target), Math.cos(p.angle - target))) <
+        0.15
+      );
+    });
+    expect(errors).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath("walking.png") });
   });
 }

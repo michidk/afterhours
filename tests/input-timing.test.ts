@@ -36,6 +36,27 @@ test("an input burst cannot delay the newest stop, duplicate it, or accelerate a
     };
     await send({ type: "join", version: VERSION, name: "Burst", color: "#ffffff" });
     const session = sessions.clients.get(peer)!;
+    const chats: string[] = [];
+    ws.on("message", (raw, binary) => {
+      if (!binary) {
+        const m = JSON.parse(String(raw));
+        assert.equal(typeof m.time, "number", "server messages carry simulation time");
+        if (m.type === "chat") chats.push(m.text);
+      }
+    });
+    const chatReceived = new Promise<void>((resolve) => {
+      ws.on("message", (raw, binary) => {
+        if (!binary && JSON.parse(String(raw)).type === "chat") resolve();
+      });
+    });
+    await send({ type: "reload", timestamp: 1 });
+    await send({ type: "chat", timestamp: 2, text: "Action delivered" });
+    await chatReceived;
+    assert.deepEqual(
+      chats,
+      ["Action delivered"],
+      "one action cannot suppress another type",
+    );
     const p = sim.entities.get(session.id!)!;
     p.x = p.z = 0;
     const prediction = new Prediction(sim.city);
@@ -87,6 +108,11 @@ test("an input burst cannot delay the newest stop, duplicate it, or accelerate a
     });
     sessions.broadcast();
     const snapshot = await received;
+    assert.equal(
+      snapshot.ackTimestamp,
+      22 * 33,
+      "ack echoes applied browser timestamp",
+    );
     assert.equal(
       snapshot.ack,
       22,

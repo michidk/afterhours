@@ -36,7 +36,13 @@ export class AgentClient {
       });
       socket.on("open", () =>
         socket.send(
-          JSON.stringify({ type: "join", version: VERSION, name, color: "#55a9b8" }),
+          JSON.stringify({
+            type: "join",
+            timestamp: performance.now(),
+            version: VERSION,
+            name,
+            color: "#55a9b8",
+          }),
         ),
       );
       socket.on("message", (raw, binary) => {
@@ -70,8 +76,8 @@ export class AgentClient {
     });
     return client;
   }
-  send(message: unknown) {
-    this.socket.send(JSON.stringify(message));
+  send(message: object) {
+    this.socket.send(JSON.stringify({ timestamp: performance.now(), ...message }));
   }
   async command(command: DebugCommand): Promise<DebugState> {
     const result = this.commandQueue.then(() => this.executeCommand(command));

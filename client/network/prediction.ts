@@ -12,6 +12,7 @@ export class Prediction {
   body: Entity | undefined;
   ownership = "";
   corrections = 0;
+  lastCorrection = { distance: 0, angle: 0 };
   offset = { x: 0, z: 0, y: 0, angle: 0 };
   lastRender = 0;
   private lastInput: InputFrame | undefined;
@@ -33,6 +34,13 @@ export class Prediction {
     this.shadows = [];
     this.suspended = false;
     this.discardedThrough = -1;
+    this.lastRender = 0;
+    this.lastCorrection = { distance: 0, angle: 0 };
+  }
+  get status() {
+    if (!this.body) return "waiting for authority";
+    if (!this.worldReady(this.body)) return "waiting for map";
+    return this.suspended ? "waiting for acknowledgements" : "predicting";
   }
   reconcile(player: Entity, entities: Entity[], ack: number) {
     const authoritative = entities.find((e) => e.id === (player.vehicle || player.id));
@@ -87,7 +95,11 @@ export class Prediction {
       const dx = previous.x - this.body.x,
         dz = previous.z - this.body.z,
         dy = previous.y - this.body.y;
-      if (Math.hypot(dx, dz) > 0.3) this.corrections++;
+      this.lastCorrection = {
+        distance: Math.hypot(dx, dz, dy),
+        angle: Math.abs(wrap(previous.angle - this.body.angle)),
+      };
+      if (this.lastCorrection.distance > 0.3) this.corrections++;
       if (Math.hypot(dx, dz, dy) < 3) {
         this.offset.x += dx;
         this.offset.z += dz;
@@ -101,12 +113,21 @@ export class Prediction {
     }
   }
   render(now: number) {
-    const decay = Math.exp(-Math.min(0.1, (now - this.lastRender) / 1000) * 12);
+    const seconds = Math.max(0, (now - this.lastRender) / 1000);
+    const distance = Math.hypot(this.offset.x, this.offset.z, this.offset.y);
+    // Smooth only presentation: small errors settle gently, large errors catch up faster.
+    const decay = Math.exp(-seconds * (6 + 12 * Math.min(1, distance)));
+    const angleDecay = Math.exp(
+      -seconds * (6 + 12 * Math.min(1, Math.abs(this.offset.angle))),
+    );
     this.lastRender = now;
     this.offset.x *= decay;
     this.offset.z *= decay;
     this.offset.y *= decay;
-    this.offset.angle *= decay;
+    this.offset.angle *= angleDecay;
+    if (Math.hypot(this.offset.x, this.offset.z, this.offset.y) < 0.001)
+      this.offset.x = this.offset.z = this.offset.y = 0;
+    if (Math.abs(this.offset.angle) < 0.00001) this.offset.angle = 0;
     if (!this.body || this.suspended || !this.worldReady(this.body)) return undefined;
     const pose = {
       ...this.body,

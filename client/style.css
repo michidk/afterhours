@@ -852,3 +852,30 @@ kbd {
 #speed {
   font-variant-numeric: tabular-nums;
 }
+
+.debug details {
+  margin: 16px 0;
+}
+.debug summary {
+  cursor: pointer;
+  font-size: 12px;
+}
+#network-stats {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 7px 10px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+#network-stats dt {
+  color: #b3c7c0;
+}
+#network-stats dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.debug {
+  width: min(360px, calc(100vw - 32px));
+  right: 16px;
+}
