@@ -2,9 +2,8 @@ import { buildCharacter } from "../models/character.ts";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { Color4 } from "@babylonjs/core/Maths/math.color";
 import { ParticleSystem } from "@babylonjs/core/Particles/particleSystem";
-import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
+import { createParticles } from "../effects/particles.ts";
 import type { Destructible, DebrisState } from "../../shared/destruction.ts";
 import { TUNING } from "../../shared/catalog.ts";
 import type { CityScene } from "../scene.ts";
@@ -23,8 +22,7 @@ export class DestructionRenderer {
   private broken = new Set<string>();
   private frames: Frame[] = [];
   private received = 0;
-  private water = new Map<string, ParticleSystem>();
-  private waterTexture?: DynamicTexture;
+  private water = new Map<string, ParticleSystem[]>();
   constructor(private host: CityScene) {}
   syncStatic(fixtures: Destructible[]) {
     const wanted = new Set(fixtures.map((p) => p.id));
@@ -241,41 +239,22 @@ export class DestructionRenderer {
   }
   private startWater(id: string, position: Vector3) {
     if (this.water.has(id) || this.water.size >= 16) return;
-    if (!this.waterTexture) {
-      this.waterTexture = new DynamicTexture("water spray", 32, this.host.scene, false);
-      const ctx = this.waterTexture.getContext();
-      ctx.clearRect(0, 0, 32, 32);
-      ctx.fillStyle = "white";
-      ctx.beginPath();
-      ctx.arc(16, 16, 10, 0, Math.PI * 2);
-      ctx.fill();
-      this.waterTexture.update();
-    }
-    const water = new ParticleSystem(`hydrant:${id}`, 96, this.host.scene);
-    water.particleTexture = this.waterTexture;
-    water.emitter = new Vector3(position.x, 0.25, position.z);
-    water.minEmitBox = new Vector3(-0.12, 0, -0.12);
-    water.maxEmitBox = new Vector3(0.12, 0, 0.12);
-    water.direction1 = new Vector3(-0.8, 6, -0.8);
-    water.direction2 = new Vector3(0.8, 8, 0.8);
-    water.minEmitPower = 1;
-    water.maxEmitPower = 1;
-    water.gravity = new Vector3(0, -12, 0);
-    water.minLifeTime = 0.8;
-    water.maxLifeTime = 1.2;
-    water.minSize = 0.07;
-    water.maxSize = 0.2;
-    water.emitRate = 60;
-    water.color1 = new Color4(0.65, 0.9, 1, 0.8);
-    water.color2 = new Color4(0.95, 1, 1, 0.6);
-    water.colorDead = new Color4(0.65, 0.9, 1, 0);
+    const origin = new Vector3(position.x, 0.25, position.z);
+    const water = createParticles(this.host.scene, "spray", 180, origin);
+    water.emitRate = 140;
+    const mist = createParticles(this.host.scene, "mist", 48, origin.clone());
+    mist.emitRate = 16;
+    mist.direction1.set(-0.7, 1, -0.7);
+    mist.direction2.set(0.7, 2, 0.7);
     water.start();
-    this.water.set(id, water);
+    mist.start();
+    this.water.set(id, [water, mist]);
   }
+
   private stopWater(id: string) {
     const water = this.water.get(id);
     if (water) {
-      water.dispose(false, false);
+      for (const system of water) system.dispose(false, false);
       this.water.delete(id);
     }
   }
@@ -299,7 +278,6 @@ export class DestructionRenderer {
     for (const model of [...this.staticNodes.values(), ...this.debrisNodes.values()])
       this.disposeModel(model);
     for (const id of this.water.keys()) this.stopWater(id);
-    this.waterTexture?.dispose();
     this.staticNodes.clear();
     this.debrisNodes.clear();
     this.frames = [];

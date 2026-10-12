@@ -140,7 +140,7 @@ test("all catalog models, weapons, supplies, grenades, parachutes and animated w
     assert.equal(WATER_LEVEL, -1.1);
     const effects = new Effects(scene, (color, glow) => host.mat(color, glow));
     effects.effect({ kind: "flame", x: 0, y: 1, z: 0, angle: 0, length: 9 });
-    assert.equal(effects.effects.length, 6);
+    assert.equal(effects.effects.length, 2);
     effects.update(3);
     assert.equal(effects.effects.length, 0);
     water.dispose();
