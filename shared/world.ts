@@ -40,6 +40,7 @@ export interface Entity {
   name?: string;
   character?: Character;
   driver?: string;
+  lightsOn?: boolean;
   /** Vehicle occupant IDs; slot zero is the driver/pilot. Null means vacant. */
   seats?: (string | null)[];
   vehicle?: string;

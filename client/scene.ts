@@ -1,3 +1,4 @@
+import { buildHeadlightCones, CarLights } from "./models/car-lights.ts";
 import { buildCharacter } from "./models/character.ts";
 import { buildRoad } from "./models/road.ts";
 import { buildBuilding } from "./models/buildings/index.ts";
@@ -71,6 +72,7 @@ export class CityScene {
   lights: { mesh: Mesh; axis: "x" | "z" }[] = [];
   streetGlow: StandardMaterial;
   lighting: EnvironmentLighting;
+  private carLights: CarLights;
   debugCamera = new DebugCamera();
   destruction: DestructionRenderer;
   effects: Effects;
@@ -87,6 +89,7 @@ export class CityScene {
     });
     this.engine.setHardwareScalingLevel(Math.max(1, devicePixelRatio / 1.6));
     this.scene = new Scene(this.engine);
+    this.carLights = new CarLights(this.scene);
     this.scene.skipPointerMovePicking = true;
     this.scene.skipPointerDownPicking = true;
     this.scene.skipPointerUpPicking = true;
@@ -572,7 +575,7 @@ export class CityScene {
           0.06,
           "#fff1b5",
           root,
-        ).material = this.streetGlow;
+        );
         this.box(
           "taillight",
           side * 0.68,
@@ -587,6 +590,7 @@ export class CityScene {
         this.box("pillar", side * 0.81, 1.2, -0.25, 0.1, 0.7, 0.15, e.color, root);
       }
       this.box("bumper", 0, 0.4, 2.2, 1.85, 0.17, 0.1, "#c5c8bd", root);
+      buildHeadlightCones(this.scene, root);
     } else if (e.kind === "helicopter") {
       const body = MeshBuilder.CreateSphere(
         "fuselage",
@@ -637,7 +641,9 @@ export class CityScene {
     this.nodes.set(e.id, root);
     const parts = root.getChildMeshes() as Mesh[];
     this.parts.set(e.id, parts);
-    this.shadowCandidates.push(...parts);
+    this.shadowCandidates.push(
+      ...parts.filter((mesh) => mesh.name !== "headlight cone"),
+    );
     return root;
   }
   update(
@@ -698,6 +704,13 @@ export class CityScene {
           );
 
       for (const child of parts) {
+        const lit = !!e.lightsOn && !e.wreck && e.health > 0;
+        if (child.name === "headlight cone") child.setEnabled(lit);
+        if (child.name === "headlight" || child.name === "taillight")
+          child.material = this.mat(
+            child.name === "headlight" ? "#fff1b5" : "#c95343",
+            lit,
+          );
         child.visibility =
           e.wreck === undefined
             ? 1
@@ -838,6 +851,7 @@ export class CityScene {
           );
         });
     }
+    this.carLights.update(entities, this.nodes, this.target);
     this.lighting.update(this.day, this.target, dt);
     if (this.debugCamera.mode === "free")
       this.scene.fogDensity /= Math.max(1, this.debugCamera.distance / 53);

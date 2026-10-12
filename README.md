@@ -50,6 +50,7 @@ Startup downloads the spawn chunks before building their 3D scenery, so mesh con
 | G / R              | Drop active jetpack or equipped weapon / reload                                             |
 | E / Q              | Aircraft climb / descend; enabled jetpack thrust / descent                                  |
 | B                  | Enable or disable equipped jetpack                                                          |
+| L                  | Toggle car headlights and taillights from the driver seat                                   |
 | Enter / H / Escape | Chat / help / close panels                                                                  |
 | M / N / F1         | Island map / mute sound / development menu with tools, clock, and camera selection          |
 
@@ -57,7 +58,7 @@ F1 also selects an elevated free camera or first-person fly camera. Both move in
 
 M toggles the full island map; Escape or the Close button dismisses it. Drag to pan, scroll or use +/- to zoom, and Find me recentres on your live position. Island restores the full overview. The server sends a compact road/park/landmark overview on demand, separate from 3D chunk streaming. The map shows nearby players within normal snapshot interest; it does not reveal the entire server population. Opening it releases movement/attack controls while the world continues running. N toggles sound. Both Shift keys sprint on foot without applying a vehicle handbrake.
 
-Cars have four wheel forces, yaw-dependent contact velocities, front steering, rear handbrake grip recovery, SAT contacts, angular impulses, and fading tyre trails. Sedan, sport, and van models differ in mass, power, grip, durability, speed, and appearance. Damaged vehicles smoke, burn for six seconds, explode with nearby damage, and leave temporary wrecks.
+Cars have four wheel forces, yaw-dependent contact velocities, front steering, rear handbrake grip recovery, SAT contacts, angular impulses, and fading tyre trails. Sedan, sport, and van models differ in mass, power, grip, durability, speed, and appearance. AI drivers turn their lights on from 18:00 to 06:00. Player toggles persist when parked or changing drivers; wrecks lose their lights. Headlights have visible cones and illuminate nearby surfaces. Four nearby headlight spotlights are pooled; cones are cosmetic and do not cast shadows or stop at walls. Damaged vehicles smoke, burn for six seconds, explode with nearby damage, and leave temporary wrecks.
 
 The top-left player list shows everyone connected to the city, including distant players, with character colours and a YOU badge. Overhead names identify nearby players, including seated passengers. Both update on join/leave/reconnect.
 

@@ -197,6 +197,7 @@ window.addEventListener("keydown", (event) => {
   if (!scene.debugCamera.active && event.code === "KeyF") send({ type: "interact" });
   if (!scene.debugCamera.active && event.code === "KeyG") send({ type: "drop" });
   if (!scene.debugCamera.active && event.code === "KeyR") send({ type: "reload" });
+  if (!scene.debugCamera.active && event.code === "KeyL") send({ type: "lights" });
   if (!scene.debugCamera.active && event.code === "KeyB") send({ type: "jetpack" });
   if (!scene.debugCamera.active && /^Digit[1-4]$/.test(event.code))
     send({ type: "equip", slot: Number(event.code.slice(-1)) - 1 });

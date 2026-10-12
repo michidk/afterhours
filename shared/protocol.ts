@@ -46,6 +46,7 @@ export const messageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("drop") }),
   z.object({ type: z.literal("reload") }),
   z.object({ type: z.literal("jetpack") }),
+  z.object({ type: z.literal("lights") }),
   z.object({ type: z.literal("equip"), slot: z.number().int().min(0).max(3) }),
   z.object({
     type: z.literal("debugCommand"),

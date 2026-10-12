@@ -315,6 +315,19 @@ export class Simulation {
       }
     return false;
   }
+  toggleLights(id: string) {
+    const p = this.entities.get(id);
+    const car = p?.vehicle ? this.entities.get(p.vehicle) : undefined;
+    if (
+      p?.kind === "player" &&
+      !p.down &&
+      car?.kind === "car" &&
+      car.driver === id &&
+      !car.wreck &&
+      car.health > 0
+    )
+      car.lightsOn = !car.lightsOn;
+  }
   interact(id: string) {
     const p = this.entities.get(id);
     if (!p || p.down) return;
@@ -579,6 +592,8 @@ export class Simulation {
           if (input.attack) this.attack(e);
         }
       } else if (e.kind === "car") {
+        if (e.wreck || e.health <= 0) e.lightsOn = false;
+        else if (e.ai) e.lightsOn = this.day >= 18 || this.day < 6;
         const drive = e.wreck
           ? { throttle: 0, steer: 0, brake: true }
           : e.ai

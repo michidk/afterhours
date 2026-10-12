@@ -237,6 +237,7 @@ export class Sessions {
     }
     if (now - c.action < 100) return;
     c.action = now;
+    if (m.type === "lights") this.sim.toggleLights(c.id);
     if (m.type === "interact") this.sim.interact(c.id);
     if (m.type === "drop") this.sim.inventory.drop(p, this.sim.time);
     if (m.type === "reload") this.sim.inventory.reload(p, this.sim.time);
