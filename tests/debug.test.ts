@@ -49,7 +49,7 @@ test("camera movement and look stay independent while zoom has no gameplay limit
   const distance = camera.distance;
   camera.update({ ...idle(), up: true, right: true }, 1);
   assert.ok(camera.focus.x > 11 && camera.focus.z > 25);
-  assert.equal(Math.hypot(camera.focus.x - 11, camera.focus.z - 25), 25);
+  assert.ok(Math.abs(Math.hypot(camera.focus.x - 11, camera.focus.z - 25) - 60) < 1e-9);
   assert.deepEqual(player, { x: 11, y: 0, z: 25 });
   camera.zoom(-200);
   assert.ok(camera.distance < distance);

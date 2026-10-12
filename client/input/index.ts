@@ -86,8 +86,12 @@ export class Controls {
       ...(pad ? { moveX, moveY } : {}),
       brake: keys.has("Space") || button(0),
       sprint: keys.has("ShiftLeft") || keys.has("ShiftRight"),
-      ascend: keys.has("KeyE") || button(5),
-      descend: keys.has("KeyQ") || button(4),
+      ascend: keys.has("KeyE") || keys.has("Space") || button(5),
+      descend:
+        keys.has("KeyQ") ||
+        keys.has("ControlLeft") ||
+        keys.has("ControlRight") ||
+        button(4),
       attack: keys.has("KeyJ") || this.mouseDown || button(2),
       aim: this.aim,
     };

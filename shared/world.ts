@@ -79,6 +79,10 @@ export interface WorldEvent {
   z: number;
   angle?: number;
   length?: number;
+  /** Entity struck by a hit, so clients can play its flinch. */
+  target?: string;
+  /** Attacker behind a swing or shot, so clients can animate the strike. */
+  source?: string;
   sound?:
     | "pistol"
     | "smg"

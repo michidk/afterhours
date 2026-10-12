@@ -81,7 +81,8 @@ export class DebugCamera {
     const forward = inputY(input),
       side = inputX(input);
     const vertical = Number(input.ascend) - Number(input.descend);
-    const speed = input.brake || input.sprint ? 75 : 25;
+    // Both debug cameras share one speed; Shift is a fast traverse across the island.
+    const speed = input.sprint ? 320 : 60;
     let x = side,
       y = vertical,
       z = forward;

@@ -130,7 +130,7 @@ test("helicopter boarding pause allows later passengers and shares prediction", 
   s.inputs.set(passenger.id, { ...idle(), up: true });
   s.tick(1 / 30);
   assert.equal(v.y, 0, "a passenger cannot bypass the boarding pause");
-  s.inputs.set(pilot.id, { ...idle(), up: true });
+  s.inputs.set(pilot.id, { ...idle(), ascend: true });
   s.tick(1 / 30);
   assert.ok(v.y > 0);
   assert.equal(v.takeoffDelay, undefined);

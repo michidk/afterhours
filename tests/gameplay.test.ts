@@ -163,7 +163,7 @@ test("a car driving into a character still causes impact damage and knockdown", 
     assert.ok(s.drainEvents().some((e) => e.kind === "hit"));
   }
 });
-test("helicopter climbs before crossing a roof and keeps moving after parachute exit", () => {
+test("helicopter needs pilot climb to cross a roof and keeps moving after parachute exit", () => {
   const s = empty(),
     p = s.join("Pilot", "#ffffff");
   p.x = 0;
@@ -171,10 +171,17 @@ test("helicopter climbs before crossing a roof and keeps moving after parachute 
   const heli = s.spawn("helicopter", 0, 0);
   s.city.buildings = [{ x: 22, z: 0, w: 12, d: 20, h: 25, color: "#fff", style: 0 }];
   s.interact(p.id);
+  s.inputs.set(p.id, { ...idle(), right: true, ascend: true });
+  run(s, 1.5);
   s.inputs.set(p.id, { ...idle(), right: true });
+  for (let i = 0; i < 120; i++) {
+    s.tick(1 / 30);
+    assert.ok(heli.x < 14, "a low helicopter cannot fly into the wall");
+  }
+  s.inputs.set(p.id, { ...idle(), right: true, ascend: true });
   for (let i = 0; i < 240; i++) {
     s.tick(1 / 30);
-    if (heli.x > 16 && heli.x < 28) assert.ok(heli.y >= 35, "roof clearance");
+    if (heli.x > 16 && heli.x < 28) assert.ok(heli.y >= 26.8, "roof clearance");
   }
   assert.ok(heli.x > 16);
   s.interact(p.id);
@@ -185,7 +192,7 @@ test("helicopter climbs before crossing a roof and keeps moving after parachute 
   const x = heli.x;
   run(s, 3);
   assert.ok(heli.x > x + 10);
-  run(s, 2);
+  run(s, 5);
   assert.equal(heli.flight, "grounded");
   assert.equal(p.vehicle, undefined);
   assert.equal(heli.y, 0);
@@ -195,10 +202,11 @@ test("disconnect releases a helicopter to fall rather than land automatically", 
     p = s.join("Pilot", "#fff"),
     h = s.spawn("helicopter", p.x, p.z);
   s.interact(p.id);
+  s.inputs.set(p.id, { ...idle(), ascend: true });
   run(s, 3);
   s.leave(p.id);
   assert.equal(h.flight, "falling");
-  run(s, 3);
+  run(s, 5);
   assert.equal(h.flight, "grounded");
 });
 
@@ -228,13 +236,15 @@ test("helicopter refuses a blocked landing and reroutes around a new obstruction
   p.x = p.z = 0;
   const h = s.spawn("helicopter", 0, 0, undefined, "utility");
   s.interact(p.id);
+  s.inputs.set(p.id, { ...idle(), ascend: true });
   run(s, 3);
+  s.inputs.set(p.id, idle());
   s.city.buildings = [{ x: 0, z: 0, w: 120, d: 120, h: 20, color: "#fff", style: 0 }];
   s.requestLanding(h);
   assert.notEqual(h.flight, "landing");
   run(s, 5);
   assert.equal(p.vehicle, h.id);
-  assert.ok(h.y > 30);
+  assert.ok(h.y > 21, "a roof beneath the fuselage lifts the hovering helicopter");
   s.city.buildings = [];
   s.requestLanding(h);
   assert.equal(h.flight, "landing");
@@ -252,7 +262,11 @@ test("utility helicopter keeps clearance across its larger rotor footprint", () 
   s.interact(p.id);
   s.city.buildings = [{ x: 6, z: 0, w: 1, d: 12, h: 24, color: "#fff", style: 0 }];
   run(s, 10);
-  assert.ok(h.y > 35, "climb above a roof beneath the outer utility rotor");
+  assert.equal(h.y, 0, "a wall under the outer rotor does not lift a parked helicopter");
+  s.inputs.set(p.id, { ...idle(), ascend: true });
+  run(s, 10);
+  s.inputs.set(p.id, idle());
+  assert.ok(h.y > 35);
   s.requestLanding(h);
   run(s, 20);
   assert.equal(h.flight, "grounded");

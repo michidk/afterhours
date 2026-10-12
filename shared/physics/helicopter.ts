@@ -64,7 +64,14 @@ export function flyHelicopter(
   const tuning = model.flight;
   if (e.flight === "takingOff" && e.takeoffDelay !== undefined) {
     e.takeoffDelay -= dt;
-    if (e.takeoffDelay <= 0 || input.up || input.down || input.left || input.right)
+    if (
+      e.takeoffDelay <= 0 ||
+      input.up ||
+      input.down ||
+      input.left ||
+      input.right ||
+      input.ascend
+    )
       e.takeoffDelay = undefined;
   }
   if (!e.driver || !e.flight || e.flight === "grounded" || (e.takeoffDelay || 0) > 0) {
@@ -96,60 +103,63 @@ export function flyHelicopter(
     dz = (e.landingZ ?? e.z) - e.z;
     maxSpeed = Math.min(8, Math.hypot(dx, dz) * 1.4);
   }
-  if (e.flight === "takingOff" && e.y < groundLevel(e.x, e.z, city) + 8) {
-    dx = 0;
-    dz = 0;
-  }
   const length = Math.hypot(dx, dz);
   if (length) {
     dx /= length;
     dz /= length;
   }
   const footprint = rotorRadius(e);
-  let under = surface(city, e.x, e.z, footprint);
+  // Automatic landings clear the whole rotor; pilots only collide with the fuselage.
+  const reach = e.flight === "landing" ? footprint : 2;
+  let under = surface(city, e.x, e.z, reach);
   for (const other of entities)
     if (
       other.id !== e.id &&
       !other.vehicle &&
       other.y <= e.y &&
       Math.hypot(other.x - e.x, other.z - e.z) <
-        footprint + Math.hypot(shape(other).w, shape(other).d)
+        reach + Math.hypot(shape(other).w, shape(other).d)
     )
       under = Math.max(under, other.y + 2);
-  // Look ahead and climb before advancing over a roof; never teleport through it.
-  const ahead = surface(city, e.x + dx * 12, e.z + dz * 12, footprint);
-  const clearance = Math.max(under, ahead) + TUNING.clearance;
-  let target = e.targetAltitude ?? clearance;
-  if (input.ascend || input.descend)
-    target =
-      e.y +
-      (Number(input.ascend) * tuning.climb - Number(input.descend) * tuning.descend) /
-        tuning.response;
-  if (!input.descend && e.flight !== "landing") target = Math.max(target, clearance);
-  target = clamp(
-    Math.max(target, Math.max(under, ahead) + 2),
-    0,
-    groundLevel(e.x, e.z, city) + tuning.ceiling,
-  );
-  if (!input.ascend && !input.descend && e.flight === "takingOff")
-    target = Math.max(target, clearance);
+  // Look ahead so the pilot must climb over a roof; never teleport through it.
+  const ahead = surface(city, e.x + dx * 6, e.z + dz * 6, reach);
+  const ceiling = groundLevel(e.x, e.z, city) + tuning.ceiling;
   const atLanding =
     e.flight === "landing" &&
     Math.hypot((e.landingX ?? e.x) - e.x, (e.landingZ ?? e.z) - e.z) < 0.7;
-  if (atLanding) target = surface(city, e.x, e.z, footprint);
-  e.targetAltitude = target;
-  const desiredVertical = clamp(
-    (target - e.y) * tuning.response,
-    -tuning.descend,
-    tuning.climb,
-  );
+  // Pilots set climb rate directly (Space/Ctrl); releasing both holds altitude.
+  let desiredVertical =
+    Number(input.ascend) * tuning.climb - Number(input.descend) * tuning.descend;
+  if (e.flight === "landing") {
+    const target = atLanding
+      ? surface(city, e.x, e.z, footprint)
+      : clamp(
+          Math.max(
+            e.targetAltitude ?? Math.max(under, ahead) + TUNING.clearance,
+            Math.max(under, ahead) + 2,
+          ),
+          0,
+          ceiling,
+        );
+    e.targetAltitude = target;
+    desiredVertical = clamp(
+      (target - e.y) * tuning.response,
+      -tuning.descend,
+      tuning.climb,
+    );
+  } else e.targetAltitude = undefined;
+  // Ease onto roofs and people below instead of snapping through them.
+  if (!atLanding)
+    desiredVertical = Math.max(
+      desiredVertical,
+      Math.min(tuning.climb, (under - e.y) * tuning.response),
+    );
+  if (e.y >= ceiling) desiredVertical = Math.min(0, desiredVertical);
   e.vy += (desiredVertical - e.vy) * (1 - Math.exp(-tuning.vertical * dt));
   e.y = Math.max(groundLevel(e.x, e.z, city), e.y + e.vy * dt);
   if (e.flight === "takingOff" && e.y >= groundLevel(e.x, e.z, city) + 9)
     e.flight = "cruising";
-  if (!atLanding && e.y < ahead + (input.descend ? 1.8 : TUNING.clearance - 1))
-    maxSpeed = 0;
-  if (input.brake) maxSpeed = 0;
+  if (!atLanding && e.y < ahead + 1) maxSpeed = 0;
   e.vx += (dx * maxSpeed - e.vx) * (1 - Math.exp(-tuning.acceleration * dt));
   e.vz += (dz * maxSpeed - e.vz) * (1 - Math.exp(-tuning.acceleration * dt));
   if (length > 0.01) {

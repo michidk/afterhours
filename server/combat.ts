@@ -116,17 +116,16 @@ export class Combat {
       return;
     }
     const ranged = spec.mode === "hitscan";
-    const rewind = ranged
-      ? this.history.find(
-          (h) =>
-            h.time >=
-            clamp(
-              sim.inputs.get(p.id)?.shotTime ?? sim.time,
-              sim.time - TUNING.lagCompensation,
-              sim.time,
-            ),
-        )
-      : undefined;
+    // Melee rewinds too: punches land where the attacker saw the target.
+    const rewind = this.history.find(
+      (h) =>
+        h.time >=
+        clamp(
+          sim.inputs.get(p.id)?.shotTime ?? sim.time,
+          sim.time - TUNING.lagCompensation,
+          sim.time,
+        ),
+    );
     const hits = [...sim.entities.values()]
       .filter((e) => e.id !== p.id && !e.vehicle && !e.wreck)
       .map((e) => {
@@ -137,8 +136,11 @@ export class Combat {
         if (Math.abs(pose.y - p.y) > 2) return { e, distance: Infinity };
         const distance = ranged
           ? rayDistance(p.x, p.z, dx, dz, entityBox({ ...e, ...pose }), range)
-          : d > 0 && (tx * dx + tz * dz) / d > 0.75 && wallDistance(tx / d, tz / d) > d
-            ? d
+          : d > 0 &&
+              // Wide cone up close so a target brushing your shoulder still counts.
+              (tx * dx + tz * dz) / d > (d < 1.3 ? 0.2 : 0.7) &&
+              wallDistance(tx / d, tz / d) > d
+            ? Math.max(0, d - 0.35)
             : Infinity;
         return { e, distance };
       })
@@ -153,6 +155,7 @@ export class Combat {
       length = ranged ? Math.min(wall, propHit?.distance ?? hit?.distance ?? range) : 0;
     sim.events.push({
       kind: ranged ? "shot" : "swing",
+      source: p.id,
       sound:
         item?.kind === "smg" || item?.kind === "machinegun"
           ? "smg"
@@ -182,11 +185,16 @@ export class Combat {
     }
     if (hit) {
       sim.damage(hit.e, spec.damage, p);
-      const push = vehicle(hit.e) ? 0.3 : 4;
+      const heavy = item?.kind === "bat";
+      const push = vehicle(hit.e) ? 0.3 : heavy ? 8 : 4;
       hit.e.vx += dx * push;
       hit.e.vz += dz * push;
+      // Bat blows knock people off their feet; they stand up once `down` expires.
+      if (heavy && !vehicle(hit.e)) hit.e.down = Math.max(hit.e.down || 0, 1);
       sim.events.push({
         kind: "hit",
+        target: hit.e.id,
+        angle: aim,
         sound: vehicle(hit.e)
           ? "impact"
           : spec.magazine

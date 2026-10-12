@@ -83,6 +83,9 @@ export class CityScene {
   destruction: DestructionRenderer;
   effects: Effects;
   private tyreTracks = new TyreTracks();
+  /** Wall-clock start of recent hit flinches and melee swings, keyed by entity. */
+  private flinches = new Map<string, { at: number; angle: number }>();
+  private swings = new Map<string, number>();
   effectClock = 0;
   target = new Vector3(4, 0, 12);
   day = 16.5;
@@ -750,6 +753,7 @@ export class CityScene {
       }
       if (e.kind === "player" || e.kind === "pedestrian") {
         poseCharacter(n, e);
+        this.react(n, e);
         if (e.parachute) {
           n.rotation.x = -e.vz * 0.025;
           n.rotation.z += e.vx * 0.025;
@@ -859,6 +863,7 @@ export class CityScene {
     }
     this.carLights.update(entities, this.nodes, this.target);
     this.lighting.update(this.day, this.target, dt);
+    this.scene.fogEnabled = this.debugCamera.mode !== "fly";
     if (this.debugCamera.mode === "free")
       this.scene.fogDensity /= Math.max(1, this.debugCamera.distance / 53);
     for (const l of this.lights)
@@ -872,6 +877,42 @@ export class CityScene {
       );
   }
   effect(e: WorldEvent) {
+    const now = performance.now() / 1000;
+    if (e.kind === "hit" && e.target)
+      this.flinches.set(e.target, { at: now, angle: e.angle ?? 0 });
+    if (e.kind === "swing" && e.source) this.swings.set(e.source, now);
     this.effects.effect(e);
+  }
+  /** Melee punch thrust and a recoil lean away from the blow that just landed. */
+  private react(n: TransformNode, e: Entity) {
+    const now = performance.now() / 1000;
+    const swing = this.swings.get(e.id);
+    if (swing !== undefined) {
+      const t = (now - swing) / 0.25;
+      if (t >= 1) this.swings.delete(e.id);
+      else {
+        const arm = n
+          .getChildTransformNodes(false)
+          .find((node) => node.name === "arm pivot" && node.position.x > 0);
+        if (arm) arm.rotation.x = -Math.PI * 0.55 * Math.sin(t * Math.PI);
+      }
+    }
+    const flinch = this.flinches.get(e.id);
+    if (!flinch) return;
+    const k = 1 - (now - flinch.at) / 0.4;
+    if (k <= 0) {
+      this.flinches.delete(e.id);
+      return;
+    }
+    if (e.down) return;
+    const lean = 0.5 * k * k,
+      relative = flinch.angle - e.angle;
+    n.rotation.x += lean * Math.cos(relative);
+    n.rotation.z -= lean * Math.sin(relative);
+    n.position.addInPlaceFromFloats(
+      Math.sin(flinch.angle) * lean * 0.3,
+      0,
+      Math.cos(flinch.angle) * lean * 0.3,
+    );
   }
 }

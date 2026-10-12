@@ -43,6 +43,7 @@ for (const model of ["plane", "aerobatic"] as const) {
     run(s, 1.5);
     assert.ok(e.y < y - 1);
     assert.ok(e.angle > 0.4);
+    assert.ok(Math.abs(Math.atan2(e.vx, e.vz) - e.angle) < 0.05, "flies along its nose");
     e.y = 20;
     e.vy = 0;
     e.vx = e.vz = 1;
@@ -53,7 +54,7 @@ for (const model of ["plane", "aerobatic"] as const) {
     e.vy = 0;
     e.vx = 0;
     e.vz = 20;
-    s.inputs.set("pilot", { ...idle(), brake: true });
+    s.inputs.set("pilot", { ...idle(), down: true });
     run(s, 2);
     assert.ok(Math.hypot(e.vx, e.vz) < 0.1);
     assert.equal(e.y, 0);
@@ -81,10 +82,13 @@ for (const model of ["scout", "utility"] as const) {
     assert.ok(e.y < y - 3);
     assert.ok(e.x > 5);
     assert.ok(e.angle > 1);
-    s.inputs.set("pilot", { ...idle(), up: true, brake: true });
+    s.inputs.set("pilot", idle());
     run(s, 3);
     assert.ok(Math.hypot(e.vx, e.vz) < 0.03);
     assert.ok(e.y >= 2, "descent remains clear of ground");
+    const hover = e.y;
+    run(s, 2);
+    assert.ok(Math.abs(e.y - hover) < 0.5, "releasing Space and Ctrl holds altitude");
   });
 }
 test("aircraft variants have observable acceleration and climb differences", () => {

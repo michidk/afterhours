@@ -90,6 +90,7 @@ const incomingMessageSchema = z.discriminatedUnion("type", [
       "grenade",
       "jetpack",
       "heal",
+      "respawn",
       "damage",
       "day",
       "night",

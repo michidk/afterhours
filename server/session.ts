@@ -292,6 +292,7 @@ export class Sessions {
           if (v) this.sim.repair(v);
         }
       }
+      if (m.kind === "respawn") this.sim.respawn(p);
       if (m.kind === "damage" && p.vehicle) {
         const v = this.sim.entities.get(p.vehicle);
         if (v) this.sim.damage(v, (v.maxHealth || 100) * 0.8);

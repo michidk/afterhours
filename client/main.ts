@@ -213,6 +213,8 @@ window.addEventListener("keydown", (event) => {
     )
   )
     event.preventDefault();
+  // Ctrl descends in aircraft; keep Ctrl+S/D/A from opening browser dialogs.
+  if (event.ctrlKey && event.code !== "KeyR") event.preventDefault();
   controls.press(event.code);
   if (event.repeat) return;
   if (event.code === "KeyM") {

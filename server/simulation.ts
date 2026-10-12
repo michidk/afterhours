@@ -530,6 +530,25 @@ export class Simulation {
     }
     return broken;
   }
+  respawn(e: Entity) {
+    const seated = e.vehicle ? this.entities.get(e.vehicle) : undefined;
+    if (seated) this.releaseSeat(e, seated);
+    e.health = e.maxHealth ?? 100;
+    e.down = 0;
+    e.burning = undefined;
+    const pos = safeSpawn(this.city, [...this.entities.values()], e.id);
+    e.x = pos.x;
+    e.z = pos.z;
+    if (e.ai) {
+      this.ai.assign(e, this.serial++ % 36);
+      this.ai.citizens.reset(e, this.time);
+    }
+    if (e.kind === "player") this.inventory.initialize(e);
+    e.jetpack = undefined;
+    e.y = 0;
+    e.parachute = undefined;
+    e.vx = e.vz = e.vy = 0;
+  }
   repair(e: Entity) {
     if (e.wreck) return;
     e.health = e.maxHealth || 100;
@@ -647,21 +666,7 @@ export class Simulation {
         e.down = Math.max(0, e.down - dt);
         e.vx *= Math.exp(-5 * dt);
         e.vz *= Math.exp(-5 * dt);
-        if (!e.down && e.health <= 0) {
-          e.health = e.maxHealth ?? 100;
-          const pos = safeSpawn(this.city, [...this.entities.values()], e.id);
-          e.x = pos.x;
-          e.z = pos.z;
-          if (e.ai) {
-            this.ai.assign(e, this.serial++ % 36);
-            this.ai.citizens.reset(e, this.time);
-          }
-          if (e.kind === "player") this.inventory.initialize(e);
-          e.jetpack = undefined;
-          e.y = 0;
-          e.parachute = undefined;
-          e.vx = e.vz = e.vy = 0;
-        }
+        if (!e.down && e.health <= 0) this.respawn(e);
       }
       const previous = { ...e };
       const input = this.inputs.get(e.driver || e.id) || idle();
