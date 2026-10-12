@@ -20,6 +20,10 @@ export function uploadMeshes(host: CityScene, group: MeshGroup) {
       colors: saved.colors,
     });
     data.applyToMesh(mesh);
+    if (saved.name === "island terrain") {
+      mesh.subdivide(Math.min(64, saved.indices.length / 3));
+      mesh.cullingStrategy = Mesh.CULLINGSTRATEGY_STANDARD;
+    }
     const m = saved.material;
     if (m.role === "windows") mesh.material = host.lighting.windows;
     else if (m.role === "glow") mesh.material = host.streetGlow;

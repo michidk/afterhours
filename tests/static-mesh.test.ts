@@ -7,6 +7,9 @@ import { NullEngine } from "@babylonjs/core/Engines/nullEngine";
 import { Scene } from "@babylonjs/core/scene";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera";
+import { Frustum } from "@babylonjs/core/Maths/math.frustum";
+import { uploadMeshes } from "../client/world/mesh-buffers.ts";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { loadCity } from "../server/city-loader.ts";
@@ -56,6 +59,7 @@ test("saved geometry is tied to the persisted city with complete, validated spaw
 test("saved chunks upload buffers without procedural builders, and fixtures retain destruction ownership", async () => {
   const city = await loadCity();
   const artifact = decode(await readFile("data/city-meshes.msgpack")) as {
+    base: Uint8Array;
     chunks: Record<string, Uint8Array>;
   };
   const lampChunk = [...new CityStore(city).chunks.values()].find((chunk) =>
@@ -123,6 +127,27 @@ test("saved chunks upload buffers without procedural builders, and fixtures reta
   store.manifest.geometryVersion = 1;
   const renderer = new CityRenderer(host, store.manifest);
   try {
+    const base = meshGroupSchema.parse(
+      JSON.parse(gunzipSync(artifact.base).toString()),
+    );
+    const terrain = uploadMeshes(host, base).find(
+      (mesh) => mesh.name === "island terrain",
+    )!;
+    const camera = new FreeCamera("terrain view", new Vector3(0, 60, -40), scene);
+    camera.maxZ = 250;
+    camera.setTarget(Vector3.Zero());
+    terrain.computeWorldMatrix(true);
+    const planes = Frustum.GetPlanes(
+      camera.getViewMatrix().multiply(camera.getProjectionMatrix()),
+    );
+    const visible = terrain.subMeshes
+      .filter((part) => part.isInFrustum(planes))
+      .reduce((sum, part) => sum + part.indexCount, 0);
+    assert.ok(visible > 0, "saved terrain retains the visible ground");
+    assert.ok(
+      visible < terrain.getTotalIndices() / 4,
+      "saved terrain culls the distant island",
+    );
     renderer.sync([chunk]);
     const root = scene.getTransformNodeByName("fixture:" + lamp.id)!;
     assert.ok(root);

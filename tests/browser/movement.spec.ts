@@ -39,6 +39,10 @@ const test = base.extend({
     const session = await page.context().newCDPSession(page);
     await session.send("Profiler.enable");
     await session.send("Profiler.start");
+    await session.send("Tracing.start", {
+      categories: "devtools.timeline,v8,blink.user_timing,cc,gpu",
+      transferMode: "ReturnAsStream",
+    });
     try {
       await use(page);
     } finally {
@@ -49,6 +53,19 @@ const test = base.extend({
         path,
         contentType: "application/json",
       });
+      const completed = new Promise<string>((resolve) =>
+        session.once("Tracing.tracingComplete", (event) => resolve(event.stream!)),
+      );
+      await session.send("Tracing.end");
+      const handle = await completed;
+      let trace = "";
+      while (true) {
+        const chunk = await session.send("IO.read", { handle });
+        trace += chunk.data;
+        if (chunk.eof) break;
+      }
+      await session.send("IO.close", { handle });
+      await writeFile(testInfo.outputPath("chrome-trace.json"), trace);
       await session.detach();
     }
   },
@@ -164,6 +181,7 @@ for (const delay of [0, 150]) {
       };
       window.addEventListener("keydown", (event) => {
         if (event.code !== "KeyW" || event.repeat) return;
+        performance.mark("movement-hold-start");
         held = true;
         window.movementSamples = [];
         sample("input");
@@ -171,6 +189,7 @@ for (const delay of [0, 150]) {
       window.addEventListener("keyup", (event) => {
         if (event.code !== "KeyW") return;
         sample("input");
+        performance.mark("movement-hold-end");
         held = false;
       });
       debug.scene.scene.onAfterRenderObservable.add(() => sample("render"));
