@@ -127,7 +127,7 @@ export function flyHelicopter(
   const atLanding =
     e.flight === "landing" &&
     Math.hypot((e.landingX ?? e.x) - e.x, (e.landingZ ?? e.z) - e.z) < 0.7;
-  // Pilots set climb rate directly (Space/Ctrl); releasing both holds altitude.
+  // Pilots set climb rate directly (Space/Shift); releasing both holds altitude.
   let desiredVertical =
     Number(input.ascend) * tuning.climb - Number(input.descend) * tuning.descend;
   if (e.flight === "landing") {

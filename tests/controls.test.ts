@@ -19,8 +19,8 @@ test("all control presses survive release between network samples without adding
     ["KeyE", "ascend"],
     ["KeyQ", "descend"],
     ["Space", "ascend"],
-    ["ControlLeft", "descend"],
-    ["ControlRight", "descend"],
+    ["ShiftLeft", "descend"],
+    ["ShiftRight", "descend"],
     ["KeyJ", "attack"],
   ] as const) {
     controls.press(code);

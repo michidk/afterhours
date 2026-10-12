@@ -80,7 +80,8 @@ export class DebugCamera {
     if (!this.active) return;
     const forward = inputY(input),
       side = inputX(input);
-    const vertical = Number(input.ascend) - Number(input.descend);
+    // Shift both descends (aircraft) and boosts here; in the camera it only boosts.
+    const vertical = Number(input.ascend) - Number(input.descend && !input.sprint);
     // Both debug cameras share one speed; Shift is a fast traverse across the island.
     const speed = input.sprint ? 320 : 60;
     let x = side,
