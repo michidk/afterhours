@@ -9,26 +9,31 @@ import {
 import { CharacterPreview } from "./character-preview.ts";
 
 export const characterMenuHTML = `<section class="overlay" id="entry" aria-labelledby="entry-title">
-  <header class="entry-masthead"><a class="wordmark" href="/" aria-label="Afterhours home">AFTERHOURS<span>●</span></a><span>PALOMA ISLAND<br>ONLINE PLAYTEST / 01</span></header>
+  <header class="entry-masthead"><div class="logo">AFTER<span>HOURS</span></div><span>Paloma Island <span class="menu-mode">Online</span></span></header>
   <form id="join" class="character-sheet">
-    <div class="character-heading"><span class="sheet-label">BEFORE YOU HEAD OUT</span><h1 id="entry-title">Who's going<br> out tonight?</h1><p>Make yourself at home. Then make some trouble.</p></div>
-    <section class="portrait" aria-label="Character preview"><span class="portrait-label">PALOMA RESIDENT / <span id="physique-label">REGULAR</span></span><div class="portrait-number" aria-hidden="true">01</div><canvas id="character-preview" aria-label="3D preview of your chosen character"></canvas><div class="portrait-floor"></div><div class="portrait-caption"><span>YOUR CHARACTER</span><button type="button" id="randomize">↻ &nbsp; Randomize</button></div></section>
-    <section class="character-options" aria-label="Customize character"><label class="field-label" for="name">01 / STREET NAME</label><input id="name" maxlength="18" placeholder="Your name" autocomplete="nickname" required value="Stranger">
-    <fieldset class="physiques"><legend>02 / BUILD</legend><div class="physique-choices">${characterSchema.shape.physique.options.map((key) => `<button type="button" data-physique="${key}" aria-pressed="${key === "regular"}">${PHYSIQUES[key].name}</button>`).join("")}</div><p id="build-description"></p><div class="build-stats"><span>PACE <strong id="pace-stat"></strong></span><span>HEALTH <strong id="health-stat"></strong></span></div></fieldset>
-    <fieldset class="appearance"><legend>03 / THE DETAILS</legend>${[
-      ["hair", "Head", characterSchema.shape.hair.options],
-      ["top", "Upper body", characterSchema.shape.top.options],
-      ["legs", "Legs", characterSchema.shape.legs.options],
-    ]
-      .map(
-        ([key, label, options]) =>
-          `<div class="part-row"><label for="character-${key}">${label}</label><select id="character-${key}">${Array.isArray(options) ? options.map((value) => `<option value="${value}">${value === "tee" ? "T-shirt" : value.charAt(0).toUpperCase() + value.slice(1)}</option>`).join("") : ""}</select></div>`,
+    <section class="character-options" aria-label="Customize character">
+      <h1 id="entry-title">Your character</h1>
+      <div class="name-row"><label for="name">Name</label><input id="name" name="nickname" maxlength="18" placeholder="Your name" autocomplete="nickname" spellcheck="false" required value="Stranger"></div>
+      <fieldset class="physiques"><legend>Build</legend><div class="physique-choices">${characterSchema.shape.physique.options.map((key) => `<button type="button" data-physique="${key}" aria-pressed="${key === "regular"}">${PHYSIQUES[key].name}</button>`).join("")}</div><p id="build-description"></p></fieldset>
+      <fieldset class="appearance"><legend>Appearance</legend>${(
+        [
+          ["hair", "Head", characterSchema.shape.hair.options],
+          ["top", "Upper body", characterSchema.shape.top.options],
+          ["legs", "Legs", characterSchema.shape.legs.options],
+        ] as const
       )
-      .join("")}
-    <div class="part-row"><span>Skin tone</span><div class="swatches" role="group" aria-label="Skin tone">${characterSchema.shape.skin.options.map((color, index) => `<button type="button" class="swatch" data-skin="${color}" style="--swatch:${color}" aria-label="${["Light", "Warm", "Brown", "Deep"][index]} skin" aria-pressed="false"></button>`).join("")}</div></div>
-    <div class="part-row"><span>Colour</span><div class="swatches" role="group" aria-label="Shirt colour">${SHIRT_COLORS.map((color, index) => `<button type="button" class="swatch" data-color="${color}" style="--swatch:${color}" aria-label="${["Ochre", "Rust", "Teal", "Lilac", "Olive", "Chalk"][index]} shirt" aria-pressed="false"></button>`).join("")}</div></div></fieldset>
-    <button class="primary" id="play" disabled>Preparing the city…</button><div class="loading" id="loading" role="status" aria-live="polite">Your character is saved on this device.</div></section>
-  </form><footer class="menu-footer"><span><i></i> ONE SHARED CITY. NO ACCOUNT REQUIRED.</span><span>DESKTOP · WASD MOVE · F ENTER VEHICLE</span></footer></section>`;
+        .map(
+          ([key, label, options]) =>
+            `<div class="part-row"><label for="character-${key}">${label}</label><select id="character-${key}" name="${key}">${options.map((value) => `<option value="${value}">${value === "tee" ? "T-shirt" : value.charAt(0).toUpperCase() + value.slice(1)}</option>`).join("")}</select></div>`,
+        )
+        .join("")}
+      <div class="part-row"><span>Skin tone</span><div class="swatches" role="group" aria-label="Skin tone">${characterSchema.shape.skin.options.map((color, index) => `<button type="button" class="swatch" data-skin="${color}" style="--swatch:${color}" aria-label="${["Light", "Warm", "Brown", "Deep"][index]} skin" aria-pressed="false"></button>`).join("")}</div></div>
+      <div class="part-row"><span>Shirt colour</span><div class="swatches" role="group" aria-label="Shirt colour">${SHIRT_COLORS.map((color, index) => `<button type="button" class="swatch" data-color="${color}" style="--swatch:${color}" aria-label="${["Ochre", "Rust", "Teal", "Lilac", "Olive", "Chalk"][index]} shirt" aria-pressed="false"></button>`).join("")}</div></div></fieldset>
+      <button type="button" id="randomize">Randomize appearance & build <span aria-hidden="true">⟳</span></button>
+      <button class="primary" id="play" disabled>Preparing the city…</button><div class="loading" id="loading" role="status" aria-live="polite">Choose a character, then enter the city.</div>
+    </section>
+    <section class="portrait" aria-label="Character preview"><canvas id="character-preview" aria-label="3D preview of your chosen character"></canvas><div class="character-info"><h2 id="physique-label">Regular</h2><div class="build-stats"><span>Speed <strong id="pace-stat"></strong></span><meter id="pace-meter" min="0" max="150" value="100" aria-label="Ground speed relative to Regular"></meter><span>Health <strong id="health-stat"></strong></span><meter id="health-meter" min="0" max="150" value="100" aria-label="Maximum health"></meter></div></div></section>
+  </form><footer class="menu-footer"><span>Character saved on this device</span><span><kbd>Tab</kbd> Select <kbd>↑ ↓</kbd> Change option <kbd>Enter</kbd> Confirm</span></footer></section>`;
 
 const savedSchema = z.object({
   character: characterSchema,
@@ -52,10 +57,12 @@ export function mountCharacterMenu() {
     document.querySelector<T>(selector)!;
   function update() {
     const build = PHYSIQUES[selection.character.physique];
-    element("#physique-label").textContent = build.name.toUpperCase();
+    element("#physique-label").textContent = build.name;
     element("#build-description").textContent = build.description;
     element("#pace-stat").textContent = `${Math.round(build.speed * 100)}%`;
     element("#health-stat").textContent = String(build.health);
+    element<HTMLMeterElement>("#pace-meter").value = Math.round(build.speed * 100);
+    element<HTMLMeterElement>("#health-meter").value = build.health;
     for (const button of document.querySelectorAll<HTMLButtonElement>(
       "[data-physique], [data-skin], [data-color]",
     )) {

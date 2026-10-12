@@ -83,6 +83,7 @@ $("#join").addEventListener("submit", (event) => {
         }
         playerId = m.id;
         debugAllowed = m.debug;
+        document.querySelector(".debug-hint")?.classList.toggle("hidden", !m.debug);
         if (debugAllowed && network) {
           automation = new AgentInterface(network, scene, setCamera);
           Object.defineProperty(window, "afterhoursDebug", {
@@ -404,7 +405,7 @@ async function boot() {
     }
     scene.engine.stopRenderLoop();
     void audio.preload();
-    $("#play").textContent = "Enter the city →";
+    $("#play").textContent = "Enter the city";
     $("#play").removeAttribute("disabled");
     $("#app").removeAttribute("inert");
     document.querySelector("#boot")?.remove();
@@ -512,6 +513,7 @@ async function boot() {
             },
           });
         const v = rendered.find((e) => e.id === p.vehicle);
+        $("#player-status").classList.toggle("on-foot", !v);
         $("#speed").textContent = String(
           Math.round(Math.hypot(v?.vx || 0, v?.vz || 0) * 3.6),
         );
@@ -525,8 +527,14 @@ async function boot() {
         $("#weapon").textContent = p.down
           ? "RECOVERING…"
           : (v?.kind || p.weapon || "fists").toUpperCase();
-        $("#health").style.width =
-          `${Math.max(0, ((v?.health ?? p.health) / (v?.maxHealth ?? p.maxHealth ?? 100)) * 100)}%`;
+        const healthPercent = Math.max(
+          0,
+          ((v?.health ?? p.health) / (v?.maxHealth ?? p.maxHealth ?? 100)) * 100,
+        );
+        $("#health").style.width = `${healthPercent}%`;
+        document
+          .querySelector(".health")
+          ?.setAttribute("aria-valuenow", String(Math.round(healthPercent)));
         const item = p.inventory?.[p.equipped || 0];
         if (!v && item)
           $("#weapon").textContent =
