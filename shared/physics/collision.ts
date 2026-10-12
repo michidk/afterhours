@@ -109,7 +109,7 @@ export const buildingBox = (b: Building): Box => ({
   z: b.z,
   w: b.w / 2,
   d: b.d / 2,
-  angle: 0,
+  angle: b.angle ?? 0,
 });
 export function pointVelocity(e: Entity, x: number, z: number) {
   return {

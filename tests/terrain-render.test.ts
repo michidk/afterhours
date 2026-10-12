@@ -6,6 +6,7 @@ import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 import { buildTerrain } from "../client/world/terrain.ts";
 import { generateTerrain } from "../scripts/terrain-generator.ts";
+import { TERRAIN_SIDE } from "../shared/terrain.ts";
 
 test("terrain faces and normals point up so the island is visible from above", () => {
   const engine = new NullEngine();
@@ -18,7 +19,7 @@ test("terrain faces and normals point up so the island is visible from above", (
     const normals = mesh.getVerticesData(VertexBuffer.NormalKind)!;
     for (let i = 1; i < normals.length; i += 3) assert.ok(normals[i] > 0);
     assert.ok(mesh.getBoundingInfo().boundingBox.maximum.y > 170);
-    assert.equal(mesh.getTotalVertices(), 9409);
+    assert.equal(mesh.getTotalVertices(), TERRAIN_SIDE ** 2);
   } finally {
     scene.dispose();
     engine.dispose();

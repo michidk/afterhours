@@ -16,6 +16,8 @@ function setup() {
   s.city.parks = [];
   s.city.surfaces = [];
   s.city.ramps = [];
+  // Pure handling checks: the generated island is not flat at the origin.
+  s.city.terrain = undefined;
   return s;
 }
 function run(s: Simulation, seconds: number) {

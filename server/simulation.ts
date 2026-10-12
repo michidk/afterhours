@@ -98,16 +98,29 @@ export class Simulation {
       const e = this.spawn("pedestrian", 0, 0);
       this.ai.assign(e, i + 9);
     }
-    this.spawn("car", 4, 25);
-    this.spawn("car", -4, 44, undefined, "sport");
-    this.spawn("car", 68, 25, undefined, "van");
-    this.spawn("helicopter", 0, 36);
+    // Starter vehicles sit near downtown. Generated cities are not centred on the
+    // origin, so each site is moved to the nearest street lane there.
+    const site = (dx: number, dz: number) =>
+      this.city.centre
+        ? this.roadside(this.city.centre.x + dx, this.city.centre.z + dz)
+        : { x: dx, z: dz };
+    for (const [dx, dz, model] of [
+      [4, 25, undefined],
+      [-4, 44, "sport"],
+      [68, 25, "van"],
+    ] as const) {
+      const s = site(dx, dz);
+      this.spawn("car", s.x, s.z, undefined, model);
+    }
+    const heli = site(0, 36);
+    this.spawn("helicopter", heli.x, heli.z);
     this.spawn(
       "plane",
       this.city.airport.x,
       this.city.airport.z - this.city.airport.d / 2 + 14,
     );
-    this.spawn("helicopter", -64, 30, undefined, "utility");
+    const utility = site(-64, 30);
+    this.spawn("helicopter", utility.x, utility.z, undefined, "utility");
     this.spawn(
       "plane",
       this.city.airport.x - 22,
@@ -124,7 +137,12 @@ export class Simulation {
       this.ai.assignWatercraft(craft, i);
     }
     for (const p of this.city.pickups)
-      this.inventory.addSource(p.x, p.z, p.weapon as "bat" | "pistol" | "smg");
+      this.inventory.addSource(
+        p.x,
+        p.z,
+        p.weapon as "bat" | "pistol" | "smg",
+        groundLevel(p.x, p.z, this.city),
+      );
     this.addSupplies();
   }
   private addSupplies() {
@@ -164,13 +182,36 @@ export class Simulation {
             )
           )
             continue;
-          this.inventory.addSupplySource(x, z, payload);
+          this.inventory.addSupplySource(x, z, payload, groundLevel(x, z, this.city));
           placed = true;
           break;
         }
         if (placed) break;
       }
     }
+  }
+  /** Nearest street lane point to a position, 3.5 m right of the centreline. */
+  roadside(x: number, z: number) {
+    let best = { x, z },
+      bestDistance = Infinity;
+    for (const r of this.city.roads) {
+      const dx = r.bx - r.ax,
+        dz = r.bz - r.az,
+        l2 = dx * dx + dz * dz || 1;
+      const t = Math.max(
+        0.15,
+        Math.min(0.85, ((x - r.ax) * dx + (z - r.az) * dz) / l2),
+      );
+      const px = r.ax + dx * t,
+        pz = r.az + dz * t,
+        d = Math.hypot(px - x, pz - z);
+      if (d < bestDistance) {
+        const l = Math.sqrt(l2);
+        bestDistance = d;
+        best = { x: px + (dz / l) * 3.5, z: pz - (dx / l) * 3.5 };
+      }
+    }
+    return best;
   }
   spawn(kind: Kind, x: number, z: number, color?: string, model?: VehicleModel) {
     model ??=

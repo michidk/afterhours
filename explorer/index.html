@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>AFTERHOURS map explorer</title>
+  </head>
+  <body>
+    <aside id="panel">
+      <header>
+        <small>AFTERHOURS</small>
+        <h1>Map explorer</h1>
+      </header>
+      <section class="row">
+        <button id="regenerate" class="primary">Regenerate</button>
+        <label>Seed <input id="seed" type="number" value="713" /></label>
+        <button id="apply">Apply</button>
+        <button id="toggle3d">3D view</button>
+      </section>
+      <section>
+        <small>LAYERS</small>
+        <div id="layers"></div>
+      </section>
+      <section>
+        <small>STAGES</small>
+        <table id="timings"></table>
+      </section>
+      <section>
+        <small>STATS</small>
+        <div id="stats"></div>
+      </section>
+      <section>
+        <small>UNDER CURSOR</small>
+        <div id="hover">Move over the map.</div>
+      </section>
+      <footer>
+        Drag to pan, wheel to zoom, R regenerates, F fits the island, V or the 3D button
+        flies into the map at the current view centre. The generator runs in a worker;
+        nothing is saved.
+      </footer>
+    </aside>
+    <main>
+      <canvas id="map"></canvas>
+      <canvas id="scene" class="hidden" tabindex="0"></canvas>
+      <div id="status">Generating…</div>
+      <div id="hint3d" class="hidden">
+        WASD move · drag to look · Shift fast · E/Q up/down · Esc back to map
+      </div>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

@@ -68,14 +68,18 @@ import {
   BUILDING_ASSETS,
   BUILDING_ASSET_IDS,
 } from "../shared/assets/buildings/index.ts";
-import { cityFileSchema } from "../shared/city-schema.ts";
+import { CITY_FORMAT_VERSION, cityFileSchema } from "../shared/city-schema.ts";
 import { LIMIT, district } from "../shared/world.ts";
 
 test("district composition keeps streets, alleys, parks and airfield clear across seeds", () => {
   for (const seed of [0, 1, 42, 713, 932, -17, 2147483647]) {
     const city = generateCity(seed);
     assert.deepEqual(generateCity(seed), city);
-    cityFileSchema.parse({ format: "afterhours-city", version: 4, city });
+    cityFileSchema.parse({
+      format: "afterhours-city",
+      version: CITY_FORMAT_VERSION,
+      city,
+    });
     assert.ok(city.parks.length >= 20);
     assert.ok(city.buildings.length >= 250);
     assert.ok(LIMIT * 2 >= 1600);

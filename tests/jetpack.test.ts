@@ -13,6 +13,8 @@ import { applyPatch } from "../shared/codec.ts";
 
 test("jetpack thrust spends finite fuel identically in authority and prediction, then parachutes", async () => {
   const city = await loadCity();
+  // Pure flight checks: the generated island is not flat at the origin.
+  (city as { terrain?: unknown }).terrain = undefined;
   city.buildings = [];
   city.props = [];
   city.ramps = [];
@@ -43,6 +45,8 @@ test("jetpack thrust spends finite fuel identically in authority and prediction,
 
 test("disabled packs and render extrapolation cannot spend replay fuel", async () => {
   const city = await loadCity();
+  // Pure flight checks: the generated island is not flat at the origin.
+  (city as { terrain?: unknown }).terrain = undefined;
   city.buildings = [];
   city.props = [];
   city.ramps = [];
@@ -75,6 +79,8 @@ test("disabled packs and render extrapolation cannot spend replay fuel", async (
 
 test("empty packs cannot retain powered horizontal speed and parachutes take precedence", async () => {
   const city = await loadCity();
+  // Pure flight checks: the generated island is not flat at the origin.
+  (city as { terrain?: unknown }).terrain = undefined;
   const sim = new Simulation(city);
   sim.entities.clear();
   const p = sim.join("Flyer", "#ffffff");
@@ -94,6 +100,8 @@ test("empty packs cannot retain powered horizontal speed and parachutes take pre
 
 test("Q descends under power identically in authority and prediction and lands safely on roofs", async () => {
   const city = await loadCity();
+  // Pure flight checks: the generated island is not flat at the origin.
+  (city as { terrain?: unknown }).terrain = undefined;
   city.buildings = [{ x: 0, z: 0, w: 20, d: 20, h: 8, color: "#ffffff", style: 0 }];
   city.props = [];
   city.parks = [];

@@ -1,6 +1,6 @@
 import { LIMIT, type City } from "./world.ts";
 
-export const TERRAIN_STEP = 32;
+export const TERRAIN_STEP = 8;
 export const TERRAIN_SIDE = (LIMIT * 2) / TERRAIN_STEP + 1;
 /** Triangle interpolation matches the rendered mesh, including its diagonal. */
 export function terrainHeight(x: number, z: number, city?: Pick<City, "terrain">) {

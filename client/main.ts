@@ -19,7 +19,13 @@ import { CityRenderer } from "./world/render.ts";
 import { mapManifestSchema } from "../shared/city-stream.ts";
 import type { CameraMode } from "./camera/debug.ts";
 import { district, idle, LIMIT, type Entity } from "../shared/world";
-import { WORLD_LIMIT, isWater, watercraft, WATER_LEVEL } from "../shared/water.ts";
+import {
+  WORLD_LIMIT,
+  groundLevel,
+  isWater,
+  watercraft,
+  WATER_LEVEL,
+} from "../shared/water.ts";
 mountUI();
 const characterMenu = mountCharacterMenu();
 const nameplates = new Nameplates();
@@ -612,7 +618,7 @@ async function boot() {
               availableSeat(e) >= 0 &&
               !e.wreck &&
               e.burning === undefined &&
-              e.y < 0.5 &&
+              e.y - groundLevel(e.x, e.z, scene.city) < 0.5 &&
               Math.abs(e.y - p.y) < (watercraft(e.kind) ? 1.6 : 0.5) &&
               Math.hypot(e.x - p.x, e.z - p.z) < 6,
           )
@@ -639,7 +645,8 @@ async function boot() {
               ? `${availableSeat(nearVehicle) === 0 ? "Drive" : "Ride in"} ${nearVehicle.model ? VEHICLES[nearVehicle.model].name : nearVehicle.kind} (${occupiedSeats(nearVehicle)}/${seatCapacity(nearVehicle)} seats)`
               : "No nearby vehicle or weapon";
         $("#prompt").innerHTML = v
-          ? v.y > 0.2 && (v.kind === "helicopter" || v.kind === "plane")
+          ? v.y - groundLevel(v.x, v.z, scene.city) > 0.2 &&
+            (v.kind === "helicopter" || v.kind === "plane")
             ? `<kbd>F</kbd> Exit and deploy parachute`
             : `<kbd>F</kbd> Exit ${v.kind}${v.kind === "plane" ? " · E / Q altitude" : ""}`
           : p.parachute

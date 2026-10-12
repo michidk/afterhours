@@ -5,3 +5,4 @@ data/*.json
 data/city-preview.html
 docs/*benchmark.json
 docs/load-test.json
+dist-explorer

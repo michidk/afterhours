@@ -1,10 +1,12 @@
 import type { Entity, City } from "../shared/world.ts";
 import { LIMIT } from "../shared/world.ts";
 export function safeSpawn(city: City, entities: Entity[], ignore?: string) {
+  // Generated cities carry their downtown reference; the authored map used the origin.
+  const origin = { x: (city.centre?.x ?? 0) + 11, z: (city.centre?.z ?? 0) + 25 };
   for (let radius = 0; radius < 80; radius += 2)
     for (let i = 0; i < 16; i++) {
-      const x = 11 + Math.sin((i * Math.PI) / 8) * radius,
-        z = 25 + Math.cos((i * Math.PI) / 8) * radius;
+      const x = origin.x + Math.sin((i * Math.PI) / 8) * radius,
+        z = origin.z + Math.cos((i * Math.PI) / 8) * radius;
       if (
         Math.abs(x) > LIMIT - 2 ||
         Math.abs(z) > LIMIT - 2 ||
@@ -27,5 +29,5 @@ export function safeSpawn(city: City, entities: Entity[], ignore?: string) {
         continue;
       return { x, z };
     }
-  return { x: 11, z: 25 };
+  return origin;
 }

@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { generateCity } from "../scripts/city-generator.ts";
-import { terrainHeight, terrainMesh, TERRAIN_SIDE } from "../shared/terrain.ts";
+import {
+  terrainHeight,
+  terrainMesh,
+  TERRAIN_SIDE,
+  TERRAIN_STEP,
+} from "../shared/terrain.ts";
 import {
   groundLevel,
   isWater,
@@ -33,7 +38,7 @@ test("saved island is reproducible, larger, varied and surrounded by ocean", () 
   assert.deepEqual(generateCity().terrain, city.terrain);
   assert.notDeepEqual(generateCity(714).terrain, city.terrain);
   assert.ok(city.terrain);
-  assert.ok(Math.max(...city.terrain.heights) > 120);
+  assert.ok(city.terrain.heights.reduce((m, h) => Math.max(m, h), -Infinity) > 120);
   assert.equal(groundLevel(0, 0, city), 0);
   assert.equal(groundLevel(city.airport.x, city.airport.z, city), 0);
   let land = 0;
@@ -125,9 +130,11 @@ test("rotated boats stay off the irregular shore and all actors hit the invisibl
 });
 
 test("flight ceilings allow powered takeoff above high terrain", () => {
-  const peak = city.terrain!.heights.indexOf(Math.max(...city.terrain!.heights));
-  const x = (peak % TERRAIN_SIDE) * 32 - LIMIT,
-    z = Math.floor(peak / TERRAIN_SIDE) * 32 - LIMIT;
+  const peak = city.terrain!.heights.indexOf(
+    city.terrain!.heights.reduce((m, h) => Math.max(m, h), -Infinity),
+  );
+  const x = (peak % TERRAIN_SIDE) * TERRAIN_STEP - LIMIT,
+    z = Math.floor(peak / TERRAIN_SIDE) * TERRAIN_STEP - LIMIT;
   for (const kind of ["player", "helicopter", "plane"] as const) {
     const e = body(kind, x, z),
       floor = e.y;

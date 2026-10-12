@@ -13,17 +13,18 @@ export class Inventory {
   sources: {
     x: number;
     z: number;
+    y: number;
     payload: PickupPayload;
     id: string;
     next: number;
   }[] = [];
-  addSource(x: number, z: number, kind: WeaponKind) {
-    this.addSupplySource(x, z, { kind: "weapon", item: this.item(kind) });
+  addSource(x: number, z: number, kind: WeaponKind, y = 0) {
+    this.addSupplySource(x, z, { kind: "weapon", item: this.item(kind) }, y);
   }
-  addSupplySource(x: number, z: number, payload: PickupPayload) {
-    const pickup = this.spawnPayload(x, z, payload, 0);
+  addSupplySource(x: number, z: number, payload: PickupPayload, y = 0) {
+    const pickup = this.spawnPayload(x, z, payload, 0, y);
     pickup.expires = Number.MAX_SAFE_INTEGER;
-    this.sources.push({ x, z, payload, id: pickup.id, next: 0 });
+    this.sources.push({ x, z, y, payload, id: pickup.id, next: 0 });
   }
   item(kind: WeaponKind): WeaponItem {
     const spec = WEAPONS[kind];
@@ -180,7 +181,7 @@ export class Inventory {
           source.payload.kind === "weapon"
             ? { kind: "weapon" as const, item: this.item(source.payload.item.kind) }
             : source.payload;
-        const pickup = this.spawnPayload(source.x, source.z, payload, time);
+        const pickup = this.spawnPayload(source.x, source.z, payload, time, source.y);
         pickup.expires = Number.MAX_SAFE_INTEGER;
         source.id = pickup.id;
         source.next = 0;

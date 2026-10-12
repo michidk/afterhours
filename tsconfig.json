@@ -11,5 +11,5 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node", "vite/client"]
   },
-  "include": ["client", "server", "shared", "tests", "scripts"]
+  "include": ["client", "server", "shared", "tests", "scripts", "mapgen", "explorer"]
 }

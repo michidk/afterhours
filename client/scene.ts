@@ -50,7 +50,8 @@ import { buildParachute } from "./models/parachute.ts";
 import { buildWeapon } from "./models/weapons.ts";
 import { WaterRenderer } from "./world/water.ts";
 import { buildWatercraft } from "./models/watercraft.ts";
-import { watercraft } from "../shared/water.ts";
+import { groundLevel, watercraft } from "../shared/water.ts";
+import { buildSurface } from "./models/surface.ts";
 import type { GrenadeState } from "../shared/grenades.ts";
 export class CityScene {
   pickupNodes = new Map<string, TransformNode>();
@@ -234,11 +235,19 @@ export class CityScene {
       this.shadows.addShadowCaster(leaf);
     }
   }
+  /** Ground altitude under a feature; the authored map is flat at zero downtown. */
+  groundAt(x: number, z: number) {
+    return this.city?.terrain ? groundLevel(x, z, this.city) : 0;
+  }
   build(city: City, options: GeometryOptions = {}) {
     const r = random(city.seed + (options.index ?? 0) * 997);
+    const ground = (x: number, z: number) =>
+      city.terrain ? groundLevel(x, z, city) : 0;
     if (options.base !== false) {
       if (city.terrain) buildTerrain(this, city.terrain);
       else this.box("island", 0, -0.65, 0, LIMIT * 2, 1, LIMIT * 2, "#a9b29a");
+      // Generated cities ship road surfaces as polygons with their own profile heights.
+      if (city.surface) buildSurface(this, city.surface);
     }
     for (const surface of city.surfaces || []) {
       const colors = {
@@ -289,17 +298,18 @@ export class CityScene {
       }
     }
     if (options.airport !== false) {
-      const a = city.airport;
-      this.box("airfield apron", a.x, 0.03, a.z, a.w, 0.06, a.d, "#a3ab9b");
-      this.box("runway", a.x, 0.08, a.z, 22, 0.06, a.d - 8, "#4d585a");
+      const a = city.airport,
+        ay = ground(a.x, a.z);
+      this.box("airfield apron", a.x, ay + 0.03, a.z, a.w, 0.06, a.d, "#a3ab9b");
+      this.box("runway", a.x, ay + 0.08, a.z, 22, 0.06, a.d - 8, "#4d585a");
       for (let i = -a.d / 2 + 12; i <= a.d / 2 - 12; i += 10)
-        this.box("runway markings", a.x, 0.13, a.z + i, 0.4, 0.04, 3, "#f4e7c3");
+        this.box("runway markings", a.x, ay + 0.13, a.z + i, 0.4, 0.04, 3, "#f4e7c3");
       for (const side of [-1, 1])
         for (let i = -a.d / 2 + 8; i <= a.d / 2 - 8; i += 12)
           this.cylinder(
             "runway light",
             a.x + side * 11,
-            0.2,
+            ay + 0.2,
             a.z + i,
             0.12,
             0.25,
@@ -307,16 +317,26 @@ export class CityScene {
           ).material = this.streetGlow;
     }
     for (const landmark of city.landmarks)
-      this.sign(landmark.name, landmark.x, 5, landmark.z - 13, "#467b72", 12);
-    if (options.roads !== false) for (const road of city.roads) buildRoad(this, road);
+      this.sign(
+        landmark.name,
+        landmark.x,
+        ground(landmark.x, landmark.z) + 5,
+        landmark.z - 13,
+        "#467b72",
+        12,
+      );
+    // Surface polygons already cover every street of a generated city.
+    if (options.roads !== false && !city.surface)
+      for (const road of city.roads) buildRoad(this, road);
     city.buildings.forEach((b, i) => buildBuilding(this, b, options.index ?? i, r));
     for (const p of city.parks) {
       const pw = p.w ?? 38,
         pd = p.d ?? 38;
+      const py = ground(p.x, p.z);
       this.box(
         "park",
         p.x,
-        0.24,
+        py + 0.24,
         p.z,
         pw,
         0.3,
@@ -324,11 +344,11 @@ export class CityScene {
         p.kind === "civic" ? "#c7bda6" : p.kind === "woodland" ? "#7e946d" : "#82936c",
       );
 
-      this.box("park path", p.x, 0.42, p.z, 3, 0.1, pd, "#c9baa0");
-      this.box("cross path", p.x, 0.42, p.z, pw, 0.1, 3, "#c9baa0");
+      this.box("park path", p.x, py + 0.42, p.z, 3, 0.1, pd, "#c9baa0");
+      this.box("cross path", p.x, py + 0.42, p.z, pw, 0.1, 3, "#c9baa0");
       if (p.kind === "woodland") continue;
-      this.cylinder("fountain", p.x, 1, p.z, 1.2, 7, "#c4c4b0");
-      this.cylinder("fountain water", p.x, 1.65, p.z, 0.1, 5.8, "#71bdbe");
+      this.cylinder("fountain", p.x, py + 1, p.z, 1.2, 7, "#c4c4b0");
+      this.cylinder("fountain water", p.x, py + 1.65, p.z, 0.1, 5.8, "#71bdbe");
     }
     for (const ramp of city.ramps) {
       const m = rampMesh(this.scene, ramp.x, ramp.z);

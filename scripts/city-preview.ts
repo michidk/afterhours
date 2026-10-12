@@ -1,4 +1,5 @@
 import { LIMIT, district, type City } from "../shared/world.ts";
+import { TERRAIN_SIDE, TERRAIN_STEP } from "../shared/terrain.ts";
 
 /** Self-contained offline review map; it is never served or imported by the game. */
 export function cityPreview(city: City): string {
@@ -27,7 +28,7 @@ const colors={"DOWNTOWN":"#d7ad73","LITTLE HAVANA":"#d58d76","EAST MARKET":"#d2b
 const descriptions={"DOWNTOWN":"Glass offices, deco towers and a civic square. Compact blocks and the island's tallest skyline.","LITTLE HAVANA":"Pastel shop houses, striped awnings and compact streets around the starting neighborhood.","EAST MARKET":"Low market halls, mixed commercial frontage and branching avenues.","PALM GARDENS":"Balcony apartments, villas and a chain of public gardens.","SUNSET BEACH":"Hotels, garden homes and winding coastal routes beside the western beach.","PORT PALOMA":"Warehouses, collidable cargo containers, angled streets and service lanes.","IRONWORKS":"Larger industrial plots with angled warehouse access lanes.","PALOMA INTERNATIONAL":"A long runway, two hangars, terminal and control tower. Clear approaches and taxi space.","UNIVERSITY":"Faculty halls along a broad campus crescent and tree-lined streets.","NORTHWOOD":"Low townhouses and wooded reserves with trails, branching streets and cul-de-sacs."};
 const svg=document.querySelector('#map'), ns='http://www.w3.org/2000/svg';let view=[-limit,-limit,limit*2,limit*2],heightMode=false,selected='';
 function box(x,z,w,d,fill,attrs={}){const e=document.createElementNS(ns,'rect');for(const [k,v] of Object.entries({x:x-w/2,y:-z-d/2,width:w,height:d,fill,...attrs}))e.setAttribute(k,v);svg.append(e);return e}
-if(city.terrain){for(let z=0;z<96;z++)for(let x=0;x<96;x++){const h=city.terrain.heights[z*97+x];if(h>=-1.1)box(x*32-limit+16,z*32-limit+16,32,32,h<-.1?'#cfbf96':'hsl(105,22%,'+(40+h/7)+'%)')}}else box(0,0,limit*2,limit*2,'#96a785');
+if(city.terrain){const side=${TERRAIN_SIDE},step=${TERRAIN_STEP};for(let z=0;z<side-1;z++)for(let x=0;x<side-1;x++){const h=city.terrain.heights[z*side+x];if(h>=-1.1)box(x*step-limit+step/2,z*step-limit+step/2,step,step,h<-.1?'#cfbf96':'hsl(105,22%,'+(40+h/7)+'%)')}}else box(0,0,limit*2,limit*2,'#96a785');
 for(const s of city.surfaces||[])box(s.x,s.z,s.w,s.d,s.kind==='service'?'#637375':s.kind==='parking'?'#7c8880':'#aeb098');
 for(const p of city.parks)box(p.x,p.z,p.w||38,p.d||38,p.kind==='civic'?'#c7bca0':'#66865e');
 for(const r of roads){const e=document.createElementNS(ns,'line');for(const[k,v]of Object.entries({x1:r.ax,y1:-r.az,x2:r.bx,y2:-r.bz,stroke:'#435b5e','stroke-width':r.width,'stroke-linecap':'round'}))e.setAttribute(k,v);svg.append(e)}

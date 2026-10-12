@@ -230,7 +230,7 @@ export class DestructionRenderer {
       h.shadows.addShadowCaster(mesh);
     }
     h.shadowCandidates.push(...meshes);
-    root.position.set(p.x, p.h / 2, p.z);
+    root.position.set(p.x, h.groundAt(p.x, p.z) + p.h / 2, p.z);
     if (p.kind !== "corpse") root.rotation.y = p.angle ?? 0;
     const model: Model = { root, meshes, lit: false };
     if (live && p.kind === "lamp") {

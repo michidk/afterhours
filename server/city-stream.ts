@@ -26,6 +26,8 @@ export class CityStore {
       chunkSize: CITY_CHUNK_SIZE,
       airport: city.airport,
       terrain: city.terrain,
+      centre: city.centre,
+      surface: city.surface,
     };
     this.atlas = {
       mapId: this.manifest.mapId,

@@ -157,7 +157,10 @@ test("script debug interface controls real transport and production rejects it",
           client.command({ kind: "time", hour: 0, rate: 0 }),
           /disabled/,
         );
-        client.send({ type: "debugView", center: { x: -190, z: -190 } });
+        client.send({
+          type: "debugView",
+          center: client!.welcome.map.centre ?? { x: -190, z: -190 },
+        });
         await pause(150);
         assert.ok(client.entities.has(client.welcome.id));
       } else {
@@ -179,11 +182,19 @@ test("script debug interface controls real transport and production rejects it",
         const spawned = await client.command({ kind: "spawn", model: "sport" });
         assert.equal(spawned.entities.length, after.entities.length + 1);
         assert.ok(spawned.entities.some((e) => e.model === "sport" && !e.ai));
-        client.send({ type: "debugView", center: { x: -190, z: -190 } });
+        client.send({
+          type: "debugView",
+          center: client!.welcome.map.centre ?? { x: -190, z: -190 },
+        });
         const deadline = Date.now() + 5000;
         while (
           ![...client.entities.values()].some(
-            (e) => e.kind !== "player" && Math.hypot(e.x + 190, e.z + 190) < 110,
+            (e) =>
+              e.kind !== "player" &&
+              Math.hypot(
+                e.x - (client!.welcome.map.centre?.x ?? -190),
+                e.z - (client!.welcome.map.centre?.z ?? -190),
+              ) < 110,
           ) &&
           Date.now() < deadline
         )
@@ -191,7 +202,12 @@ test("script debug interface controls real transport and production rejects it",
         assert.ok(client.entities.has(client.welcome.id));
         assert.ok(
           [...client.entities.values()].some(
-            (e) => e.kind !== "player" && Math.hypot(e.x + 190, e.z + 190) < 110,
+            (e) =>
+              e.kind !== "player" &&
+              Math.hypot(
+                e.x - (client!.welcome.map.centre?.x ?? -190),
+                e.z - (client!.welcome.map.centre?.z ?? -190),
+              ) < 110,
           ),
         );
       }

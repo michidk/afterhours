@@ -11,7 +11,10 @@ export function buildBuilding(
 ) {
   const asset = BUILDING_ASSETS[b.asset ?? "shop-house"];
   const facing = b.facing ?? 0,
-    angle = (facing * Math.PI) / 2;
+    angle = (facing * Math.PI) / 2 + (b.angle ?? 0),
+    // Generated cities place pads on terrain: walls span the pad altitude to the roof.
+    base = b.y ?? 0,
+    height = b.h - base;
   const w = facing % 2 ? b.d : b.w,
     d = facing % 2 ? b.w : b.d;
   const box = (
@@ -28,7 +31,7 @@ export function buildBuilding(
     const mesh = scene.box(
       name,
       b.x + x * Math.cos(angle) - z * Math.sin(angle),
-      y,
+      base + y,
       b.z + x * Math.sin(angle) + z * Math.cos(angle),
       width,
       height,
@@ -40,17 +43,17 @@ export function buildBuilding(
     mesh.rotation.y = -angle;
     return mesh;
   };
-  box(asset.name, 0, (b.h - 0.05) / 2, 0, w, b.h - 0.05, d, b.color, true);
+  box(asset.name, 0, (height - 0.05) / 2, 0, w, height - 0.05, d, b.color, true);
   if (b.asset === "container") {
     for (let x = -w / 2 + 0.5; x < w / 2; x += 0.8)
       for (const side of [-1, 1])
         box(
           "cargo rib",
           x,
-          b.h / 2,
+          height / 2,
           side * (d / 2 + 0.025),
           0.08,
-          b.h - 0.15,
+          height - 0.15,
           0.06,
           asset.trim,
         );
@@ -58,10 +61,28 @@ export function buildBuilding(
   }
   box("foundation", 0, 0.4, 0, w + 0.12, 0.8, d + 0.12, asset.trim);
   // Flat roof detailing stays within the server's roof height (no invisible rooftop obstacles).
-  box("roof deck", 0, b.h - 0.0125, 0, w - 0.5, 0.025, d - 0.5, "#89938b");
+  box("roof deck", 0, height - 0.0125, 0, w - 0.5, 0.025, d - 0.5, "#89938b");
   for (const side of [-1, 1]) {
-    box("roof coping", 0, b.h - 0.15, side * (d / 2 - 0.15), w, 0.3, 0.3, asset.trim);
-    box("roof coping", side * (w / 2 - 0.15), b.h - 0.15, 0, 0.3, 0.3, d, asset.trim);
+    box(
+      "roof coping",
+      0,
+      height - 0.15,
+      side * (d / 2 - 0.15),
+      w,
+      0.3,
+      0.3,
+      asset.trim,
+    );
+    box(
+      "roof coping",
+      side * (w / 2 - 0.15),
+      height - 0.15,
+      0,
+      0.3,
+      0.3,
+      d,
+      asset.trim,
+    );
   }
   // Four finished faces: repeated window strips keep distant silhouettes clean and batch well.
   for (let face = 0; face < 4; face++) {
@@ -99,7 +120,7 @@ export function buildBuilding(
             color,
           );
     };
-    for (let y = asset.storefront ? 6 : 2.8; y < b.h - 1.6; y += asset.floorHeight) {
+    for (let y = asset.storefront ? 6 : 2.8; y < height - 1.6; y += asset.floorHeight) {
       if (asset.facade === "glass") {
         surface("glass ribbon", 0, y, span - 1, 2.7, 0.04, "#486f78");
         surface("floor band", 0, y - 1.45, span, 0.18, 0.08, asset.trim);
@@ -130,12 +151,12 @@ export function buildBuilding(
     }
     if (asset.facade === "piers") {
       for (let u = -span / 2 + 0.7; u <= span / 2; u += 3.5)
-        surface("deco pier", u, b.h / 2, 0.45, b.h - 0.8, 0.14, asset.trim);
-      for (let y = b.h - 2.4; y < b.h; y += 0.8)
+        surface("deco pier", u, height / 2, 0.45, height - 0.8, 0.14, asset.trim);
+      for (let y = height - 2.4; y < height; y += 0.8)
         surface("deco crown", 0, y, span + 0.2, 0.25, 0.17, asset.trim);
     }
     if (asset.facade === "industrial") {
-      surface("brick belt", 0, b.h - 0.8, span, 0.5, 0.12, asset.trim);
+      surface("brick belt", 0, height - 0.8, span, 0.5, 0.12, asset.trim);
     }
   }
   box("entrance", 0, 1.4, -d / 2 - 0.035, Math.min(3, w / 3), 2.8, 0.07, "#365c5e");
@@ -167,7 +188,7 @@ export function buildBuilding(
       const sign = scene.sign(
         labels[index % labels.length],
         b.x - z * Math.sin(angle),
-        4.1,
+        base + 4.1,
         b.z + z * Math.cos(angle),
         accent,
         Math.min(6, w - 2),
@@ -210,11 +231,11 @@ export function buildBuilding(
     );
   }
   // Roof paint, not geometry above the collision envelope.
-  if (b.h > 35 && index % 3 === 0) {
+  if (height > 35 && index % 3 === 0) {
     box(
       "helipad",
       0,
-      b.h + 0.03,
+      height + 0.03,
       0,
       Math.min(w - 2, 9),
       0.025,
@@ -222,7 +243,7 @@ export function buildBuilding(
       "#586e68",
     );
     for (const x of [-1.3, 1.3])
-      box("helipad H", x, b.h + 0.05, 0, 0.4, 0.015, 3.5, "#e8d9af");
-    box("helipad H", 0, b.h + 0.05, 0, 2.6, 0.015, 0.4, "#e8d9af");
+      box("helipad H", x, height + 0.05, 0, 0.4, 0.015, 3.5, "#e8d9af");
+    box("helipad H", 0, height + 0.05, 0, 2.6, 0.015, 0.4, "#e8d9af");
   }
 }

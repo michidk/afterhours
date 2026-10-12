@@ -128,12 +128,25 @@ export interface Building {
   z: number;
   w: number;
   d: number;
+  /** Roof altitude. Generated cities set `y` (pad altitude) so walls span y..h. */
   h: number;
+  y?: number;
+  /** Footprint rotation in radians for street-aligned lots; collision honours it. */
+  angle?: number;
   color: string;
   style: number;
 }
+/** Flat [x, y, z, ...] polygons with road-profile heights, shared by map and 3D. */
+export interface RoadSurface {
+  asphalt: number[][];
+  sidewalks: number[][];
+  markings: { color: "white" | "yellow"; polygon: number[] }[];
+}
 export interface City {
   terrain?: { heights: number[] };
+  /** Downtown reference point for spawns; generated cities are not centred on 0,0. */
+  centre?: { x: number; z: number };
+  surface?: RoadSurface;
   roads: Road[];
   seed: number;
   props: { x: number; z: number; h: number; kind: "palm" | "lamp" | "tree" }[];
