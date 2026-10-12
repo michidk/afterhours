@@ -148,3 +148,18 @@ workspace activity and cannot establish isolated server capacity. They do establ
 that the current environment did not pass the movement gate. Production promotion
 remains deferred; the interpolation regression fix is not a claim that all lag is
 resolved.
+
+## Production verification, 2026-10-12
+
+Production now runs `4d58b165afb10158374232ee1056c566ccf34de1`, promoted by
+infrastructure commit `63bd138e`. The deployment workflow completed successfully;
+the live Deployment has one available replica and the public health endpoint is
+healthy. This supersedes the deferred-promotion status in the historical runs above.
+
+A two-client WebSocket smoke check through `https://afterhours.k8s.lohr.dev/`
+held walking for three seconds and moved authority 12.378 m. The final diagnostic
+reported 30 inputs/s, 40.7 ms RTT, four pending inputs and zero snapshot resyncs.
+Server tick p95 was 42.6 ms, above the 33.3 ms simulation budget. This short check
+verifies live input delivery and movement, not sustained capacity, collision quality
+or browser frame pacing. Full-scene browser acceptance remains open; CI's unit,
+real-socket and image jobs passed for this revision, while its browser job failed.
