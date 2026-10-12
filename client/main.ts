@@ -456,6 +456,7 @@ async function boot() {
     loading("Building the spawn scenery…");
     cityRenderer = new CityRenderer(scene, world);
     cityRenderer.sync([...cityStream.chunks.values()]);
+    scene.lighting.selectLamps(scene.target);
     loading("Preparing the first frame…");
     scene.engine.runRenderLoop(() => scene.scene.render());
     let readinessTimer: ReturnType<typeof setTimeout>;

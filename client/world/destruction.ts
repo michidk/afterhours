@@ -243,6 +243,7 @@ export class DestructionRenderer {
       meshes.push(pool);
     }
     if (live && p.kind === "signal") model.light = { mesh: bulb!, axis: p.axis ?? "z" };
+    if (live) for (const mesh of meshes) h.culling.add(mesh);
     return model;
   }
   private startWater(id: string, position: Vector3) {

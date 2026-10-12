@@ -1,3 +1,4 @@
+import { SceneryCulling } from "../client/world/culling.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine";
@@ -105,6 +106,7 @@ test("hydrant fountains are idempotent and dispose both layers when streamed out
     scene = new Scene(engine);
   const host = Object.assign(Object.create(CityScene.prototype), {
     scene,
+    culling: new SceneryCulling(scene),
     materials: new Map(),
     target: Vector3.Zero(),
     shadowCandidates: [],

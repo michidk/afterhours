@@ -1,3 +1,4 @@
+import { SceneryCulling } from "./world/culling.ts";
 import { buildTerrain } from "./world/terrain.ts";
 import { buildHeadlightCones, CarLights } from "./models/car-lights.ts";
 import { buildCharacter, poseCharacter } from "./models/character.ts";
@@ -61,6 +62,7 @@ export class CityScene {
   water: WaterRenderer;
   engine: Engine;
   scene: Scene;
+  readonly culling: SceneryCulling;
   camera: FreeCamera;
   sun: DirectionalLight;
   ambient: HemisphericLight;
@@ -94,6 +96,7 @@ export class CityScene {
     this.engine.getCaps().parallelShaderCompile = undefined;
     this.engine.setHardwareScalingLevel(Math.max(1, devicePixelRatio / 1.6));
     this.scene = new Scene(this.engine);
+    this.culling = new SceneryCulling(this.scene);
     this.carLights = new CarLights(this.scene);
     this.scene.skipPointerMovePicking = true;
     this.scene.skipPointerDownPicking = true;
@@ -442,13 +445,17 @@ export class CityScene {
       groups.set(key, group);
     }
     for (const group of groups.values()) {
-      if (group.length < 2) continue;
+      if (group.length < 2) {
+        this.culling.add(group[0]);
+        continue;
+      }
       const cast = casters.has(group[0]);
       for (const mesh of group) this.shadows.removeShadowCaster(mesh);
       const merged = Mesh.MergeMeshes(group, true, true, undefined, false, false);
       if (merged) {
         merged.receiveShadows = true;
         merged.freezeWorldMatrix();
+        this.culling.add(merged);
         if (cast) this.shadows.addShadowCaster(merged);
       }
     }

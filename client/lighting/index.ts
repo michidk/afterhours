@@ -135,22 +135,7 @@ export class EnvironmentLighting {
     this.pool.alpha = state.night * 0.3;
     for (const sign of this.signs) sign.emissiveColor.setAll(0.13 + state.night * 0.48);
     this.selectionClock += dt;
-    if (this.selectionClock >= 0.3) {
-      this.selectionClock = 0;
-      const nearest = [...this.lamps]
-        .sort(
-          (a, b) =>
-            Math.hypot(a.x - focus.x, a.z - focus.z) -
-            Math.hypot(b.x - focus.x, b.z - focus.z),
-        )
-        .slice(0, 4);
-      for (let i = 0; i < this.localLights.length; i++) {
-        const position = nearest[i];
-        if (position) this.localLights[i].position.copyFrom(position);
-        if (this.localLights[i].isEnabled() !== !!position)
-          this.localLights[i].setEnabled(!!position);
-      }
-    }
+    if (this.selectionClock >= 0.3) this.selectLamps(focus);
     for (const light of this.localLights) light.intensity = state.lampIntensity;
     this.sky.setColor3("zenith", color(state.zenith));
     this.sky.setColor3("horizon", fog);
@@ -158,6 +143,22 @@ export class EnvironmentLighting {
     this.sky.setColor3("sunlight", color(state.sunlight));
     this.sky.setFloat("daylight", state.daylight);
     this.sky.setFloat("night", state.night);
+  }
+  selectLamps(focus: Vector3) {
+    this.selectionClock = 0;
+    const nearest = [...this.lamps]
+      .sort(
+        (a, b) =>
+          Math.hypot(a.x - focus.x, a.z - focus.z) -
+          Math.hypot(b.x - focus.x, b.z - focus.z),
+      )
+      .slice(0, 4);
+    for (let i = 0; i < this.localLights.length; i++) {
+      const position = nearest[i];
+      if (position) this.localLights[i].position.copyFrom(position);
+      if (this.localLights[i].isEnabled() !== !!position)
+        this.localLights[i].setEnabled(!!position);
+    }
   }
   get diagnostics() {
     return {

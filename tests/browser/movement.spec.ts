@@ -174,8 +174,12 @@ for (const delay of [0, 150]) {
       return (
         scene && {
           meshes: scene.meshes.length,
+          candidates: scene.getActiveMeshCandidates().length,
           activeMeshes: scene.getActiveMeshes().length,
-          vertices: scene.getTotalVertices(),
+          vertices: scene.meshes.reduce(
+            (sum, mesh) => sum + mesh.getTotalVertices(),
+            0,
+          ),
           materials: scene.materials.length,
         }
       );

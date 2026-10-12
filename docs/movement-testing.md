@@ -85,3 +85,33 @@ plus substantial idle/native time; it does not establish a network fault or prov
 GPU bottleneck. Shared-host contention and software WebGL prevent using these runs
 as hardware performance measurements. The next acceptance step remains an unchanged
 full-city held-input run with frame, input and server timings recorded together.
+
+## Scenery selection investigation
+
+Controlled headless comparisons kept the live networking/update loop running while
+bypassing scene rendering, shadows, terrain, draw calls or HUD effects separately.
+Bypassing scene rendering produced 215 frames in four seconds; ordinary rendering
+produced 12–15 in the surrounding samples. Disabling individual visual effects did
+not remove the stalls. These diagnostic runs shared CPU resources with other work
+and are not hardware-client benchmarks.
+
+Static scenery now uses Babylon's octree before per-mesh processing. Intact
+fixtures are indexed along with buildings; moving debris, actors and newly created
+meshes remain eligible every frame. Eviction removes indexed meshes. The regression
+compares visible meshes against a full-scene frustum check, including moved cameras,
+parented/restored fixtures, immediate spawns and geometry outside the index bounds.
+Browser attachments now include candidate counts. The first full-city walking run
+selected 1,584 candidates from 8,914 resident meshes, but still failed the unchanged
+250 ms freeze limit (approximately 398 ms). The subsequent delayed-snapshot run was
+terminated externally before completion. Neither result establishes playable
+movement; production promotion is still deferred.
+
+Disabling trace recording did not make the walking gate pass. Startup also now
+selects the spawn's nearby lamps before waiting for renderer readiness, so the
+first gameplay lamp selection does not change the shader light set. A focused
+regression checks this without advancing gameplay. The following trace-free walk
+sent 91 commands and moved authority 13.13 m, but still recorded a 362.5 ms frame
+gap. In a later controlled comparison, the headless browser consumed about nine
+CPU cores; disabling shadows and HUD together reduced observed frame gaps below
+250 ms, while normal rendering still exceeded that limit. Those temporary visual
+changes were diagnostic only and are not part of the game or acceptance result.

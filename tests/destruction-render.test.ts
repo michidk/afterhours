@@ -1,3 +1,4 @@
+import { SceneryCulling } from "../client/world/culling.ts";
 import { DEFAULT_CHARACTER } from "../shared/character.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -21,6 +22,7 @@ test("streamed fixtures hide, debris interpolates/fades, lights restore and mesh
     casters = new Set<Mesh>();
   const host = Object.assign(Object.create(CityScene.prototype), {
     scene,
+    culling: new SceneryCulling(scene),
     materials: new Map(),
     target: new Vector3(0, 0, 0),
     shadowCandidates: [],
