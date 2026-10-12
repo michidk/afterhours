@@ -115,6 +115,7 @@ export function predictStep(
   nearby: Entity[],
   dt: number,
   shadows = predictionWorld(e, nearby),
+  contacts?: Set<string>,
 ) {
   const count = Math.ceil(dt / TUNING.physicsStep),
     h = dt / count;
@@ -175,12 +176,16 @@ export function predictStep(
       if (b.kind === "car") carAltitude(b, previous, city, h);
       else b.y = Math.max(groundLevel(b.x, b.z, city), b.y + b.vy * h);
     }
-    resolveMovementContacts(bodies, city);
+    resolveMovementContacts(bodies, city, contacts);
   }
 }
 
 /** Provisional contact solve; never damage entities or change gameplay ownership. */
-export function resolveMovementContacts(bodies: Entity[], city: City) {
+export function resolveMovementContacts(
+  bodies: Entity[],
+  city: City,
+  contacts?: Set<string>,
+) {
   for (let pass = 0; pass < 3; pass++) {
     for (const body of bodies) {
       resolveStaticContacts(body, city);
@@ -188,7 +193,13 @@ export function resolveMovementContacts(bodies: Entity[], city: City) {
     for (const [a, b] of collisionPairs(bodies)) {
       if (Math.abs(a.x - b.x) > 10 || Math.abs(a.z - b.z) > 10) continue;
       const c = contact(entityBox(a), entityBox(b));
-      if (c) resolveContact(a, b, c);
+      if (c) {
+        if (contacts?.has(a.id) || contacts?.has(b.id)) {
+          contacts.add(a.id);
+          contacts.add(b.id);
+        }
+        resolveContact(a, b, c);
+      }
     }
   }
   for (const body of bodies) resolveWorldBounds(body, city);

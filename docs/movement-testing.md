@@ -1,5 +1,20 @@
 # Movement regression tests
 
+`bun run test:network` runs two real clients against a separate production server
+using the saved city. It measures walking and helicopter movement with 0, 150 and
+360 ms incoming delay plus ordered bidirectional jitter. It checks input cadence,
+authoritative speed, local and nearby remote poses, backward jumps, release,
+convergence and bounded unacknowledged inputs. Each scenario prints timings and
+server health before asserting. It deliberately fails if CPU starvation slows
+simulated time; it does not wait longer to make slow movement pass. Run it without
+other local builds when comparing results. CI runs it after the build.
+
+This check has no WebGL and complements, rather than replaces, the rendered browser
+gate below. The deterministic socket regression also tests a neighbour at both
+8 and 80 metres: ordinary nearby players must stay on buffered interpolation.
+Only contact-connected bodies use provisional collision poses, then blend back to
+the buffered timeline over 500 ms. Server snapshots remain authoritative.
+
 Run the production browser test from a checkout that nobody else is editing:
 
 ```sh
@@ -115,3 +130,21 @@ gap. In a later controlled comparison, the headless browser consumed about nine
 CPU cores; disabling shadows and HUD together reduced observed frame gaps below
 250 ms, while normal rendering still exceeded that limit. Those temporary visual
 changes were diagnostic only and are not part of the game or acceptance result.
+
+## Nearby-player interpolation regression
+
+The earlier socket scenario put the other player 80 m away, missing the presentation
+path used within 24 m. At 8 m, that path switched ordinary movement to provisional
+collision poses that reset at each snapshot. Before the fix, the deterministic
+50 and 80 ms wakeup cases recorded backward jumps of 0.53 and 0.62 m. All six
+near/far cases now pass, along with the existing immediate-impact and collision
+replay checks.
+
+The new wall-clock harness still fails acceptance on this shared host: its complete
+container run sent 90–91 commands per three-second hold, but recorded slow authority,
+excess pending inputs and one 520 ms helicopter pause during server stalls. Server
+tick p95 ranged from 55 to 102 ms across scenarios. These runs overlapped other
+workspace activity and cannot establish isolated server capacity. They do establish
+that the current environment did not pass the movement gate. Production promotion
+remains deferred; the interpolation regression fix is not a claim that all lag is
+resolved.

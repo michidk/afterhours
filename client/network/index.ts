@@ -1,3 +1,4 @@
+import { contact, entityBox } from "../../shared/physics/index.ts";
 import type { Character } from "../../shared/character.ts";
 import { VERSION } from "../../shared/version.ts";
 import type {
@@ -44,6 +45,8 @@ export class GameNetwork {
   private snapshotTimes: number[] = [];
   token = "";
   private timeline = new SnapshotTimeline();
+  private contactPresentation = new Map<string, number>();
+  private contactOwner = "";
   private retry: ReturnType<typeof setTimeout> | undefined;
   private closed = false;
   private debugSerial = 0;
@@ -129,6 +132,8 @@ export class GameNetwork {
         this.frame = 0;
         this.entities.clear();
         this.timeline.reset();
+        this.contactPresentation.clear();
+        this.contactOwner = "";
         this.hooks.welcome(m);
         this.hooks.status("connected");
       }
@@ -275,7 +280,13 @@ export class GameNetwork {
         ? controlled
         : undefined);
     if (predicted) {
-      // Nearby contacts share the player's clock; distant traffic stays buffered.
+      if (this.contactOwner !== predicted.id) {
+        this.contactPresentation.clear();
+        this.contactOwner = predicted.id;
+      }
+      for (const [id, until] of this.contactPresentation)
+        if (until <= now) this.contactPresentation.delete(id);
+      // Only interacting bodies leave the buffered timeline, not every nearby player.
       for (const neighbour of prediction?.neighbours ?? this.entities.values()) {
         if (neighbour.id === predicted.id || neighbour.vehicle) continue;
         const index = result.findIndex((e) => e.id === neighbour.id);
@@ -285,7 +296,14 @@ export class GameNetwork {
           Math.hypot(remote.x - predicted.x, remote.z - predicted.z),
           Math.hypot(neighbour.x - predicted.x, neighbour.z - predicted.z),
         );
-        const weight = Math.max(0, Math.min(1, (24 - distance) / 12));
+        const interacting =
+          prediction?.contacts.has(neighbour.id) ||
+          (Math.abs(remote.y - predicted.y) < 1.8 &&
+            contact(entityBox(predicted), entityBox(remote)));
+        // Let interpolation catch up gradually after a provisional impact.
+        if (interacting) this.contactPresentation.set(neighbour.id, now + 500);
+        const remaining = (this.contactPresentation.get(neighbour.id) ?? now) - now;
+        const weight = Math.max(0, Math.min(1, (24 - distance) / 12, remaining / 500));
         if (weight === 0) continue;
         const pose = interpolate(remote, neighbour, weight);
         if (index >= 0) result[index] = pose;

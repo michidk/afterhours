@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "start": "node --import tsx server/index.ts --production",
     "test": "tsx --test --test-concurrency=1 tests/*.test.ts",
+    "test:network": "tsx scripts/network-realtime-test.ts",
     "test:browser": "playwright test",
     "test:browser:docker": "bash scripts/test-browser-docker.sh",
     "city:generate": "tsx scripts/generate-city.ts",

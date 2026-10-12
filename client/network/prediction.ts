@@ -23,6 +23,7 @@ export class Prediction {
   private lastInput: InputFrame | undefined;
   private nearby: Entity[] = [];
   private shadows: Entity[] = [];
+  private contacts = new Set<string>();
   private suspended = false;
   private discardedThrough = -1;
   constructor(
@@ -37,6 +38,7 @@ export class Prediction {
     this.lastInput = undefined;
     this.nearby = [];
     this.shadows = [];
+    this.contacts.clear();
     this.suspended = false;
     this.discardedThrough = -1;
     this.lastRender = 0;
@@ -75,6 +77,7 @@ export class Prediction {
     this.body = structuredClone(authoritative);
     this.nearby = entities;
     this.shadows = predictionWorld(this.body, entities);
+    this.contacts = new Set([this.body.id]);
     if (!this.worldReady(this.body)) {
       this.pending = [];
       this.lastInput = undefined;
@@ -96,6 +99,7 @@ export class Prediction {
         entities,
         TUNING.tick,
         this.shadows,
+        this.contacts,
       );
     }
     if (!this.worldReady(this.body)) {
@@ -158,7 +162,7 @@ export class Prediction {
     this.decayOffset(now);
     this.lastRender = now;
     if (!this.body || !this.worldReady(this.body)) return undefined;
-    const { body: pose, neighbours } = this.extrapolate(this.body, now);
+    const { body: pose, neighbours, contacts } = this.extrapolate(this.body, now);
     pose.x += this.offset.x;
     pose.z += this.offset.z;
     pose.y += this.offset.y;
@@ -170,7 +174,7 @@ export class Prediction {
       Math.abs(this.offset.angle) > 0.001
     )
       constrainRenderPose(pose, this.city, neighbours);
-    return { body: pose, neighbours };
+    return { body: pose, neighbours, contacts };
   }
   private extrapolate(body: Entity, now: number) {
     const pose = {
@@ -179,6 +183,7 @@ export class Prediction {
       jetpack: body.jetpack && { ...body.jetpack },
     };
     const neighbours = structuredClone(this.shadows);
+    const contacts = new Set(this.contacts);
     // Fill the gap between 30 Hz inputs at display refresh rate. This copy never
     // changes the replay state or decides gameplay outcomes.
     if (this.lastInput && !this.suspended) {
@@ -194,9 +199,10 @@ export class Prediction {
           this.nearby,
           partial,
           neighbours,
+          contacts,
         );
     }
-    return { body: pose, neighbours };
+    return { body: pose, neighbours, contacts };
   }
   input(frame: InputFrame, nearby: Entity[]) {
     if (!this.body) return;
@@ -212,7 +218,15 @@ export class Prediction {
     if (this.suspended || this.pending.length > MAX_PREDICTION_STEPS) return;
     this.lastInput = frame;
     if (this.body)
-      predictStep(this.body, frame.input, this.city, nearby, TUNING.tick, this.shadows);
+      predictStep(
+        this.body,
+        frame.input,
+        this.city,
+        nearby,
+        TUNING.tick,
+        this.shadows,
+        this.contacts,
+      );
   }
 }
 export function interpolate(
