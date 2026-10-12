@@ -1,7 +1,46 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 import { GameAudio } from "../client/audio/index.ts";
+import { SOUND_BANKS } from "../client/audio/banks.ts";
 import type { Entity } from "../shared/world.ts";
+
+test("sound preloading downloads every clip once with at most four requests in flight", async (t) => {
+  const requested: string[] = [];
+  let active = 0,
+    maximum = 0;
+  const server = createServer(async (req, res) => {
+    requested.push(req.url ?? "");
+    maximum = Math.max(maximum, ++active);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    active--;
+    res.end(Buffer.from([1, 2, 3, 4]));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const fetchClip = globalThis.fetch;
+  t.mock.method(globalThis, "fetch", (input: RequestInfo | URL, init?: RequestInit) =>
+    fetchClip(new URL(String(input), `http://127.0.0.1:${address.port}`), init),
+  );
+  try {
+    const audio = new GameAudio(),
+      loading = audio.preload();
+    assert.equal(audio.preload(), loading);
+    await loading;
+    const expected = [...new Set(Object.values(SOUND_BANKS).flatMap((b) => b.files))]
+      .map((name) => `/audio/${name}.wav`)
+      .sort();
+    assert.deepEqual(requested.sort(), expected);
+    assert.ok(maximum <= 4, "sound downloads must not exceed four concurrent requests");
+    assert.deepEqual(audio.diagnostics.failed, []);
+    await audio.preload();
+    assert.equal(requested.length, expected.length);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
 
 test("pushing idle vehicles never starts engines; powering and shutdown control loops", () => {
   const listener: Entity = {

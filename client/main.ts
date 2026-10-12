@@ -365,7 +365,6 @@ function drawMap(p: Entity) {
 }
 async function boot() {
   try {
-    void audio.preload();
     await new Promise((r) => setTimeout(r, 30));
     loading("Downloading the city map…");
     const response = await fetch("/city", {
@@ -375,8 +374,8 @@ async function boot() {
     if (!response.ok) throw Error("City download failed");
     const world = mapManifestSchema.parse(await response.json());
     loading("Starting 3D rendering…");
-    let cityRenderer: CityRenderer;
-    cityStream = new CityStream(world, (chunks) => cityRenderer.sync(chunks));
+    let cityRenderer: CityRenderer | undefined;
+    cityStream = new CityStream(world, (chunks) => cityRenderer?.sync(chunks));
     scene = new CityScene($<HTMLCanvasElement>("#world"), cityStream.city, true);
     cityMap = new CityMap(
       $("#city-map"),
@@ -389,9 +388,11 @@ async function boot() {
         network?.input(idle());
       },
     );
-    cityRenderer = new CityRenderer(scene, world);
     loading("Loading the spawn neighbourhood…");
     await cityStream.prepare();
+    loading("Building the spawn scenery…");
+    cityRenderer = new CityRenderer(scene, world);
+    cityRenderer.sync([...cityStream.chunks.values()]);
     loading("Preparing the first frame…");
     scene.engine.runRenderLoop(() => scene.scene.render());
     let readinessTimer: ReturnType<typeof setTimeout>;
@@ -409,6 +410,7 @@ async function boot() {
       clearTimeout(readinessTimer!);
     }
     scene.engine.stopRenderLoop();
+    void audio.preload();
     $("#play").textContent = "Enter the city →";
     $("#play").removeAttribute("disabled");
     $("#app").removeAttribute("inert");

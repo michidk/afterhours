@@ -56,14 +56,17 @@ export class GameAudio {
       ...new Set(Object.values(SOUND_BANKS).flatMap((bank) => bank.files)),
     ];
     return (this.loading ??= Promise.all(
-      files.map(async (name) => {
-        try {
-          const response = await fetch("/audio/" + name + ".wav");
-          if (!response.ok) throw Error(String(response.status));
-          this.raw.set(name, await response.arrayBuffer());
-        } catch {
-          this.failures.push(name);
-          console.warn("Could not load sound:", name);
+      Array.from({ length: Math.min(4, files.length) }, async () => {
+        let name: string | undefined;
+        while ((name = files.shift()) !== undefined) {
+          try {
+            const response = await fetch("/audio/" + name + ".wav");
+            if (!response.ok) throw Error(String(response.status));
+            this.raw.set(name, await response.arrayBuffer());
+          } catch {
+            this.failures.push(name);
+            console.warn("Could not load sound:", name);
+          }
         }
       }),
     ).then(() => {}));

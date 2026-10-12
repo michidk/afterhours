@@ -30,6 +30,8 @@ bun run build
 bun run start
 ```
 
+Startup downloads the spawn chunks before building their 3D scenery, so mesh construction cannot delay the remaining downloads into a timeout. Sounds begin loading after the first frame is ready, with at most four downloads at once. Sound loading can continue after the entry screen appears.
+
 `start` serves the built client and WebSocket endpoint. Production debug tools are disabled; `ALLOW_DEBUG=1` explicitly enables them for everyone on that server. Development enables them. Do not expose development mode publicly. See [debug commands and scenarios](docs/debugging.md) for the script and browser interfaces.
 
 ## Controls
