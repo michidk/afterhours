@@ -1,3 +1,4 @@
+import type { Character } from "./character.ts";
 import type { BuildingAssetId } from "./assets/buildings/index.ts";
 export const BLOCK = 64;
 import type { VehicleModel, WeaponItem, WeaponKind } from "./catalog.ts";
@@ -37,6 +38,7 @@ export interface Entity {
   color: string;
   health: number;
   name?: string;
+  character?: Character;
   driver?: string;
   /** Vehicle occupant IDs; slot zero is the driver/pilot. Null means vacant. */
   seats?: (string | null)[];

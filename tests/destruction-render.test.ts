@@ -1,3 +1,4 @@
+import { DEFAULT_CHARACTER } from "../shared/character.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine";
@@ -75,6 +76,46 @@ test("streamed fixtures hide, debris interpolates/fades, lights restore and mesh
     assert.equal(host.shadowCandidates.length, 0);
     assert.equal(host.lighting.lamps.length, 0);
     assert.ok(scene.materials.length > 0, "palette survives chunk eviction");
+    renderer.receive(
+      [
+        {
+          ...state,
+          id: "body:test",
+          source: {
+            id: "body:test",
+            kind: "corpse",
+            x: 0,
+            z: 0,
+            h: 1.9,
+            w: 0.65,
+            d: 0.6,
+            color: "#e8b63f",
+            character: {
+              ...DEFAULT_CHARACTER,
+              skin: "#654432",
+              hair: "cap",
+              legs: "shorts",
+            },
+          },
+        },
+      ],
+      0,
+      3000,
+    );
+    renderer.update(3000);
+    const corpse = scene.getTransformNodeByName("debris:body:test")!;
+    assert.ok(
+      corpse.getChildMeshes().some((mesh) => mesh.material === host.mat("#654432")),
+      "corpse retains skin tone",
+    );
+    assert.ok(
+      corpse.getChildMeshes().some((mesh) => mesh.material === host.mat("#344842")),
+      "corpse retains cap",
+    );
+    renderer.receive([], 30, 4000);
+    renderer.update(4000);
+    assert.equal(scene.meshes.length, 0);
+    assert.equal(scene.transformNodes.length, 0);
   } finally {
     renderer.dispose();
     scene.dispose();

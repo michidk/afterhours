@@ -194,7 +194,17 @@ export class Destruction {
   corpse(e: Entity, time: number) {
     const id = `body:${e.id}:${++this.serial}`;
     this.spawn(
-      { id, kind: "corpse", x: e.x, z: e.z, h: 1.9, w: 0.65, d: 0.6, color: e.color },
+      {
+        id,
+        kind: "corpse",
+        x: e.x,
+        z: e.z,
+        h: 1.9,
+        w: 0.65,
+        d: 0.6,
+        color: e.color,
+        character: e.character,
+      },
       time,
       { x: e.vx, y: Math.max(0, e.vy), z: e.vz },
       TUNING.corpseSeconds,

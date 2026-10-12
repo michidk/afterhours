@@ -1,4 +1,5 @@
-﻿import { decodeSnapshot, applyPatch } from "../shared/codec.ts";
+import { DEFAULT_CHARACTER } from "../shared/character.ts";
+import { decodeSnapshot, applyPatch } from "../shared/codec.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -63,7 +64,19 @@ test("multiplayer authority, delta recovery, input sequences, jitter, reconnects
         }
         throw new Error("Network assertion timed out");
       };
-      send({ type: "join", version: VERSION, name, color: "#55a9b8", token });
+      send({
+        type: "join",
+        version: VERSION,
+        name,
+        color: "#55a9b8",
+        token,
+        character: {
+          ...DEFAULT_CHARACTER,
+          physique: "tank",
+          hair: "cap",
+          legs: "cargo",
+        },
+      });
       return {
         ws,
         send,
@@ -108,6 +121,14 @@ test("multiplayer authority, delta recovery, input sequences, jitter, reconnects
     assert.ok(b.entities.has(a.welcome.id));
     await a.wait((m) => m.type === "state");
     const before = structuredClone(a.entities.get(a.welcome.id)!);
+    assert.equal(before.maxHealth, 150);
+    assert.deepEqual(before.character, {
+      ...DEFAULT_CHARACTER,
+      physique: "tank",
+      hair: "cap",
+      legs: "cargo",
+    });
+    assert.deepEqual(b.entities.get(a.welcome.id)!.character, before.character);
     a.send({ type: "input", x: 999999, z: 999999 });
     a.send({ type: "debug", kind: "pistol" });
     a.ws.send("{broken json");

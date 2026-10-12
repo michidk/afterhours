@@ -155,7 +155,7 @@ export class Sessions {
         this.detached.delete(c.token);
       } else {
         const name = m.name.replace(/[<>\x00-\x1f]/g, "") || "Stranger";
-        c.id = this.sim.join(name, m.color).id;
+        c.id = this.sim.join(name, m.color, m.character).id;
       }
       this.send(ws, {
         type: "welcome",

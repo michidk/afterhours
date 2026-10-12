@@ -1,3 +1,4 @@
+import { buildCharacter } from "../models/character.ts";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
@@ -203,13 +204,10 @@ export class DestructionRenderer {
         live ? "#88ca9e" : "#263739",
       );
     } else if (p.kind === "corpse") {
-      h.cylinder("body", 0, 1, 0, 0.8, 0.65, p.color);
-      h.cylinder("head", 0, 1.65, 0, 0.4, 0.4, "#c79e7b");
-      h.box("hair", 0, 1.87, 0, 0.43, 0.14, 0.4, "#473e35");
-      for (const side of [-1, 1]) {
-        h.box("leg", side * 0.17, 0.35, 0, 0.23, 0.65, 0.25, "#354955");
-        h.box("arm", side * 0.42, 1, 0, 0.18, 0.65, 0.22, p.color);
-      }
+      const body = new TransformNode("corpse model", h.scene);
+      buildCharacter(body, p.color, (color) => h.mat(color), p.character);
+      for (const mesh of body.getChildMeshes()) mesh.setParent(null);
+      body.dispose();
     }
     const created = h.scene.meshes.filter((mesh) => !before.has(mesh)) as Mesh[],
       groups = new Map<number, Mesh[]>();

@@ -1,3 +1,4 @@
+import { mountCharacterMenu } from "./ui/character-menu.ts";
 import { VEHICLES, WEAPONS, isVehicleModel } from "../shared/catalog.ts";
 import { availableSeat, occupiedSeats, seatCapacity } from "../shared/seats.ts";
 import type { Pickup } from "../shared/protocol.ts";
@@ -19,6 +20,7 @@ import type { CameraMode } from "./camera/debug.ts";
 import { district, idle, LIMIT, type Entity } from "../shared/world";
 import { WORLD_LIMIT, isWater, watercraft, WATER_LEVEL } from "../shared/water.ts";
 mountUI();
+const characterMenu = mountCharacterMenu();
 const nameplates = new Nameplates();
 let pickups: Pickup[] = [];
 const $ = <T extends HTMLElement = HTMLElement>(s: string) =>
@@ -27,8 +29,7 @@ const playerList = new PlayerList(
   $<HTMLUListElement>("#player-list"),
   $("#player-count"),
 );
-let selected = "#e8b63f",
-  network: GameNetwork | undefined,
+let network: GameNetwork | undefined,
   playerId: string | undefined,
   entities: Entity[] = [],
   joined = false,
@@ -63,16 +64,6 @@ function toast(message: string) {
 function send(data: unknown) {
   network?.send(data);
 }
-for (const swatch of document.querySelectorAll<HTMLButtonElement>(".swatch"))
-  swatch.onclick = () => {
-    selected = swatch.dataset.color!;
-    for (const s of document.querySelectorAll(".swatch")) {
-      s.classList.remove("selected");
-      s.setAttribute("aria-pressed", "false");
-    }
-    swatch.classList.add("selected");
-    swatch.setAttribute("aria-pressed", "true");
-  };
 function loading(text: string) {
   const status = document.querySelector("#boot-status") ?? $("#loading");
   status.textContent = text;
@@ -103,6 +94,7 @@ $("#join").addEventListener("submit", (event) => {
           delete (window as unknown as { afterhoursDebug?: AgentInterface })
             .afterhoursDebug;
         }
+        characterMenu.dispose();
         joined = true;
         $("#entry").classList.add("hidden");
         $("#hud").classList.remove("hidden");
@@ -160,8 +152,9 @@ $("#join").addEventListener("submit", (event) => {
       },
     },
     $<HTMLInputElement>("#name").value,
-    selected,
+    characterMenu.selection.color,
     scene.city,
+    characterMenu.selection.character,
   );
   network.worldReady = (point) => cityStream.ready(point);
   network.connect();
@@ -415,6 +408,7 @@ async function boot() {
     $("#play").removeAttribute("disabled");
     $("#app").removeAttribute("inert");
     document.querySelector("#boot")?.remove();
+    characterMenu.ready();
     const profiler = import.meta.env.DEV ? new FrameProfiler() : undefined;
     if (import.meta.env.DEV)
       Object.defineProperty(window, "afterhours", {
@@ -462,7 +456,7 @@ async function boot() {
         dt = Math.min(0.05, (now - last) / 1000);
       const interval = now - last;
       last = now;
-      if (!joined) scene.time += dt;
+      if (!joined) return;
       const rendered = network?.renderEntities(now) || entities;
       const cameraInput =
         cityMap?.open ||

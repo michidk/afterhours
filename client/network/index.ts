@@ -1,3 +1,4 @@
+import type { Character } from "../../shared/character.ts";
 import { VERSION } from "../../shared/version.ts";
 import type {
   Snapshot,
@@ -49,6 +50,7 @@ export class GameNetwork {
     private name: string,
     private color: string,
     private city?: City,
+    private character?: Character,
   ) {}
   worldReady = (_point: { x: number; z: number }) => true;
   connect() {
@@ -64,6 +66,7 @@ export class GameNetwork {
         version: VERSION,
         name: this.name,
         color: this.color,
+        character: this.character,
         token: this.token || undefined,
       });
     this.socket.onmessage = (event) => {

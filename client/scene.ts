@@ -1,3 +1,4 @@
+import { buildCharacter } from "./models/character.ts";
 import { buildRoad } from "./models/road.ts";
 import { buildBuilding } from "./models/buildings/index.ts";
 import "@babylonjs/core/Shaders/default.vertex";
@@ -489,14 +490,7 @@ export class CityScene {
     const root = new TransformNode(e.id, this.scene);
     const human = e.kind === "player" || e.kind === "pedestrian";
     if (human) {
-      this.cylinder("body", 0, 1, 0, 0.8, 0.65, e.color, root);
-      this.cylinder("head", 0, 1.65, 0, 0.4, 0.4, "#c79e7b", root);
-      this.box("hair", 0, 1.87, 0, 0.43, 0.14, 0.4, "#473e35", root);
-      for (const s of [-1, 1]) {
-        this.box("leg", s * 0.17, 0.35, 0, 0.23, 0.65, 0.25, "#354955", root, true);
-        this.box("shoe", s * 0.17, 0.06, 0.08, 0.25, 0.15, 0.4, "#e7e3d2", root);
-        this.box("arm", s * 0.42, 1, 0, 0.18, 0.65, 0.22, e.color, root, true);
-      }
+      buildCharacter(root, e.color, (color) => this.mat(color), e.character);
       if (e.kind === "player") {
         buildParachute(this, root);
         for (const side of [-1, 1]) {

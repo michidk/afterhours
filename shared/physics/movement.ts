@@ -1,3 +1,4 @@
+import { PHYSIQUES } from "../character.ts";
 import { staticGeometry } from "./static.ts";
 import { fallAircraft } from "./abandoned-aircraft.ts";
 import { JETPACK, jetpackThrust } from "./jetpack.ts";
@@ -40,8 +41,8 @@ export function characterForces(
           : isWater(e.x, e.z) && e.y <= WATER_LEVEL + 0.1
             ? 2.8
             : input.sprint || input.brake
-              ? TUNING.sprint
-              : TUNING.walk);
+              ? TUNING.sprint * PHYSIQUES[e.character?.physique ?? "regular"].speed
+              : TUNING.walk * PHYSIQUES[e.character?.physique ?? "regular"].speed);
   if (length) {
     x = (x / length) * speed;
     z = (z / length) * speed;

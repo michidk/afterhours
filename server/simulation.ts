@@ -1,3 +1,4 @@
+import { DEFAULT_CHARACTER, PHYSIQUES, type Character } from "../shared/character.ts";
 import { navigationFor } from "../shared/navigation.ts";
 import { staticGeometry } from "../shared/physics/static.ts";
 import {
@@ -197,10 +198,12 @@ export class Simulation {
     this.entities.set(e.id, e);
     return e;
   }
-  join(name: string, color: string) {
+  join(name: string, color: string, character: Character = DEFAULT_CHARACTER) {
     const pos = safeSpawn(this.city, [...this.entities.values()]);
     const p = this.spawn("player", pos.x, pos.z, color);
     p.name = name;
+    p.character = { ...character };
+    p.health = p.maxHealth = PHYSIQUES[character.physique].health;
     this.inventory.initialize(p);
     this.inputs.set(p.id, idle());
     return p;
@@ -536,7 +539,7 @@ export class Simulation {
         e.vx *= Math.exp(-5 * dt);
         e.vz *= Math.exp(-5 * dt);
         if (!e.down && e.health <= 0) {
-          e.health = 100;
+          e.health = e.maxHealth ?? 100;
           const pos = safeSpawn(this.city, [...this.entities.values()], e.id);
           e.x = pos.x;
           e.z = pos.z;

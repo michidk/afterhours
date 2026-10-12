@@ -1,3 +1,4 @@
+import type { Character } from "./character.ts";
 import type { City } from "./world.ts";
 
 export type PropKind = "palm" | "tree" | "lamp" | "bench" | "signal" | "hydrant";
@@ -27,6 +28,7 @@ export interface DebrisState {
         w: number;
         d: number;
         color: string;
+        character?: Character;
       };
   position: Vec3;
   rotation: Rotation;

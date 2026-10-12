@@ -1,3 +1,4 @@
+import { characterSchema } from "./character.ts";
 import { WORLD_LIMIT } from "./water.ts";
 import { z } from "zod";
 import type { Entity, WorldEvent, Input } from "./world.ts";
@@ -27,6 +28,7 @@ export const messageSchema = z.discriminatedUnion("type", [
     version: z.literal(VERSION),
     name: z.string().trim().min(1).max(18),
     color: z.string().regex(/^#[0-9a-f]{6}$/i),
+    character: characterSchema.optional(),
     token: z.string().max(100).optional(),
   }),
   z.object({
