@@ -1,4 +1,4 @@
-﻿# Operations
+# Operations
 
 `docker compose up -d --build` builds the production client/server and starts Caddy plus one Node process. `data/` is a read-only bind mount so manually generated artifacts can be replaced without rebuilding the image. After `bun run city:generate`, restart `game` to load the file. Never regenerate during startup. Production debug is explicitly disabled in the compose environment.
 
@@ -13,3 +13,9 @@ Shutdown releases connections with "Server restarting". Browsers retry; a restar
 The local deployment acceptance test checks HTTPS content, WSS joining, production cheat gating, artifact delivery, health, and reconnect after `docker compose restart game`. A public-domain launch remains an operator action requiring a domain/host; no public deployment is implied by local container validation.
 
 Health includes `traffic` counters for persistent jam groups/cars, cumulative horns and wreck replacements, and pending replacements. A growing replacement queue usually means clear road sites are unavailable; the server retries without forcing overlaps. Traffic diagnostics and the queue reset on process restart. See [traffic lifecycle](traffic.md).
+
+## Cluster deployment
+
+On each push to `main`, CI runs formatting, type checks, unit tests and the production build, then publishes `ghcr.io/michidk/afterhours` for AMD64 and ARM64. Tags are `sha-<full commit>` and `main`; the image job summary records the immutable manifest digest. Browser movement checks run separately and remain visible when software rendering cannot sustain their speed gates. Their failure does not establish whether the cluster server meets the tick budget.
+
+The image includes the built client assets and saved city artifact. Its single Node process serves HTTP, map chunks and WebSockets on port 5173 with production debug disabled. Deploy it through `apps/afterhours/` in the sibling k8s repository at `https://afterhours.k8s.lohr.dev`. That repository owns the digest pin, ingress, resource reservation and rollout. To promote another build, update its tagged digest, run `just verify`, and push its `main` branch. A single-replica Recreate deployment prevents two independent city processes from receiving players during rollout; updates disconnect players and reset transient state.

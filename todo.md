@@ -9,3 +9,5 @@
 - [ ] Investigate sustained server/browser slowness separately. The previous public browser check reported slow frames; this networking change does not establish a hardware performance pass.
 
 - [ ] Remove loading-screen island label, tagline, and neighbourhood note; verify the simplified screen and deploy.
+
+- [ ] Publish a tested AMD64/ARM64 production container on every main push and deploy one authoritative city through the sibling k8s repository. Keep software-rendered browser failures visible independently of image publication.
