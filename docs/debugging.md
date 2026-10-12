@@ -61,10 +61,10 @@ await d.time(16.5, 1 / 75); // resume normal shared clock
 
 F1 opens the development menu with camera selection, vehicle/tools, fixed-time lighting presets, resume, and a 30-second day-cycle button.
 
-| Mode                    | Controls                                                                                       |
-| ----------------------- | ---------------------------------------------------------------------------------------------- |
-| Player follow           | Normal gameplay controls                                                                       |
-| Elevated free camera    | WASD/arrows pan, E/Space and Q/Ctrl raise/lower focus, Shift faster, wheel zoom               |
+| Mode                    | Controls                                                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Player follow           | Normal gameplay controls                                                                                              |
+| Elevated free camera    | WASD/arrows pan, E/Space and Q/Ctrl raise/lower focus, Shift faster, wheel zoom                                       |
 | First-person fly camera | WASD/arrows move relative to view, E/Space and Q/Ctrl rise/descend, Shift faster, no fog, right-drag look, wheel zoom |
 
 Escape restores player follow and closes panels. Both debug cameras suppress gameplay movement, attacks, equipment changes, and interactions; the server receives idle player controls. The world continues simulating, so moving vehicles still coast and collisions remain possible. A debug-only camera position selects nearby snapshot interest without teleporting the player. Returning to follow restores normal input and player-centered interest. Blur/hidden tabs release held inputs. `stop()` releases scripted movement; a disconnected client loses its debug API.

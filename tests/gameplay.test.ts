@@ -262,7 +262,11 @@ test("utility helicopter keeps clearance across its larger rotor footprint", () 
   s.interact(p.id);
   s.city.buildings = [{ x: 6, z: 0, w: 1, d: 12, h: 24, color: "#fff", style: 0 }];
   run(s, 10);
-  assert.equal(h.y, 0, "a wall under the outer rotor does not lift a parked helicopter");
+  assert.equal(
+    h.y,
+    0,
+    "a wall under the outer rotor does not lift a parked helicopter",
+  );
   s.inputs.set(p.id, { ...idle(), ascend: true });
   run(s, 10);
   s.inputs.set(p.id, idle());

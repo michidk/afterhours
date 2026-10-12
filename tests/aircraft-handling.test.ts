@@ -43,7 +43,10 @@ for (const model of ["plane", "aerobatic"] as const) {
     run(s, 1.5);
     assert.ok(e.y < y - 1);
     assert.ok(e.angle > 0.4);
-    assert.ok(Math.abs(Math.atan2(e.vx, e.vz) - e.angle) < 0.05, "flies along its nose");
+    assert.ok(
+      Math.abs(Math.atan2(e.vx, e.vz) - e.angle) < 0.05,
+      "flies along its nose",
+    );
     e.y = 20;
     e.vy = 0;
     e.vx = e.vz = 1;
