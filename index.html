@@ -9,48 +9,179 @@
       html,
       body {
         margin: 0;
-        background: #14202a;
+        background: #15232e;
       }
       #boot {
         position: fixed;
         inset: 0;
         z-index: 50;
-        display: grid;
-        place-content: center;
-        color: #f5e9cc;
-        text-align: center;
-        font: 14px system-ui;
-        background: #14202a;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        overflow: hidden;
+        padding: clamp(28px, 6vw, 96px);
+        color: #fff9eb;
+        background: #15232e;
+        font:
+          14px system-ui,
+          sans-serif;
       }
-      #boot strong {
-        font-size: 34px;
-        letter-spacing: 5px;
+      .boot-skyline {
+        position: absolute;
+        width: 75%;
+        height: 100%;
+        right: 0;
+        bottom: 0;
+        opacity: 0.75;
+        pointer-events: none;
+        mask-image: linear-gradient(90deg, transparent, black 35%);
+      }
+      .boot-title {
+        position: relative;
+        margin-bottom: 96px;
+      }
+      .boot-island {
+        margin: 0 0 20px;
+        font-size: 15px;
+        color: #bdcbc9;
+      }
+      #boot h1 {
+        margin: 0;
+        font-family: "Barlow Condensed", Impact, "Arial Narrow", sans-serif;
+        font-size: clamp(30px, 10vw, 144px);
+        line-height: 0.9;
+        font-weight: 800;
+        letter-spacing: -0.035em;
+      }
+      #boot h1 span {
+        color: #f0bc6d;
+      }
+      .boot-caption {
+        margin: 24px 0 0;
+        color: #bdcbc9;
+        font-size: 16px;
+      }
+      .boot-bottom {
+        position: absolute;
+        bottom: clamp(28px, 6vw, 72px);
+        left: clamp(28px, 6vw, 96px);
+        right: clamp(28px, 6vw, 96px);
+      }
+      .boot-status-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 24px;
+      }
+      #boot-status {
+        margin: 0 0 18px;
+        line-height: 1.5;
+      }
+      .boot-note {
+        color: #a8b9bd;
+        font-size: 12px;
+        white-space: nowrap;
       }
       #boot .bar {
-        height: 4px;
-        margin-top: 20px;
-        background: repeating-linear-gradient(
-          120deg,
-          #f0b862 0 14px,
-          #896942 14px 28px
-        );
-        background-size: 56px 100%;
-        animation: bands 1s linear infinite;
+        height: 2px;
+        background: #ffffff20;
+        overflow: hidden;
       }
-      @keyframes bands {
+      #boot .bar::after {
+        content: "";
+        display: block;
+        width: 30%;
+        height: 100%;
+        background: #f0bc6d;
+        animation: boot-travel 2.4s ease-in-out infinite;
+      }
+      #boot[data-failed] .bar::after {
+        animation: none;
+        width: 100%;
+        background: #dd987d;
+      }
+      #boot[data-failed] .boot-note {
+        display: none;
+      }
+      #boot noscript {
+        position: relative;
+      }
+      @keyframes boot-travel {
+        from {
+          transform: translateX(-100%);
+        }
         to {
-          background-position: 56px 0;
+          transform: translateX(340%);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot .bar::after {
+          animation: none;
+        }
+      }
+      @media (max-width: 600px) {
+        .boot-skyline {
+          width: 150%;
+          right: -40%;
+          opacity: 0.45;
+        }
+        .boot-title {
+          margin-bottom: 80px;
+        }
+        .boot-note {
+          display: none;
+        }
+        .boot-caption {
+          font-size: 14px;
         }
       }
     </style>
   </head>
   <body>
-    <div id="boot" role="status" aria-live="polite">
-      <strong>AFTERHOURS</strong>
-      <p>Paloma Island / Opening the city</p>
-      <div class="bar"></div>
-      <p id="boot-status">Loading the engine…</p>
-      <noscript>Enable JavaScript to enter the city.</noscript>
+    <div id="boot">
+      <svg
+        class="boot-skyline"
+        viewBox="0 0 1000 800"
+        preserveAspectRatio="xMidYMid slice"
+        aria-hidden="true"
+      >
+        <defs>
+          <linearGradient id="dusk" x2="0" y2="1">
+            <stop stop-color="#15232e" />
+            <stop offset="1" stop-color="#77565e" />
+          </linearGradient>
+        </defs>
+        <path fill="url(#dusk)" d="M0 0h1000v800H0z" />
+        <circle cx="740" cy="340" r="110" fill="#e8b182" opacity=".7" />
+        <path
+          fill="#44434f"
+          d="M0 570h100V430h70v100h90V370h80v160h55V460h80v-160h90v220h75V390h95v150h50V450h120v100h95v250H0z"
+        />
+        <path
+          fill="#24333f"
+          d="M0 650h140V540h110v80h120V470h100v150h90V550h140v-85h120v160h65V530h115v270H0z"
+        />
+        <path
+          stroke="#d5aa7d"
+          stroke-width="3"
+          opacity=".3"
+          d="M386 505h65m-65 18h65m-65 18h65m265-40h88m-88 18h88m-88 18h88M580 580h100m-100 18h100M164 572h64m-64 18h64"
+        />
+        <path fill="#15232e" d="M0 730h1000v70H0z" />
+      </svg>
+      <div class="boot-title">
+        <p class="boot-island">Paloma Island</p>
+        <h1>AFTER<span>HOURS</span></h1>
+        <p class="boot-caption">The city is yours.</p>
+      </div>
+      <div class="boot-bottom">
+        <div class="boot-status-row">
+          <p id="boot-status" role="status" aria-live="polite">Loading the engine…</p>
+          <span class="boot-note">Getting your neighbourhood ready</span>
+        </div>
+        <div class="bar" aria-hidden="true"></div>
+        <noscript>Enable JavaScript to enter the city.</noscript>
+      </div>
     </div>
     <canvas id="world"></canvas>
     <div id="app" inert></div>

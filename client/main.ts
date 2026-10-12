@@ -616,6 +616,7 @@ async function boot() {
     });
   } catch (error) {
     scene?.engine.stopRenderLoop();
+    document.querySelector("#boot")?.setAttribute("data-failed", "");
     loading("Could not load the city. Check your connection and WebGL, then refresh.");
     console.error(error);
   }

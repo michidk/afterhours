@@ -6,6 +6,8 @@ The original audit used `c2da9ed` after pulling `origin/main`. The dictated "cha
 
 ## Character selection
 
+- [x] Restyle the initial loader with a Paloma dusk skyline, matching wordmark, real startup status and reduced-motion support. Stop the loading animation on startup failure. Production build and formatting pass. A browser-held copy of the initial HTML verifies desktop composition, phone wordmark bounds, readable failure text and stopped error animation. No artificial progress percentage or extra asset download is required.
+
 - [x] Polish the menu with a sunset rooftop skyline, warm character lighting, simplified controls and integrated stats. Four focused character/render tests, production build, formatting and boundaries pass. Shared browser checks verify desktop and 390 px layouts, Tank stats, appearance selection and randomization. Gameplay and the HUD are unchanged.
 
 - [x] Rework the rejected paper-style menu into a compact dark menu and 3D garage using game UI references and installed design/review skills for Codex and Claude. Preserve character choices and the HUD palette; reduce persistent controls, hide speed on foot, and label health and notifications accessibly. Four focused character/render tests, formatting, boundaries, types and production build pass. Shared T3 browser checks cover Tank stats, appearance, randomization, saved selection, 390 px layout and joining with the updated HUD. Full gameplay tests were not repeated for this UI-only change. See [design references](docs/ui-design.md).
