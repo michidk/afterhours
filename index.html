@@ -40,11 +40,6 @@
         position: relative;
         margin-bottom: 96px;
       }
-      .boot-island {
-        margin: 0 0 20px;
-        font-size: 15px;
-        color: #bdcbc9;
-      }
       #boot h1 {
         margin: 0;
         font-family: "Barlow Condensed", Impact, "Arial Narrow", sans-serif;
@@ -56,31 +51,15 @@
       #boot h1 span {
         color: #f0bc6d;
       }
-      .boot-caption {
-        margin: 24px 0 0;
-        color: #bdcbc9;
-        font-size: 16px;
-      }
       .boot-bottom {
         position: absolute;
         bottom: clamp(28px, 6vw, 72px);
         left: clamp(28px, 6vw, 96px);
         right: clamp(28px, 6vw, 96px);
       }
-      .boot-status-row {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 24px;
-      }
       #boot-status {
         margin: 0 0 18px;
         line-height: 1.5;
-      }
-      .boot-note {
-        color: #a8b9bd;
-        font-size: 12px;
-        white-space: nowrap;
       }
       #boot .bar {
         height: 2px;
@@ -99,9 +78,6 @@
         animation: none;
         width: 100%;
         background: #dd987d;
-      }
-      #boot[data-failed] .boot-note {
-        display: none;
       }
       #boot noscript {
         position: relative;
@@ -127,12 +103,6 @@
         }
         .boot-title {
           margin-bottom: 80px;
-        }
-        .boot-note {
-          display: none;
-        }
-        .boot-caption {
-          font-size: 14px;
         }
       }
     </style>
@@ -170,15 +140,10 @@
         <path fill="#15232e" d="M0 730h1000v70H0z" />
       </svg>
       <div class="boot-title">
-        <p class="boot-island">Paloma Island</p>
         <h1>AFTER<span>HOURS</span></h1>
-        <p class="boot-caption">The city is yours.</p>
       </div>
       <div class="boot-bottom">
-        <div class="boot-status-row">
-          <p id="boot-status" role="status" aria-live="polite">Loading the engine…</p>
-          <span class="boot-note">Getting your neighbourhood ready</span>
-        </div>
+        <p id="boot-status" role="status" aria-live="polite">Loading the engine…</p>
         <div class="bar" aria-hidden="true"></div>
         <noscript>Enable JavaScript to enter the city.</noscript>
       </div>
