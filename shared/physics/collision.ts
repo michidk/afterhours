@@ -53,8 +53,7 @@ const axes = (b: Box) => [
   { x: Math.cos(b.angle), z: -Math.sin(b.angle) },
   { x: Math.sin(b.angle), z: Math.cos(b.angle) },
 ];
-function extent(b: Box, x: number, z: number) {
-  const a = axes(b);
+function extent(b: Box, a: ReturnType<typeof axes>, x: number, z: number) {
   return (
     Math.abs(a[0].x * x + a[0].z * z) * b.w + Math.abs(a[1].x * x + a[1].z * z) * b.d
   );
@@ -63,10 +62,14 @@ export function contact(a: Box, b: Box): Contact | undefined {
   let depth = Infinity,
     nx = 0,
     nz = 0;
-  for (const axis of [...axes(a), ...axes(b)]) {
+  const aAxes = axes(a),
+    bAxes = axes(b);
+  for (const axis of [...aAxes, ...bAxes]) {
     const delta = (b.x - a.x) * axis.x + (b.z - a.z) * axis.z;
     const overlap =
-      extent(a, axis.x, axis.z) + extent(b, axis.x, axis.z) - Math.abs(delta);
+      extent(a, aAxes, axis.x, axis.z) +
+      extent(b, bAxes, axis.x, axis.z) -
+      Math.abs(delta);
     if (overlap <= 0) return;
     if (overlap < depth) {
       depth = overlap;
@@ -79,16 +82,16 @@ export function contact(a: Box, b: Box): Contact | undefined {
     at = a.x * tx + a.z * tz,
     bt = b.x * tx + b.z * tz;
   const tangent =
-    (Math.max(at - extent(a, tx, tz), bt - extent(b, tx, tz)) +
-      Math.min(at + extent(a, tx, tz), bt + extent(b, tx, tz))) /
+    (Math.max(at - extent(a, aAxes, tx, tz), bt - extent(b, bAxes, tx, tz)) +
+      Math.min(at + extent(a, aAxes, tx, tz), bt + extent(b, bAxes, tx, tz))) /
     2;
   const normal =
     (a.x * nx +
       a.z * nz +
-      extent(a, nx, nz) +
+      extent(a, aAxes, nx, nz) +
       b.x * nx +
       b.z * nz -
-      extent(b, nx, nz)) /
+      extent(b, bAxes, nx, nz)) /
     2;
   return {
     nx,
@@ -159,4 +162,23 @@ export function insideBuilding(b: Building, x: number, z: number, pad = 0) {
   const u = dx * Math.cos(a) + dz * Math.sin(a),
     v = -dx * Math.sin(a) + dz * Math.cos(a);
   return Math.abs(u) < b.w / 2 + pad && Math.abs(v) < b.d / 2 + pad;
+}
+
+/** Stable pair order for authority and replay, with 6 m of contact-correction margin. */
+export function collisionPairs(entities: Entity[]): [Entity, Entity][] {
+  const byId = (a: Entity, b: Entity) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const sorted = entities
+    .filter((e) => !e.vehicle && (vehicle(e) || e.health > 0))
+    .sort((a, b) => a.x - b.x || byId(a, b));
+  const pairs: [Entity, Entity][] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const a = sorted[i];
+    for (let j = i + 1; j < sorted.length; j++) {
+      const b = sorted[j];
+      if (b.x - a.x > 16) break;
+      if (Math.abs(a.z - b.z) > 16 || Math.abs(a.y - b.y) > 1.8) continue;
+      pairs.push(byId(a, b) < 0 ? [a, b] : [b, a]);
+    }
+  }
+  return pairs.sort((a, b) => byId(a[0], b[0]) || byId(a[1], b[1]));
 }

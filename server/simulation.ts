@@ -25,6 +25,7 @@ import {
   mass,
   shape,
   contact,
+  collisionPairs,
   entityBox,
   buildingBox,
   insideBuilding,
@@ -598,12 +599,11 @@ export class Simulation {
     const steps = Math.max(1, Math.ceil(dt / (1 / 120))),
       h = dt / steps;
     for (let i = 0; i < steps; i++) this.step(h);
-    if (this.traffic.update(this)) {
-      // Newly replenished cars must enter snapshot interest in this tick.
-      this.spatial.clear();
-      for (const e of this.entities.values())
-        if (!e.vehicle) this.spatial.insert(e, e.x, e.z, 6);
-    }
+    this.traffic.update(this);
+    // Publish current positions, including contact corrections and replenished traffic.
+    this.spatial.clear();
+    for (const e of this.entities.values())
+      if (!e.vehicle) this.spatial.insert(e, e.x, e.z, 6);
     this.inventory.cleanup(this.time);
     this.destruction.update(this.time, dt, [...this.entities.values()]);
     this.combat.record(this);
@@ -780,9 +780,6 @@ export class Simulation {
       Pick<Entity, "x" | "y" | "z" | "angle" | "vx" | "vz" | "angularVelocity">
     >();
     for (let pass = 0; pass < 3; pass++) {
-      this.spatial.clear();
-      for (const e of list)
-        if (!e.vehicle && this.entities.has(e.id)) this.spatial.insert(e, e.x, e.z, 6);
       for (const e of list) {
         if (e.vehicle || !this.entities.has(e.id)) continue;
         const pose = {
@@ -852,64 +849,57 @@ export class Simulation {
         if (vehicle(e) && pass === 0)
           this.damage(e, Math.max(0, impact - 3) ** 2 * TUNING.wallDamage);
       }
-      for (let i = 0; i < list.length; i++)
-        for (const b of this.spatial.query(list[i].x, list[i].z, 10)) {
-          const a = list[i];
-          if (a.id >= b.id || !this.entities.has(a.id) || !this.entities.has(b.id))
-            continue;
-          if (
-            a.vehicle ||
-            b.vehicle ||
-            (!vehicle(a) && a.health <= 0) ||
-            (!vehicle(b) && b.health <= 0) ||
-            Math.abs(a.y - b.y) > 1.8 ||
-            Math.abs(a.x - b.x) > 10 ||
-            Math.abs(a.z - b.z) > 10
-          )
-            continue;
-          const c = contact(entityBox(a), entityBox(b));
-          if (!c) continue;
-          let vehicleApproach = Infinity;
-          if (vehicle(a) !== vehicle(b)) {
-            // Character locomotion into a parked/departing vehicle is not a strike.
-            // Use the vehicle's contact-point motion toward the character, including yaw.
-            const v = vehicle(a) ? a : b;
-            const velocity = pointVelocity(v, c.x, c.z);
-            const direction = vehicle(a) ? 1 : -1;
-            vehicleApproach = Math.max(
-              0,
-              direction * (velocity.x * c.nx + velocity.z * c.nz),
-            );
-          }
-          const av = pointVelocity(a, c.x, c.z),
-            bv = pointVelocity(b, c.x, c.z);
-          const approachA = Math.max(0, av.x * c.nx + av.z * c.nz),
-            approachB = Math.max(0, -bv.x * c.nx - bv.z * c.nz);
-          const responsible =
-            vehicle(a) !== vehicle(b)
-              ? vehicle(a)
-                ? a
-                : b
-              : approachA > approachB + 0.5
-                ? a
-                : approachB > approachA + 0.5
-                  ? b
-                  : undefined;
-          const speed = Math.min(resolveContact(a, b, c), vehicleApproach);
-          if (pass === 0 && speed > 3) {
-            const severity = (speed - 3) ** 2 * TUNING.collisionDamage;
-            this.damage(a, severity * Math.min(1, mass(b) / mass(a)), responsible);
-            this.damage(b, severity * Math.min(1, mass(a) / mass(b)), responsible);
-            if (!vehicle(a) && vehicle(b)) a.down = Math.max(a.down || 0, 0.8);
-            if (!vehicle(b) && vehicle(a)) b.down = Math.max(b.down || 0, 0.8);
-            this.events.push({
-              kind: "hit",
-              x: c.x,
-              z: c.z,
-              y: Math.max(a.y, b.y) + 0.5,
-            });
-          }
+      for (const [a, b] of collisionPairs(list)) {
+        if (
+          !this.entities.has(a.id) ||
+          !this.entities.has(b.id) ||
+          Math.abs(a.x - b.x) > 10 ||
+          Math.abs(a.z - b.z) > 10
+        )
+          continue;
+        const c = contact(entityBox(a), entityBox(b));
+        if (!c) continue;
+        let vehicleApproach = Infinity;
+        if (vehicle(a) !== vehicle(b)) {
+          // Character locomotion into a parked/departing vehicle is not a strike.
+          // Use the vehicle's contact-point motion toward the character, including yaw.
+          const v = vehicle(a) ? a : b;
+          const velocity = pointVelocity(v, c.x, c.z);
+          const direction = vehicle(a) ? 1 : -1;
+          vehicleApproach = Math.max(
+            0,
+            direction * (velocity.x * c.nx + velocity.z * c.nz),
+          );
         }
+        const av = pointVelocity(a, c.x, c.z),
+          bv = pointVelocity(b, c.x, c.z);
+        const approachA = Math.max(0, av.x * c.nx + av.z * c.nz),
+          approachB = Math.max(0, -bv.x * c.nx - bv.z * c.nz);
+        const responsible =
+          vehicle(a) !== vehicle(b)
+            ? vehicle(a)
+              ? a
+              : b
+            : approachA > approachB + 0.5
+              ? a
+              : approachB > approachA + 0.5
+                ? b
+                : undefined;
+        const speed = Math.min(resolveContact(a, b, c), vehicleApproach);
+        if (pass === 0 && speed > 3) {
+          const severity = (speed - 3) ** 2 * TUNING.collisionDamage;
+          this.damage(a, severity * Math.min(1, mass(b) / mass(a)), responsible);
+          this.damage(b, severity * Math.min(1, mass(a) / mass(b)), responsible);
+          if (!vehicle(a) && vehicle(b)) a.down = Math.max(a.down || 0, 0.8);
+          if (!vehicle(b) && vehicle(a)) b.down = Math.max(b.down || 0, 0.8);
+          this.events.push({
+            kind: "hit",
+            x: c.x,
+            z: c.z,
+            y: Math.max(a.y, b.y) + 0.5,
+          });
+        }
+      }
     }
     // Pair impulses can displace a hull after the last static pass.
     for (const e of list) if (!e.vehicle) resolveWorldBounds(e, this.city);

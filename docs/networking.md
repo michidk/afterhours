@@ -18,6 +18,12 @@ Pending simulation is limited to seven 30 Hz ticks (233 ms), with at most one ex
 
 Server input remains one command per fixed tick. A two-frame FIFO absorbs normal batching. On overflow it drops the oldest command, retaining the newest stop or turn. Previously the eight-frame queue rejected new commands when full, retaining up to 267 ms of old control at the target tick rate, and longer when the server was overloaded. An acknowledgement identifies the applied command; older discarded commands also leave client history. Overflow therefore permits a correction. It does not grant extra physics steps or claim to have simulated discarded commands. Duplicate or out-of-order sequence numbers remain rejected. A 250 ms input silence still releases held controls.
 
+## Collision pair order
+
+Authority and prediction use the same sweep broad phase. It sorts bodies along X, considers nearby candidates with a contact-correction margin, then orders pairs by stable entity IDs before resolving them. Reordering snapshot entities therefore cannot change pileup resolution. The server retains its spatial grid for AI and snapshot interest, but no longer rebuilds and queries it for every contact pass. Static contact checks are reused only while the body's pose and planar velocity are unchanged.
+
+Protocol 7 rejects older clients whose collision solver or map manifest differs. Physics remains at 120 Hz and authority at 30 Hz; the optimization does not lower collision frequency or give the client additional simulation time.
+
 ## Server overload
 
 The stepped-walking investigation reproduced only 1.8 m of movement in three seconds while the development shell was CPU-throttled. The fixed-step runtime could perform four expensive catch-up ticks without letting socket events run. It now yields once its callback consumes one tick budget, while retaining the four-step limit for cheap catch-up. Spatial queries reuse cell-range candidates until insertion or clearing invalidates them; returned arrays remain independent.

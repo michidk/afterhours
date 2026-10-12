@@ -21,6 +21,7 @@ import {
   buildingBox,
   insideBuilding,
   contact,
+  collisionPairs,
   resolveContact,
   vehicle,
 } from "./collision.ts";
@@ -184,21 +185,11 @@ export function resolveMovementContacts(bodies: Entity[], city: City) {
     for (const body of bodies) {
       resolveStaticContacts(body, city);
     }
-    for (let i = 0; i < bodies.length; i++)
-      for (let j = i + 1; j < bodies.length; j++) {
-        const first = bodies[i],
-          second = bodies[j];
-        if (
-          Math.abs(first.y - second.y) > 1.8 ||
-          Math.abs(first.x - second.x) > 10 ||
-          Math.abs(first.z - second.z) > 10
-        )
-          continue;
-        // Match authoritative pair ordering, including coincident centres.
-        const [a, b] = first.id < second.id ? [first, second] : [second, first];
-        const c = contact(entityBox(a), entityBox(b));
-        if (c) resolveContact(a, b, c);
-      }
+    for (const [a, b] of collisionPairs(bodies)) {
+      if (Math.abs(a.x - b.x) > 10 || Math.abs(a.z - b.z) > 10) continue;
+      const c = contact(entityBox(a), entityBox(b));
+      if (c) resolveContact(a, b, c);
+    }
   }
   for (const body of bodies) resolveWorldBounds(body, city);
 }
