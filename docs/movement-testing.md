@@ -68,3 +68,20 @@ The server skips repeated static contact work only while a body's position, angl
 Terrain uses Babylon submeshes with bounding-box frustum checks. The terrain regression verifies upward faces, unchanged vertex count, retained visible ground and exclusion of most island indices from a street-level view. This checks submitted geometry, not hardware frame rate.
 
 `tests/collision-pairs.test.ts` checks correction-margin candidates and resolves a wall-bound pileup from different entity orders. Both must produce identical body states. Authority and prediction share this pair ordering. The full-city CPU comparison uses the same saved city, 60 warmup ticks and 90 measured ticks per run, alternating the old grid and shared sweep; wall-clock results on the shared host remain affected by contention.
+
+## Combined-build acceptance, 2026-10-12
+
+At `b7a6b82`, the local production-container walking checks passed input cadence,
+walking distance and authoritative speed, both normally and with 150 ms incoming
+snapshot delay. The samples sent 93 commands in 3.12 seconds and 96 in 3.19 seconds;
+authority moved 13.43 m and 12.98 m respectively. Both still failed the unchanged
+250 ms rendered-freeze limit, with frame gaps above 400 ms. CI also failed movement
+acceptance, including input cadence on its runner. These are not a playable-game
+acceptance pass, and production promotion remains deferred.
+
+Removing HUD backdrop blur did not make both cases pass, so that experiment was
+reverted. A diagnostic Chrome CPU profile showed mesh selection and rendering work,
+plus substantial idle/native time; it does not establish a network fault or prove a
+GPU bottleneck. Shared-host contention and software WebGL prevent using these runs
+as hardware performance measurements. The next acceptance step remains an unchanged
+full-city held-input run with frame, input and server timings recorded together.
