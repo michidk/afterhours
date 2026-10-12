@@ -47,6 +47,10 @@ export class Sessions {
     readonly map: MapManifest,
   ) {
     this.debug = process.env.ALLOW_DEBUG === "1" || !production;
+    const publicUrl = process.env.PUBLIC_ORIGIN && new URL(process.env.PUBLIC_ORIGIN);
+    if (publicUrl && !["http:", "https:"].includes(publicUrl.protocol))
+      throw Error("PUBLIC_ORIGIN must be an HTTP or HTTPS URL");
+    const publicOrigin = publicUrl ? publicUrl.origin : undefined;
     this.wss = new WebSocketServer({ server, path: "/ws", maxPayload: 4096 });
     this.wss.on("connection", (ws, req) => {
       let valid = true;
@@ -59,7 +63,10 @@ export class Sessions {
           localProxy && req.headers["x-forwarded-host"]
             ? req.headers["x-forwarded-host"]
             : req.headers.host;
-        valid = !req.headers.origin || new URL(req.headers.origin).host === host;
+        valid =
+          !req.headers.origin ||
+          req.headers.origin === publicOrigin ||
+          new URL(req.headers.origin).host === host;
       } catch {
         valid = false;
       }

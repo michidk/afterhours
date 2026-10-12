@@ -19,7 +19,11 @@ export class Runtime {
       accumulator += Math.min(0.2, (now - last) / 1000);
       last = now;
       let catchup = 0;
-      while (accumulator >= TUNING.tick && catchup < 4) {
+      while (
+        accumulator >= TUNING.tick &&
+        catchup < 4 &&
+        (catchup === 0 || performance.now() - now < TUNING.tick * 1000)
+      ) {
         const start = performance.now();
         this.sessions.tick();
         this.sim.tick(TUNING.tick);

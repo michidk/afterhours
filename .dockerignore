@@ -4,3 +4,5 @@ dist
 *.log
 .env
 docs
+test-results
+playwright-report
