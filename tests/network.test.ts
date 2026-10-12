@@ -167,12 +167,69 @@ test("multiplayer authority, delta recovery, input sequences, jitter, reconnects
     assert.ok(health.rejectedMessages >= 3);
     assert.ok(Number.isFinite(health.tickP95Ms));
     assert.equal(health.players, 2);
-    const attacker = new WebSocket(`ws://localhost:${port}/ws`, {
-      origin: "https://malicious.example",
-    });
-    sockets.push(attacker);
-    const code = await new Promise<number>((resolve) => attacker.on("close", resolve));
-    assert.equal(code, 1008);
+    for (const scenario of [
+      { origin: `http://127.0.0.1:${port}`, accepted: true },
+      {
+        origin: "https://city.example",
+        forwardedHost: "city.example",
+        accepted: true,
+      },
+      { origin: "https://malicious.example", accepted: false },
+      {
+        origin: "https://malicious.example",
+        forwardedHost: "city.example",
+        accepted: false,
+      },
+      {
+        origin: `http://127.0.0.1:${port}`,
+        forwardedHost: "city.example",
+        accepted: false,
+      },
+      {
+        origin: "https://city.example",
+        forwardedHost: "city.example, malicious.example",
+        accepted: false,
+      },
+      { origin: "null", accepted: false },
+      {
+        origin: "https://malicious.example",
+        forwardedHost: "malicious.example",
+        localAddress: "127.0.0.2",
+        accepted: false,
+      },
+    ]) {
+      const peer = new WebSocket(`ws://127.0.0.1:${port}/ws`, {
+        origin: scenario.origin,
+        localAddress: scenario.localAddress,
+        headers: scenario.forwardedHost
+          ? { "X-Forwarded-Host": scenario.forwardedHost }
+          : undefined,
+      });
+      sockets.push(peer);
+      const response = await new Promise<string | number>((resolve, reject) => {
+        const timeout = setTimeout(
+          () => reject(new Error(`Origin check timed out: ${scenario.origin}`)),
+          4000,
+        );
+        peer.once("error", reject);
+        peer.once("open", () => {
+          peer.send(JSON.stringify({ type: "ping", timestamp: 123 }));
+        });
+        peer.once("message", (raw) => {
+          clearTimeout(timeout);
+          resolve(String(raw));
+          peer.close();
+        });
+        peer.once("close", (code) => {
+          clearTimeout(timeout);
+          resolve(code);
+        });
+      });
+      if (scenario.accepted) {
+        assert.equal(typeof response, "string");
+        assert.equal(JSON.parse(String(response)).type, "pong");
+      } else assert.equal(response, 1008);
+    }
   } finally {
     for (const ws of sockets) ws.terminate();
     child.kill();

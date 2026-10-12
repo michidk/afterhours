@@ -104,6 +104,8 @@ docker compose up -d --build
 
 The production stack runs one non-root Node process and Caddy with HTTPS, WebSockets, health checks, structured proxy logs, and restart policies. Local defaults are https://localhost:8443 and HTTP port 8080. Caddy uses a local CA for localhost; trust that CA on your development machine before browser testing HTTPS. Public deployment uses `DOMAIN=game.example.com`, `HTTP_PORT=80`, and `HTTPS_PORT=443`, with DNS pointing to the host; Caddy then obtains a public certificate. See [operations](docs/operations.md).
 
+WebSocket origin checks support the VibePod gateway's rewritten Host through `X-Forwarded-Host` from its loopback connection. Local proxies must overwrite that header; other peers must preserve Host. Preview HTTP 401 or a password screen requires signing in to the gateway.
+
 `/health` reports ticks, p95/max tick duration, catch-up drops, bytes, rejected messages, entity count, and memory. City geometry persists in the artifact; dynamic players, inventory, traffic damage, and time reset on restart. Use one replica per city. Reconnects restore a session only within the same running process.
 
 ## Current limits

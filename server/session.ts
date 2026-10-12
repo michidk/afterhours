@@ -51,8 +51,15 @@ export class Sessions {
     this.wss.on("connection", (ws, req) => {
       let valid = true;
       try {
-        valid =
-          !req.headers.origin || new URL(req.headers.origin).host === req.headers.host;
+        // The local preview proxy overwrites forwarded host before rewriting Host.
+        const localProxy = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(
+          req.socket.remoteAddress ?? "",
+        );
+        const host =
+          localProxy && req.headers["x-forwarded-host"]
+            ? req.headers["x-forwarded-host"]
+            : req.headers.host;
+        valid = !req.headers.origin || new URL(req.headers.origin).host === host;
       } catch {
         valid = false;
       }
