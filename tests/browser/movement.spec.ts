@@ -18,7 +18,13 @@ declare global {
     afterhoursDebug?: AgentInterface;
     movementSamples: MovementSample[];
     movementStages: Record<
-      "prediction" | "reconcile" | "update" | "render" | "input",
+      | "prediction"
+      | "reconcile"
+      | "update"
+      | "render"
+      | "input"
+      | "beginFrame"
+      | "endFrame",
       number[]
     >;
   }
@@ -101,6 +107,8 @@ for (const delay of [0, 150]) {
         update: [],
         render: [],
         input: [],
+        beginFrame: [],
+        endFrame: [],
       };
       let held = false;
       const measure =
@@ -128,6 +136,11 @@ for (const delay of [0, 150]) {
           prediction.reconcile.bind(prediction),
         );
       debug.scene.update = measure("update", debug.scene.update.bind(debug.scene));
+      for (const stage of ["beginFrame", "endFrame"] as const)
+        debug.scene.engine[stage] = measure(
+          stage,
+          debug.scene.engine[stage].bind(debug.scene.engine),
+        );
       debug.scene.scene.render = measure(
         "render",
         debug.scene.scene.render.bind(debug.scene.scene),
