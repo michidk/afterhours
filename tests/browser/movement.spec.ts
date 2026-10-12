@@ -54,7 +54,7 @@ for (const delay of [0, 150]) {
         debug?.network.prediction?.body && debug.scene.nodes.has(debug.network.playerId)
       );
     });
-    await page.evaluate((delay) => {
+    await page.evaluate(async (delay) => {
       const debug = window.afterhoursDebug;
       if (!debug) throw Error("Debug interface missing");
       const socket = debug.network.socket;
@@ -96,6 +96,8 @@ for (const delay of [0, 150]) {
         held = false;
       });
       debug.scene.scene.onAfterRenderObservable.add(() => sample("render"));
+      await debug.scene.scene.whenReadyAsync();
+      await debug.settle();
     }, delay);
     await page.keyboard.down("w");
     await page.waitForTimeout(3000);

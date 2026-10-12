@@ -12,6 +12,14 @@ Pending simulation is limited to 250 ms, with at most one extra 30 Hz step for r
 
 Server input remains one command per fixed tick. A two-frame FIFO absorbs normal batching. On overflow it drops the oldest command, retaining the newest stop or turn. Previously the eight-frame queue rejected new commands when full, retaining up to 267 ms of old control at the target tick rate, and longer when the server was overloaded. An acknowledgement identifies the applied command; older discarded commands also leave client history. Overflow therefore permits a correction. It does not grant extra physics steps or claim to have simulated discarded commands. Duplicate or out-of-order sequence numbers remain rejected. A 250 ms input silence still releases held controls.
 
+## Server overload
+
+The stepped-walking investigation reproduced only 1.8 m of movement in three seconds while the development shell was CPU-throttled. The fixed-step runtime could perform four expensive catch-up ticks without letting socket events run. It now yields once its callback consumes one tick budget, while retaining the four-step limit for cheap catch-up. Spatial queries reuse cell-range candidates until insertion or clearing invalidates them; returned arrays remain independent.
+
+Both managed previews now run immutable production Docker images outside the development shell's CPU quota. `PUBLIC_ORIGIN` permits the exact public origin behind container NAT without trusting forwarded headers from arbitrary peers. Prediction remains bounded and server authority is unchanged. Sustained overload still slows the simulation; yielding does not manufacture CPU capacity.
+
+The [browser harness](movement-testing.md) checks held keyboard input, authoritative and rendered movement, release, and 150 ms delayed snapshots. The runtime, spatial-cache and real-socket origin regressions pass with the full 175-test suite. The browser suite passes both cases after gameplay shader readiness. It does not establish cold-start or hardware GPU performance.
+
 ## Research and dependency decision
 
 Sources checked on 2026-10-12:
