@@ -80,8 +80,7 @@ export class Simulation {
   constructor(city: City) {
     this.city = city;
     this.destruction = new Destruction(city);
-    this.ai = new CityAI(navigationFor(city));
-    this.ai.props = city.props;
+    this.ai = new CityAI(navigationFor(city), city);
     for (let i = 0; i < 84; i++) {
       const e = this.spawn(
         "car",
@@ -268,7 +267,7 @@ export class Simulation {
     else if (v.kind === "helicopter") v.flight = "grounded";
   }
   private exit(p: Entity, v: Entity) {
-    const airborne = v.y > 0.2;
+    const airborne = v.kind === "car" ? !carGrounded(v, this.city) : v.y > 0.2;
     if (airborne && v.kind !== "helicopter" && v.kind !== "plane") return false;
     const model = v.model && VEHICLES[v.model];
     const distance = Math.max(
@@ -314,6 +313,29 @@ export class Simulation {
         return true;
       }
     return false;
+  }
+  private exitCitizen(car: Entity) {
+    const reaction = this.ai.citizens.reaction(car, this.time);
+    if (
+      reaction.kind !== "exit" ||
+      this.time < reaction.retryAt ||
+      car.driver ||
+      car.wreck ||
+      car.health <= 0 ||
+      car.burning !== undefined ||
+      Math.hypot(car.vx, car.vz) > 1
+    )
+      return;
+    reaction.retryAt = this.time + 0.5;
+    const person = this.spawn("pedestrian", car.x, car.z, car.color);
+    if (!this.exit(person, car)) {
+      this.entities.delete(person.id);
+      return;
+    }
+    this.ai.assign(person, this.serial, false);
+    this.ai.citizens.transferDriver(car, person, this.time);
+    car.ai = false;
+    this.ai.routes.delete(car.id);
   }
   toggleLights(id: string) {
     const p = this.entities.get(id);
@@ -389,9 +411,10 @@ export class Simulation {
     }
     this.inventory.pickup(p, this.time);
   }
-  damage(e: Entity, amount: number) {
+  damage(e: Entity, amount: number, source?: Entity) {
     if (e.wreck || (!vehicle(e) && e.health <= 0) || amount <= 0) return;
     e.health = Math.max(0, e.health - amount);
+    this.ai.citizens.notice(e, source, this.time, this.entities, this.city);
     if (vehicle(e)) {
       if (
         e.health <= (e.maxHealth || 100) * TUNING.fireThreshold &&
@@ -556,7 +579,10 @@ export class Simulation {
           const pos = safeSpawn(this.city, [...this.entities.values()], e.id);
           e.x = pos.x;
           e.z = pos.z;
-          if (e.ai) this.ai.assign(e, this.serial++ % 36);
+          if (e.ai) {
+            this.ai.assign(e, this.serial++ % 36);
+            this.ai.citizens.reset(e, this.time);
+          }
           if (e.kind === "player") this.inventory.initialize(e);
           e.jetpack = undefined;
           e.y = 0;
@@ -571,10 +597,10 @@ export class Simulation {
           const aiDirection = e.ai
             ? this.ai.pedestrian(
                 e,
-                this.spatial.query(e.x, e.z, 10),
+                this.spatial.query(e.x, e.z, 30),
                 dt,
                 this.time,
-                this.city,
+                this.entities,
               )
             : undefined;
           characterForces(
@@ -585,13 +611,21 @@ export class Simulation {
               ? {
                   x: aiDirection.x,
                   z: aiDirection.z,
-                  speed: aiDirection.sprint ? 5 : 2.2,
+                  speed: aiDirection.sprint
+                    ? 5
+                    : this.ai.citizens.state(e).personality === "restless"
+                      ? 2.8
+                      : 2.2,
                 }
               : undefined,
           );
-          if (input.attack) this.attack(e);
+          if (aiDirection?.attack !== undefined) {
+            e.angle = aiDirection.attack;
+            this.attack(e);
+          } else if (input.attack) this.attack(e);
         }
       } else if (e.kind === "car") {
+        if (e.ai) this.exitCitizen(e);
         if (e.wreck || e.health <= 0) e.lightsOn = false;
         else if (e.ai) e.lightsOn = this.day >= 18 || this.day < 6;
         const drive = e.wreck
@@ -744,11 +778,25 @@ export class Simulation {
               direction * (velocity.x * c.nx + velocity.z * c.nz),
             );
           }
+          const av = pointVelocity(a, c.x, c.z),
+            bv = pointVelocity(b, c.x, c.z);
+          const approachA = Math.max(0, av.x * c.nx + av.z * c.nz),
+            approachB = Math.max(0, -bv.x * c.nx - bv.z * c.nz);
+          const responsible =
+            vehicle(a) !== vehicle(b)
+              ? vehicle(a)
+                ? a
+                : b
+              : approachA > approachB + 0.5
+                ? a
+                : approachB > approachA + 0.5
+                  ? b
+                  : undefined;
           const speed = Math.min(resolveContact(a, b, c), vehicleApproach);
           if (pass === 0 && speed > 3) {
             const severity = (speed - 3) ** 2 * TUNING.collisionDamage;
-            this.damage(a, severity * Math.min(1, mass(b) / mass(a)));
-            this.damage(b, severity * Math.min(1, mass(a) / mass(b)));
+            this.damage(a, severity * Math.min(1, mass(b) / mass(a)), responsible);
+            this.damage(b, severity * Math.min(1, mass(a) / mass(b)), responsible);
             if (!vehicle(a) && vehicle(b)) a.down = Math.max(a.down || 0, 0.8);
             if (!vehicle(b) && vehicle(a)) b.down = Math.max(b.down || 0, 0.8);
             this.events.push({

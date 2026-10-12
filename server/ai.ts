@@ -1,7 +1,9 @@
 import { staticGeometry } from "../shared/physics/static.ts";
 import type { City } from "../shared/world.ts";
-import { signal, type Entity, type Input } from "../shared/world.ts";
+import { signal, type Entity } from "../shared/world.ts";
 import { clamp, wrap, type Drive } from "../shared/physics/index.ts";
+import { Citizens, type Intent } from "./citizens.ts";
+import { rayDistance, buildingBox } from "../shared/physics/collision.ts";
 import { Navigation, type Waypoint } from "../shared/navigation.ts";
 import { VEHICLES, DEFAULT_MODELS } from "../shared/catalog.ts";
 import { LIMIT } from "../shared/world.ts";
@@ -15,10 +17,37 @@ interface Route {
   destination: number;
   trip: number;
   crossing: boolean;
+  routine?: {
+    stops: [home: number, work: number, leisure: number];
+    goal: number;
+    waiting: boolean;
+    until: number;
+  };
+  reacting?: boolean;
 }
 export class CityAI {
-  constructor(readonly navigation: Navigation) {}
-  props: { x: number; z: number }[] = [];
+  citizens = new Citizens();
+  private detours = new WeakMap<
+    Entity,
+    { goal: number; destination: Point; points: Point[]; index: number }
+  >();
+  constructor(
+    readonly navigation: Navigation,
+    readonly city: City,
+  ) {}
+
+  private nearestSidewalk(point: Point) {
+    let nearest = this.navigation.sidewalks[0],
+      distance = Infinity;
+    for (const node of this.navigation.sidewalks) {
+      const squared = (node.x - point.x) ** 2 + (node.z - point.z) ** 2;
+      if (squared < distance) {
+        nearest = node;
+        distance = squared;
+      }
+    }
+    return nearest.id;
+  }
   routes = new Map<string, Route>();
   waterRoutes = new Map<string, { points: Point[]; index: number }>();
   assignWatercraft(e: Entity, index: number) {
@@ -90,7 +119,7 @@ export class CityAI {
       crossing: false,
     });
   }
-  assign(e: Entity, index: number) {
+  assign(e: Entity, index: number, relocate = true) {
     const node = (index * 17) % this.navigation.roads.length;
     let points: Point[], destination: number;
     if (e.kind === "car") {
@@ -106,13 +135,17 @@ export class CityAI {
       );
       return;
     } else {
-      const corner = (index * 31) % this.navigation.sidewalks.length,
+      const corner = relocate
+          ? (index * 31) % this.navigation.sidewalks.length
+          : this.nearestSidewalk(e),
         a = this.navigation.sidewalks[corner];
       destination = corner;
       points = [{ x: a.x, z: a.z }];
-      e.x = a.x;
-      e.z = a.z + (index % 3) * 1.3;
-      e.angle = 0;
+      if (relocate) {
+        e.x = a.x;
+        e.z = a.z + (index % 3) * 1.3;
+        e.angle = 0;
+      }
     }
     e.ai = true;
     this.routes.set(e.id, {
@@ -123,12 +156,44 @@ export class CityAI {
       destination,
       trip: index,
       crossing: false,
+      routine: {
+        stops: [
+          destination,
+          this.nearestSidewalk(
+            this.city.buildings[(index * 13) % this.city.buildings.length] ??
+              this.navigation.sidewalks[
+                (index * 17 + 1) % this.navigation.sidewalks.length
+              ],
+          ),
+          this.nearestSidewalk(
+            this.city.parks[index % this.city.parks.length] ??
+              this.navigation.sidewalks[
+                (index * 31 + 3) % this.navigation.sidewalks.length
+              ],
+          ),
+        ],
+        goal: 0,
+        waiting: false,
+        until: 0,
+      },
     });
   }
-  target(e: Entity, dt: number) {
+  target(e: Entity, dt: number, time = 0) {
     const route = this.routes.get(e.id);
     if (!route) return;
+    if (route.routine?.waiting) {
+      if (time < route.routine.until) return;
+      route.routine.waiting = false;
+      route.routine.goal = (route.routine.goal + 1) % 3;
+      const goal = route.routine.stops[route.routine.goal];
+      route.points = this.navigation.sidewalkPath(route.destination, goal);
+      // Disconnected destinations must not strand a citizen or lie about its position.
+      if (route.points.length) route.destination = goal;
+      else route.points = [{ ...this.navigation.sidewalks[route.destination] }];
+      route.index = 0;
+    }
     let target = route.points[route.index];
+    if (!target) return;
     if (Math.hypot(target.x - e.x, target.z - e.z) < (e.kind === "car" ? 4 : 0.9)) {
       route.index++;
       route.crossing = false;
@@ -143,12 +208,13 @@ export class CityAI {
             .slice(1)
             .map((id, i) => this.navigation.lanePoint(ids[i], id));
           route.destination = goal;
-        } else {
-          let goal = (route.trip * 31 + 7) % this.navigation.sidewalks.length;
-          if (goal === route.destination)
-            goal = (goal + 1) % this.navigation.sidewalks.length;
-          route.points = this.navigation.sidewalkPath(route.destination, goal);
-          route.destination = goal;
+        } else if (route.routine) {
+          route.routine.waiting = true;
+          route.routine.until =
+            time +
+            (this.citizens.state(e).personality === "restless" ? 2 : 6) +
+            (route.trip % 5);
+          return;
         }
         route.index = 0;
       }
@@ -162,7 +228,10 @@ export class CityAI {
     return { target, route };
   }
   car(e: Entity, entities: Entity[], time: number, dt: number): Drive {
-    const data = this.target(e, dt);
+    const reaction = this.citizens.reaction(e, time);
+    if (reaction.kind === "exit")
+      return { throttle: 0, steer: 0, brake: false, serviceBrake: 1 };
+    const data = this.target(e, dt, time);
     if (!data) return { throttle: 0, steer: 0, brake: false };
     const dx = data.target.x - e.x,
       dz = data.target.z - e.z,
@@ -186,7 +255,14 @@ export class CityAI {
       ahead > 9 &&
       ahead < 24 &&
       signal(time, junction.axis) !== "green";
-    let desiredSpeed = Math.abs(error) > 0.25 ? 4 : 8;
+    const personality = this.citizens.state(e).personality;
+    const cruise =
+      reaction.kind === "drive"
+        ? 13
+        : personality === "calm" || personality === "timid"
+          ? 7
+          : 9;
+    let desiredSpeed = Math.abs(error) > 0.25 ? 4 : cruise;
     if (stop) desiredSpeed = Math.min(desiredSpeed, Math.max(0, remaining - 1) * 0.8);
     for (const other of entities) {
       if (
@@ -220,50 +296,114 @@ export class CityAI {
     e: Entity,
     entities: Entity[],
     dt: number,
-    time = 0,
-    city?: City,
-  ): { x: number; z: number; sprint: boolean } {
-    const data = this.target(e, dt);
-    if (!data) return { x: 0, z: 0, sprint: false };
-    if (data.target.crossing && !data.route.crossing) {
-      if (signal(time, data.target.crossing) !== "red")
-        return { x: 0, z: 0, sprint: false };
-      if (
-        entities.some((v) => v.kind === "car" && Math.hypot(v.x - e.x, v.z - e.z) < 8)
-      )
-        return { x: 0, z: 0, sprint: false };
-      data.route.crossing = true;
+    time: number,
+    all: Map<string, Entity>,
+  ): Intent {
+    const reaction = this.citizens.intent(e, entities, all, time, this.city);
+    const route = this.routes.get(e.id);
+    if (reaction && route) route.reacting = true;
+    if (!reaction && route?.reacting) {
+      // Rejoin the nearest sidewalk after a chase instead of crossing a block to an old waypoint.
+      const start = this.nearestSidewalk(e);
+      route.points = [
+        this.navigation.sidewalks[start],
+        ...this.navigation.sidewalkPath(start, route.destination),
+      ];
+      route.index = 0;
+      route.crossing = false;
+      route.reacting = false;
+      if (route.routine) route.routine.waiting = false;
     }
-    let x = data.target.x - e.x,
-      z = data.target.z - e.z;
-    const length = Math.hypot(x, z) || 1;
-    x /= length;
-    z /= length;
-    for (const p of city
-      ? staticGeometry(city)
-          .query(e.x, e.z, 2)
-          .filter((p) => p.obstacle)
-      : this.props) {
-      const dx = p.x - e.x,
-        dz = p.z - e.z,
-        d = Math.hypot(dx, dz);
-      if (d < 2 && dx * x + dz * z > 0) {
-        if (Math.abs(z) > 0.5) x += 2;
-        else z -= 2;
+    const data = reaction ? undefined : this.target(e, dt, time);
+    let intent: Intent = reaction ?? { x: 0, z: 0, sprint: false };
+    if (data) {
+      let waiting = false;
+      if (data.target.crossing && !data.route.crossing) {
+        waiting =
+          signal(time, data.target.crossing) !== "red" ||
+          entities.some(
+            (v) => v.kind === "car" && Math.hypot(v.x - e.x, v.z - e.z) < 8,
+          );
+        if (!waiting) data.route.crossing = true;
       }
+      if (!waiting)
+        intent = { x: data.target.x - e.x, z: data.target.z - e.z, sprint: false };
     }
-    let flee = false;
-    for (const v of entities) {
-      if (v.kind !== "car" || v.y > 2) continue;
-      const dx = e.x - v.x,
-        dz = e.z - v.z,
-        d = Math.hypot(dx, dz);
-      if (d < 7 && Math.hypot(v.vx, v.vz) > 3) {
-        x += (dx / Math.max(d, 0.1)) * 2;
-        z += (dz / Math.max(d, 0.1)) * 2;
-        flee = true;
-      }
+    let length = Math.hypot(intent.x, intent.z);
+    if (!length) return intent;
+    if (reaction && intent.attack === undefined) {
+      const distance = Math.min(30, Math.max(10, length));
+      const dx = intent.x / length,
+        dz = intent.z / length;
+      const blocked = staticGeometry(this.city)
+        .query(e.x + (dx * distance) / 2, e.z + (dz * distance) / 2, distance / 2 + 2)
+        .some(
+          (b) =>
+            !b.obstacle &&
+            e.y < b.h + 1.8 &&
+            rayDistance(e.x, e.z, dx, dz, buildingBox(b), distance) < distance,
+        );
+      if (blocked) {
+        const destination = { x: e.x + dx * distance, z: e.z + dz * distance };
+        let detour = this.detours.get(e);
+        if (
+          !detour ||
+          Math.hypot(
+            destination.x - detour.destination.x,
+            destination.z - detour.destination.z,
+          ) > 8
+        ) {
+          const goal = this.nearestSidewalk(destination);
+          if (!detour || detour.goal !== goal) {
+            const start = this.nearestSidewalk(e);
+            detour = {
+              goal,
+              destination,
+              points: [
+                this.navigation.sidewalks[start],
+                ...this.navigation.sidewalkPath(start, goal),
+              ],
+              index: 0,
+            };
+            this.detours.set(e, detour);
+          } else detour.destination = destination;
+        }
+        while (
+          detour.points[detour.index] &&
+          Math.hypot(
+            detour.points[detour.index].x - e.x,
+            detour.points[detour.index].z - e.z,
+          ) < 0.9
+        )
+          detour.index++;
+        const waypoint = detour.points[detour.index];
+        if (waypoint) intent = { ...intent, x: waypoint.x - e.x, z: waypoint.z - e.z };
+      } else this.detours.delete(e);
+      length = Math.hypot(intent.x, intent.z);
+      if (!length) return intent;
     }
-    return { x, z, sprint: flee };
+    const x = intent.x / length,
+      z = intent.z / length;
+    const obstacles = staticGeometry(this.city).query(e.x, e.z, 5);
+    const clear = (dx: number, dz: number) =>
+      obstacles.every(
+        (b) =>
+          e.y >= b.h + (b.obstacle ? 0 : 1.8) ||
+          rayDistance(
+            e.x,
+            e.z,
+            dx,
+            dz,
+            { ...buildingBox(b), w: b.w / 2 + 0.6, d: b.d / 2 + 0.6 },
+            3,
+          ) >= 3,
+      );
+    if (clear(x, z)) return { ...intent, x, z };
+    for (const turn of [Math.PI / 4, -Math.PI / 4, Math.PI / 2, -Math.PI / 2]) {
+      const dx = x * Math.cos(turn) - z * Math.sin(turn),
+        dz = x * Math.sin(turn) + z * Math.cos(turn);
+      if (clear(dx, dz)) return { ...intent, x: dx, z: dz, attack: undefined };
+    }
+    return { x: 0, z: 0, sprint: false };
   }
 }

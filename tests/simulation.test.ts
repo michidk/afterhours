@@ -8,7 +8,6 @@ function empty() {
   const s = new Simulation(generateCity());
   s.entities.clear();
   s.city.props = [];
-  s.ai.props = [];
   s.city.buildings = [];
   return s;
 }

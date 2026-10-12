@@ -14,7 +14,6 @@ const empty = () => {
   const s = new Simulation(generateCity());
   s.entities.clear();
   s.city.props = [];
-  s.ai.props = [];
   s.city.buildings = [];
   s.inventory.pickups.clear();
   return s;
@@ -309,7 +308,9 @@ test("AI cars and pedestrians remain active over a full traffic cycle", () => {
   );
   run(s, 22);
   const cars = [...s.entities.values()].filter((e) => e.ai && e.kind === "car"),
-    people = [...s.entities.values()].filter((e) => e.ai && e.kind === "pedestrian");
+    people = [...s.entities.values()].filter(
+      (e) => e.ai && e.kind === "pedestrian" && start.has(e.id),
+    );
   assert.ok(
     cars.filter(
       (e) => Math.hypot(e.x - start.get(e.id)!.x, e.z - start.get(e.id)!.z) > 8,

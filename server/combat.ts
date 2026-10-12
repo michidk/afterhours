@@ -19,7 +19,7 @@ interface CombatWorld {
   inputs: Map<string, Input>;
   inventory: Inventory;
   events: WorldEvent[];
-  damage: (e: Entity, amount: number) => void;
+  damage: (e: Entity, amount: number, source?: Entity) => void;
   destruction: Destruction;
   damageProp: (id: string, amount: number, velocity: Vec3) => boolean;
   grenades: Grenades;
@@ -89,7 +89,7 @@ export class Combat {
         const prop = sim.destruction.ray(p.x, p.z, p.y + 1, ex, ez, distance);
         if (wallDistance(ex, ez) < distance || (prop && prop.distance < distance))
           continue;
-        sim.damage(e, spec.damage);
+        sim.damage(e, spec.damage, p);
       }
       for (const collider of staticGeometry(sim.city).query(p.x, p.z, range)) {
         if (!collider.destructibleId) continue;
@@ -180,7 +180,7 @@ export class Combat {
       });
     }
     if (hit) {
-      sim.damage(hit.e, spec.damage);
+      sim.damage(hit.e, spec.damage, p);
       const push = vehicle(hit.e) ? 0.3 : 4;
       hit.e.vx += dx * push;
       hit.e.vz += dz * push;

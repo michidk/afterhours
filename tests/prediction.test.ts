@@ -482,7 +482,6 @@ test("prediction replays unacknowledged inputs once and clears ownership history
   const s = new Simulation(generateCity());
   s.entities.clear();
   s.city.props = [];
-  s.ai.props = [];
   s.city.buildings = [];
   const p = s.join("A", "#ffffff"),
     prediction = new Prediction(s.city);

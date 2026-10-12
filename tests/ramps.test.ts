@@ -11,7 +11,6 @@ function empty() {
   s.entities.clear();
   s.city.buildings = [];
   s.city.props = [];
-  s.ai.props = [];
   return s;
 }
 test("AI drives up the physical ramp below the old launch threshold and lands", () => {
