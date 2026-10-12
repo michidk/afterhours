@@ -1,3 +1,4 @@
+import { terrainMesh } from "../shared/terrain.ts";
 import RAPIER from "@dimforge/rapier3d-compat";
 import {
   destructibles,
@@ -7,7 +8,7 @@ import {
   type Vec3,
 } from "../shared/destruction.ts";
 import { LIMIT, type City, type Entity } from "../shared/world.ts";
-import { WATER_LEVEL, WORLD_LIMIT, isWater } from "../shared/water.ts";
+import { WATER_LEVEL, WORLD_LIMIT, groundLevel, isWater } from "../shared/water.ts";
 import { TUNING } from "../shared/catalog.ts";
 import { SpatialGrid } from "../shared/spatial.ts";
 import { staticGeometry } from "../shared/physics/static.ts";
@@ -48,11 +49,20 @@ export class Destruction {
   private world() {
     if (!this.physics) {
       this.physics = new RAPIER.World({ x: 0, y: -18, z: 0 });
-      this.physics.createCollider(
-        RAPIER.ColliderDesc.cuboid(LIMIT, 0.1, LIMIT)
-          .setTranslation(0, -0.1, 0)
-          .setFriction(0.85),
-      );
+      if (this.city.terrain) {
+        const { positions, indices } = terrainMesh(this.city.terrain);
+        this.physics.createCollider(
+          RAPIER.ColliderDesc.trimesh(
+            new Float32Array(positions),
+            new Uint32Array(indices),
+          ).setFriction(0.85),
+        );
+      } else
+        this.physics.createCollider(
+          RAPIER.ColliderDesc.cuboid(LIMIT, 0.1, LIMIT)
+            .setTranslation(0, -0.1, 0)
+            .setFriction(0.85),
+        );
       this.physics.createCollider(
         RAPIER.ColliderDesc.cuboid(WORLD_LIMIT, 0.1, WORLD_LIMIT)
           .setTranslation(0, WATER_LEVEL - 0.4, 0)
@@ -143,7 +153,9 @@ export class Destruction {
     state.position.x += state.velocity.x * dt;
     state.position.z += state.velocity.z * dt;
     state.position.y += state.velocity.y * dt;
-    let floor = isWater(state.position.x, state.position.z) ? WATER_LEVEL : 0.3;
+    let floor = isWater(state.position.x, state.position.z, this.city)
+      ? WATER_LEVEL
+      : groundLevel(state.position.x, state.position.z, this.city) + 0.3;
     for (const b of staticGeometry(this.city).query(
       state.position.x,
       state.position.z,

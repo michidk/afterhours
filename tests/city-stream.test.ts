@@ -1,3 +1,4 @@
+import { LIMIT } from "../shared/world.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { CityStore } from "../server/city-stream.ts";
@@ -31,9 +32,9 @@ const fixture = () => {
 };
 const settle = () => new Promise((r) => setTimeout(r, 5));
 test("offshore coverage excludes land chunks when the clipped bounds do not overlap", () => {
-  assert.deepEqual(chunksAround(-1030, 0, COLLISION_RADIUS), []);
-  assert.deepEqual(chunksAround(0, 1030, COLLISION_RADIUS), []);
-  assert.deepEqual(chunksAround(-820, 0, 48), ["-7,-1", "-7,0"]);
+  assert.deepEqual(chunksAround(-LIMIT - 214, 0, COLLISION_RADIUS), []);
+  assert.deepEqual(chunksAround(0, LIMIT + 214, COLLISION_RADIUS), []);
+  assert.deepEqual(chunksAround(-LIMIT - 4, 0, 48), ["-12,-1", "-12,0"]);
 });
 test("saved map identity is stable and chunks duplicate only boundary features with stable IDs", () => {
   const city = fixture(),

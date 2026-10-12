@@ -16,39 +16,30 @@ export class WaterRenderer {
   private patches: { mesh: Mesh; positions: number[]; normals: number[] }[] = [];
   private clock = 0;
   constructor(host: CityScene) {
-    const extent = LIMIT + 256,
-      strip = extent - LIMIT;
+    const extent = LIMIT * 4;
     const material = host.mat("#478e9c");
     material.specularColor = new Color3(0.5, 0.65, 0.7);
     material.specularPower = 64;
-    for (const side of [-1, 1])
-      for (const axis of ["x", "z"]) {
-        const mesh = MeshBuilder.CreateGround(
-          "animated water",
-          {
-            width: axis === "x" ? strip : extent * 2,
-            height: axis === "z" ? strip : LIMIT * 2,
-            subdivisionsX: axis === "x" ? 12 : 100,
-            subdivisionsY: axis === "z" ? 12 : 100,
-            updatable: true,
-          },
-          host.scene,
-        );
-        mesh.position.set(
-          axis === "x" ? side * (LIMIT + strip / 2) : 0,
-          -1.08,
-          axis === "z" ? side * (LIMIT + strip / 2) : 0,
-        );
-        mesh.material = material;
-        mesh.receiveShadows = true;
-        const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
-        if (positions)
-          this.patches.push({
-            mesh,
-            positions: Array.from(positions),
-            normals: new Array(positions.length).fill(0),
-          });
-      }
+    const mesh = MeshBuilder.CreateGround(
+      "animated water",
+      {
+        width: extent * 2,
+        height: extent * 2,
+        subdivisions: 80,
+        updatable: true,
+      },
+      host.scene,
+    );
+    mesh.position.y = -1.08;
+    mesh.material = material;
+    mesh.receiveShadows = true;
+    const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+    if (positions)
+      this.patches.push({
+        mesh,
+        positions: Array.from(positions),
+        normals: new Array(positions.length).fill(0),
+      });
   }
   update(time: number, dt: number) {
     this.clock += dt;

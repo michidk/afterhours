@@ -75,7 +75,7 @@ test("district composition keeps streets, alleys, parks and airfield clear acros
   for (const seed of [0, 1, 42, 713, 932, -17, 2147483647]) {
     const city = generateCity(seed);
     assert.deepEqual(generateCity(seed), city);
-    cityFileSchema.parse({ format: "afterhours-city", version: 3, city });
+    cityFileSchema.parse({ format: "afterhours-city", version: 4, city });
     assert.ok(city.parks.length >= 20);
     assert.ok(city.buildings.length >= 250);
     assert.ok(LIMIT * 2 >= 1600);
@@ -142,7 +142,7 @@ test("district composition keeps streets, alleys, parks and airfield clear acros
   assert.notDeepEqual(generateCity(1), generateCity(2));
 });
 
-test("asset catalog and v3 references remain valid and old artifacts fail explicitly", () => {
+test("asset catalog and v4 references remain valid and old artifacts fail explicitly", () => {
   for (const id of BUILDING_ASSET_IDS) {
     const asset = BUILDING_ASSETS[id];
     assert.equal(asset.id, id);

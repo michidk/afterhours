@@ -28,7 +28,7 @@ test("saturated airborne corpses keep falling and lie on roofs, land or water un
     const sites = [
       { x: 0, z: 0, floor: 12.1 },
       { x: 50, z: 0, floor: 0.3 },
-      { x: -900, z: 0, floor: -1.1 },
+      { x: -LIMIT - 84, z: 0, floor: -1.1 },
     ];
     for (let i = 0; i < 131; i++) {
       person.x = i < 3 ? sites[i].x : 250 + (i % 16) * 4;

@@ -1,3 +1,4 @@
+import { LIMIT } from "../shared/world.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadCity } from "../server/city-loader.ts";
@@ -105,7 +106,7 @@ test("aircraft variants have observable acceleration and climb differences", () 
 test("abandoned aircraft ditch at the water surface and burn authoritatively", () => {
   for (const kind of ["plane", "helicopter"] as const) {
     const s = setup(),
-      e = s.spawn(kind, -950, 0);
+      e = s.spawn(kind, -LIMIT - 134, 0);
     e.y = 20;
     e.flight = "falling";
     run(s, 3);

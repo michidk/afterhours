@@ -1,13 +1,14 @@
-import type { Entity, Input } from "../world.ts";
+import type { City, Entity, Input } from "../world.ts";
 import { clamp } from "./vehicle.ts";
 import { VEHICLES } from "../catalog.ts";
 import { groundLevel } from "../water.ts";
 /** Arcade aeroplane: lift needs airspeed, ground braking and airborne stalls. */
-export function flyPlane(e: Entity, input: Input, dt: number) {
+export function flyPlane(e: Entity, input: Input, dt: number, city?: City) {
   const model = VEHICLES[e.model || "plane"];
   if (model.kind !== "plane") return;
   const tuning = model.flight,
-    floor = groundLevel(e.x, e.z);
+    floor = groundLevel(e.x, e.z, city),
+    ceiling = floor + tuning.ceiling;
   const sx = Math.sin(e.angle),
     sz = Math.cos(e.angle),
     speed = Math.hypot(e.vx, e.vz);
@@ -29,6 +30,6 @@ export function flyPlane(e: Entity, input: Input, dt: number) {
           ? -tuning.descend
           : 0;
   e.vy += (vertical - e.vy) * (1 - Math.exp(-tuning.vertical * dt));
-  e.y = clamp(e.y + e.vy * dt, floor, tuning.ceiling);
-  if (e.y === floor || e.y === tuning.ceiling) e.vy = 0;
+  e.y = clamp(e.y + e.vy * dt, floor, ceiling);
+  if (e.y === floor || e.y === ceiling) e.vy = 0;
 }

@@ -1,3 +1,4 @@
+import { WORLD_LIMIT } from "../shared/water.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -86,10 +87,10 @@ test("camera movement and look stay independent while zoom has no gameplay limit
 test("debug cameras reach offshore water and stay inside the shared world boundary", () => {
   const camera = new DebugCamera();
   camera.setMode("free", { x: 0, y: 46, z: -26 }, { x: 0, y: 0, z: 0 });
-  camera.setPose({ x: -950, y: 0, z: 0 });
-  assert.equal(camera.focus.x, -950);
+  camera.setPose({ x: -WORLD_LIMIT + 122, y: 0, z: 0 });
+  assert.equal(camera.focus.x, -WORLD_LIMIT + 122);
   camera.update({ ...idle(), left: true }, 10);
-  assert.equal(camera.focus.x, -1068);
+  assert.equal(camera.focus.x, -WORLD_LIMIT + 4);
 });
 
 test("lighting is continuous, periodic and readable across the full day", () => {

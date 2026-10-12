@@ -20,6 +20,7 @@ export const mapManifestSchema = z.object({
   limit: z.literal(LIMIT),
   chunkSize: z.literal(CITY_CHUNK_SIZE),
   airport: citySchema.shape.airport,
+  terrain: citySchema.shape.terrain,
 });
 export type MapManifest = z.infer<typeof mapManifestSchema>;
 /** A navigation drawing, separate from streamed collision/render geometry. */
@@ -55,9 +56,12 @@ export const cityChunkSchema = z.object({
   landmarks: z.array(entry(citySchema.shape.landmarks.element)).max(100),
 });
 export type CityChunk = z.infer<typeof cityChunkSchema>;
-export function emptyCity(map: Pick<MapManifest, "seed" | "airport">): City {
+export function emptyCity(
+  map: Pick<MapManifest, "seed" | "airport" | "terrain">,
+): City {
   return {
     seed: map.seed,
+    terrain: map.terrain,
     airport: map.airport,
     roads: [],
     buildings: [],

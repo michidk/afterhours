@@ -1,3 +1,4 @@
+import { buildTerrain } from "./world/terrain.ts";
 import { buildHeadlightCones, CarLights } from "./models/car-lights.ts";
 import { buildCharacter } from "./models/character.ts";
 import { buildRoad } from "./models/road.ts";
@@ -37,7 +38,7 @@ import { Effects } from "./effects/index.ts";
 import { DebugCamera } from "./camera/debug.ts";
 import { EnvironmentLighting } from "./lighting/index.ts";
 import { idle, type Input } from "../shared/world.ts";
-import { rampSlope, carGrounded } from "../shared/physics/ramps.ts";
+import { rampHeight, carGrounded } from "../shared/physics/ramps.ts";
 import { rampMesh } from "./models/ramp.ts";
 import { TyreTracks } from "./effects/tyre-tracks.ts";
 import { CAR_WHEEL_MOUNTS } from "./models/car-wheels.ts";
@@ -236,60 +237,8 @@ export class CityScene {
   build(city: City, options: GeometryOptions = {}) {
     const r = random(city.seed + (options.index ?? 0) * 997);
     if (options.base !== false) {
-      this.box("island", 0, -0.65, 0, LIMIT * 2, 1, LIMIT * 2, "#a9b29a");
-      this.box("ocean", 0, -1.2, 0, 6000, 0.2, 6000, "#669f9f");
-      for (const side of [-1, 1]) {
-        this.box(
-          "coastal walk",
-          0,
-          0.03,
-          side * (LIMIT - 7),
-          LIMIT * 2 - 4,
-          0.12,
-          10,
-          "#d1c3a5",
-        );
-        this.box(
-          "coastal walk",
-          side * (LIMIT - 7),
-          0.03,
-          0,
-          10,
-          0.12,
-          LIMIT * 2 - 4,
-          "#d1c3a5",
-        );
-        this.box(
-          "sand shoreline",
-          0,
-          -0.12,
-          side * (LIMIT - 2),
-          LIMIT * 2,
-          0.12,
-          4,
-          "#ddcda6",
-        );
-        this.box(
-          "sand shoreline",
-          side * (LIMIT - 2),
-          -0.12,
-          0,
-          4,
-          0.12,
-          LIMIT * 2,
-          "#ddcda6",
-        );
-      }
-      this.box(
-        "sunset beach sand",
-        -LIMIT + 24,
-        -0.02,
-        0,
-        38,
-        0.12,
-        LIMIT * 2 - 8,
-        "#ddcda6",
-      );
+      if (city.terrain) buildTerrain(this, city.terrain);
+      else this.box("island", 0, -0.65, 0, LIMIT * 2, 1, LIMIT * 2, "#a9b29a");
     }
     for (const surface of city.surfaces || []) {
       const colors = {
@@ -675,9 +624,19 @@ export class CityScene {
       n.rotation.y = e.angle;
       n.rotation.z = e.down ? Math.PI / 2 : 0;
       n.rotation.x = 0;
-      if (e.kind === "car" && e.y > 0.03 && carGrounded(e, this.city)) {
-        n.rotation.x = -Math.atan(rampSlope * Math.cos(e.angle));
-        n.rotation.z = Math.atan(rampSlope * Math.sin(e.angle));
+      if (e.kind === "car" && carGrounded(e, this.city)) {
+        const sx = Math.sin(e.angle),
+          cz = Math.cos(e.angle);
+        const forward =
+          (rampHeight(e.x + sx * 0.1, e.z + cz * 0.1, this.city) -
+            rampHeight(e.x - sx * 0.1, e.z - cz * 0.1, this.city)) /
+          0.2;
+        const sideways =
+          (rampHeight(e.x + cz * 0.1, e.z - sx * 0.1, this.city) -
+            rampHeight(e.x - cz * 0.1, e.z + sx * 0.1, this.city)) /
+          0.2;
+        n.rotation.x = -Math.atan(forward);
+        n.rotation.z = -Math.atan(sideways);
       }
       const parts = this.parts.get(e.id)!;
       for (const child of parts)
@@ -800,7 +759,7 @@ export class CityScene {
       this.camera.fov = this.debugCamera.fov;
       this.camera.minZ =
         this.debugCamera.mode === "free"
-          ? Math.max(0.05, Math.min(2, this.debugCamera.distance * 0.002))
+          ? Math.max(0.05, Math.min(32, this.debugCamera.distance * 0.002))
           : Math.max(0.05, Math.min(1, position.y / 100));
       this.camera.maxZ = Math.max(
         LIMIT * 4,

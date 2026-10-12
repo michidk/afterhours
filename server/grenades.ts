@@ -112,7 +112,7 @@ export class Grenades {
           }
         }
       }
-      const floor = groundLevel(g.x, g.z) + g.radius;
+      const floor = groundLevel(g.x, g.z, city) + g.radius;
       if (g.y < floor) {
         g.y = floor;
         g.vy = Math.abs(g.vy) > 0.5 ? Math.abs(g.vy) * 0.4 : 0;

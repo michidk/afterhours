@@ -35,6 +35,7 @@ const island = { x: 0, z: 0, angle: 0, w: LIMIT, d: LIMIT };
 function setup() {
   const sim = new Simulation(structuredClone(saved));
   sim.entities.clear();
+  sim.city.terrain = undefined;
   sim.city.buildings = [];
   sim.city.props = [];
   sim.city.parks = [];
@@ -55,8 +56,8 @@ function afloat(e: Entity) {
   const box = entityBox(e),
     c = Math.abs(Math.cos(e.angle)),
     n = Math.abs(Math.sin(e.angle));
-  assert.ok(Math.abs(e.x) + c * box.w + n * box.d <= 1072.00001);
-  assert.ok(Math.abs(e.z) + n * box.w + c * box.d <= 1072.00001);
+  assert.ok(Math.abs(e.x) + c * box.w + n * box.d <= WORLD_LIMIT + 0.00001);
+  assert.ok(Math.abs(e.z) + n * box.w + c * box.d <= WORLD_LIMIT + 0.00001);
 }
 
 test("the immutable saved map supplies every model safely without enlarging land chunks", () => {
@@ -81,25 +82,28 @@ test("the immutable saved map supplies every model safely without enlarging land
     if ("water" in spec) afloat(placed);
   }
   assert.equal(JSON.stringify(saved), source);
-  assert.throws(() => sim.spawn("boat", -900, 0, undefined, "plane"), /does not match/);
-  assert.equal(sim.spawn("jetski", -900, 0).model, "jetski");
-  assert.equal(LIMIT, 816);
-  assert.equal(WORLD_LIMIT, 1072);
-  assert.equal(groundLevel(-820, 0), -1.1);
+  assert.throws(
+    () => sim.spawn("boat", -LIMIT - 84, 0, undefined, "plane"),
+    /does not match/,
+  );
+  assert.equal(sim.spawn("jetski", -LIMIT - 84, 0).model, "jetski");
+  assert.equal(LIMIT, 1536);
+  assert.equal(WORLD_LIMIT, 1792);
+  assert.equal(groundLevel(-LIMIT - 4, 0), -1.1);
   assert.equal(isWater(0, 0), false);
   assert.equal(
-    debugCommandSchema.safeParse({ kind: "teleport", x: -950, z: 0 }).success,
+    debugCommandSchema.safeParse({ kind: "teleport", x: -LIMIT - 134, z: 0 }).success,
     true,
   );
   assert.equal(
-    debugCommandSchema.safeParse({ kind: "teleport", x: -1100, z: 0 }).success,
+    debugCommandSchema.safeParse({ kind: "teleport", x: -LIMIT - 284, z: 0 }).success,
     false,
   );
-  assert.deepEqual(chunksAround(-1030, 0, 48), []);
+  assert.deepEqual(chunksAround(-LIMIT - 214, 0, 48), []);
   const stream = new CityStream(new CityStore(saved).manifest, () => {});
-  assert.equal(stream.ready({ x: -1030, z: 0 }), true);
+  assert.equal(stream.ready({ x: -LIMIT - 214, z: 0 }), true);
   assert.equal(
-    stream.ready({ x: -820, z: 0 }),
+    stream.ready({ x: -LIMIT - 4, z: 0 }),
     false,
     "shore still needs land collision geometry",
   );
@@ -108,7 +112,7 @@ test("the immutable saved map supplies every model safely without enlarging land
 for (const model of waterModels) {
   test(`${model} shares authoritative throttle, steering and braking with prediction`, () => {
     const s = setup(),
-      e = s.spawn(VEHICLES[model].kind, -970, 0, undefined, model);
+      e = s.spawn(VEHICLES[model].kind, -LIMIT - 154, 0, undefined, model);
     e.driver = "driver";
     const prediction = structuredClone(e);
     const input = { ...idle(), up: true, right: true };
@@ -191,7 +195,7 @@ test("water variants accelerate differently and have distinct seats and cruising
   ] as const) {
     const speeds = models.map((model) => {
       const s = setup(),
-        e = s.spawn(VEHICLES[model].kind, -950, 0, undefined, model);
+        e = s.spawn(VEHICLES[model].kind, -LIMIT - 134, 0, undefined, model);
       e.driver = "driver";
       s.inputs.set("driver", { ...idle(), up: true });
       run(s, 1);
@@ -231,7 +235,7 @@ test("swimmers can board together, exit to water, and step onto the shoreline", 
     s.tick(1 / 30);
     predictStep(predicted, { ...idle(), right: true }, s.city, [craft], 1 / 30);
   }
-  assert.ok(passenger.x > -816);
+  assert.ok(passenger.x > -LIMIT);
   assert.equal(passenger.y, 0);
   assert.ok(Math.abs(predicted.x - passenger.x) < 1e-8);
   s.interact(driver.id);
@@ -241,7 +245,7 @@ test("swimmers can board together, exit to water, and step onto the shoreline", 
 test("swimming slows locomotion, then a parachute lands at water height", () => {
   const s = setup(),
     p = s.join("Swimmer", "#ffffff");
-  p.x = -950;
+  p.x = -LIMIT - 134;
   p.z = 0;
   p.y = WATER_LEVEL;
   s.inputs.set(p.id, { ...idle(), up: true, sprint: true });
@@ -256,7 +260,7 @@ test("swimming slows locomotion, then a parachute lands at water height", () => 
   assert.equal(p.parachute, undefined);
 });
 
-test("all water AI models cruise bounded routes for three minutes and stop when stolen", () => {
+test("all water AI models cruise bounded routes for six minutes and stop when stolen", () => {
   const s = setup();
   const craft = waterModels.map((model, index) => {
     const e = s.spawn(VEHICLES[model].kind, 0, 0, undefined, model);
@@ -266,7 +270,7 @@ test("all water AI models cruise bounded routes for three minutes and stop when 
   const start = craft.map((e) => ({ x: e.x, z: e.z }));
   const targets = craft.map((e) => s.ai.waterRoutes.get(e.id)?.index);
   const advanced = new Set<string>();
-  for (let i = 0; i < 5400; i++) {
+  for (let i = 0; i < 10800; i++) {
     s.tick(1 / 30);
     for (const [index, e] of craft.entries()) {
       afloat(e);

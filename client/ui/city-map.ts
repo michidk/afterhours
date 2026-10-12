@@ -1,3 +1,4 @@
+import { TERRAIN_SIDE, TERRAIN_STEP } from "../../shared/terrain.ts";
 import {
   cityAtlasSchema,
   type CityAtlas,
@@ -197,10 +198,23 @@ export class CityMap {
     c.translate(v.width / 2 - v.x * v.scale, v.height / 2 + v.z * v.scale);
     c.scale(v.scale, -v.scale);
     c.fillStyle = "#425752";
-    c.fillRect(-limit, -limit, limit * 2, limit * 2);
+    if (this.manifest.terrain) {
+      for (let z = 0; z < TERRAIN_SIDE - 1; z++)
+        for (let x = 0; x < TERRAIN_SIDE - 1; x++) {
+          const h = this.manifest.terrain.heights[z * TERRAIN_SIDE + x];
+          if (h < -1.1) continue;
+          c.fillStyle = h < -0.1 ? "#a79870" : `hsl(105, 18%, ${32 + h / 6}%)`;
+          c.fillRect(
+            x * TERRAIN_STEP - limit,
+            z * TERRAIN_STEP - limit,
+            TERRAIN_STEP,
+            TERRAIN_STEP,
+          );
+        }
+    } else c.fillRect(-limit, -limit, limit * 2, limit * 2);
     c.strokeStyle = "#ebd5ac55";
     c.lineWidth = 2 / v.scale;
-    c.strokeRect(-limit, -limit, limit * 2, limit * 2);
+    c.strokeRect(-limit - 256, -limit - 256, (limit + 256) * 2, (limit + 256) * 2);
     for (const park of this.atlas?.parks ?? []) {
       c.fillStyle = park.kind === "civic" ? "#797c67" : "#547958";
       c.fillRect(

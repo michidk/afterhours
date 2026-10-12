@@ -3,7 +3,7 @@ import { LIMIT, type Entity, type City, type Input } from "../world.ts";
 import { clamp, wrap } from "./vehicle.ts";
 import { TUNING, VEHICLES } from "../catalog.ts";
 import { shape } from "./collision.ts";
-import { groundLevel } from "../water.ts";
+import { groundLevel, isWater } from "../water.ts";
 function rotorRadius(e: Entity) {
   const model = e.model && VEHICLES[e.model];
   return model && model.kind === "helicopter" ? model.rotorRadius : 4.7;
@@ -19,7 +19,7 @@ function landingBlocked(e: Entity, other: Entity, x: number, z: number) {
   );
 }
 export function surface(city: City, x: number, z: number, radius = 0) {
-  let top = groundLevel(x, z);
+  let top = groundLevel(x, z, city);
   for (const b of staticGeometry(city).query(x, z, radius + 4)) {
     if (b.obstacle) {
       const r = radius + (b.obstacle === "lamp" ? 0.5 : 4);
@@ -48,7 +48,8 @@ export function landingSite(e: Entity, city: City, entities: Entity[]) {
         );
       // Prefer road/ground landing so the player can resume walking immediately.
       if (
-        surface(city, x, z, footprint) === 0 &&
+        !isWater(x, z, city) &&
+        surface(city, x, z, footprint) === groundLevel(x, z, city) &&
         !entities.some((v) => landingBlocked(e, v, x, z))
       )
         return { x, z };
@@ -99,7 +100,7 @@ export function flyHelicopter(
     dz = (e.landingZ ?? e.z) - e.z;
     maxSpeed = Math.min(8, Math.hypot(dx, dz) * 1.4);
   }
-  if (e.flight === "takingOff" && e.y < 8) {
+  if (e.flight === "takingOff" && e.y < groundLevel(e.x, e.z, city) + 8) {
     dx = 0;
     dz = 0;
   }
@@ -129,7 +130,11 @@ export function flyHelicopter(
       (Number(input.ascend) * tuning.climb - Number(input.descend) * tuning.descend) /
         tuning.response;
   if (!input.descend && e.flight !== "landing") target = Math.max(target, clearance);
-  target = clamp(Math.max(target, Math.max(under, ahead) + 2), 0, tuning.ceiling);
+  target = clamp(
+    Math.max(target, Math.max(under, ahead) + 2),
+    0,
+    groundLevel(e.x, e.z, city) + tuning.ceiling,
+  );
   if (!input.ascend && !input.descend && e.flight === "takingOff")
     target = Math.max(target, clearance);
   const atLanding =
@@ -143,8 +148,9 @@ export function flyHelicopter(
     tuning.climb,
   );
   e.vy += (desiredVertical - e.vy) * (1 - Math.exp(-tuning.vertical * dt));
-  e.y = Math.max(groundLevel(e.x, e.z), e.y + e.vy * dt);
-  if (e.flight === "takingOff" && e.y >= 9) e.flight = "cruising";
+  e.y = Math.max(groundLevel(e.x, e.z, city), e.y + e.vy * dt);
+  if (e.flight === "takingOff" && e.y >= groundLevel(e.x, e.z, city) + 9)
+    e.flight = "cruising";
   if (!atLanding && e.y < ahead + (input.descend ? 1.8 : TUNING.clearance - 1))
     maxSpeed = 0;
   if (input.brake) maxSpeed = 0;

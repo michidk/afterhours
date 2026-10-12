@@ -28,6 +28,7 @@ export function characterForces(
   input: Input,
   dt: number,
   direction?: { x: number; z: number; speed: number },
+  city?: City,
 ) {
   let x = direction?.x ?? Number(input.right) - Number(input.left),
     z = direction?.z ?? Number(input.up) - Number(input.down);
@@ -38,7 +39,7 @@ export function characterForces(
         ? 6
         : e.jetpack?.active && e.jetpack.fuel > 0 && e.y > 0.2 && !e.vehicle && !e.down
           ? JETPACK.speed
-          : isWater(e.x, e.z) && e.y <= WATER_LEVEL + 0.1
+          : isWater(e.x, e.z, city) && e.y <= WATER_LEVEL + 0.1
             ? 2.8
             : input.sprint || input.brake
               ? TUNING.sprint * PHYSIQUES[e.character?.physique ?? "regular"].speed
@@ -71,7 +72,7 @@ export function characterAltitude(
   dt: number,
   input: Input = idle(),
 ) {
-  let floor = groundLevel(e.x, e.z);
+  let floor = groundLevel(e.x, e.z, city);
   // The quay's shallow step is traversable from swimming height.
   if (floor === 0 && e.y >= WATER_LEVEL - 0.02 && e.y < 0) e.y = 0;
   for (const b of staticGeometry(city).query(e.x, e.z, 1)) {
@@ -126,7 +127,7 @@ export function predictStep(
   for (let i = 0; i < count; i++) {
     if (e.down || e.wreck) return;
     const previous = { ...e };
-    if (!vehicle(e)) characterForces(e, input, h);
+    if (!vehicle(e)) characterForces(e, input, h, undefined, city);
     else if (e.kind === "car") {
       carForces(
         e,
@@ -148,10 +149,13 @@ export function predictStep(
         },
         h,
       );
-    else if (!e.driver && (e.y > 0.2 || e.flight === "falling"))
+    else if (
+      !e.driver &&
+      (e.y > groundLevel(e.x, e.z, city) + 0.2 || e.flight === "falling")
+    )
       fallAircraft(e, city, h);
     else if (e.kind === "helicopter") flyHelicopter(e, input, city, nearby, h);
-    else if (e.kind === "plane") flyPlane(e, input, h);
+    else if (e.kind === "plane") flyPlane(e, input, h, city);
     const speed = Math.hypot(e.vx, e.vz),
       limit = e.model ? VEHICLES[e.model].speed : 52;
     if (vehicle(e) && speed > limit) {
@@ -174,7 +178,7 @@ export function predictStep(
       b.z += b.vz * h;
       if (vehicle(b)) b.angle = wrap(b.angle + (b.angularVelocity || 0) * h);
       if (b.kind === "car") carAltitude(b, previous, city, h);
-      else b.y = Math.max(groundLevel(b.x, b.z), b.y + b.vy * h);
+      else b.y = Math.max(groundLevel(b.x, b.z, city), b.y + b.vy * h);
     }
     resolveMovementContacts(bodies, city);
   }
@@ -202,7 +206,7 @@ export function resolveMovementContacts(bodies: Entity[], city: City) {
         if (c) resolveContact(a, b, c);
       }
   }
-  for (const body of bodies) resolveWorldBounds(body);
+  for (const body of bodies) resolveWorldBounds(body, city);
 }
 
 function resolveStaticContacts(body: Entity, city: City) {
@@ -217,7 +221,7 @@ function resolveStaticContacts(body: Entity, city: City) {
     if (c) resolveContact(body, undefined, c);
   }
   for (const c of rampContacts(body, city)) resolveContact(body, undefined, c);
-  resolveWorldBounds(body);
+  resolveWorldBounds(body, city);
 }
 
 /** Cosmetic correction cannot displace the neighbours shown by the renderer. */
@@ -238,5 +242,5 @@ export function constrainRenderPose(pose: Entity, city: City, nearby: Entity[]) 
       if (c) resolveContact(pose, undefined, c);
     }
   }
-  resolveWorldBounds(pose);
+  resolveWorldBounds(pose, city);
 }

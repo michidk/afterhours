@@ -1,11 +1,12 @@
 import type { City, Entity } from "../world.ts";
+import { groundLevel } from "../water.ts";
 import { contact, entityBox, shape, type Contact } from "./collision.ts";
 
 /** City artifacts store positions; geometry is identical on authority and client. */
 export const RAMP = { width: 5, length: 7, height: 1.6 };
 export const rampSlope = RAMP.height / RAMP.length;
 export function rampHeight(x: number, z: number, city: City) {
-  let height = 0;
+  let height = groundLevel(x, z, city);
   for (const r of city.ramps)
     if (Math.abs(x - r.x) <= RAMP.width / 2 && Math.abs(z - r.z) <= RAMP.length / 2)
       height = Math.max(height, (z - r.z + RAMP.length / 2) * rampSlope);
@@ -27,6 +28,14 @@ export function carAltitude(e: Entity, previous: Entity, city: City, dt: number)
         Math.abs(e.x - r.x) <= RAMP.width / 2 &&
         Math.abs(previous.x - r.x) <= RAMP.width / 2,
     );
+  const onTerrain =
+    groundLevel(e.x, e.z, city) === floor &&
+    groundLevel(previous.x, previous.z, city) === oldFloor;
+  if (supported && onTerrain) {
+    e.y = floor;
+    e.vy = 0;
+    return;
+  }
   if (
     supported &&
     ((floor > 0 && (oldFloor > 0 || toeEntry)) ||
@@ -42,7 +51,8 @@ export function carAltitude(e: Entity, previous: Entity, city: City, dt: number)
   e.vy -= 18 * dt;
   e.y += e.vy * dt;
   // A descending body can land on the slope, but a side/back approach cannot teleport up.
-  const landing = previous.y >= floor - 0.02 && e.vy <= 0 ? floor : 0;
+  const landing =
+    previous.y >= floor - 0.02 && e.vy <= 0 ? floor : groundLevel(e.x, e.z, city);
   if (e.y <= landing) {
     e.y = landing;
     e.vy = 0;

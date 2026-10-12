@@ -20,7 +20,7 @@ if (previewPath === path) throw Error("--preview must differ from --out");
 if (!Number.isInteger(seed)) throw Error("--seed must be an integer");
 const artifact = cityFileSchema.parse({
   format: "afterhours-city",
-  version: 3,
+  version: 4,
   city: generateCity(seed),
 });
 await mkdir(dirname(path), { recursive: true });

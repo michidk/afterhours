@@ -322,6 +322,13 @@ function drawMap(p: Entity) {
   map.save();
   map.translate(110 - p.x * scale, 110 + p.z * scale);
   map.scale(scale, -scale);
+  for (let x = Math.floor((p.x - 125) / 8) * 8; x <= p.x + 125; x += 8)
+    for (let z = Math.floor((p.z - 125) / 8) * 8; z <= p.z + 125; z += 8)
+      if (isWater(x, z, scene.city)) {
+        map.fillStyle = "#478e9c";
+        map.fillRect(x, z, 8, 8);
+      }
+
   map.fillStyle = "#4e6060";
   for (const r of scene.city.roads) {
     map.strokeStyle = "#4e6060";
@@ -534,7 +541,7 @@ async function boot() {
           ? "KM/H"
           : p.parachute
             ? "PARACHUTE"
-            : isWater(p.x, p.z) && p.y <= WATER_LEVEL + 0.1
+            : isWater(p.x, p.z, scene.city) && p.y <= WATER_LEVEL + 0.1
               ? "SWIMMING"
               : "ON FOOT";
         $("#weapon").textContent = p.down

@@ -6,6 +6,9 @@ const coordinate = z.number().finite().min(-LIMIT).max(LIMIT),
 const point = { x: coordinate, z: coordinate };
 export const citySchema = z.object({
   seed: z.number().int(),
+  terrain: z
+    .object({ heights: z.array(z.number().finite().min(-20).max(240)).length(97 * 97) })
+    .optional(),
   roads: z
     .array(
       z
@@ -82,6 +85,6 @@ export const citySchema = z.object({
 });
 export const cityFileSchema = z.object({
   format: z.literal("afterhours-city"),
-  version: z.literal(3),
-  city: citySchema,
+  version: z.literal(4),
+  city: citySchema.extend({ terrain: citySchema.shape.terrain.unwrap() }),
 });

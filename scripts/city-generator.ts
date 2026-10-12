@@ -1,9 +1,10 @@
-import { LIMIT, district, random, type City, type Building } from "../shared/world.ts";
+import { district, random, type City, type Building } from "../shared/world.ts";
 import {
   BUILDING_ASSETS,
   type BuildingAssetId,
 } from "../shared/assets/buildings/index.ts";
 import { roadIntersectsBox, roadDistance } from "../shared/roads.ts";
+import { generateTerrain } from "./terrain-generator.ts";
 import { generateRoads } from "./road-generator.ts";
 
 export const CITY_TUNING = {
@@ -39,8 +40,8 @@ export function generateCity(seed = 713): City {
     { x: 76, z: 12, weapon: "pistol" },
   ];
   const clear = (lot: Lot) =>
-    Math.abs(lot.x) + lot.w / 2 < LIMIT - 22 &&
-    Math.abs(lot.z) + lot.d / 2 < LIMIT - 22 &&
+    Math.abs(lot.x) + lot.w / 2 < 816 - 22 &&
+    Math.abs(lot.z) + lot.d / 2 < 816 - 22 &&
     !roads.some((road) => roadIntersectsBox(road, lot)) &&
     !buildings.some((b) => overlaps(b, lot, 2)) &&
     !parks.some((p) => overlaps({ ...p, w: p.w ?? 38, d: p.d ?? 38 }, lot, 2)) &&
@@ -199,8 +200,8 @@ export function generateCity(seed = 713): City {
       key = `${x},${z}`;
     if (
       propKeys.has(key) ||
-      Math.abs(x) > LIMIT - 15 ||
-      Math.abs(z) > LIMIT - 15 ||
+      Math.abs(x) > 816 - 15 ||
+      Math.abs(z) > 816 - 15 ||
       overlaps({ ...p, w: 2, d: 2 }, airport, 3) ||
       buildings.some((b) => overlaps({ ...p, w: 1, d: 1 }, b, 1)) ||
       roads.some((road) => roadDistance(p, road) < road.width / 2 + 0.7) ||
@@ -232,6 +233,7 @@ export function generateCity(seed = 713): City {
   }
   return {
     seed,
+    terrain: generateTerrain(seed),
     roads,
     buildings,
     props,

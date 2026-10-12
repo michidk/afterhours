@@ -179,7 +179,7 @@ export class Simulation {
       kind,
       x,
       z,
-      y: groundLevel(x, z),
+      y: groundLevel(x, z, this.city),
       angle: 0,
       vx: 0,
       vz: 0,
@@ -221,7 +221,9 @@ export class Simulation {
       p.vz = v.vz;
       p.vy = Math.min(0, v.vy);
       p.parachute =
-        (v.y > 0.2 && (v.kind === "helicopter" || v.kind === "plane")) || undefined;
+        (v.y > groundLevel(v.x, v.z, this.city) + 0.2 &&
+          (v.kind === "helicopter" || v.kind === "plane")) ||
+        undefined;
     }
   }
   leave(id: string) {
@@ -262,12 +264,18 @@ export class Simulation {
     if (!wasDriver) return;
     v.driver = undefined;
     v.takeoffDelay = undefined;
-    if ((v.kind === "helicopter" || v.kind === "plane") && v.y > 0.2)
+    if (
+      (v.kind === "helicopter" || v.kind === "plane") &&
+      v.y > groundLevel(v.x, v.z, this.city) + 0.2
+    )
       v.flight = "falling";
     else if (v.kind === "helicopter") v.flight = "grounded";
   }
   private exit(p: Entity, v: Entity) {
-    const airborne = v.kind === "car" ? !carGrounded(v, this.city) : v.y > 0.2;
+    const airborne =
+      v.kind === "car"
+        ? !carGrounded(v, this.city)
+        : v.y > groundLevel(v.x, v.z, this.city) + 0.2;
     if (airborne && v.kind !== "helicopter" && v.kind !== "plane") return false;
     const model = v.model && VEHICLES[v.model];
     const distance = Math.max(
@@ -297,14 +305,14 @@ export class Simulation {
               e.id !== p.id &&
               e.id !== v.id &&
               !e.vehicle &&
-              Math.abs(e.y - (airborne ? v.y : groundLevel(x, z))) < 2 &&
+              Math.abs(e.y - (airborne ? v.y : groundLevel(x, z, this.city))) < 2 &&
               Math.hypot(e.x - x, e.z - z) < (vehicle(e) ? 2 : 0.8),
           )
         )
           continue;
         p.x = x;
         p.z = z;
-        p.y = airborne ? v.y : groundLevel(x, z);
+        p.y = airborne ? v.y : groundLevel(x, z, this.city);
         p.vx = airborne ? clamp(v.vx, -6, 6) : 0;
         p.vz = airborne ? clamp(v.vz, -6, 6) : 0;
         p.vy = airborne ? -1 : 0;
@@ -367,8 +375,12 @@ export class Simulation {
           availableSeat(e) >= 0 &&
           !e.wreck &&
           !e.burning &&
-          e.y < 0.5 &&
-          Math.abs(e.y - p.y) < (watercraft(e.kind) ? 1.3 : 0.5) &&
+          e.y < groundLevel(e.x, e.z, this.city) + 0.5 &&
+          Math.abs(
+            e.y -
+              groundLevel(e.x, e.z, this.city) -
+              (p.y - groundLevel(p.x, p.z, this.city)),
+          ) < (watercraft(e.kind) ? 1.3 : 0.5) &&
           Math.hypot(e.x - p.x, e.z - p.z) < 6,
       )
       .sort(
@@ -618,6 +630,7 @@ export class Simulation {
                       : 2.2,
                 }
               : undefined,
+            this.city,
           );
           if (aiDirection?.attack !== undefined) {
             e.angle = aiDirection.attack;
@@ -648,7 +661,10 @@ export class Simulation {
                 brake: input.brake || !!e.wreck,
               };
         watercraftForces(e, drive, dt);
-      } else if (!e.driver && (e.y > 0.2 || e.flight === "falling")) {
+      } else if (
+        !e.driver &&
+        (e.y > groundLevel(e.x, e.z, this.city) + 0.2 || e.flight === "falling")
+      ) {
         const impact = fallAircraft(e, this.city, dt);
         if (impact > 3) {
           this.damage(e, (impact - 3) ** 2 * TUNING.wallDamage);
@@ -669,7 +685,7 @@ export class Simulation {
           const p = this.entities.get(e.driver);
           if (p) this.exit(p, e);
         }
-      } else if (e.kind === "plane") flyPlane(e, input, dt);
+      } else if (e.kind === "plane") flyPlane(e, input, dt, this.city);
       const speed = Math.hypot(e.vx, e.vz),
         limit = e.model ? VEHICLES[e.model].speed : 52;
       if (vehicle(e) && speed > limit) {
@@ -680,7 +696,7 @@ export class Simulation {
       e.z += e.vz * dt;
       if (
         (e.kind === "plane" || e.kind === "helicopter") &&
-        isWater(e.x, e.z) &&
+        isWater(e.x, e.z, this.city) &&
         e.y <= WATER_LEVEL + 0.02 &&
         e.health > 0
       ) {
@@ -745,7 +761,7 @@ export class Simulation {
             this.events.push({ kind: "hit", x: c.x, z: c.z, y: e.y + 0.5 });
           }
         }
-        const impact = resolveWorldBounds(e);
+        const impact = resolveWorldBounds(e, this.city);
         if (vehicle(e) && pass === 0)
           this.damage(e, Math.max(0, impact - 3) ** 2 * TUNING.wallDamage);
       }
@@ -809,7 +825,7 @@ export class Simulation {
         }
     }
     // Pair impulses can displace a hull after the last static pass.
-    for (const e of list) if (!e.vehicle) resolveWorldBounds(e);
+    for (const e of list) if (!e.vehicle) resolveWorldBounds(e, this.city);
     for (const p of list)
       if (p.vehicle) {
         const v = this.entities.get(p.vehicle);

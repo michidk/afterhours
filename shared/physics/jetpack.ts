@@ -20,7 +20,7 @@ export function jetpackThrust(e: Entity, input: Input, dt: number, floor: number
   e.parachute = undefined;
   const target = input.ascend ? JETPACK.speed : -4;
   e.vy += (target - e.vy) * (1 - Math.exp(-4 * powered));
-  e.y = clamp(e.y + e.vy * powered, floor, JETPACK.ceiling);
-  if (e.y === JETPACK.ceiling || e.y === floor) e.vy = 0;
+  e.y = clamp(e.y + e.vy * powered, floor, floor + JETPACK.ceiling);
+  if (e.y === floor + JETPACK.ceiling || e.y === floor) e.vy = 0;
   return powered > 0;
 }
