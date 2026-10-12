@@ -7,6 +7,7 @@ import {
   type CityChunk,
   type MapManifest,
 } from "../../shared/city-stream.ts";
+import { spawnOrigin } from "../../shared/world.ts";
 import { TUNING } from "../../shared/catalog.ts";
 
 // Cover snapshot neighbours and their local physics queries before predicting.
@@ -87,7 +88,7 @@ export class CityStream {
   ready(point: { x: number; z: number }, radius = COLLISION_RADIUS) {
     return chunksAround(point.x, point.z, radius).every((key) => this.chunks.has(key));
   }
-  async prepare(center = { x: 11, z: 25 }) {
+  async prepare(center = spawnOrigin(this.map)) {
     const deadline = Date.now() + 30000;
     do {
       this.setView(undefined, center, Math.max(SCENERY_RADIUS, COLLISION_RADIUS));

@@ -194,25 +194,24 @@ export class GameNetwork {
     if (this.socket?.readyState === WebSocket.OPEN)
       this.socket.send(JSON.stringify({ timestamp: performance.now(), ...data }));
   }
-  input(input: Input) {
+  input(input: Input, timestamp = performance.now()) {
     if (
       this.socket?.readyState !== WebSocket.OPEN ||
       !this.welcomed ||
       !this.prediction
     )
       return;
-    const timestamp = performance.now(),
-      frame: InputFrame = {
-        seq: this.seq++,
-        timestamp,
-        input: {
-          ...input,
-          shotTime: Math.max(
-            0,
-            this.serverTime + (timestamp - this.received) / 1000 - this.latency / 1000,
-          ),
-        },
-      };
+    const frame: InputFrame = {
+      seq: this.seq++,
+      timestamp,
+      input: {
+        ...input,
+        shotTime: Math.max(
+          0,
+          this.serverTime + (timestamp - this.received) / 1000 - this.latency / 1000,
+        ),
+      },
+    };
     this.send({ type: "input", seq: frame.seq, timestamp, ...frame.input });
     this.prediction.input(frame, [...this.entities.values()]);
     this.inputTimes.push(timestamp);

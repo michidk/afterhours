@@ -23,6 +23,9 @@ export function buildTerrain(
   const data = new VertexData();
   Object.assign(data, { positions, indices, normals, colors });
   data.applyToMesh(mesh);
+  // Cull terrain strips outside the camera instead of drawing the entire heightfield.
+  mesh.subdivide(Math.min(64, indices.length / 3));
+  mesh.cullingStrategy = Mesh.CULLINGSTRATEGY_STANDARD;
   mesh.material = host.mat("#ffffff");
   mesh.receiveShadows = true;
   return mesh;

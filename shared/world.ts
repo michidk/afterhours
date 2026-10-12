@@ -210,3 +210,7 @@ export function district(x: number, z: number) {
   if (x > 128) return "EAST MARKET";
   return "LITTLE HAVANA";
 }
+
+export function spawnOrigin(city: Pick<City, "centre">) {
+  return { x: (city.centre?.x ?? 0) + 11, z: (city.centre?.z ?? 0) + 25 };
+}

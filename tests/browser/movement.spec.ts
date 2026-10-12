@@ -1,5 +1,8 @@
 import { test as base, expect } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
+import { chunksAround, mapManifestSchema } from "../../shared/city-stream.ts";
+import { spawnOrigin } from "../../shared/world.ts";
+import { SCENERY_RADIUS } from "../../client/world/stream.ts";
 import type { AgentInterface } from "../../client/debug/index.ts";
 
 interface MovementSample {
@@ -303,6 +306,7 @@ for (const delay of [0, 150]) {
 
 test("nighttime scenery is ready far ahead and lamp pools stay lit when approached", async ({
   page,
+  request,
 }, testInfo) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -314,7 +318,11 @@ test("nighttime scenery is ready far ahead and lamp pools stay lit when approach
         .getEntriesByType("resource")
         .filter((entry) => entry.name.includes("/city/chunks/")).length,
   );
-  expect(startupChunks).toBeGreaterThanOrEqual(81);
+  const manifest = mapManifestSchema.parse(await (await request.get("/city")).json());
+  const origin = spawnOrigin(manifest);
+  expect(startupChunks).toBeGreaterThanOrEqual(
+    chunksAround(origin.x, origin.z, SCENERY_RADIUS).length,
+  );
   await page.locator("#name").fill("Scenery test");
   await page.locator("#play").click();
   await expect(page.locator("#entry")).toBeHidden();
@@ -341,7 +349,9 @@ test("nighttime scenery is ready far ahead and lamp pools stay lit when approach
         z: p.z,
         parent: pool.parent!.name,
         distantBuildings: d.scene.city.buildings.filter(
-          (b) => Math.abs(b.x - 11) > 400 || Math.abs(b.z - 25) > 400,
+          (b) =>
+            Math.abs(b.x - d.scene.target.x) > 400 ||
+            Math.abs(b.z - d.scene.target.z) > 400,
         ).length,
       };
     });

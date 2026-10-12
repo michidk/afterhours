@@ -10,6 +10,7 @@ import { PlayerList } from "./ui/player-list.ts";
 import { Nameplates } from "./ui/nameplates.ts";
 import { GameNetwork } from "./network/index.ts";
 import { Controls } from "./input/index.ts";
+import { InputClock } from "./input/clock.ts";
 import { GameAudio } from "./audio/index.ts";
 import { CityScene } from "./scene";
 import { FrameProfiler } from "./performance/index.ts";
@@ -316,7 +317,12 @@ canvas.addEventListener(
   { passive: false },
 );
 window.addEventListener("pointerup", () => (controls.mouseDown = false));
-setInterval(() => {
+const inputClock = new InputClock();
+function pumpInput(now = performance.now()) {
+  if (!joined || document.hidden) {
+    inputClock.reset();
+    return;
+  }
   const pointer = controls.pointer;
   const p = network?.entities.get(network.playerId);
   const position = p && scene?.nodes.get(p.id)?.position;
@@ -325,7 +331,7 @@ setInterval(() => {
     point && position && !p?.vehicle
       ? Math.atan2(point.x - position.x, point.z - position.z)
       : undefined;
-  if (joined && !document.hidden) {
+  inputClock.advance(now, (timestamp) => {
     const input = controls.sample();
     handleGamepadActions();
     network?.input(
@@ -334,9 +340,11 @@ setInterval(() => {
         ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName || "")
         ? idle()
         : automation?.input || input,
+      timestamp,
     );
-  }
-}, 1000 / 30);
+  });
+}
+setInterval(pumpInput, 1000 / 30);
 setInterval(() => {
   if (debugAllowed && network && !$("#debug").classList.contains("hidden"))
     updateNetworkStats($("#network-stats"), network);
@@ -514,6 +522,7 @@ async function boot() {
       const interval = now - last;
       last = now;
       if (!joined) return;
+      pumpInput(now);
       const rendered = network?.renderEntities(now) || entities;
       const cameraInput =
         cityMap?.open ||

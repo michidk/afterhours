@@ -1,9 +1,9 @@
 import type { Entity, City } from "../shared/world.ts";
-import { LIMIT } from "../shared/world.ts";
+import { LIMIT, spawnOrigin } from "../shared/world.ts";
 import { insideBuilding } from "../shared/physics/collision.ts";
 export function safeSpawn(city: City, entities: Entity[], ignore?: string) {
   // Generated cities carry their downtown reference; the authored map used the origin.
-  const origin = { x: (city.centre?.x ?? 0) + 11, z: (city.centre?.z ?? 0) + 25 };
+  const origin = spawnOrigin(city);
   for (let radius = 0; radius < 80; radius += 2)
     for (let i = 0; i < 16; i++) {
       const x = origin.x + Math.sin((i * Math.PI) / 8) * radius,

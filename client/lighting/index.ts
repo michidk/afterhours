@@ -147,7 +147,8 @@ export class EnvironmentLighting {
       for (let i = 0; i < this.localLights.length; i++) {
         const position = nearest[i];
         if (position) this.localLights[i].position.copyFrom(position);
-        this.localLights[i].setEnabled(!!position);
+        if (this.localLights[i].isEnabled() !== !!position)
+          this.localLights[i].setEnabled(!!position);
       }
     }
     for (const light of this.localLights) light.intensity = state.lampIntensity;

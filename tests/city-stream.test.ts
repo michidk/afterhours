@@ -245,3 +245,23 @@ test("failed or wrong-map chunks remain unavailable and retry without accepting 
   assert.equal(wrong.chunks.size, 0);
   assert.match(wrong.error, /identity mismatch/);
 });
+
+test("startup preloads the generated city's spawn rather than the old map origin", async () => {
+  const city = fixture();
+  city.centre = { x: -272, z: 632 };
+  const store = new CityStore(city);
+  const download: typeof fetch = async (url) => {
+    const parts = String(url).split("/");
+    return new Response(
+      JSON.stringify(store.chunks.get(`${parts.at(-2)},${parts.at(-1)}`)),
+    );
+  };
+  const stream = new CityStream(store.manifest, () => {}, download);
+  await stream.prepare();
+  assert.deepEqual(
+    [...stream.chunks.keys()].sort(),
+    chunksAround(-261, 657, SCENERY_RADIUS).sort(),
+  );
+  assert.equal(stream.ready({ x: -261, z: 657 }), true);
+  assert.equal(stream.ready({ x: 11, z: 25 }), false);
+});

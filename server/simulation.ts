@@ -774,12 +774,39 @@ export class Simulation {
       if (!vehicle(e)) characterAltitude(e, this.city, dt, input);
       if (vehicle(e)) e.angle = wrap(e.angle + (e.angularVelocity || 0) * dt);
     }
+    // Recheck static contacts only when the prior pass or another body changed this body.
+    const checked = new Map<
+      Entity,
+      Pick<Entity, "x" | "y" | "z" | "angle" | "vx" | "vz" | "angularVelocity">
+    >();
     for (let pass = 0; pass < 3; pass++) {
       this.spatial.clear();
       for (const e of list)
         if (!e.vehicle && this.entities.has(e.id)) this.spatial.insert(e, e.x, e.z, 6);
       for (const e of list) {
         if (e.vehicle || !this.entities.has(e.id)) continue;
+        const pose = {
+          x: e.x,
+          y: e.y,
+          z: e.z,
+          angle: e.angle,
+          vx: e.vx,
+          vz: e.vz,
+          angularVelocity: e.angularVelocity,
+        };
+        const previous = checked.get(e);
+        if (
+          previous &&
+          previous.x === e.x &&
+          previous.y === e.y &&
+          previous.z === e.z &&
+          previous.angle === e.angle &&
+          previous.vx === e.vx &&
+          previous.vz === e.vz &&
+          previous.angularVelocity === e.angularVelocity
+        )
+          continue;
+        checked.set(e, pose);
         for (const b of staticGeometry(this.city).query(e.x, e.z, 6)) {
           if (
             e.y >= b.h + (b.obstacle ? 0 : 1.8) - 0.02 ||

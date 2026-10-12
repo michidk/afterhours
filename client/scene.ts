@@ -23,6 +23,7 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import {
   LIMIT,
+  spawnOrigin,
   random,
   signal,
   type City,
@@ -99,7 +100,13 @@ export class CityScene {
     this.scene.fogMode = Scene.FOGMODE_EXP2;
     this.scene.fogDensity = 0.003;
     this.scene.fogColor = Color3.FromHexString("#b8d0cf");
-    this.camera = new FreeCamera("camera", new Vector3(15, 68, -47), this.scene);
+    const spawn = spawnOrigin(city);
+    this.target.set(spawn.x, groundLevel(spawn.x, spawn.z, city), spawn.z);
+    this.camera = new FreeCamera(
+      "camera",
+      this.target.add(new Vector3(0, 46, -26)),
+      this.scene,
+    );
     this.camera.fov = 0.72;
     this.camera.minZ = 0.5;
     this.camera.maxZ = 3200;

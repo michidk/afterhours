@@ -92,7 +92,7 @@ export class CarLights {
       .slice(0, 2);
     for (const [i, light] of this.lights.entries()) {
       const car = cars[Math.floor(i / 2)];
-      light.setEnabled(!!car);
+      if (light.isEnabled() !== !!car) light.setEnabled(!!car);
       if (!car) continue;
       const root = nodes.get(car.id)!;
       const matrix = root.computeWorldMatrix(true);

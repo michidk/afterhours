@@ -115,7 +115,7 @@ test("light on and off updates survive binary snapshot deltas", () => {
   }
 });
 
-test("car beams follow scaled rotating cars, limit real lights, and disable on removal", () => {
+test("car beams follow scaled rotating cars, limit real lights, and disable on removal", (t) => {
   const engine = new NullEngine(),
     scene = new Scene(engine);
   try {
@@ -137,6 +137,13 @@ test("car beams follow scaled rotating cars, limit real lights, and disable on r
     assert.ok("position" in first && first.position instanceof Vector3);
     assert.ok(Math.abs(first.position.x - 12.86) < 0.0001);
     assert.ok(Math.abs(first.position.y - 1.272) < 0.0001);
+    const scans = t.mock.method(scene.meshes[0], "_resyncLightSource");
+    lights.update([car], new Map([[car.id, root]]), Vector3.Zero());
+    assert.equal(
+      scans.mock.callCount(),
+      0,
+      "unchanged lights do not rescan scene meshes",
+    );
     car.lightsOn = false;
     lights.update([car], new Map([[car.id, root]]), Vector3.Zero());
     assert.equal(scene.lights.filter((l) => l.isEnabled()).length, 0);
