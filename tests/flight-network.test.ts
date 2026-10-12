@@ -40,7 +40,26 @@ function airborne() {
   return { player, helicopter, prediction };
 }
 
-test("capped flight retains turns and brakes and does not revive acknowledged throttle", () => {
+test("flight responds to a new turn while 400 ms of commands await acknowledgement", () => {
+  const { player, helicopter, prediction } = airborne();
+  for (let seq = 0; seq < 12; seq++)
+    prediction.input(
+      { seq, timestamp: (seq * 1000) / 30, input: { ...idle(), up: true } },
+      [player, helicopter],
+    );
+  const before = prediction.body!.x;
+  prediction.input({ seq: 12, timestamp: 400, input: { ...idle(), right: true } }, [
+    player,
+    helicopter,
+  ]);
+  assert.ok(
+    prediction.body!.x > before,
+    "turn locally without waiting for a round trip",
+  );
+  assert.equal(prediction.status, "predicting");
+});
+
+test("bounded flight retains turns and brakes and does not revive acknowledged throttle", () => {
   const { player, helicopter, prediction } = airborne();
   for (let seq = 0; seq < 30; seq++)
     prediction.input(
@@ -159,7 +178,7 @@ for (const delays of [
       let previous = 0,
         worstBackstep = 0,
         largestStep = 0,
-        capped = 0;
+        delayed = 0;
       let worst = "";
       try {
         for (let frame = 0; frame < 600; frame++) {
@@ -185,7 +204,7 @@ for (const delays of [
             const p = packets.shift()!;
             receive(p.entities, p.ack, p.time, now);
           }
-          if (network.prediction.pending.length > 7) capped++;
+          if (network.prediction.pending.length > 7) delayed++;
           const rendered = network.renderEntities(now);
           const pose = rendered.find((e) => e.id === helicopter.id)!;
           const rider = rendered.find((e) => e.id === player.id)!;
@@ -205,7 +224,7 @@ for (const delays of [
           if (frame > 0) largestStep = Math.max(largestStep, pose.z - previous);
           previous = pose.z;
         }
-        assert.ok(capped > 0, "exercise delay beyond 250 ms");
+        assert.ok(delayed > 0, "exercise delay beyond 250 ms");
         assert.ok(
           worstBackstep >= -0.01,
           `steady flight rewound ${-worstBackstep.toFixed(3)} m: ${worst}`,

@@ -8,7 +8,7 @@ import {
 } from "../../shared/physics/index.ts";
 import { TUNING } from "../../shared/catalog.ts";
 
-const MAX_PREDICTION_STEPS = Math.floor(0.25 / TUNING.tick);
+const MAX_PREDICTION_STEPS = Math.floor(TUNING.predictionSeconds / TUNING.tick);
 const MAX_PENDING_INPUTS = Math.ceil(2 / TUNING.tick);
 export class Prediction {
   pending: InputFrame[] = [];

@@ -97,14 +97,27 @@ export function characterAltitude(
 }
 /** Private, finite-mass neighbours. Never apply speculative impulses to snapshots. */
 export function predictionWorld(e: Entity, nearby: Entity[]) {
+  const speedLimit = (body: Entity) =>
+    Math.max(
+      Math.hypot(body.vx, body.vz),
+      vehicle(body)
+        ? body.model
+          ? VEHICLES[body.model].speed
+          : 52
+        : body.jetpack?.active
+          ? JETPACK.speed
+          : TUNING.sprint * PHYSIQUES[body.character?.physique ?? "regular"].speed,
+    );
+  const speed = speedLimit(e);
   return nearby
     .filter(
       (b) =>
         b.id !== e.id &&
         !b.vehicle &&
         (vehicle(b) || b.health > 0) &&
-        // Cover closing motion at 52 m/s each over the bounded prediction horizon.
-        Math.hypot(b.x - e.x, b.z - e.z) < 40,
+        // Cover closing motion without simulating distant pedestrians as racing cars.
+        Math.hypot(b.x - e.x, b.z - e.z) <
+          12 + (speed + speedLimit(b)) * (TUNING.predictionSeconds + TUNING.tick),
     )
     .map((b) => structuredClone(b));
 }

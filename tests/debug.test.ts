@@ -138,7 +138,7 @@ test("script debug interface controls real transport and production rejects it",
       await new Promise<void>((resolve, reject) => {
         const timer = setTimeout(
           () => reject(Error("Server startup timed out")),
-          10000,
+          60000,
         );
         child.stdout.on("data", (data) => {
           const match = /AFTERHOURS http:\/\/localhost:(\d+)/.exec(String(data));

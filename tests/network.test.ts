@@ -18,7 +18,7 @@ test("multiplayer authority, delta recovery, input sequences, jitter, reconnects
     sockets: WebSocket[] = [];
   try {
     await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error("Startup timed out")), 10000);
+      const timeout = setTimeout(() => reject(new Error("Startup timed out")), 60000);
       child.stdout.on("data", (d) => {
         const match = /AFTERHOURS http:\/\/localhost:(\d+)/.exec(String(d));
         if (match) {

@@ -75,7 +75,7 @@ test("rendered neighbours respond to predicted impacts before the next snapshot"
   );
 });
 
-for (const delay of [0, 50, 100, 200]) {
+for (const delay of [0, 50, 100, 200, 360]) {
   test(`collision replay and display stay aligned with ${delay} ms delayed, jittered snapshots`, () => {
     const s = new Simulation(generateCity());
     s.entities.clear();
@@ -125,38 +125,74 @@ for (const delay of [0, 50, 100, 200]) {
       assert.ok(prediction.pending.every((frame) => frame.seq <= seq));
     }
     assert.ok(visibleContacts > 0, "the scenario must actually collide");
-    if (delay === 200) assert.ok(capped > 0, "excess jitter caps the prediction lead");
+    assert.equal(capped, 0, "ordinary latency must not suspend local controls");
     prediction.reconcile(p, [p, car, obstacle], 89);
     assert.equal(prediction.pending.length, 0);
     assert.deepEqual(prediction.body, car, "final authority replaces all speculation");
   });
 }
 
-test("approaching bodies outside 24 m are included before they can reach the player", () => {
-  const city = emptyCity({ seed: 42, airport: { x: 640, z: -640, w: 128, d: 200 } });
-  const a: Entity = {
-    id: "a",
-    kind: "car",
-    model: "sport",
+for (const distance of [27, 100])
+  test(`approaching bodies at ${distance} m are included before they can reach the player`, () => {
+    const city = emptyCity({ seed: 42, airport: { x: 640, z: -640, w: 128, d: 200 } });
+    const a: Entity = {
+      id: "a",
+      kind: "car",
+      model: "sport",
+      x: 0,
+      z: 0,
+      y: 0,
+      vx: 0,
+      vz: 52,
+      vy: 0,
+      angle: 0,
+      health: 100,
+      color: "#fff",
+    };
+    const b: Entity = {
+      ...a,
+      id: "b",
+      z: distance,
+      vz: -52,
+      angle: Math.PI,
+      driver: "remote",
+    };
+    const shadows = predictionWorld(a, [a, b]);
+    for (let step = 0; step < 30; step++)
+      predictStep(a, { ...idle(), up: true }, city, [a, b], 1 / 30, shadows);
+    const hit = shadows.find((e) => e.id === b.id);
+    assert.ok(hit, "closing traffic cannot be omitted from prediction");
+    assert.ok(
+      a.vz < 20 && hit.vz > -20,
+      "the collision is resolved within the prediction horizon",
+    );
+  });
+
+test("prediction bounds follow closing speed, including existing impulses", () => {
+  const player: Entity = {
+    id: "local",
+    kind: "player",
     x: 0,
-    z: 0,
     y: 0,
+    z: 0,
     vx: 0,
-    vz: 52,
     vy: 0,
+    vz: 0,
     angle: 0,
     health: 100,
     color: "#fff",
   };
-  const b: Entity = { ...a, id: "b", z: 27, vz: -52, angle: Math.PI, driver: "remote" };
-  const shadows = predictionWorld(a, [a, b]);
-  for (let step = 0; step < 7; step++)
-    predictStep(a, { ...idle(), up: true }, city, [a, b], 1 / 30, shadows);
-  const hit = shadows.find((e) => e.id === b.id);
-  assert.ok(hit, "closing traffic cannot be omitted from prediction");
-  assert.ok(
-    a.vz < 20 && hit.vz > -20,
-    "the collision is resolved within the prediction horizon",
+  const pedestrian: Entity = { ...player, id: "remote", z: 60 };
+  assert.deepEqual(
+    predictionWorld(player, [pedestrian]),
+    [],
+    "walking cannot close sixty metres in one second",
+  );
+  pedestrian.vz = -80;
+  assert.equal(
+    predictionWorld(player, [pedestrian])[0]?.id,
+    "remote",
+    "an existing impulse can reach the player",
   );
 });
 
@@ -194,11 +230,11 @@ test("capped prediction keeps the local player and nearby cars on the same timel
   timeline.push(0, [old, car], 0);
   network.prediction = new Prediction(city);
   network.prediction.reconcile(p, [p, moved], -1);
-  for (let seq = 0; seq < 9; seq++)
+  for (let seq = 0; seq < 32; seq++)
     network.prediction.input({ seq, timestamp: seq * 33, input: idle() }, [p, moved]);
   assert.equal(network.prediction.status, "waiting for acknowledgements");
-  assert.ok(network.prediction.render(300));
-  const result = network.renderEntities(300),
+  assert.ok(network.prediction.render(1100));
+  const result = network.renderEntities(1100),
     local = result.find((e) => e.id === p.id)!,
     neighbour = result.find((e) => e.id === car.id)!;
   assert.equal(local.z, 2);
@@ -227,15 +263,15 @@ test("stalled acknowledgements stop prediction before neighbours leave collision
   };
   const prediction = new Prediction(city);
   prediction.reconcile(p, [p], -1);
-  for (let seq = 0; seq < 9; seq++)
+  for (let seq = 0; seq < 32; seq++)
     prediction.input(
       { seq, timestamp: (seq * 1000) / 30, input: { ...idle(), up: true } },
       [p],
     );
-  const held = prediction.render(300)!.body.z;
-  assert.ok(held > 0 && held < 1.2, "prediction stops within its lead budget");
+  const held = prediction.render(1100)!.body.z;
+  assert.ok(held > 0 && held < 5, "prediction stops within its lead budget");
   assert.equal(prediction.status, "waiting for acknowledgements");
-  for (let seq = 9; seq < 100; seq++)
+  for (let seq = 32; seq < 100; seq++)
     prediction.input(
       { seq, timestamp: (seq * 1000) / 30, input: { ...idle(), up: true } },
       [p],

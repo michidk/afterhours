@@ -10,11 +10,25 @@ Counting timer callbacks as ticks made prediction run slow whenever the browser 
 
 ## Fixes and bounds
 
-Previously, prediction applied impulses to private neighbouring bodies but rendering continued to draw those bodies from a snapshot clock 100 ms in the past. The local player could collide with an invisible future car, overlap its displayed hull, or push a car whose visible response waited for a round trip. Rendering now uses the same extrapolated neighbour copies as the controlled body within 12 m. It blends back to buffered interpolation between 12 and 24 m. When prediction reaches its lead limit, the controlled body and its close neighbours hold the same bounded provisional timeline. New snapshots restore authority and replay a complete prefix of pending inputs. Missing map coverage still falls back to authority. All riders follow their displayed vehicle. Authoritative snapshots still replace the provisional neighbour world.
+Remote entities normally stay on buffered interpolation, including nearby players.
+Only bodies involved in a local predicted contact use provisional collision poses;
+after contact ends they blend back over 500 ms. This preserves immediate impact
+feedback without resetting every nearby player's pose on each snapshot. Riders
+follow their displayed vehicle. Snapshots replace provisional physics state.
 
-Prediction includes bodies within 40 m of the authoritative controlled body. Two vehicles closing at the maximum 52 m/s each cover about 28 m over the allowed prediction plus render interval; the remainder covers contact footprints. The 252 m streamed collision-map requirement remains larger than both this region and the 220 m snapshot interest.
+Prediction covers one second (30 input ticks), plus at most one render tick. The
+previous seven-tick budget stopped accepting local turns and brakes at ordinary
+latencies above 233 ms, even while snapshots arrived normally. The client now
+replays the complete pending prefix up to 30 commands, retaining at most 60 for
+recovery. Beyond one second it holds its bounded pose until acknowledgements
+advance; if history overflows, incomplete suffixes are never replayed.
 
-Pending simulation is limited to seven 30 Hz ticks (233 ms), with at most one extra tick for rendering. The client retains up to 60 timestamped input frames, but replays only the earliest seven unacknowledged commands. Reaching the limit holds the last bounded pose and its contact neighbours instead of jumping back to an older snapshot. As acknowledgements arrive, the replay window advances. If history exceeds 60 frames, its discarded sequence is recorded; incomplete suffixes are never replayed. This bounds speculative collision work while allowing recovery from ordinary latency spikes without toggling between two positions.
+Collision candidates cover each body’s maximum closing distance, including any
+existing impulse velocity. This reaches about 120 m for two vehicles at 52 m/s: they travel
+107.5 m during the prediction and render horizon, with 12 m for contact footprints.
+This remains inside the 220 m snapshot interest and 252 m streamed collision-map
+requirement. Missing collision chunks still suspend prediction. Server authority
+and damage rules are unchanged.
 
 Server input remains one command per fixed tick. A two-frame FIFO absorbs normal batching. On overflow it drops the oldest command, retaining the newest stop or turn. Previously the eight-frame queue rejected new commands when full, retaining up to 267 ms of old control at the target tick rate, and longer when the server was overloaded. An acknowledgement identifies the applied command; older discarded commands also leave client history. Overflow therefore permits a correction. It does not grant extra physics steps or claim to have simulated discarded commands. Duplicate or out-of-order sequence numbers remain rejected. A 250 ms input silence still releases held controls.
 

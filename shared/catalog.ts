@@ -2,6 +2,7 @@ export const TUNING = {
   physicsStep: 1 / 120,
   tick: 1 / 30,
   snapshot: 1 / 15,
+  predictionSeconds: 1,
   walk: 4.5,
   sprint: 8,
   acceleration: 42,
