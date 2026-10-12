@@ -1,8 +1,6 @@
 import { test as base, expect } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
-import { chunksAround, mapManifestSchema } from "../../shared/city-stream.ts";
-import { spawnOrigin } from "../../shared/world.ts";
-import { SCENERY_RADIUS } from "../../client/world/stream.ts";
+import type { MapManifest } from "../../shared/city-stream.ts";
 import type { AgentInterface } from "../../client/debug/index.ts";
 
 interface MovementSample {
@@ -318,11 +316,16 @@ test("nighttime scenery is ready far ahead and lamp pools stay lit when approach
         .getEntriesByType("resource")
         .filter((entry) => entry.name.includes("/city/chunks/")).length,
   );
-  const manifest = mapManifestSchema.parse(await (await request.get("/city")).json());
-  const origin = spawnOrigin(manifest);
-  expect(startupChunks).toBeGreaterThanOrEqual(
-    chunksAround(origin.x, origin.z, SCENERY_RADIUS).length,
-  );
+  const manifest: MapManifest = await (await request.get("/city")).json();
+  const origin = {
+    x: (manifest.centre?.x ?? 0) + 11,
+    z: (manifest.centre?.z ?? 0) + 25,
+  };
+  const span = (center: number) =>
+    Math.floor(Math.min(manifest.limit, center + 512) / manifest.chunkSize) -
+    Math.floor(Math.max(-manifest.limit, center - 512) / manifest.chunkSize) +
+    1;
+  expect(startupChunks).toBeGreaterThanOrEqual(span(origin.x) * span(origin.z));
   await page.locator("#name").fill("Scenery test");
   await page.locator("#play").click();
   await expect(page.locator("#entry")).toBeHidden();
