@@ -30,7 +30,7 @@ The test enters through the name form, waits for gameplay shaders and two render
 
 The measured interval starts after shader readiness. Cold-start rendering stalls and real-device frame rates need separate checks.
 
-Movement attachments also record prediction, reconciliation, scene-update, render and input-handler durations, plus mesh and vertex counts. Set `BROWSER_CPU_PROFILE=1` when running the suite to attach a Chrome CPU profile even when startup fails and save `chrome-trace.json` with graphics-process events. The `movement-hold-start` and `movement-hold-end` user-timing marks delimit the measured keyboard hold. Profiling adds overhead; use it to locate work, then rerun without it for the movement acceptance check.
+Movement attachments also record prediction, reconciliation, scene-update, render and input-handler durations, plus mesh and vertex counts. The `frame` stage spans the entire engine frame callback, including streaming, audio and HUD work omitted by the individual function timers. Compare it with gaps between rendered samples to separate callback work from pauses outside the callback. Set `BROWSER_CPU_PROFILE=1` when running the suite to attach a Chrome CPU profile even when startup fails and save `chrome-trace.json` with graphics-process events. The `movement-hold-start` and `movement-hold-end` user-timing marks delimit the measured keyboard hold. Profiling adds overhead; use it to locate work, then rerun without it for the movement acceptance check.
 
 For a diagnostic run on a busy host, `--timeout 300000` also extends startup's wait while reserving 30 seconds for gameplay. The default startup wait remains 90 seconds. The held-key interval and movement thresholds stay unchanged. The freeze check includes the gap before each moved frame, so a low frame rate cannot pass merely because every sampled frame moved.
 
@@ -163,3 +163,10 @@ Server tick p95 was 42.6 ms, above the 33.3 ms simulation budget. This short che
 verifies live input delivery and movement, not sustained capacity, collision quality
 or browser frame pacing. Full-scene browser acceptance remains open; CI's unit,
 real-socket and image jobs passed for this revision, while its browser job failed.
+
+The subsequent local headless run with total frame-callback timing still failed
+rendered distance. It captured six frames during the hold: callbacks took at most
+119 ms, but the gap between two rendered frames reached 695 ms. Prediction replays
+took at most 58 ms; 92 inputs were sent. This narrows the unexplained pause to work
+or scheduling outside the measured frame callback, without proving which browser,
+GPU or host component caused it. Server tick p95 was 56.6 ms in that same run.

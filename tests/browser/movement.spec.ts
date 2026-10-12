@@ -23,6 +23,7 @@ declare global {
       | "update"
       | "render"
       | "input"
+      | "frame"
       | "beginFrame"
       | "endFrame",
       number[]
@@ -124,10 +125,18 @@ for (const delay of [0, 150]) {
         update: [],
         render: [],
         input: [],
+        frame: [],
         beginFrame: [],
         endFrame: [],
       };
       let held = false;
+      let frameStarted = 0;
+      debug.scene.engine.onBeginFrameObservable.add(() => {
+        frameStarted = performance.now();
+      });
+      debug.scene.engine.onEndFrameObservable.add(() => {
+        if (held) window.movementStages.frame.push(performance.now() - frameStarted);
+      });
       const measure =
         <A extends unknown[], R>(
           stage: keyof Window["movementStages"],
