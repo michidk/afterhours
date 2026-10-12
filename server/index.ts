@@ -6,12 +6,14 @@ import { Runtime } from "./runtime.ts";
 import { loadCity } from "./city-loader.ts";
 import { Simulation } from "./simulation.ts";
 import { CityStore } from "./city-stream.ts";
+import { loadCityMeshes } from "./city-mesh-loader.ts";
 import { VERSION } from "../shared/version.ts";
 
 const production = process.argv.includes("--production"),
   port = Number(process.env.PORT || 5173);
 const sim = new Simulation(await loadCity());
 const cityStore = new CityStore(sim.city);
+await loadCityMeshes(cityStore);
 const vite = production
   ? null
   : await (

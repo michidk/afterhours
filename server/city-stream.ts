@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { gzipSync } from "node:zlib";
+import { gzipSync, gunzipSync } from "node:zlib";
 import {
   CITY_CHUNK_SIZE,
   STATIC_FIELDS,
@@ -41,6 +41,7 @@ export class CityStore {
   private atlasBody: Body;
   private bodies = new Map<string, Body>();
   private terrainBody?: Body;
+  private baseGeometry?: Body;
   constructor(city: City) {
     this.manifest = {
       version: 1,
@@ -111,6 +112,16 @@ export class CityStore {
     for (const [key, chunk] of this.chunks)
       this.bodies.set(key, new Body(JSON.stringify(chunk), "application/json"));
   }
+  installGeometry(base: Uint8Array, chunks: Record<string, Uint8Array>) {
+    this.baseGeometry = new Body(gunzipSync(base), "application/json");
+    this.manifest.geometryVersion = 1;
+    this.bodies = new Map(
+      Object.entries(chunks).map(([key, bytes]) => [
+        key,
+        new Body(gunzipSync(bytes), "application/json"),
+      ]),
+    );
+  }
   serve(req: IncomingMessage, res: ServerResponse) {
     const path = req.url?.split("?")[0];
     if (path === "/city") {
@@ -120,6 +131,14 @@ export class CityStore {
       return true;
     }
     if (!path?.startsWith("/city/")) return false;
+    const geometry = /^\/city\/geometry\/([0-9a-f]{64})\/base$/.exec(path);
+    if (geometry) {
+      if (geometry[1] !== this.manifest.mapId)
+        res.writeHead(409).end("Map changed; reload the city");
+      else if (!this.baseGeometry) res.writeHead(404).end("No saved geometry");
+      else this.baseGeometry.send(req, res);
+      return true;
+    }
     const named = /^\/city\/(terrain|atlas)\/([0-9a-f]{64})$/.exec(path);
     if (named) {
       if (named[2] !== this.manifest.mapId)

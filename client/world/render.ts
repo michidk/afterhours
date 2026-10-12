@@ -11,6 +11,8 @@ import type { City } from "../../shared/world.ts";
 import type { CityScene } from "../scene.ts";
 import { buildSurface } from "../models/surface.ts";
 import { destructibles } from "../../shared/destruction.ts";
+import type { MeshGroup } from "../../shared/city-mesh.ts";
+import { uploadMeshes } from "./mesh-buffers.ts";
 export type GeometryOptions = {
   base?: boolean;
   roads?: boolean;
@@ -31,14 +33,25 @@ export class CityRenderer {
     private map: ClientMap,
   ) {}
   sync(chunks: CityChunk[]) {
+    const saved = new Map<string, MeshGroup>();
+    if (this.map.geometryVersion) {
+      this.host.staticFixtures.clear();
+      for (const chunk of chunks) {
+        if (!chunk.geometry) throw Error("Server omitted saved chunk geometry");
+        for (const [key, group] of Object.entries(chunk.geometry.features))
+          saved.set(key, group);
+        for (const [key, group] of Object.entries(chunk.geometry.fixtures))
+          this.host.staticFixtures.set(key, group);
+      }
+    }
     const present = new Set(chunks.map((chunk) => chunk.key));
     for (const [key, meshes] of this.streets)
       if (!present.has(key)) {
-        for (const mesh of meshes) mesh.dispose(false, true);
+        for (const mesh of meshes) mesh.dispose(false, !this.map.geometryVersion);
         this.streets.delete(key);
       }
     for (const chunk of chunks)
-      if (chunk.surface && !this.streets.has(chunk.key))
+      if (!this.map.geometryVersion && chunk.surface && !this.streets.has(chunk.key))
         this.streets.set(
           chunk.key,
           buildSurface(this.host, unpackSurface(chunk.surface, chunkOrigin(chunk.key))),
@@ -63,13 +76,23 @@ export class CityRenderer {
         Object.assign(city, { [entry.field]: [entry.value] });
         this.features.set(
           key,
-          this.group(city, {
-            base: false,
-            roads: entry.field === "roads" && !this.map.surface,
-            airport: false,
-            index: entry.id,
-          }),
+          this.group(
+            city,
+            {
+              base: false,
+              roads: entry.field === "roads" && !this.map.surface,
+              airport: false,
+              index: entry.id,
+            },
+            this.map.geometryVersion ? saved.get(key) : undefined,
+          ),
         );
+      }
+    for (const chunk of chunks)
+      if (this.map.geometryVersion && !this.streets.has(chunk.key)) {
+        const meshes = uploadMeshes(this.host, saved.get(`surface:${chunk.key}`) ?? []);
+        for (const mesh of meshes) this.host.culling?.add(mesh);
+        this.streets.set(chunk.key, meshes);
       }
     const fixtures = emptyCity(this.map);
     for (const entry of wanted.values())
@@ -87,31 +110,43 @@ export class CityRenderer {
         );
       });
     if (airportVisible && !this.airport)
-      this.airport = this.group(emptyCity(this.map), {
-        base: false,
-        roads: false,
-        airport: true,
-      });
+      this.airport = this.group(
+        emptyCity(this.map),
+        {
+          base: false,
+          roads: false,
+          airport: true,
+        },
+        this.map.geometryVersion
+          ? chunks.find((chunk) => chunk.geometry?.airport)?.geometry?.airport
+          : undefined,
+      );
     if (!airportVisible && this.airport) {
       this.airport.dispose();
       this.airport = undefined;
     }
   }
-  private group(city: City, options: GeometryOptions): Group {
+  private group(city: City, options: GeometryOptions, saved?: MeshGroup): Group {
     const h = this.host,
       meshStart = h.scene.meshes.length,
       lampStart = h.lighting.lamps.length,
       signStart = h.lighting.signs.length;
     // Babylon defers onNewMeshAdded notifications. Capture synchronously so
     // batching and disposal own every mesh created by this group.
-    h.build(city, options);
-    h.batchStatic(h.scene.meshes.slice(meshStart));
+    if (this.map.geometryVersion) {
+      if (!saved) throw Error("Saved mesh feature is missing");
+      for (const mesh of uploadMeshes(h, saved)) h.culling?.add(mesh);
+    } else {
+      h.build(city, options);
+      h.batchStatic(h.scene.meshes.slice(meshStart));
+    }
     const meshes = h.scene.meshes.slice(meshStart) as Mesh[],
       meshSet = new Set(meshes),
       lamps = h.lighting.lamps.slice(lampStart),
       signs = h.lighting.signs.slice(signStart),
       casters = new Set(h.shadows.getShadowMap()?.renderList ?? []);
-    h.shadowCandidates.push(...meshes.filter((mesh) => casters.has(mesh)));
+    if (!this.map.geometryVersion)
+      h.shadowCandidates.push(...meshes.filter((mesh) => casters.has(mesh)));
     return {
       dispose() {
         for (const mesh of meshes) {

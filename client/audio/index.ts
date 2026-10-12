@@ -7,6 +7,15 @@ import {
   engineSound,
   type Sound,
 } from "./banks.ts";
+import { propulsionRunning } from "../../shared/propulsion.ts";
+import {
+  vehicleAudioState,
+  vehicleLayers,
+  spatialPan,
+  dopplerRate,
+  type AudioView,
+  type VehicleAudioState,
+} from "./vehicles.ts";
 
 type Voice = {
   sound: Sound;
@@ -33,6 +42,8 @@ export class GameAudio {
   private steps = new Map<string, { x: number; z: number; distance: number }>();
   private hydrants: DebrisState[] = [];
   private clock = 0;
+  private vehicles = new Map<string, VehicleAudioState>();
+  private view: AudioView | undefined;
   private failures: string[] = [];
   private played = 0;
   private lastSelection:
@@ -49,6 +60,12 @@ export class GameAudio {
       played: this.played,
       lastSelection: this.lastSelection,
       state: this.context?.state,
+      vehicles: [...this.vehicles].map(([id, state]) => ({
+        id,
+        rpm: state.rpm,
+        load: state.load,
+        gear: state.gear + 1,
+      })),
     };
   }
   preload() {
@@ -208,6 +225,10 @@ export class GameAudio {
     voice.source.start();
     this.loops.set("audition", voice);
   }
+  async ready() {
+    this.unlock();
+    await this.decoding;
+  }
   private spatial(
     sound: Sound,
     source: Pick<Entity, "x" | "y" | "z">,
@@ -223,7 +244,7 @@ export class GameAudio {
     this.play(
       sound,
       range ? (1 - distance / range) ** 2 : 1,
-      range ? (source.x - listener.x) / 25 : 0,
+      range ? spatialPan(source, listener, this.view) : 0,
       Math.floor(source.x) + "," + Math.floor(source.z),
     );
   }
@@ -249,9 +270,20 @@ export class GameAudio {
   ) {
     const next = new Map<string, Entity>();
     for (const current of entities) {
-      if (current.kind !== "player") continue;
+      if (current.kind !== "player" && current.kind !== "car") continue;
       const previous = this.previous.get(current.id);
-      if (previous && listener)
+      if (previous && listener && current.kind === "car") {
+        if (!propulsionRunning(previous) && propulsionRunning(current))
+          this.spatial("engineStart", current, listener);
+        else if (
+          propulsionRunning(previous) &&
+          !propulsionRunning(current) &&
+          current.health > 0 &&
+          current.wreck === undefined
+        )
+          this.spatial("engineStop", current, listener);
+      }
+      if (previous && listener && current.kind === "player")
         for (const sound of transitionSounds(
           previous,
           current,
@@ -266,6 +298,7 @@ export class GameAudio {
   reset() {
     this.previous.clear();
     this.steps.clear();
+    this.vehicles.clear();
     this.hydrants = [];
     this.lastPlayed.clear();
     this.clock = 0;
@@ -276,14 +309,27 @@ export class GameAudio {
   }
   private stopLoop(voice: Voice) {
     if (!this.context) return;
-    voice.gain.gain.setTargetAtTime(0, this.context.currentTime, 0.025);
-    voice.source.stop(this.context.currentTime + 0.15);
+    const tyreRelease = voice.sound === "skid" || voice.sound === "tyreSqueal";
+    voice.gain.gain.setTargetAtTime(
+      0,
+      this.context.currentTime,
+      tyreRelease ? 0.075 : 0.025,
+    );
+    voice.source.stop(this.context.currentTime + (tyreRelease ? 0.3 : 0.15));
   }
-  update(entities: Entity[], listener: Entity | undefined, dt: number, city?: City) {
+  update(
+    entities: Entity[],
+    listener: Entity | undefined,
+    dt: number,
+    city?: City,
+    view?: AudioView,
+  ) {
     if (!this.context) return;
     this.clock += dt;
     if (this.clock < 1 / 30) return;
+    const elapsed = this.clock;
     this.clock = 0;
+    this.view = view;
     const wanted = new Set<string>(),
       ctx = this.context;
     for (const [key, time] of this.lastPlayed)
@@ -294,6 +340,7 @@ export class GameAudio {
       source: Pick<Entity, "x" | "y" | "z">,
       rate = 1,
       intensity = 1,
+      tone = 1,
     ) => {
       if (!listener || this.muted || ctx.state !== "running") return;
       const config = SOUND_BANKS[sound],
@@ -311,6 +358,7 @@ export class GameAudio {
         voice = undefined;
       }
       if (!voice) {
+        if (this.loops.size >= 32) return;
         voice = this.voice(sound);
         if (!voice || !voice.source.buffer) return;
         voice.source.start(0, Math.random() * voice.source.buffer.duration);
@@ -330,14 +378,12 @@ export class GameAudio {
         0.08,
       );
       voice.pan.pan.setTargetAtTime(
-        config.range
-          ? Math.max(-0.85, Math.min(0.85, (source.x - listener.x) / 25))
-          : 0,
+        config.range ? spatialPan(source, listener, this.view) : 0,
         ctx.currentTime,
         0.1,
       );
       voice.filter.frequency.setTargetAtTime(
-        voice.cutoff / (1 + distance * 0.03),
+        (voice.cutoff * tone) / (1 + distance * 0.03),
         ctx.currentTime,
         0.1,
       );
@@ -360,29 +406,32 @@ export class GameAudio {
           )
           .slice(0, 6)
       : [];
-    for (const e of nearby) {
-      const speed = Math.hypot(e.vx, e.vz);
-      const sound = engineSound(e);
-      if (sound) {
-        const rate =
-          e.kind === "car"
-            ? 0.78 + Math.min(speed, 52) * 0.018
-            : e.kind === "helicopter"
-              ? !e.driver
-                ? 0.6
-                : e.flight === "takingOff"
-                  ? 0.85
-                  : 1
-              : 0.85 + speed * 0.01;
-        loop(e.id, sound, e, rate);
-      }
-      if (e.skidding && e.kind === "car")
+    const activeVehicles = new Set(nearby.map((e) => e.id));
+    for (const id of this.vehicles.keys())
+      if (!activeVehicles.has(id)) this.vehicles.delete(id);
+    for (const [index, e] of nearby.entries()) {
+      const previous = this.vehicles.get(e.id);
+      const state = vehicleAudioState(
+        e,
+        previous,
+        elapsed,
+        e.driver === listener?.id ? view?.input : undefined,
+      );
+      this.vehicles.set(e.id, state);
+      const detailed =
+        e.id === listener?.vehicle ||
+        (index < 2 && Math.hypot(e.x - listener!.x, e.z - listener!.z) < 30);
+      if (previous && !previous.slipping && state.slipping && listener)
+        this.spatial("tyreOnset", e, listener);
+      const doppler = listener ? dopplerRate(e, listener) : 1;
+      for (const layer of vehicleLayers(e, state, detailed))
         loop(
-          "skid:" + e.id,
-          "skid",
+          `vehicle:${e.id}:${layer.key}`,
+          layer.sound,
           e,
-          0.9 + Math.min(speed, 50) * 0.006,
-          Math.min(1, speed / 12),
+          layer.rate * doppler,
+          layer.gain,
+          layer.tone,
         );
       if (e.burning !== undefined) loop("fire:" + e.id, "fire", e);
     }

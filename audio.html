@@ -67,6 +67,19 @@
       small {
         color: #b9c7c0;
       }
+      section {
+        padding: 20px;
+        border: 1px solid #355050;
+        border-radius: 10px;
+        margin: 24px 0;
+      }
+      h2 {
+        margin-top: 0;
+      }
+      .telemetry {
+        font-variant-numeric: tabular-nums;
+        min-height: 3em;
+      }
     </style>
   </head>
   <body>
@@ -85,6 +98,36 @@
     <p id="selection" role="status" aria-live="polite">
       Choose a sound and press Play. Loading starts on your first click.
     </p>
+    <section aria-labelledby="vehicle-title">
+      <h2 id="vehicle-title">Take a vehicle for a listen</h2>
+      <p>
+        Hear the complete mix as the vehicle accelerates, coasts, or loses grip. These
+        listening demos use the same mixer as the city.
+      </p>
+      <div class="controls">
+        <label for="vehicle">Vehicle</label>
+        <select id="vehicle">
+          <option value="sedan">Sedan</option>
+          <option value="sport">Sport car</option>
+          <option value="van">Van</option>
+          <option value="boat">Motorboat</option>
+          <option value="jetski">Jet ski</option>
+          <option value="speedboat">Speedboat</option>
+          <option value="helicopter">Helicopter</option>
+          <option value="plane">Propeller plane</option>
+        </select>
+        <label for="scenario">Listen to</label>
+        <select id="scenario">
+          <option value="drive">Idle, accelerate, then coast</option>
+          <option value="drift">Sustained drift and grip recovery</option>
+          <option value="pass">Drive past</option>
+        </select>
+        <button id="drive" type="button">Play vehicle</button>
+      </div>
+      <p id="vehicle-status" class="telemetry" role="status">
+        Choose a vehicle and a listening demo. Stop ends all playback.
+      </p>
+    </section>
     <table>
       <caption>
         Shipped sounds and variation settings

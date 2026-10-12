@@ -54,6 +54,8 @@ import { WaterRenderer } from "./world/water.ts";
 import { buildWatercraft } from "./models/watercraft.ts";
 import { groundLevel, watercraft } from "../shared/water.ts";
 import type { GrenadeState } from "../shared/grenades.ts";
+import type { MeshGroup } from "../shared/city-mesh.ts";
+import { uploadMeshes } from "./world/mesh-buffers.ts";
 export class CityScene {
   pickupNodes = new Map<string, TransformNode>();
   grenadeNodes = new Map<string, TransformNode>();
@@ -86,7 +88,14 @@ export class CityScene {
   day = 16.5;
   dayRate = 0;
   time = 0;
-  constructor(canvas: HTMLCanvasElement, city: City, streamed = false) {
+  staticFixtures = new Map<string, MeshGroup>();
+  savedGeometry = false;
+  constructor(
+    canvas: HTMLCanvasElement,
+    city: City,
+    streamed = false,
+    base?: MeshGroup,
+  ) {
     this.engine = new Engine(canvas, true, {
       stencil: true,
       preserveDrawingBuffer: false,
@@ -138,8 +147,13 @@ export class CityScene {
     );
     this.city = city;
     this.destruction = new DestructionRenderer(this);
-    this.build(this.city, { roads: !streamed, airport: !streamed });
-    this.batchStatic();
+    this.savedGeometry = !!base;
+    if (base) {
+      for (const mesh of uploadMeshes(this, base)) this.culling.add(mesh);
+    } else {
+      this.build(this.city, { roads: !streamed, airport: !streamed });
+      this.batchStatic();
+    }
     this.water = new WaterRenderer(this);
     if (!streamed) this.destruction.syncStatic(destructibles(city));
     this.effects = new Effects(

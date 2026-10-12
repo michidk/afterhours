@@ -12,6 +12,9 @@ import { GameNetwork } from "./network/index.ts";
 import { Controls } from "./input/index.ts";
 import { InputClock } from "./input/clock.ts";
 import { GameAudio } from "./audio/index.ts";
+import { prepareFirstFrame } from "./startup.ts";
+import { meshGroupSchema } from "../shared/city-mesh.ts";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { CityScene } from "./scene";
 import { FrameProfiler } from "./performance/index.ts";
 import { AgentInterface } from "./debug/index.ts";
@@ -438,8 +441,16 @@ async function boot() {
     }
     let cityRenderer: CityRenderer | undefined;
     cityStream = new CityStream(world, (chunks) => cityRenderer?.sync(chunks));
-    loading("Starting 3D rendering…");
-    scene = new CityScene($<HTMLCanvasElement>("#world"), cityStream.city, true);
+    const base = world.geometryVersion
+      ? await fetch(`/city/geometry/${world.mapId}/base`, {
+          cache: "no-store",
+          signal: AbortSignal.timeout(30000),
+        }).then(async (response) => {
+          if (!response.ok) throw Error("Saved terrain mesh download failed");
+          return meshGroupSchema.parse(await response.json());
+        })
+      : undefined;
+    scene = new CityScene($<HTMLCanvasElement>("#world"), cityStream.city, true, base);
     cityMap = new CityMap(
       $("#city-map"),
       $<HTMLCanvasElement>("#city-map-canvas"),
@@ -458,22 +469,7 @@ async function boot() {
     cityRenderer.sync([...cityStream.chunks.values()]);
     scene.lighting.selectLamps(scene.target);
     loading("Preparing the first frame…");
-    scene.engine.runRenderLoop(() => scene.scene.render());
-    let readinessTimer: ReturnType<typeof setTimeout>;
-    try {
-      await Promise.race([
-        scene.scene.whenReadyAsync(),
-        new Promise<never>((_, reject) => {
-          readinessTimer = setTimeout(
-            () => reject(Error("Rendering readiness timed out")),
-            30000,
-          );
-        }),
-      ]);
-    } finally {
-      clearTimeout(readinessTimer!);
-    }
-    scene.engine.stopRenderLoop();
+    await prepareFirstFrame(scene.engine, scene.scene, loading);
     void audio.preload();
     $("#play").textContent = "Enter the city";
     $("#play").removeAttribute("disabled");
@@ -565,7 +561,13 @@ async function boot() {
         cityStream.setView(body, center, radius);
       }
       const local = rendered.find((e) => e.id === playerId);
-      audio.update(rendered, local, dt, scene.city);
+      const audioRight = scene.camera.getDirection(new Vector3(1, 0, 0));
+      const audioRightLength = Math.hypot(audioRight.x, audioRight.z) || 1;
+      audio.update(rendered, local, dt, scene.city, {
+        rightX: audioRight.x / audioRightLength,
+        rightZ: audioRight.z / audioRightLength,
+        input: cameraInput,
+      });
       const updated = profiler ? performance.now() : 0;
       scene.scene.render();
       nameplates.update(scene, rendered, playerId);
@@ -689,7 +691,9 @@ async function boot() {
   } catch (error) {
     scene?.engine.stopRenderLoop();
     document.querySelector("#boot")?.setAttribute("data-failed", "");
-    loading("Could not load the city. Check your connection and WebGL, then refresh.");
+    loading(
+      `Could not load the city. ${error instanceof Error ? error.message : "Check your connection and WebGL, then refresh."}`,
+    );
     console.error(error);
   }
 }

@@ -41,7 +41,10 @@ test("every sound bank has distinct, unclipped PCM assets with smooth edges", as
     JSON.parse(await readFile("public/audio/manifest.json", "utf8")),
     SOUND_BANKS,
   );
-  const recipes = JSON.parse(await readFile("scripts/audio-clips.json", "utf8"));
+  const recipes = [
+    ...JSON.parse(await readFile("scripts/audio-clips.json", "utf8")),
+    ...JSON.parse(await readFile("scripts/vehicle-audio-clips.json", "utf8")),
+  ];
   const hashes = JSON.parse(await readFile("public/audio/source-hashes.json", "utf8"));
   const provenance = JSON.parse(await readFile("public/audio/sources.json", "utf8"));
   const sourceFiles: string[] = [];

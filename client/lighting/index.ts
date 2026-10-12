@@ -23,6 +23,9 @@ export class EnvironmentLighting {
   private selectionClock = 1;
   state = environmentAt(16.5);
   hour = 16.5;
+  get poolMaterial() {
+    return this.pool;
+  }
   constructor(
     readonly scene: Scene,
     readonly sun: DirectionalLight,

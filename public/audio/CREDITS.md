@@ -74,3 +74,23 @@ The manual script uses the installed development-only FFmpeg, converts to mono 4
 Open `/audio.html` for the listening page, which uses the same `GameAudio` engine as gameplay. N toggles sound in the game.
 
 Traffic horns use Joseph SARDIN’s [Recent car horn #2](https://bigsoundbank.com/recent-car-horn-2-s0258.html) and [Recent car horn #1](https://bigsoundbank.com/recent-car-horn-1-s0257.html), both CC0. Source files are `horn-0258.mp3` and `horn-0257.mp3`, downloaded from the corresponding `/UPLOAD/mp3/` URLs on BigSoundBank. License text verified on 2026-10-12. Recipes, original hashes and page evidence are included in the normal audio manifests.
+
+## Vehicle audio additions
+
+The additional 33 clips use the same CC0 license and preparation process. [Vehicle recipes](../../scripts/vehicle-audio-clips.json) specify the excerpts. New recordings are:
+
+- Dorian CLAIR: [Screeching Tires #1](https://bigsoundbank.com/screeching-tires-1-s2368.html), [#3](https://bigsoundbank.com/screeching-tires-3-s2370.html) and [#4](https://bigsoundbank.com/screeching-tires-4-s2371.html), downloaded from `/UPLOAD/mp3/2368.mp3`, `2370.mp3` and `2371.mp3` as `tyre-2368.mp3`, `tyre-2370.mp3`, `tyre-2371.mp3`.
+- XiiiSamples: [Car engine](https://freesound.org/people/XiiiSamples/sounds/384107/), HQ MP3 preview as `sedan-idle.mp3`.
+- wjauch: [Jetski.wav](https://freesound.org/people/wjauch/sounds/212441/), HQ MP3 preview as `jetski.mp3`. A real two-stroke Sea-Doo; water at the end supplies wake textures.
+- nomadas: [River boat with outboard engine](https://freesound.org/people/nomadas/sounds/690160/), HQ MP3 preview as `boat-outboard.mp3`.
+
+Existing AC Cobra, diesel and car acceleration originals supply the other bands and shared car start/stop cues. The author credited for Car Engine #2 (0291) is DenisChardonnet, as identified on its source page; the machine-readable inventory corrects the earlier attribution to Joseph SARDIN.
+
+The manual downloader fetches these originals without accounts or paid purchases. To reproduce only the additions:
+
+```sh
+bunx tsx scripts/fetch-vehicle-audio.ts --source-dir /path/to/vehicle-originals
+bun run audio:prepare --source-dir /path/to/vehicle-originals --vehicles-only
+```
+
+Full preparation reads both recipe files and requires all original sources. Hashes record the downloaded bytes, including HQ previews. Paid and restricted-redistribution libraries are not included. Rev/coast bands are edited textures rather than matched dynamometer RPM/load recordings; aircraft layers reuse existing samples. Source licenses checked on 2026-10-12.

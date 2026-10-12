@@ -61,6 +61,97 @@ export const SOUND_BANKS = {
   }),
   plane: bank(clips("plane", 3), { loop: true, volume: 0.28, pitch: 0.35, range: 80 }),
   skid: bank(clips("skid", 3), { loop: true, volume: 0.22, pitch: 1.5, range: 45 }),
+  tyreSqueal: bank(clips("tyre-squeal", 3), {
+    loop: true,
+    volume: 0.3,
+    pitch: 0.4,
+    range: 55,
+  }),
+  tyreOnset: bank(clips("tyre-onset", 2), {
+    volume: 0.2,
+    pitch: 0.6,
+    range: 45,
+    cooldown: 0.8,
+  }),
+  sedanIdle: bank(clips("sedan-idle", 2), {
+    loop: true,
+    volume: 0.2,
+    pitch: 0.2,
+    range: 55,
+  }),
+  sedanHigh: bank(clips("sedan-high", 2), {
+    loop: true,
+    volume: 0.22,
+    pitch: 0.2,
+    range: 55,
+  }),
+  sedanCoast: bank(clips("sedan-coast", 2), {
+    loop: true,
+    volume: 0.16,
+    pitch: 0.2,
+    range: 55,
+  }),
+  sportIdle: bank(clips("sport-idle", 2), {
+    loop: true,
+    volume: 0.22,
+    pitch: 0.2,
+    range: 55,
+  }),
+  sportHigh: bank(clips("sport-high", 2), {
+    loop: true,
+    volume: 0.26,
+    pitch: 0.2,
+    range: 65,
+  }),
+  sportCoast: bank(clips("sport-coast", 2), {
+    loop: true,
+    volume: 0.18,
+    pitch: 0.2,
+    range: 55,
+  }),
+  vanIdle: bank(clips("van-idle", 2), {
+    loop: true,
+    volume: 0.2,
+    pitch: 0.2,
+    range: 55,
+  }),
+  vanHigh: bank(clips("van-high", 2), {
+    loop: true,
+    volume: 0.23,
+    pitch: 0.2,
+    range: 55,
+  }),
+  vanCoast: bank(clips("van-coast", 2), {
+    loop: true,
+    volume: 0.17,
+    pitch: 0.2,
+    range: 55,
+  }),
+  boatMotor: bank(clips("boat-motor", 2), {
+    loop: true,
+    volume: 0.22,
+    pitch: 0.3,
+    range: 65,
+  }),
+  jetskiMotor: bank(clips("jetski-motor", 2), {
+    loop: true,
+    volume: 0.2,
+    pitch: 0.3,
+    range: 60,
+  }),
+  wake: bank(clips("wake", 2), { loop: true, volume: 0.17, pitch: 0.5, range: 35 }),
+  engineStart: bank(clips("engine-start", 2), {
+    volume: 0.2,
+    pitch: 0.4,
+    range: 40,
+    cooldown: 1,
+  }),
+  engineStop: bank(clips("engine-stop", 2), {
+    volume: 0.16,
+    pitch: 0.4,
+    range: 35,
+    cooldown: 1,
+  }),
   fire: bank(clips("fire", 3), { loop: true, volume: 0.22, pitch: 0.5, range: 25 }),
   wind: bank(clips("wind", 3), { loop: true, volume: 0.12, pitch: 0.5, range: 0 }),
   jetpack: bank(clips("wind", 3), { loop: true, volume: 0.12, pitch: 0.5, range: 35 }),
@@ -119,6 +210,38 @@ export const SOUND_BANKS = {
   Record<NonNullable<WorldEvent["sound"]>, SoundBank>;
 export type Sound = keyof typeof SOUND_BANKS;
 
+export interface DriftSoundMix {
+  squealRate: number;
+  squealGain: number;
+  squealTone: number;
+  scrubRate: number;
+  scrubGain: number;
+  scrubTone: number;
+}
+
+/** Shape tyre audio from actual sideways motion instead of road speed alone. */
+export function driftSoundMix(entity: Entity): DriftSoundMix | undefined {
+  if (entity.kind !== "car" || !entity.skidding) return;
+  const speed = Math.hypot(entity.vx, entity.vz),
+    sideways = Math.abs(
+      Math.cos(entity.angle) * entity.vx - Math.sin(entity.angle) * entity.vz,
+    ),
+    slip = Math.max(0, Math.min(1, (sideways - 0.6) / 7.4)),
+    moving = Math.max(0, Math.min(1, (speed - 0.8) / 8)),
+    slippingWheels = entity.wheelSkids?.filter(Boolean).length ?? 2,
+    contact = 0.72 + Math.min(2, slippingWheels) * 0.14,
+    intensity = moving * contact * (0.28 + slip * 0.72);
+  if (intensity < 0.025) return;
+  return {
+    squealRate: 0.82 + slip * 0.28 + Math.min(speed, 40) * 0.004,
+    squealGain: intensity,
+    squealTone: 0.48 + slip * 0.52,
+    scrubRate: 0.62 + slip * 0.12 + Math.min(speed, 40) * 0.002,
+    scrubGain: intensity * (0.24 + slip * 0.2),
+    scrubTone: 0.2 + slip * 0.18,
+  };
+}
+
 export function engineSound(entity: Entity): Sound | undefined {
   if (!propulsionRunning(entity)) return;
   if (entity.kind === "car" && (entity.driver || entity.ai))
@@ -130,7 +253,7 @@ export function engineSound(entity: Entity): Sound | undefined {
   if (entity.kind === "helicopter") return "helicopter";
   if (entity.kind === "plane" && entity.driver) return "plane";
   if (entity.kind === "boat" || entity.kind === "jetski" || entity.kind === "speedboat")
-    return entity.kind === "jetski" ? "engineSport" : "engineVan";
+    return entity.kind === "jetski" ? "jetskiMotor" : "boatMotor";
 }
 
 export class SoundPicker {

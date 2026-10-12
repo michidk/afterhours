@@ -1,0 +1,191 @@
+[
+  {
+    "name": "sedan-idle-1",
+    "file": "sedan-idle.mp3",
+    "start": 3,
+    "duration": 4,
+    "loop": true
+  },
+  {
+    "name": "sedan-idle-2",
+    "file": "sedan-idle.mp3",
+    "start": 10,
+    "duration": 4,
+    "loop": true
+  },
+  {
+    "name": "sedan-high-1",
+    "file": "engine-sedan.mp3",
+    "start": 1.3,
+    "duration": 1.4,
+    "loop": true
+  },
+  {
+    "name": "sedan-high-2",
+    "file": "engine-sedan.mp3",
+    "start": 3.8,
+    "duration": 1.4,
+    "loop": true
+  },
+  {
+    "name": "sedan-coast-1",
+    "file": "sedan-idle.mp3",
+    "start": 17,
+    "duration": 4,
+    "loop": true
+  },
+  {
+    "name": "sedan-coast-2",
+    "file": "sedan-idle.mp3",
+    "start": 22,
+    "duration": 4,
+    "loop": true
+  },
+  {
+    "name": "sport-idle-1",
+    "file": "engine-sport.mp3",
+    "start": 9,
+    "duration": 3,
+    "loop": true
+  },
+  {
+    "name": "sport-idle-2",
+    "file": "engine-sport.mp3",
+    "start": 19,
+    "duration": 3,
+    "loop": true
+  },
+  {
+    "name": "sport-high-1",
+    "file": "engine-sport.mp3",
+    "start": 13,
+    "duration": 2,
+    "loop": true
+  },
+  {
+    "name": "sport-high-2",
+    "file": "engine-sport.mp3",
+    "start": 16,
+    "duration": 2,
+    "loop": true
+  },
+  {
+    "name": "sport-coast-1",
+    "file": "engine-sport.mp3",
+    "start": 10,
+    "duration": 2,
+    "loop": true
+  },
+  {
+    "name": "sport-coast-2",
+    "file": "engine-sport.mp3",
+    "start": 20,
+    "duration": 2,
+    "loop": true
+  },
+  {
+    "name": "van-idle-1",
+    "file": "engine-van-alt.mp3",
+    "start": 1,
+    "duration": 3,
+    "loop": true
+  },
+  {
+    "name": "van-idle-2",
+    "file": "engine-van-alt.mp3",
+    "start": 8,
+    "duration": 3,
+    "loop": true
+  },
+  {
+    "name": "van-high-1",
+    "file": "engine-van.mp3",
+    "start": 10,
+    "duration": 3,
+    "loop": true
+  },
+  {
+    "name": "van-high-2",
+    "file": "engine-van.mp3",
+    "start": 16,
+    "duration": 3,
+    "loop": true
+  },
+  {
+    "name": "van-coast-1",
+    "file": "engine-van-alt.mp3",
+    "start": 14,
+    "duration": 3,
+    "loop": true
+  },
+  {
+    "name": "van-coast-2",
+    "file": "engine-van-alt.mp3",
+    "start": 20,
+    "duration": 3,
+    "loop": true
+  },
+  {
+    "name": "tyre-squeal-1",
+    "file": "tyre-2368.mp3",
+    "start": 0.5,
+    "duration": 1.8,
+    "loop": true
+  },
+  {
+    "name": "tyre-squeal-2",
+    "file": "tyre-2370.mp3",
+    "start": 0.4,
+    "duration": 1.8,
+    "loop": true
+  },
+  {
+    "name": "tyre-squeal-3",
+    "file": "tyre-2371.mp3",
+    "start": 1,
+    "duration": 4,
+    "loop": true
+  },
+  { "name": "tyre-onset-1", "file": "tyre-2368.mp3", "start": 0.2, "duration": 0.6 },
+  { "name": "tyre-onset-2", "file": "tyre-2370.mp3", "start": 0.2, "duration": 0.6 },
+  {
+    "name": "boat-motor-1",
+    "file": "boat-outboard.mp3",
+    "start": 10,
+    "duration": 5,
+    "loop": true
+  },
+  {
+    "name": "boat-motor-2",
+    "file": "boat-outboard.mp3",
+    "start": 22,
+    "duration": 5,
+    "loop": true
+  },
+  {
+    "name": "jetski-motor-1",
+    "file": "jetski.mp3",
+    "start": 4,
+    "duration": 3,
+    "loop": true
+  },
+  {
+    "name": "jetski-motor-2",
+    "file": "jetski.mp3",
+    "start": 29,
+    "duration": 3,
+    "loop": true
+  },
+  { "name": "wake-1", "file": "jetski.mp3", "start": 37, "duration": 2, "loop": true },
+  {
+    "name": "wake-2",
+    "file": "jetski.mp3",
+    "start": 39.5,
+    "duration": 2,
+    "loop": true
+  },
+  { "name": "engine-start-1", "file": "engine-sport.mp3", "start": 0, "duration": 3 },
+  { "name": "engine-start-2", "file": "engine-sport.mp3", "start": 3, "duration": 3 },
+  { "name": "engine-stop-1", "file": "engine-sport.mp3", "start": 23, "duration": 1 },
+  { "name": "engine-stop-2", "file": "engine-sport.mp3", "start": 24, "duration": 1 }
+]

@@ -7,6 +7,7 @@ import { createParticles } from "../effects/particles.ts";
 import type { Destructible, DebrisState } from "../../shared/destruction.ts";
 import { TUNING } from "../../shared/catalog.ts";
 import type { CityScene } from "../scene.ts";
+import { uploadMeshes } from "./mesh-buffers.ts";
 
 type Model = {
   root: TransformNode;
@@ -137,6 +138,27 @@ export class DestructionRenderer {
     const h = this.host,
       root = new TransformNode(`${live ? "fixture" : "debris"}:${p.id}`, h.scene),
       meshStart = h.scene.meshes.length;
+    const saved = live && p.kind !== "corpse" ? h.staticFixtures?.get(p.id) : undefined;
+    if (live && h.savedGeometry && !saved)
+      throw Error(`Saved fixture mesh missing: ${p.id}`);
+    if (saved) {
+      const meshes = uploadMeshes(h, saved);
+      for (const mesh of meshes) mesh.parent = root;
+      root.position.set(p.x, p.h / 2, p.z);
+      root.rotation.y = p.kind !== "corpse" ? (p.angle ?? 0) : 0;
+      const model: Model = { root, meshes, lit: false };
+      const bulb = meshes.find(
+        (mesh) => mesh.name === (p.kind === "lamp" ? "lamp" : "signal"),
+      );
+      if (p.kind === "lamp" && bulb) {
+        bulb.computeWorldMatrix(true);
+        model.lamp = bulb.getAbsolutePosition().clone();
+      }
+      if (p.kind === "signal" && bulb)
+        model.light = { mesh: bulb, axis: p.axis ?? "z" };
+      for (const mesh of meshes) h.culling?.add(mesh);
+      return model;
+    }
     let bulb: Mesh | undefined;
     if (p.kind === "palm") h.palm(0, 0, p.h);
     else if (p.kind === "tree") {

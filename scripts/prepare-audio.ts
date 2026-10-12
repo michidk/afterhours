@@ -23,7 +23,10 @@ const clips = z
       loop: z.boolean().default(false),
     }),
   )
-  .parse(JSON.parse(await readFile("scripts/audio-clips.json", "utf8")));
+  .parse([
+    ...JSON.parse(await readFile("scripts/audio-clips.json", "utf8")),
+    ...JSON.parse(await readFile("scripts/vehicle-audio-clips.json", "utf8")),
+  ]);
 const expected = new Set(Object.values(SOUND_BANKS).flatMap((bank) => bank.files));
 if (
   expected.size !== clips.length ||
@@ -32,10 +35,19 @@ if (
 )
   throw Error("Clip recipes must match the sound banks exactly");
 await mkdir("public/audio", { recursive: true });
-const hashes: Record<string, string> = {};
+const vehicleOnly = process.argv.includes("--vehicles-only");
+const vehicleNames = new Set(
+  JSON.parse(await readFile("scripts/vehicle-audio-clips.json", "utf8")).map(
+    (clip: { name: string }) => clip.name,
+  ),
+);
+const hashes: Record<string, string> = vehicleOnly
+  ? JSON.parse(await readFile("public/audio/source-hashes.json", "utf8"))
+  : {};
 for (const clip of clips) {
+  if (vehicleOnly && !vehicleNames.has(clip.name)) continue;
   const file = join(source, clip.file);
-  hashes[clip.file] ??= createHash("sha256")
+  hashes[clip.file] = createHash("sha256")
     .update(await readFile(file))
     .digest("hex");
   const args = ["-v", "error", "-ss", String(clip.start), "-i", file];

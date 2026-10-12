@@ -69,7 +69,7 @@
     {
       "page": "https://bigsoundbank.com/car-engine-2-s0291.html",
       "title": "Car Engine #2 \u2014 Free Sound Effect Download | BigSoundBank",
-      "author": "Joseph SARDIN",
+      "author": "DenisChardonnet",
       "license": "CC0-1.0",
       "licenseEvidence": "License CC0 (public domain): Free and royalty-free",
       "files": ["engine-sedan.mp3"]
@@ -314,6 +314,54 @@
       "license": "CC0-1.0",
       "licenseEvidence": "License CC0 (public domain): Free and royalty-free",
       "files": ["horn-0257.mp3"]
+    },
+    {
+      "page": "https://bigsoundbank.com/screeching-tires-1-s2368.html",
+      "title": "Screeching Tires #1",
+      "author": "Dorian CLAIR",
+      "license": "CC0-1.0",
+      "licenseEvidence": "CC0 (public domain): Free and royalty-free",
+      "files": ["tyre-2368.mp3"]
+    },
+    {
+      "page": "https://bigsoundbank.com/screeching-tires-3-s2370.html",
+      "title": "Screeching Tires #3",
+      "author": "Dorian CLAIR",
+      "license": "CC0-1.0",
+      "licenseEvidence": "CC0 (public domain): Free and royalty-free",
+      "files": ["tyre-2370.mp3"]
+    },
+    {
+      "page": "https://bigsoundbank.com/screeching-tires-4-s2371.html",
+      "title": "Screeching Tires #4",
+      "author": "Dorian CLAIR",
+      "license": "CC0-1.0",
+      "licenseEvidence": "CC0 (public domain): Free and royalty-free",
+      "files": ["tyre-2371.mp3"]
+    },
+    {
+      "page": "https://freesound.org/people/XiiiSamples/sounds/384107/",
+      "title": "Car engine",
+      "author": "XiiiSamples",
+      "license": "CC0-1.0",
+      "licenseEvidence": "Creative Commons 0",
+      "files": ["sedan-idle.mp3"]
+    },
+    {
+      "page": "https://freesound.org/people/wjauch/sounds/212441/",
+      "title": "Jetski.wav",
+      "author": "wjauch",
+      "license": "CC0-1.0",
+      "licenseEvidence": "Creative Commons 0",
+      "files": ["jetski.mp3"]
+    },
+    {
+      "page": "https://freesound.org/people/nomadas/sounds/690160/",
+      "title": "River boat with outboard engine (at changing speeds)",
+      "author": "nomadas",
+      "license": "CC0-1.0",
+      "licenseEvidence": "Creative Commons 0",
+      "files": ["boat-outboard.mp3"]
     }
   ]
 }

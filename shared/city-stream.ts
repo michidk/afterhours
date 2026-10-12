@@ -2,6 +2,7 @@ import { z } from "zod";
 import { citySchema } from "./city-schema.ts";
 import { packedSurfaceSchema } from "./city-pack.ts";
 import { LIMIT, type City } from "./world.ts";
+import { chunkGeometrySchema } from "./city-mesh.ts";
 
 export const CITY_CHUNK_SIZE = 128;
 export const STATIC_FIELDS = [
@@ -21,6 +22,7 @@ export const mapManifestSchema = z.object({
   limit: z.literal(LIMIT),
   chunkSize: z.literal(CITY_CHUNK_SIZE),
   airport: citySchema.shape.airport,
+  geometryVersion: z.literal(1).optional(),
   centre: citySchema.shape.centre,
   /** Set when /city/terrain/<mapId> serves 16-bit centimetre heights. */
   hasTerrain: z.boolean().optional(),
@@ -59,6 +61,7 @@ export const cityChunkSchema = z.object({
   surfaces: z.array(entry(citySchema.shape.surfaces.unwrap().element)).max(2000),
   ramps: z.array(entry(citySchema.shape.ramps.element)).max(100),
   landmarks: z.array(entry(citySchema.shape.landmarks.element)).max(100),
+  geometry: chunkGeometrySchema.optional(),
   /** Street polygons whose centroid lies in this chunk (generated cities). */
   surface: packedSurfaceSchema.optional(),
 });

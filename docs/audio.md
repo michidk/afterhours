@@ -1,6 +1,6 @@
 # Sound inventory
 
-The library replaces all eleven previous WAVs with 116 edited CC0 clips across 37 sound banks. Every bank has at least two takes. Sources, author credits, and reproduction instructions are in [audio credits](../public/audio/CREDITS.md). `/audio.html` is an explicit listening page and uses the gameplay engine.
+The library contains 149 edited CC0 clips across 53 sound banks. Every bank has at least two takes. Sources, author credits, and reproduction instructions are in [audio credits](../public/audio/CREDITS.md). `/audio.html` provides complete vehicle demos and individual sample auditioning through the gameplay engine.
 
 ## Shipped sounds
 
@@ -48,11 +48,23 @@ The library replaces all eleven previous WAVs with 116 edited CC0 clips across 3
 
 `client/audio/banks.ts` owns the banks and their pitch, gain, range, cooldown, and voice limits. `GameAudio` loads and decodes each unique file once after a user gesture. A missing file reduces that bank's available pool; an unavailable bank stays silent and appears in diagnostics. Gameplay continues when Web Audio is unavailable.
 
-Selection excludes the previous take whenever another decoded take exists. Each play varies pitch in semitones, gain by up to 12%, and a low-pass cutoff between 14.5 and 18 kHz. Engine audio follows powered drivers and traffic AI; pushed, unoccupied vehicles stay silent. Helicopter audio runs only during powered takeoff, cruising, or landing. Grounded helicopters, abandoned windmilling rotors, and wrecks stay silent. Each vehicle keeps its chosen take for the loop's lifetime. Random loop offsets prevent nearby engines from synchronizing. Playback rate, gain, and panning change smoothly.
+Selection excludes the previous take whenever another decoded take exists. Each play varies pitch in semitones, gain by up to 12%, and a low-pass cutoff between 14.5 and 18 kHz. Engine audio follows powered drivers and traffic AI; pushed, unoccupied vehicles stay silent. Helicopter audio runs only during powered takeoff, cruising, or landing. Grounded helicopters, abandoned windmilling rotors, and wrecks stay silent. Each vehicle keeps its chosen take for the loop's lifetime. Random loop offsets prevent nearby engines from synchronizing. Playback rate, gain, and panning change smoothly. Drifting uses two independently selected and detuned tyre takes: a brighter squeal and a quieter filtered road-scrub layer. Sideways velocity, road speed, and the number of slipping wheels continuously shape their gain, pitch, and tone; release tails prevent chatter when grip returns.
 
-Three-dimensional distance attenuates each spatial sound. Vehicle and ambient loops also lose high frequencies with distance. Stereo panning follows the world X axis, matching the fixed follow camera. It does not track development-camera orientation. There is no wall occlusion or Doppler effect.
+Three-dimensional distance attenuates each spatial sound. Vehicle and ambient loops also lose high frequencies with distance. Stereo panning follows the camera's horizontal right vector, including development cameras. Vehicle loops use bounded Doppler from rendered relative radial velocity; occupants hear their own motor without Doppler. Distance stays anchored to the player. There is no wall occlusion.
 
-The mixer limits one-shots to 32 and caps voices per bank. Quiet cues stop consuming new voices at 24, leaving room for combat. Cooldowns suppress repeated contacts at the same location without muting simultaneous shooters elsewhere. At most six active nearby vehicles produce engine, skid, and fire loops. Wind, canopy flutter, coast, and the nearest two broken hydrants add at most five more loops. Active jetpacks and flamethrowers add spatial wind and fire loops while their confirmed states indicate powered movement or firing. A master compressor reduces stacked transients. N smoothly mutes the master mix and stops loops; unmuting resumes current loop sources without replaying missed actions. Disconnects clear loops and snapshot history.
+The mixer limits one-shots to 32 and caps voices per bank. Quiet cues stop consuming new voices at 24, leaving room for combat. Cooldowns suppress repeated contacts at the same location without muting simultaneous shooters elsewhere. At most six active nearby vehicles produce sound. Two vehicles within 30 m get full layers, with the player's vehicle taking priority and always keeping its detailed mix; distant motors use a single loop. All vehicle and ambient sources share a 32-active-loop cap, with short release tails before disconnection. Wind, canopy flutter, coast, hydrants, jetpacks and flamethrowers share that budget. A master compressor reduces stacked transients. N smoothly mutes the master mix and stops loops; unmuting resumes current sources without replaying missed actions. Disconnects clear loops and snapshot history.
+
+## Vehicle mixer and listening demos
+
+`client/audio/vehicles.ts` estimates load from local driver input or remote acceleration. Smoothed revs and hysteretic cosmetic gears drive overlapping idle/middle/high bands plus an unloaded layer. Sources retain their take while band weights change, including at zero gain, to avoid restarting recordings at every throttle change. Estimated shifts briefly dip pitch and gain. Vehicle health softens the motor tone. These estimates never feed gameplay or alter snapshots. Only confirmed car power transitions play ignition/shutdown cues; first visibility and reconnects do not replay them.
+
+The upgrade adds 33 clips in 16 banks: `sedanIdle/High/Coast`, `sportIdle/High/Coast`, `vanIdle/High/Coast` (two takes each); `tyreSqueal` (three); `tyreOnset`, `boatMotor`, `jetskiMotor`, `wake`, `engineStart` and `engineStop` (two each). The existing car banks provide middle bands and simpler distant motors. The old `skid` clips now supply quiet filtered scrub underneath the longer dedicated tyre screeches.
+
+The listening page offers three 16-second scenarios for each vehicle: idle/acceleration/coast, sustained slip/recovery (powered turns for other kinds), and a spatial drive-by. Stop, changing selections, leaving the page or hiding the tab cancels playback. The demos create isolated audio inputs and do not connect to or modify server gameplay.
+
+New sources are Dorian CLAIR's three CC0 tyre screeches, XiiiSamples' idling car, wjauch's Sea-Doo and nomadas' outboard boat. Existing petrol/diesel recordings provide additional band excerpts. These are field-recording textures, not calibrated recordings of measured RPM/load. Coasting uses quieter idle/steady excerpts; aircraft use a second filtered take from their existing bank rather than separately isolated turbine/rotor recordings. Shared car ignition cues remain a temporary family proxy. Boat originals include water and some distant voices; only short engine-dominant sections are used. This mix needs speaker/headphone listening before subjective acceptance.
+
+Paid candidates remain [Pole Position's Skids & Screeches](https://pole.se/product/skids-screeches-tarmac-library/) and individual car libraries. They were not purchased or incorporated. [Sonniss bundles](https://sonniss.com/gdc-bundle-license/) permit game use but restrict standalone redistribution, so their raw assets should not go in this public repository without suitable permission. Shipped additions remain CC0, with provenance, recipes and source hashes.
 
 Combat sounds come from server events. Inventory, boarding, reload, parachute, and life-state cues compare consecutive confirmed snapshots. Joining and reconnecting do not replay past transitions. Footsteps use rendered travel distance as cosmetic feedback and never decide a gameplay result. Sprinting changes cadence rather than requiring another recording bank.
 
@@ -68,22 +80,22 @@ Research excluded the CC-BY close-combat bat pack. CC0 sports-bat recordings con
 
 Kenney's CC0 packs cover the short actions without another runtime dependency. Longer licensed recordings cover engines, aircraft, water, fire, and coast. The CC-BY footsteps pack was considered and excluded to keep a single asset license.
 
-| Additional sound                                          | When it becomes necessary                                                                                                |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Sand, gravel, and distinct roof footsteps                 | When those surface materials have explicit contact classification; current footsteps distinguish parks from other ground |
-| Car engine start, shutdown, idle, and loaded RPM layers   | When vehicle ignition and RPM become modeled state; current loops derive pitch from speed                                |
-| Aircraft doors, rotor startup and shutdown                | When replacing car-door boarding proxies and adding separate rotor start or stop cues                                    |
-| Pedestrian speech, pain, and panic calls                  | When characters have a defined voice direction and voice budget; current damage uses impact feedback                     |
-| Birds, insects, and district ambience                     | When districts have authored ambient zones and time-of-day schedules; current ambience covers coast and parachute wind   |
-| Horns and reverse alarms                                  | When gameplay supports those actions; do not play warning sounds without a corresponding vehicle signal                  |
-| Swimming, splashes, rain, thunder, and wind on trees      | When water movement or weather exists                                                                                    |
-| Building glass, interiors, footsteps on stairs, and doors | When those objects can interact or be destroyed; current building facades are static                                     |
-| Grenades                                                  | Dedicated pin-pull and bounce foley; explosions currently reuse the explosion bank                                       |
-| Knives and machine guns                                   | Dedicated swings, contact, shot, reload, and dry-fire banks beyond the current melee and SMG proxies                     |
-| Flamethrowers                                             | Ignition, flame roar, and extinguish beyond the current fire-loop proxy                                                  |
-| Jetpacks                                                  | Ignition, idle, thrust, and shutdown beyond the current finite-range wind proxy                                          |
-| Boats, jet skis, and speedboats                           | Model-specific motors, wake and spray, hull contacts, and boarding beyond the current sport and van motor proxies        |
-| Police sirens, missions, alerts, and music                | When those game systems exist; they are not inferred from traffic or the city clock                                      |
+| Additional sound                                           | When it becomes necessary                                                                                                |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Sand, gravel, and distinct roof footsteps                  | When those surface materials have explicit contact classification; current footsteps distinguish parks from other ground |
+| Calibrated car RPM/load layers and model-specific ignition | Current bands and gears are cosmetic estimates; ignition uses shared car excerpts                                        |
+| Aircraft doors, rotor startup and shutdown                 | When replacing car-door boarding proxies and adding separate rotor start or stop cues                                    |
+| Pedestrian speech, pain, and panic calls                   | When characters have a defined voice direction and voice budget; current damage uses impact feedback                     |
+| Birds, insects, and district ambience                      | When districts have authored ambient zones and time-of-day schedules; current ambience covers coast and parachute wind   |
+| Horns and reverse alarms                                   | When gameplay supports those actions; do not play warning sounds without a corresponding vehicle signal                  |
+| Swimming, splashes, rain, thunder, and wind on trees       | When water movement or weather exists                                                                                    |
+| Building glass, interiors, footsteps on stairs, and doors  | When those objects can interact or be destroyed; current building facades are static                                     |
+| Grenades                                                   | Dedicated pin-pull and bounce foley; explosions currently reuse the explosion bank                                       |
+| Knives and machine guns                                    | Dedicated swings, contact, shot, reload, and dry-fire banks beyond the current melee and SMG proxies                     |
+| Flamethrowers                                              | Ignition, flame roar, and extinguish beyond the current fire-loop proxy                                                  |
+| Jetpacks                                                   | Ignition, idle, thrust, and shutdown beyond the current finite-range wind proxy                                          |
+| Watercraft hull contacts, boarding and more motor families | Boats share outboard recordings, jet skis have a dedicated motor, and wake uses recorded water                           |
+| Police sirens, missions, alerts, and music                 | When those game systems exist; they are not inferred from traffic or the city clock                                      |
 
 Field-recorded loops are edited excerpts, not multi-layer studio engine recordings. Some source textures and foley proxies may need art direction after listening. Pitch variation stays within each bank's range to preserve the action's identity. The current attenuation and compressor do not guarantee a pleasing mix on every audio device.
 

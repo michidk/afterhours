@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { GameAudio } from "../client/audio/index.ts";
-import { SOUND_BANKS } from "../client/audio/banks.ts";
+import { SOUND_BANKS, driftSoundMix } from "../client/audio/banks.ts";
 import type { Entity } from "../shared/world.ts";
 
 test("sound preloading downloads every clip once with at most four requests in flight", async (t) => {
@@ -89,15 +89,18 @@ test("pushing idle vehicles never starts engines; powering and shutdown control 
     body.driver = listener.id;
     if (kind === "helicopter") body.flight = "takingOff";
     audio.update([body], listener, 1);
-    assert.equal(starts, 1, `${kind} powered`);
+    assert.ok(starts > 0, `${kind} powered`);
+    const poweredStarts = starts;
+    audio.update([body], listener, 1);
+    assert.equal(starts, poweredStarts, `${kind} retains its layers`);
     body.driver = undefined;
     body.flight = "falling";
     audio.update([body], listener, 1);
-    assert.equal(stops, 1, `${kind} abandoned`);
+    assert.equal(stops, poweredStarts, `${kind} abandons all layers`);
     body.driver = listener.id;
     body.wreck = 180;
     audio.update([body], listener, 1);
-    assert.equal(starts, 1, `${kind} wrecked`);
+    assert.equal(starts, poweredStarts, `${kind} wrecked`);
   }
 });
 
@@ -160,4 +163,33 @@ test("observer jetpacks attenuate with distance while local parachute wind stays
   audio.update([flyer], listener, 1);
   assert.ok(!audio.diagnostics.loopSounds.includes("jetpack"));
   assert.ok(audio.diagnostics.loopSounds.includes("wind"));
+});
+
+test("drift audio gets brighter and louder with sideways tyre slip", () => {
+  const car: Entity = {
+    id: "car",
+    kind: "car",
+    x: 0,
+    y: 0,
+    z: 0,
+    vx: 0,
+    vy: 0,
+    vz: 8,
+    angle: 0,
+    color: "#fff",
+    health: 100,
+    skidding: true,
+    wheelSkids: [false, false, true, false],
+  };
+  const scrub = driftSoundMix(car)!;
+  car.vx = 8;
+  car.vz = 8;
+  car.wheelSkids![3] = true;
+  const slide = driftSoundMix(car)!;
+  assert.ok(slide.squealGain > scrub.squealGain);
+  assert.ok(slide.squealRate > scrub.squealRate);
+  assert.ok(slide.squealTone > scrub.squealTone);
+  assert.ok(slide.scrubGain > scrub.scrubGain);
+  car.skidding = false;
+  assert.equal(driftSoundMix(car), undefined);
 });
