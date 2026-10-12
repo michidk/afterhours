@@ -139,6 +139,29 @@ test("all body parts render using the same model as the menu, with distinct phys
   }
 });
 
+test("characters have a readable face and relaxed shoulders", () => {
+  const engine = new NullEngine(),
+    scene = new Scene(engine),
+    root = new TransformNode("character", scene),
+    material = new StandardMaterial("test", scene);
+  try {
+    const upper = buildCharacter(root, "#e8b63f", () => material);
+    const meshes = root.getChildMeshes();
+    assert.equal(meshes.filter((mesh) => mesh.name === "eye white").length, 2);
+    assert.equal(meshes.filter((mesh) => mesh.name === "pupil").length, 2);
+    assert.equal(meshes.filter((mesh) => mesh.name === "eyebrow").length, 2);
+    assert.equal(meshes.filter((mesh) => mesh.name === "mouth").length, 1);
+    const shoulders = upper
+      .getChildTransformNodes(true)
+      .filter((node) => node.name === "arm pivot");
+    assert.equal(shoulders.length, 2);
+    assert.ok(shoulders.every((shoulder) => Math.abs(shoulder.rotation.z) > 0.03));
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
+});
+
 test("walking yaw and mouse aim stay independent in authority and prediction", async () => {
   const city = await loadCity();
   city.buildings = [];

@@ -37,13 +37,17 @@ export function buildCharacter(
   }
   const skin = character.skin,
     ink = "#302e2b",
+    eyeWhite = "#f5efe2",
+    mouth = "#7c4038",
     pants = "#3e4b4e";
   box("body", 0, 1.09, 0, 0.62 * width, 0.68, 0.38, color);
   box("neck", 0, 1.48, 0, 0.19, 0.18, 0.21, skin);
   box("head", 0, 1.72, 0, 0.38, 0.42, 0.36, skin);
   box("nose", 0, 1.69, 0.2, 0.075, 0.095, 0.09, skin);
   for (const side of [-1, 1]) {
-    box("eye", side * 0.09, 1.76, 0.184, 0.035, 0.035, 0.015, ink);
+    box("eye white", side * 0.09, 1.76, 0.184, 0.08, 0.05, 0.015, eyeWhite);
+    box("pupil", side * 0.09, 1.755, 0.195, 0.026, 0.032, 0.012, ink);
+    box("eyebrow", side * 0.09, 1.82, 0.187, 0.085, 0.018, 0.014, ink);
     box("ear", side * 0.205, 1.7, 0, 0.07, 0.12, 0.1, skin);
     const leg = box(
       "leg",
@@ -98,6 +102,7 @@ export function buildCharacter(
     const shoulder = new TransformNode("arm pivot", scene);
     shoulder.parent = upper;
     shoulder.position.set(side * 0.43 * width, 1.38, 0);
+    shoulder.rotation.set(-0.08, 0, side * 0.06);
     for (const part of [arm, hand]) {
       part.parent = shoulder;
       part.position.subtractInPlace(shoulder.position);
@@ -107,6 +112,7 @@ export function buildCharacter(
       box("jacket pocket", side * 0.18 * width, 0.98, 0.205, 0.14, 0.13, 0.035, ink);
     }
   }
+  box("mouth", 0, 1.61, 0.187, 0.12, 0.024, 0.014, mouth);
   if (character.top === "vest") box("vest zip", 0, 1.09, 0.195, 0.03, 0.64, 0.025, ink);
   if (character.top === "tee")
     box("tee collar", 0, 1.425, 0.04, 0.25, 0.055, 0.32, "#e4dfca");
@@ -145,5 +151,8 @@ export function poseCharacter(root: TransformNode, e: Entity) {
     !e.vehicle &&
     (aiming || (e.weapon && e.weapon !== "fists"));
   for (const arm of upper.getChildTransformNodes(true))
-    if (arm.name === "arm pivot") arm.rotation.x = holding ? -Math.PI / 2 : 0;
+    if (arm.name === "arm pivot") {
+      arm.rotation.x = holding ? -Math.PI / 2 : 0;
+      arm.rotation.z = holding ? 0 : Math.sign(arm.position.x) * 0.06;
+    }
 }
