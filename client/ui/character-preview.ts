@@ -21,8 +21,8 @@ export class CharacterPreview {
   constructor(canvas: HTMLCanvasElement) {
     this.engine = new Engine(canvas, true);
     this.scene = new Scene(this.engine);
-    this.scene.clearColor = Color4.FromHexString("#263a40ff");
-    const camera = new FreeCamera("portrait", new Vector3(2.8, 2.0, 5.8), this.scene);
+    this.scene.clearColor = Color4.FromHexString("#dfa68fff");
+    const camera = new FreeCamera("portrait", new Vector3(2.6, 1.8, 6.5), this.scene);
     camera.setTarget(new Vector3(0, 1, 0));
     camera.fov = 0.46;
     const light = new HemisphericLight(
@@ -30,15 +30,15 @@ export class CharacterPreview {
       new Vector3(-1, 2, 3),
       this.scene,
     );
-    light.intensity = 0.8;
-    light.groundColor = Color3.FromHexString("#4d6165");
+    light.intensity = 0.95;
+    light.groundColor = Color3.FromHexString("#52627d");
     const sun = new DirectionalLight(
       "garage light",
-      new Vector3(-1, -2, -1),
+      new Vector3(-2, -3, -2),
       this.scene,
     );
     sun.position.set(4, 7, 5);
-    sun.intensity = 1.1;
+    sun.intensity = 1.2;
     sun.diffuse = Color3.FromHexString("#ffe4bb");
     this.shadows = new ShadowGenerator(1024, sun);
     this.shadows.usePercentageCloserFiltering = true;
@@ -48,11 +48,9 @@ export class CharacterPreview {
       material.specularColor = Color3.Black();
       return material;
     };
-    const concrete = stageMaterial("concrete", "#536265"),
-      wall = stageMaterial("painted wall", "#304d54"),
-      metal = stageMaterial("shutter", "#243b42"),
-      trim = stageMaterial("door frame", "#1b3036"),
-      paint = stageMaterial("parking paint", "#a8986c");
+    const concrete = stageMaterial("rooftop concrete", "#6e7782"),
+      trim = stageMaterial("railing", "#263b4d"),
+      paint = stageMaterial("roof markings", "#c9b990");
     const box = (
       name: string,
       x: number,
@@ -72,20 +70,37 @@ export class CharacterPreview {
       mesh.material = material;
       mesh.receiveShadows = true;
     };
-    box("garage floor", 0, -0.09, 0, 30, 0.12, 30, concrete);
-    box("garage wall", 0, 3, -2, 30, 6, 0.3, wall);
-    box("shutter frame", 0.3, 1.8, -1.8, 4.5, 3.6, 0.12, trim);
-    box("roller shutter", 0.3, 1.74, -1.68, 4.2, 3.45, 0.08, metal);
-    for (let y = 0.12; y < 3.5; y += 0.19)
-      box("shutter slat", 0.3, y, -1.62, 4.2, 0.025, 0.035, trim);
-    box("side door", -3.1, 1.2, -1.8, 1.2, 2.4, 0.12, trim);
-    box("door handle", -2.7, 1.15, -1.69, 0.05, 0.16, 0.05, paint);
+    box("rooftop", 0, -0.09, 0, 40, 0.12, 30, concrete);
+    box("parapet", 0, 0.12, -4, 40, 0.24, 0.3, trim);
+    box("rail", 0, 0.72, -4, 40, 0.045, 0.045, trim);
+    for (let x = -18; x <= 18; x += 2.5)
+      box("rail post", x, 0.49, -4, 0.035, 0.5, 0.035, trim);
     for (const x of [-2.1, 2.7])
-      box("parking stripe", x, -0.025, 1.1, 0.06, 0.01, 4.5, paint);
-    box("lamp housing", 0.3, 3.72, -1.65, 1.6, 0.12, 0.2, trim);
-    const lamp = stageMaterial("lamp", "#fff0ce");
-    lamp.emissiveColor = Color3.FromHexString("#fff0ce");
-    box("garage lamp", 0.3, 3.69, -1.52, 1.4, 0.055, 0.06, lamp);
+      box("roof seam", x, -0.025, 1.1, 0.025, 0.01, 12, paint);
+    const windows = stageMaterial("distant windows", "#dfb49b");
+    windows.emissiveColor = Color3.FromHexString("#654d3b");
+    // Fixed skyline keeps the menu stable when changing outfits.
+    for (let i = 0; i < 28; i++) {
+      const height = 2 + ((i * 17) % 11) * 0.36;
+      const facade = stageMaterial(`skyline ${i}`, i % 2 ? "#737584" : "#8d8190");
+      facade.emissiveColor = Color3.FromHexString("#302737");
+      const x = (i - 14) * 2.4;
+      const z = -17 - (i % 3) * 3;
+      box("city tower", x, height / 2 - 2, z, 1.8, height, 2, facade);
+      for (let y = -0.8; y < height - 2.3; y += 0.6)
+        box("window band", x, y, z + 1.01, 1.35, 0.12, 0.015, windows);
+      if (i % 4 === 0) box("roof plant", x, height - 1.8, z, 0.8, 0.4, 0.8, trim);
+    }
+    const sunset = stageMaterial("setting sun", "#ffdab0");
+    sunset.disableLighting = true;
+    sunset.emissiveColor = Color3.FromHexString("#ffdab0");
+    const disk = MeshBuilder.CreateSphere(
+      "sun",
+      { diameter: 5, segments: 32 },
+      this.scene,
+    );
+    disk.position.set(-7, 5, -26);
+    disk.material = sunset;
     this.resize = new ResizeObserver(() => {
       this.engine.resize();
       this.scene.render();

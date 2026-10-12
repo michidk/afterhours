@@ -1,6 +1,6 @@
 # Interface direction
 
-The entry menu uses the same dark teal, amber, condensed headings and block character models as the game. A compact left menu keeps choices together; the garage gives the character a place in the world. White selection rows and native inputs keep keyboard focus clear.
+The entry menu uses the same dark teal, amber, condensed headings and block character models as the game. A compact left menu keeps choices together; a sunset rooftop and layered skyline give the character a place in Paloma. Amber build selection and pale focus rows and native inputs keep keyboard focus clear.
 
 References inspected:
 
