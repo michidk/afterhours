@@ -82,7 +82,7 @@ export class Simulation {
     this.destruction = new Destruction(city);
     this.ai = new CityAI(navigationFor(city));
     this.ai.props = city.props;
-    for (let i = 0; i < 42; i++) {
+    for (let i = 0; i < 84; i++) {
       const e = this.spawn(
         "car",
         0,
@@ -92,7 +92,7 @@ export class Simulation {
       );
       this.ai.assign(e, i);
     }
-    for (let i = 0; i < 65; i++) {
+    for (let i = 0; i < 130; i++) {
       const e = this.spawn("pedestrian", 0, 0);
       this.ai.assign(e, i + 9);
     }
