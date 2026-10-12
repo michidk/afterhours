@@ -76,7 +76,8 @@ export class Simulation {
   serial = 0;
   inventory = new Inventory();
   grenades = new Grenades();
-  spatial = new SpatialGrid<Entity>();
+  // Rebuilt every physics pass; caching misses only retains short-lived arrays.
+  spatial = new SpatialGrid<Entity>(16, false);
   destruction: Destruction;
 
   constructor(city: City) {

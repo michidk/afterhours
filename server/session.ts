@@ -28,7 +28,7 @@ interface Client {
   window: number;
   actions: Map<string, number>;
   frame: number;
-  known: Map<string, string>;
+  known: Map<string, Map<string, string | undefined>>;
   view?: { x: number; z: number };
   rosterKey?: string;
   destructionKey?: string;
@@ -331,6 +331,10 @@ export class Sessions {
       },
       destructionKey = JSON.stringify(destruction);
     this.frames++;
+    const encodedEntities = new Map<
+      string,
+      { rounded: Entity; fields: Map<string, string | undefined> }
+    >();
     for (const [ws, c] of this.clients) {
       if (!c.id) continue;
       const p = this.sim.entities.get(c.id);
@@ -354,29 +358,39 @@ export class Sessions {
           visible.set(other.id, other);
       const full = c.frame === 0 || this.frames % 30 === 0,
         entities: EntityPatch[] = [],
-        known = new Map<string, string>();
+        known = new Map<string, Map<string, string | undefined>>();
       for (const [id, e] of visible) {
-        const rounded = {
-          ...e,
-          x: +e.x.toFixed(3),
-          z: +e.z.toFixed(3),
-          y: +e.y.toFixed(3),
-          vx: +e.vx.toFixed(3),
-          vz: +e.vz.toFixed(3),
-          angle: +e.angle.toFixed(5),
-        };
-        const serialized = JSON.stringify(rounded);
-        known.set(id, serialized);
+        let encoded = encodedEntities.get(id);
+        if (!encoded) {
+          const rounded = {
+            ...e,
+            x: +e.x.toFixed(3),
+            z: +e.z.toFixed(3),
+            y: +e.y.toFixed(3),
+            vx: +e.vx.toFixed(3),
+            vz: +e.vz.toFixed(3),
+            angle: +e.angle.toFixed(5),
+          };
+          encoded = {
+            rounded,
+            fields: new Map(
+              Object.entries(rounded).map(([key, value]) => [
+                key,
+                JSON.stringify(value),
+              ]),
+            ),
+          };
+          encodedEntities.set(id, encoded);
+        }
+        const { rounded, fields } = encoded;
+        known.set(id, fields);
         if (full || !c.known.has(id)) entities.push(rounded);
         else {
-          const previous = JSON.parse(c.known.get(id)!) as Record<string, unknown>,
+          const previous = c.known.get(id)!,
             current = rounded as unknown as Record<string, unknown>,
             patch: Record<string, unknown> = { id };
-          for (const key of new Set([
-            ...Object.keys(previous),
-            ...Object.keys(current),
-          ]))
-            if (JSON.stringify(previous[key]) !== JSON.stringify(current[key]))
+          for (const key of new Set([...previous.keys(), ...fields.keys()]))
+            if (previous.get(key) !== fields.get(key))
               patch[key] = current[key] ?? null;
           if (Object.keys(patch).length > 1 || id === p.id || id === p.vehicle)
             entities.push(patch as EntityPatch);

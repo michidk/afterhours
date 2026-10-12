@@ -578,6 +578,27 @@ test("remote traffic remains continuous under uneven snapshot delivery", () => {
   );
 });
 
+test("remote movement stays continuous when server time runs slower than wall time", () => {
+  const s = new Simulation(generateCity()),
+    car = s.spawn("car", 0, 0);
+  const timeline = new SnapshotTimeline();
+  car.vx = 10;
+  let next = 0,
+    previous = 0;
+  for (let now = 0; now < 10000; now += 1000 / 60) {
+    while (next * 100 <= now) {
+      const time = next / 15;
+      timeline.push(time, [{ ...car, x: time * 10 }], next++ * 100);
+    }
+    const x = timeline.sample(now)[0].x;
+    if (now > 3000) {
+      assert.ok(x - previous > 0.05, "a slow simulation must not pause every packet");
+      assert.ok(x - previous < 0.15, "a slow simulation must not jump every packet");
+    }
+    previous = x;
+  }
+});
+
 test("corrections restore physics immediately and ease position and wrapped yaw only in render", () => {
   const s = new Simulation(generateCity());
   s.entities.clear();

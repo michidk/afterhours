@@ -22,13 +22,20 @@ export class SnapshotTimeline {
   sample(now: number): Entity[] {
     const latest = this.history.at(-1);
     if (!latest) return [];
-    const desired = latest.time + (now - latest.received) / 1000 - 0.1;
+    const oldest = this.history[0],
+      elapsed = latest.received - oldest.received,
+      // Use a delivery window so individual late packets do not set playback speed.
+      playback =
+        elapsed >= 500
+          ? Math.max(0.1, Math.min(1, ((latest.time - oldest.time) * 1000) / elapsed))
+          : 1;
+    const desired = latest.time + ((now - latest.received) / 1000) * playback - 0.1;
     const dt = Math.max(0, (now - (this.lastFrame ?? now)) / 1000);
     this.lastFrame = now;
     if (this.clock === undefined || dt > 0.25) this.clock = desired;
     else {
       const error = desired - this.clock;
-      const rate = 1 + Math.max(-0.1, Math.min(0.1, error * 2));
+      const rate = playback * (1 + Math.max(-0.1, Math.min(0.1, error * 2)));
       this.clock += dt * rate;
     }
     this.clock = Math.min(this.clock, latest.time + 0.1);

@@ -11,3 +11,8 @@
 - [x] Remove loading-screen island label, tagline, and neighbourhood note. Verified the production image and a 960px headless screenshot from the cluster URL.
 
 - [x] Publish a tested AMD64/ARM64 production container on every main push and deploy one authoritative city through the sibling k8s repository. CI image `5fbdfe3` is pinned by digest; production is ready at `https://afterhours.k8s.lohr.dev` on `work.lohr.dev`, with debug disabled. HTTPS/WSS, saved city, asset delivery and reconnect checks pass. Software-rendered browser failures remain visible independently of image publication.
+
+- [x] Reproduce and fix remote playback pauses when server time advances at two-thirds of wall time. The regression fails before the clock change and passes afterward; playback uses the observed server cadence while retaining bounded extrapolation.
+- [x] Remove ineffective caching from the repeatedly rebuilt moving-body grid and reuse cell storage. Static geometry retains its query cache; candidate-order, invalidation and independent-array checks pass.
+- [x] Prepare snapshot entity fields once per broadcast while keeping peer delta histories independent. Two real socket peers receive nested seat/jetpack mutations and explicit removals correctly. All 220 tests, formatting, boundaries, TypeScript and production build pass.
+- [ ] Deploy and measure the timing/allocation fixes. Local 16-player socket checks exceed the tick budget with zero rejected messages; concurrent workspace load makes their performance comparison inconclusive. Evidence: `/tmp/afterhours-load-final.json` and `/tmp/afterhours-spatial-comparison-final.json`. Native browser smoothness remains unverified.
