@@ -12,6 +12,7 @@ import { WATER_LEVEL, WORLD_LIMIT, groundLevel, isWater } from "../shared/water.
 import { TUNING } from "../shared/catalog.ts";
 import { SpatialGrid } from "../shared/spatial.ts";
 import { staticGeometry } from "../shared/physics/static.ts";
+import { insideBuilding } from "../shared/physics/collision.ts";
 import { shape, rayDistance } from "../shared/physics/collision.ts";
 
 await RAPIER.init();
@@ -165,8 +166,7 @@ export class Destruction {
       if (
         !b.obstacle &&
         roof <= previousY + 0.02 &&
-        Math.abs(state.position.x - b.x) < b.w / 2 &&
-        Math.abs(state.position.z - b.z) < b.d / 2
+        insideBuilding(b, state.position.x, state.position.z)
       )
         floor = Math.max(floor, roof);
     }
@@ -324,6 +324,13 @@ export class Destruction {
           world.createCollider(
             RAPIER.ColliderDesc.cuboid(b.w / 2, height / 2, b.d / 2)
               .setTranslation(b.x, height / 2, b.z)
+              // Footprint frame: local x -> (cos a, sin a), a right-handed yaw of -a.
+              .setRotation({
+                x: 0,
+                y: Math.sin(-(b.angle ?? 0) / 2),
+                z: 0,
+                w: Math.cos((b.angle ?? 0) / 2),
+              })
               .setFriction(0.8),
           ),
         );

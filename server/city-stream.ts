@@ -17,6 +17,7 @@ export class CityStore {
   readonly atlas: CityAtlas;
   private atlasBody: string;
   private bodies = new Map<string, string>();
+  private surfaceBody?: string;
   constructor(city: City) {
     this.manifest = {
       version: 1,
@@ -27,8 +28,10 @@ export class CityStore {
       airport: city.airport,
       terrain: city.terrain,
       centre: city.centre,
-      surface: city.surface,
+      surface: city.surface ? true : undefined,
     };
+    // Streets are a few megabytes; they travel on their own route, not in the welcome.
+    this.surfaceBody = city.surface ? JSON.stringify(city.surface) : undefined;
     this.atlas = {
       mapId: this.manifest.mapId,
       roads: city.roads.map(({ ax, az, bx, bz, width }) => ({ ax, az, bx, bz, width })),
@@ -88,6 +91,18 @@ export class CityStore {
       return true;
     }
     if (!path?.startsWith("/city/")) return false;
+    const surface = /^\/city\/surface\/([0-9a-f]{64})$/.exec(path);
+    if (surface) {
+      if (surface[1] !== this.manifest.mapId)
+        res.writeHead(409).end("Map changed; reload the city");
+      else if (!this.surfaceBody) res.writeHead(404).end("No street surface");
+      else {
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Cache-Control", "no-store");
+        res.end(this.surfaceBody);
+      }
+      return true;
+    }
     const atlas = /^\/city\/atlas\/([0-9a-f]{64})$/.exec(path);
     if (atlas) {
       if (atlas[1] !== this.manifest.mapId) {

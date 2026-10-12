@@ -19,6 +19,7 @@ import { carAltitude, carGrounded, rampContacts } from "./ramps.ts";
 import {
   entityBox,
   buildingBox,
+  insideBuilding,
   contact,
   resolveContact,
   vehicle,
@@ -75,12 +76,7 @@ export function characterAltitude(
   if (floor === 0 && e.y >= WATER_LEVEL - 0.02 && e.y < 0) e.y = 0;
   for (const b of staticGeometry(city).query(e.x, e.z, 1)) {
     const roof = b.h + 1.8;
-    if (
-      !b.obstacle &&
-      roof <= e.y + 0.02 &&
-      Math.abs(e.x - b.x) < b.w / 2 &&
-      Math.abs(e.z - b.z) < b.d / 2
-    )
+    if (!b.obstacle && roof <= e.y + 0.02 && insideBuilding(b, e.x, e.z))
       floor = Math.max(floor, roof);
   }
   if (jetpackThrust(e, input, dt, floor)) return;
@@ -211,8 +207,7 @@ function resolveStaticContacts(body: Entity, city: City) {
   for (const b of staticGeometry(city).query(body.x, body.z, 6)) {
     if (
       body.y >= b.h + (b.obstacle ? 0 : 1.8) - 0.02 ||
-      Math.abs(body.x - b.x) > b.w / 2 + 6 ||
-      Math.abs(body.z - b.z) > b.d / 2 + 6
+      Math.hypot(body.x - b.x, body.z - b.z) > Math.hypot(b.w, b.d) / 2 + 6
     )
       continue;
     const c = contact(entityBox(body), buildingBox(b));

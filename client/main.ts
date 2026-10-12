@@ -16,7 +16,7 @@ import { FrameProfiler } from "./performance/index.ts";
 import { AgentInterface } from "./debug/index.ts";
 import { CityStream, SCENERY_RADIUS } from "./world/stream.ts";
 import { CityRenderer } from "./world/render.ts";
-import { mapManifestSchema } from "../shared/city-stream.ts";
+import { mapManifestSchema, surfaceSchema } from "../shared/city-stream.ts";
 import type { CameraMode } from "./camera/debug.ts";
 import { district, idle, LIMIT, type Entity } from "../shared/world";
 import {
@@ -414,9 +414,18 @@ async function boot() {
     });
     if (!response.ok) throw Error("City download failed");
     const world = mapManifestSchema.parse(await response.json());
-    loading("Starting 3D rendering…");
     let cityRenderer: CityRenderer | undefined;
     cityStream = new CityStream(world, (chunks) => cityRenderer?.sync(chunks));
+    if (world.surface) {
+      loading("Downloading the streets…");
+      const streets = await fetch(`/city/surface/${world.mapId}`, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!streets.ok) throw Error("Street surface download failed");
+      cityStream.city.surface = surfaceSchema.parse(await streets.json());
+    }
+    loading("Starting 3D rendering…");
     scene = new CityScene($<HTMLCanvasElement>("#world"), cityStream.city, true);
     cityMap = new CityMap(
       $("#city-map"),

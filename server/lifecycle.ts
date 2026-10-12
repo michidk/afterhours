@@ -1,5 +1,6 @@
 import type { Entity, City } from "../shared/world.ts";
 import { LIMIT } from "../shared/world.ts";
+import { insideBuilding } from "../shared/physics/collision.ts";
 export function safeSpawn(city: City, entities: Entity[], ignore?: string) {
   // Generated cities carry their downtown reference; the authored map used the origin.
   const origin = { x: (city.centre?.x ?? 0) + 11, z: (city.centre?.z ?? 0) + 25 };
@@ -10,9 +11,7 @@ export function safeSpawn(city: City, entities: Entity[], ignore?: string) {
       if (
         Math.abs(x) > LIMIT - 2 ||
         Math.abs(z) > LIMIT - 2 ||
-        city.buildings.some(
-          (b) => Math.abs(x - b.x) < b.w / 2 + 0.7 && Math.abs(z - b.z) < b.d / 2 + 0.7,
-        )
+        city.buildings.some((b) => insideBuilding(b, x, z, 0.7))
       )
         continue;
       if (city.props.some((p) => Math.hypot(p.x - x, p.z - z) < 1)) continue;

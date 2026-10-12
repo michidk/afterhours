@@ -2,7 +2,7 @@ import { staticGeometry } from "./static.ts";
 import { LIMIT, inputX, inputY, type Entity, type City, type Input } from "../world.ts";
 import { clamp, wrap } from "./vehicle.ts";
 import { TUNING, VEHICLES } from "../catalog.ts";
-import { shape } from "./collision.ts";
+import { insideBuilding, shape } from "./collision.ts";
 import { groundLevel, isWater } from "../water.ts";
 function rotorRadius(e: Entity) {
   const model = e.model && VEHICLES[e.model];
@@ -24,11 +24,7 @@ export function surface(city: City, x: number, z: number, radius = 0) {
     if (b.obstacle) {
       const r = radius + (b.obstacle === "lamp" ? 0.5 : 4);
       if ((b.x - x) ** 2 + (b.z - z) ** 2 < r * r) top = Math.max(top, b.h);
-    } else if (
-      Math.abs(x - b.x) < b.w / 2 + radius &&
-      Math.abs(z - b.z) < b.d / 2 + radius
-    )
-      top = Math.max(top, b.h + 1.8);
+    } else if (insideBuilding(b, x, z, radius)) top = Math.max(top, b.h + 1.8);
   }
   return top;
 }

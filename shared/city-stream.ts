@@ -22,9 +22,10 @@ export const mapManifestSchema = z.object({
   airport: citySchema.shape.airport,
   terrain: citySchema.shape.terrain,
   centre: citySchema.shape.centre,
-  /** Road surface polygons are global like the terrain; chunks carry no road meshes. */
-  surface: citySchema.shape.surface,
+  /** Street polygons are fetched separately from /city/surface/<mapId> when set. */
+  surface: z.boolean().optional(),
 });
+export const surfaceSchema = citySchema.shape.surface.unwrap();
 export type MapManifest = z.infer<typeof mapManifestSchema>;
 /** A navigation drawing, separate from streamed collision/render geometry. */
 export const cityAtlasSchema = z.object({
@@ -39,7 +40,7 @@ export const cityAtlasSchema = z.object({
         width: citySchema.shape.roads.element.shape.width,
       }),
     )
-    .max(10000),
+    .max(30000),
   parks: z.array(citySchema.shape.parks.element).max(2000),
   landmarks: z.array(citySchema.shape.landmarks.element).max(1000),
   ramps: z.array(citySchema.shape.ramps.element).max(1000),
@@ -60,13 +61,12 @@ export const cityChunkSchema = z.object({
 });
 export type CityChunk = z.infer<typeof cityChunkSchema>;
 export function emptyCity(
-  map: Pick<MapManifest, "seed" | "airport" | "terrain" | "centre" | "surface">,
+  map: Pick<MapManifest, "seed" | "airport" | "terrain" | "centre">,
 ): City {
   return {
     seed: map.seed,
     terrain: map.terrain,
     centre: map.centre,
-    surface: map.surface,
     airport: map.airport,
     roads: [],
     buildings: [],

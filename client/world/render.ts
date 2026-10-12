@@ -49,7 +49,7 @@ export class CityRenderer {
           key,
           this.group(city, {
             base: false,
-            roads: entry.field === "roads",
+            roads: entry.field === "roads" && !this.map.surface,
             airport: false,
             index: entry.id,
           }),

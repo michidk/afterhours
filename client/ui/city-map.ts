@@ -188,6 +188,36 @@ export class CityMap {
     this.view.resize(rect.width, rect.height, this.manifest.limit);
     this.draw();
   }
+  private terrainCanvas?: HTMLCanvasElement;
+  /** Terrain cells rasterised once; the view transform scales the image. */
+  private terrainImage() {
+    if (this.terrainCanvas) return this.terrainCanvas;
+    const side = TERRAIN_SIDE - 1,
+      canvas = document.createElement("canvas");
+    canvas.width = canvas.height = side;
+    const context = canvas.getContext("2d")!,
+      image = context.createImageData(side, side),
+      heights = this.manifest.terrain!.heights;
+    for (let z = 0; z < side; z++)
+      for (let x = 0; x < side; x++) {
+        const h = heights[z * TERRAIN_SIDE + x],
+          i = (z * side + x) * 4;
+        if (h < -1.1) continue;
+        // hsl(105, 18%, light) without formatting a string per cell.
+        const light = Math.max(0, Math.min(1, (32 + h / 6) / 100)),
+          chroma = (1 - Math.abs(2 * light - 1)) * 0.18,
+          m = light - chroma / 2;
+        const [r, g, b] =
+          h < -0.1 ? [0.655, 0.596, 0.439] : [m + chroma * 0.25, m + chroma, m];
+        image.data[i] = r * 255;
+        image.data[i + 1] = g * 255;
+        image.data[i + 2] = b * 255;
+        image.data[i + 3] = 255;
+      }
+    context.putImageData(image, 0, 0);
+    this.terrainCanvas = canvas;
+    return canvas;
+  }
   private draw() {
     const c = this.context,
       v = this.view,
@@ -199,18 +229,9 @@ export class CityMap {
     c.scale(v.scale, -v.scale);
     c.fillStyle = "#425752";
     if (this.manifest.terrain) {
-      for (let z = 0; z < TERRAIN_SIDE - 1; z++)
-        for (let x = 0; x < TERRAIN_SIDE - 1; x++) {
-          const h = this.manifest.terrain.heights[z * TERRAIN_SIDE + x];
-          if (h < -1.1) continue;
-          c.fillStyle = h < -0.1 ? "#a79870" : `hsl(105, 18%, ${32 + h / 6}%)`;
-          c.fillRect(
-            x * TERRAIN_STEP - limit,
-            z * TERRAIN_STEP - limit,
-            TERRAIN_STEP,
-            TERRAIN_STEP,
-          );
-        }
+      // The 8 m grid has ~150k cells; rasterise it once and blit it per frame.
+      c.imageSmoothingEnabled = false;
+      c.drawImage(this.terrainImage(), -limit, -limit, limit * 2, limit * 2);
     } else c.fillRect(-limit, -limit, limit * 2, limit * 2);
     c.strokeStyle = "#ebd5ac55";
     c.lineWidth = 2 / v.scale;

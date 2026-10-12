@@ -1,4 +1,4 @@
-import type { Building, City, Road } from "../shared/world.ts";
+import type { Building, City, Road, RoadSurface } from "../shared/world.ts";
 import { LIMIT } from "../shared/world.ts";
 import { WATER_LEVEL } from "../shared/water.ts";
 import { TERRAIN_SIDE, TERRAIN_STEP } from "../shared/terrain.ts";
@@ -60,7 +60,6 @@ export function cityFromMap(map: GeneratedMap): City {
   const heights = Array.from(f.data, (h) =>
     round(Math.max(-80, Math.min(240, h + shift))),
   );
-  const ground = (x: number, z: number) => sample(f, x, z) + shift;
 
   // Roads: polylines simplified and cut into segments short enough for lanes.
   const roads: Road[] = [];
@@ -248,7 +247,6 @@ export function cityFromMap(map: GeneratedMap): City {
   ];
   if (tallest)
     landmarks.push({ x: tallest.x, z: tallest.z, name: "THE SPIRE", kind: "tower" });
-  void ground;
   return {
     seed: map.options.seed,
     terrain: { heights },

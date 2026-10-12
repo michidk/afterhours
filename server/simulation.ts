@@ -27,6 +27,7 @@ import {
   contact,
   entityBox,
   buildingBox,
+  insideBuilding,
   resolveContact,
   pointVelocity,
 } from "../shared/physics/index.ts";
@@ -100,10 +101,14 @@ export class Simulation {
     }
     // Starter vehicles sit near downtown. Generated cities are not centred on the
     // origin, so each site is moved to the nearest street lane there.
-    const site = (dx: number, dz: number) =>
-      this.city.centre
-        ? this.roadside(this.city.centre.x + dx, this.city.centre.z + dz)
+    const taken: { x: number; z: number }[] = [];
+    const site = (dx: number, dz: number) => {
+      const s = this.city.centre
+        ? this.roadside(this.city.centre.x + dx, this.city.centre.z + dz, taken)
         : { x: dx, z: dz };
+      taken.push(s);
+      return s;
+    };
     for (const [dx, dz, model] of [
       [4, 25, undefined],
       [-4, 44, "sport"],
@@ -190,9 +195,13 @@ export class Simulation {
       }
     }
   }
-  /** Nearest street lane point to a position, 3.5 m right of the centreline. */
-  roadside(x: number, z: number) {
+  /**
+   * Nearest street lane point to a position, 3.5 m right of the centreline, moved
+   * along the lane until it is clear of every point in `avoid`.
+   */
+  roadside(x: number, z: number, avoid: { x: number; z: number }[] = []) {
     let best = { x, z },
+      along = { x: 0, z: 0 },
       bestDistance = Infinity;
     for (const r of this.city.roads) {
       const dx = r.bx - r.ax,
@@ -209,7 +218,17 @@ export class Simulation {
         const l = Math.sqrt(l2);
         bestDistance = d;
         best = { x: px + (dz / l) * 3.5, z: pz - (dx / l) * 3.5 };
+        along = { x: dx / l, z: dz / l };
       }
+    }
+    for (let step = 0; step < 12; step++) {
+      if (!avoid.some((p) => Math.hypot(p.x - best.x, p.z - best.z) < 9)) break;
+      const sign = step % 2 ? -1 : 1,
+        distance = 10 * (Math.floor(step / 2) + 1);
+      best = {
+        x: best.x + along.x * distance * sign,
+        z: best.z + along.z * distance * sign,
+      };
     }
     return best;
   }
@@ -287,9 +306,7 @@ export class Simulation {
             Math.abs(x - p.x) < p.w / 2 + r &&
             Math.abs(z - p.z) < p.d / 2 + r,
         ) ||
-      this.city.buildings.some(
-        (b) => Math.abs(x - b.x) < b.w / 2 + r && Math.abs(z - b.z) < b.d / 2 + r,
-      )
+      this.city.buildings.some((b) => insideBuilding(b, x, z, r))
     );
   }
   requestLanding(v: Entity) {
@@ -766,8 +783,7 @@ export class Simulation {
         for (const b of staticGeometry(this.city).query(e.x, e.z, 6)) {
           if (
             e.y >= b.h + (b.obstacle ? 0 : 1.8) - 0.02 ||
-            Math.abs(e.x - b.x) > b.w / 2 + 6 ||
-            Math.abs(e.z - b.z) > b.d / 2 + 6
+            Math.hypot(e.x - b.x, e.z - b.z) > Math.hypot(b.w, b.d) / 2 + 6
           )
             continue;
           const c = contact(entityBox(e), buildingBox(b));

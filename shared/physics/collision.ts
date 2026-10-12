@@ -109,7 +109,9 @@ export const buildingBox = (b: Building): Box => ({
   z: b.z,
   w: b.w / 2,
   d: b.d / 2,
-  angle: b.angle ?? 0,
+  // Box axes rotate the opposite way from the footprint frame used by the
+  // generator and the client (local x -> (cos a, sin a)), hence the sign flip.
+  angle: -(b.angle ?? 0),
 });
 export function pointVelocity(e: Entity, x: number, z: number) {
   return {
@@ -148,4 +150,13 @@ export function resolveContact(a: Entity, b: Entity | undefined, c: Contact) {
   impulse(a, -c.nx * j, -c.nz * j, c.x, c.z);
   if (b) impulse(b, c.nx * j, c.nz * j, c.x, c.z);
   return speed;
+}
+/** Point test against a building footprint in its own (possibly rotated) frame. */
+export function insideBuilding(b: Building, x: number, z: number, pad = 0) {
+  const a = b.angle ?? 0,
+    dx = x - b.x,
+    dz = z - b.z;
+  const u = dx * Math.cos(a) + dz * Math.sin(a),
+    v = -dx * Math.sin(a) + dz * Math.cos(a);
+  return Math.abs(u) < b.w / 2 + pad && Math.abs(v) < b.d / 2 + pad;
 }

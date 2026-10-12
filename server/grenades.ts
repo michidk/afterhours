@@ -59,8 +59,12 @@ export class Grenades {
       for (const b of staticGeometry(city).query(g.x, g.z, 2)) {
         const w = b.w / 2 + g.radius,
           d = b.d / 2 + g.radius;
-        const dx = g.x - b.x,
-          dz = g.z - b.z;
+        // Work in the footprint frame so rotated buildings bounce correctly.
+        const a = b.angle ?? 0,
+          rx = g.x - b.x,
+          rz = g.z - b.z,
+          dx = rx * Math.cos(a) + rz * Math.sin(a),
+          dz = -rx * Math.sin(a) + rz * Math.cos(a);
         const top = b.obstacle ? b.h : b.h + 1.8;
         if (Math.abs(dx) >= w || Math.abs(dz) >= d || g.y - g.radius >= top) continue;
         if (previousY - g.radius >= top && g.vy < 0) {
