@@ -233,7 +233,15 @@ export class DestructionRenderer {
     root.position.set(p.x, p.h / 2, p.z);
     if (p.kind !== "corpse") root.rotation.y = p.angle ?? 0;
     const model: Model = { root, meshes, lit: false };
-    if (live && p.kind === "lamp") model.lamp = new Vector3(p.x + 1.3, p.h - 0.1, p.z);
+    if (live && p.kind === "lamp") {
+      bulb!.computeWorldMatrix(true);
+      model.lamp = bulb!.getAbsolutePosition().clone();
+      // The fixture owns its pool so breaking, restoring and unloading also affect light.
+      const pool = h.lighting.createLampPool();
+      pool.parent = root;
+      pool.position.set(1.3, 0.27 - p.h / 2, 0);
+      meshes.push(pool);
+    }
     if (live && p.kind === "signal") model.light = { mesh: bulb!, axis: p.axis ?? "z" };
     return model;
   }

@@ -22,7 +22,11 @@ function scale(patch: EntityPatch, direction: 1 | -1) {
   return result;
 }
 export function encodeSnapshot(s: Snapshot) {
-  return encode({ ...s, entities: s.entities.map((e) => scale(e, 1)) });
+  // Omit absent object fields; null is reserved for explicit delta removals.
+  return encode(
+    { ...s, entities: s.entities.map((e) => scale(e, 1)) },
+    { ignoreUndefined: true },
+  );
 }
 export function decodeSnapshot(raw: ArrayBuffer | Uint8Array) {
   const s = decode(raw instanceof ArrayBuffer ? new Uint8Array(raw) : raw) as Snapshot;

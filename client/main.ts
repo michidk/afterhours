@@ -14,7 +14,7 @@ import { GameAudio } from "./audio/index.ts";
 import { CityScene } from "./scene";
 import { FrameProfiler } from "./performance/index.ts";
 import { AgentInterface } from "./debug/index.ts";
-import { CityStream } from "./world/stream.ts";
+import { CityStream, SCENERY_RADIUS } from "./world/stream.ts";
 import { CityRenderer } from "./world/render.ts";
 import { mapManifestSchema } from "../shared/city-stream.ts";
 import type { CameraMode } from "./camera/debug.ts";
@@ -494,7 +494,7 @@ async function boot() {
           groundDistance =
             Math.max(0, scene.camera.position.y) / Math.max(0.15, -forward.y),
           radius = Math.max(
-            TUNING.entityRenderRadius,
+            SCENERY_RADIUS,
             groundDistance *
               Math.tan(scene.camera.fov / 2) *
               Math.max(

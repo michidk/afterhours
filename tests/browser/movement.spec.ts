@@ -225,3 +225,84 @@ for (const delay of [0, 150]) {
     await page.screenshot({ path: testInfo.outputPath("walking.png") });
   });
 }
+
+test("nighttime scenery is ready far ahead and lamp pools stay lit when approached", async ({
+  page,
+}, testInfo) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/");
+  await expect(page.locator("#play")).toBeEnabled({ timeout: 90_000 });
+  const startupChunks = await page.evaluate(
+    () =>
+      performance
+        .getEntriesByType("resource")
+        .filter((entry) => entry.name.includes("/city/chunks/")).length,
+  );
+  expect(startupChunks).toBeGreaterThanOrEqual(81);
+  await page.locator("#name").fill("Scenery test");
+  await page.locator("#play").click();
+  await expect(page.locator("#entry")).toBeHidden();
+  await page.waitForFunction(() => !!window.afterhoursDebug);
+  const original = await page.evaluate(() => window.afterhoursDebug!.state());
+  try {
+    await page.evaluate(() => window.afterhoursDebug!.time(0));
+    const distant = await page.evaluate(() => {
+      const d = window.afterhoursDebug!;
+      const pools = d.scene.scene.meshes.filter(
+        (mesh) => mesh.name === "street light pool" && mesh.isEnabled(),
+      );
+      const pool = pools.find((mesh) => {
+        const p = mesh.getAbsolutePosition();
+        return Math.hypot(p.x - d.scene.target.x, p.z - d.scene.target.z) > 180;
+      });
+      if (!pool) throw Error("No distant lamp pool");
+      const p = pool.getAbsolutePosition();
+      return {
+        poolCount: pools.length,
+        lampCount: d.scene.lighting.lamps.length,
+        alpha: pool.material!.alpha,
+        x: p.x,
+        z: p.z,
+        parent: pool.parent!.name,
+        distantBuildings: d.scene.city.buildings.filter(
+          (b) => Math.abs(b.x - 11) > 400 || Math.abs(b.z - 25) > 400,
+        ).length,
+      };
+    });
+    expect(distant.poolCount).toBeGreaterThan(4);
+    expect(distant.poolCount).toBe(distant.lampCount);
+    expect(distant.alpha).toBeCloseTo(0.3);
+    expect(distant.distantBuildings).toBeGreaterThan(0);
+    await page.screenshot({ path: testInfo.outputPath("night-spawn.png") });
+    await page.evaluate(async ({ x, z }) => {
+      const d = window.afterhoursDebug!;
+      d.camera("free", { x, y: 0, z });
+      await d.settle();
+    }, distant);
+    const approached = await page.evaluate((parent) => {
+      const pool = window.afterhoursDebug!.scene.scene.meshes.find(
+        (mesh) => mesh.name === "street light pool" && mesh.parent?.name === parent,
+      );
+      return { enabled: pool?.isEnabled(), alpha: pool?.material?.alpha };
+    }, distant.parent);
+    expect(approached).toEqual({ enabled: true, alpha: distant.alpha });
+    await page.screenshot({ path: testInfo.outputPath("night-distant-street.png") });
+    await page.evaluate(() => window.afterhoursDebug!.time(12));
+    expect(
+      await page.evaluate(() =>
+        window
+          .afterhoursDebug!.scene.scene.meshes.filter(
+            (mesh) => mesh.name === "street light pool",
+          )
+          .every((mesh) => mesh.material?.alpha === 0),
+      ),
+    ).toBe(true);
+    expect(errors).toEqual([]);
+  } finally {
+    await page.evaluate(
+      ({ day, dayRate }) => window.afterhoursDebug!.time(day, dayRate),
+      original,
+    );
+  }
+});

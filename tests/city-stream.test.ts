@@ -2,7 +2,11 @@ import { LIMIT } from "../shared/world.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { CityStore } from "../server/city-stream.ts";
-import { CityStream, COLLISION_RADIUS } from "../client/world/stream.ts";
+import {
+  CityStream,
+  COLLISION_RADIUS,
+  SCENERY_RADIUS,
+} from "../client/world/stream.ts";
 import { TUNING } from "../shared/catalog.ts";
 import { Simulation } from "../server/simulation.ts";
 import { emptyCity, chunksAround, STATIC_FIELDS } from "../shared/city-stream.ts";
@@ -31,6 +35,31 @@ const fixture = () => {
   return city;
 };
 const settle = () => new Promise((r) => setTimeout(r, 5));
+test("startup and moving views render buildings over 400 m ahead", async () => {
+  const city = fixture();
+  city.buildings[1].x = 450;
+  city.buildings[1].z = 25;
+  const store = new CityStore(city);
+  let renderedBuildings: number[] = [];
+  const stream = new CityStream(
+    store.manifest,
+    (chunks) => {
+      renderedBuildings = chunks.flatMap((chunk) => chunk.buildings.map((b) => b.id));
+    },
+    async (url) => {
+      const parts = String(url).split("/");
+      return new Response(
+        JSON.stringify(store.chunks.get(`${parts.at(-2)},${parts.at(-1)}`)),
+      );
+    },
+  );
+  await stream.prepare();
+  assert.ok(renderedBuildings.includes(1), "distant building is ready before entering");
+  assert.ok(stream.ready({ x: 11, z: 25 }));
+  stream.setView({ x: 40, z: 25 }, { x: 40, z: 25 });
+  assert.ok(renderedBuildings.includes(1), "ongoing streaming keeps the wider view");
+  assert.equal(stream.diagnostics.pending, 0, "small moves reuse prepared scenery");
+});
 test("offshore coverage excludes land chunks when the clipped bounds do not overlap", () => {
   assert.deepEqual(
     chunksAround(-LIMIT - COLLISION_RADIUS - 1, 0, COLLISION_RADIUS),
@@ -74,8 +103,8 @@ test("client fetches nearby chunks, deduplicates seams, evicts distant data and 
   await stream.prepare();
   assert.deepEqual(
     [...stream.chunks.keys()].sort(),
-    chunksAround(11, 25, COLLISION_RADIUS).sort(),
-    "startup covers spawn collisions, without the outer prefetch ring",
+    chunksAround(11, 25, SCENERY_RADIUS).sort(),
+    "startup prepares the full scenery radius as well as spawn collisions",
   );
   assert.equal(stream.ready({ x: 11, z: 25 }), true);
   assert.ok(stream.chunks.size < store.chunks.size / 4);

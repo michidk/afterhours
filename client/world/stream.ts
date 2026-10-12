@@ -11,6 +11,7 @@ import { TUNING } from "../../shared/catalog.ts";
 
 // Cover snapshot neighbours and their local physics queries before predicting.
 export const COLLISION_RADIUS = TUNING.interestRadius + 32;
+export const SCENERY_RADIUS = 512;
 const PREFETCH_RADIUS = COLLISION_RADIUS + CITY_CHUNK_SIZE;
 
 /** Memory-only neighborhood cache shared by rendering and provisional collisions. */
@@ -33,7 +34,7 @@ export class CityStream {
   setView(
     player: { x: number; z: number } | undefined,
     camera: { x: number; z: number },
-    radius = TUNING.entityRenderRadius,
+    radius = SCENERY_RADIUS,
   ) {
     const visible = new Set(chunksAround(camera.x, camera.z, radius)),
       visibilityChanged =
@@ -89,7 +90,7 @@ export class CityStream {
   async prepare(center = { x: 11, z: 25 }) {
     const deadline = Date.now() + 30000;
     do {
-      this.setView(undefined, center, COLLISION_RADIUS);
+      this.setView(undefined, center, Math.max(SCENERY_RADIUS, COLLISION_RADIUS));
       if ([...this.wanted].every((key) => this.chunks.has(key))) return;
       if (Date.now() > deadline)
         throw Error(this.error || "Neighborhood download timed out");

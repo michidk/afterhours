@@ -4,12 +4,12 @@ import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
-import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { PointLight } from "@babylonjs/core/Lights/pointLight";
 import type { Scene } from "@babylonjs/core/scene";
 import type { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
 import type { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { environmentAt } from "./environment.ts";
+import { particleTexture } from "../effects/particles.ts";
 
 const color = (values: number[]) => new Color3(values[0], values[1], values[2]);
 export class EnvironmentLighting {
@@ -38,22 +38,7 @@ export class EnvironmentLighting {
     this.pool.emissiveColor = Color3.FromHexString("#ffd79b");
     this.pool.alpha = 0;
     this.pool.disableDepthWrite = true;
-    const texture = new DynamicTexture(
-      "lamp falloff",
-      { width: 64, height: 64 },
-      scene,
-      false,
-    );
-    const ctx = texture.getContext();
-    const gradient = ctx.createRadialGradient(32, 32, 1, 32, 32, 32);
-    gradient.addColorStop(0, "rgba(255,255,255,0.9)");
-    gradient.addColorStop(0.35, "rgba(255,255,255,0.45)");
-    gradient.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 64, 64);
-    texture.hasAlpha = true;
-    texture.update();
-    this.pool.diffuseTexture = texture;
+    this.pool.diffuseTexture = particleTexture(scene, "glow");
     this.pool.useAlphaFromDiffuseTexture = true;
     this.localLights = Array.from({ length: 4 }, (_, i) => {
       const light = new PointLight(`nearby street lamp ${i}`, Vector3.Zero(), scene);
@@ -110,16 +95,15 @@ export class EnvironmentLighting {
     this.skyMesh.alwaysSelectAsActiveMesh = true;
     this.update(16.5, Vector3.Zero(), 0);
   }
-  addLamp(position: Vector3) {
-    this.lamps.push(position);
+  createLampPool() {
     const pool = MeshBuilder.CreateGround(
       "street light pool",
       { width: 20, height: 20 },
       this.scene,
     );
-    pool.position.set(position.x, 0.27, position.z);
     pool.material = this.pool;
     pool.isPickable = false;
+    return pool;
   }
   update(hour: number, focus: Vector3, dt: number) {
     this.hour = hour;
@@ -163,6 +147,7 @@ export class EnvironmentLighting {
       for (let i = 0; i < this.localLights.length; i++) {
         const position = nearest[i];
         if (position) this.localLights[i].position.copyFrom(position);
+        this.localLights[i].setEnabled(!!position);
       }
     }
     for (const light of this.localLights) light.intensity = state.lampIntensity;
