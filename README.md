@@ -51,14 +51,14 @@ After generating or changing the saved city or static rendering recipes, run `bu
 | Key                | Action                                                                                                                       |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
 | WASD / arrows      | Walk, swim, or fly helicopters; cars and watercraft use W/S throttle and A/D steer; planes use W throttle, S brake, A/D turn |
-| Shift              | Sprint on foot; aircraft descend / enabled jetpack descent (left or right Shift)             |
+| Shift              | Sprint on foot; aircraft descend / enabled jetpack descent (left or right Shift)                                             |
 | Space              | Sprint / car and watercraft handbrake / aircraft climb                                                                       |
 | F                  | Take a seat, exit, or collect a weapon, ammo, or jetpack; airborne exits deploy a parachute                                  |
 | Mouse              | Aim the upper body independently of walking; left click attacks                                                              |
 | J                  | Punch / swing / fire                                                                                                         |
 | 1–4                | Equip inventory slot                                                                                                         |
 | G / R              | Drop active jetpack or equipped weapon / reload                                                                              |
-| E / Q              | Same as Space / Shift: aircraft climb / descend; enabled jetpack thrust / descent                                             |
+| E / Q              | Same as Space / Shift: aircraft climb / descend; enabled jetpack thrust / descent                                            |
 | B                  | Enable or disable equipped jetpack                                                                                           |
 | L                  | Toggle car headlights and taillights from the driver seat                                                                    |
 | Enter / H / Escape | Chat / help / close panels                                                                                                   |
