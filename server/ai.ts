@@ -24,6 +24,7 @@ interface Route {
     until: number;
   };
   reacting?: boolean;
+  waitingAtSignal: boolean;
 }
 export class CityAI {
   citizens = new Citizens();
@@ -117,6 +118,7 @@ export class CityAI {
       destination: to,
       trip,
       crossing: false,
+      waitingAtSignal: false,
     });
   }
   assign(e: Entity, index: number, relocate = true) {
@@ -176,6 +178,7 @@ export class CityAI {
         waiting: false,
         until: 0,
       },
+      waitingAtSignal: false,
     });
   }
   target(e: Entity, dt: number, time = 0) {
@@ -263,6 +266,7 @@ export class CityAI {
           ? 7
           : 9;
     let desiredSpeed = Math.abs(error) > 0.25 ? 4 : cruise;
+    data.route.waitingAtSignal = stop;
     if (stop) desiredSpeed = Math.min(desiredSpeed, Math.max(0, remaining - 1) * 0.8);
     for (const other of entities) {
       if (

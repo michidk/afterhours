@@ -73,6 +73,7 @@ export class Effects {
     this.effects.push({ kind: "mesh", mesh, life, maxLife: life, growth });
   }
   effect(e: WorldEvent) {
+    if (e.kind === "horn") return;
     if (e.kind === "skid") {
       this.trails.add(e);
       return;

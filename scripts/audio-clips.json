@@ -585,5 +585,17 @@
     "start": 28,
     "duration": 5,
     "loop": true
+  },
+  {
+    "name": "horn-1",
+    "file": "horn-0258.mp3",
+    "start": 0,
+    "duration": 1.6
+  },
+  {
+    "name": "horn-2",
+    "file": "horn-0257.mp3",
+    "start": 0,
+    "duration": 0.53
   }
 ]

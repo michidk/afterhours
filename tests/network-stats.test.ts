@@ -50,7 +50,17 @@ test("network diagnostics measure real RTT, timestamped inputs and applied ackno
         state = resolve;
         sessions.broadcast();
       });
+    const p = sim.entities.get(network.playerId)!;
+    const near = sim.spawn("car", p.x + 180, p.z);
+    const far = sim.spawn("car", p.x + 230, p.z);
+    sim.tick(1 / 30);
     await snapshot();
+    assert.ok(network.entities.has(near.id), "traffic at 180 m reaches the client");
+    assert.equal(
+      network.entities.has(far.id),
+      false,
+      "traffic beyond 220 m stays outside snapshots",
+    );
     const inputReceived = once(peer, "message");
     network.input({
       ...idle(),
@@ -86,8 +96,8 @@ test("network diagnostics measure real RTT, timestamped inputs and applied ackno
     assert.equal(stats.prediction, "predicting");
     const player = network.entities.get(network.playerId)!;
     assert.ok(
-      Math.abs(player.angle - (-Math.PI + 0.02)) < 0.00001,
-      "server applies aim yaw",
+      Math.abs(player.aim! - (-Math.PI + 0.02)) < 0.00001,
+      "server applies aim independently of walking yaw",
     );
     const actionReceived = once(peer, "message");
     network.send({ type: "reload" });

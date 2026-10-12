@@ -1,5 +1,6 @@
+import { carGrounded } from "../shared/physics/ramps.ts";
+import { groundLevel } from "../shared/water.ts";
 import { Navigation } from "../shared/navigation.ts";
-import { occupiedSeats } from "../shared/seats.ts";
 import { VEHICLES, type VehicleModel } from "../shared/catalog.ts";
 import type { Entity } from "../shared/world.ts";
 import type { Simulation } from "./simulation.ts";
@@ -11,7 +12,8 @@ export const TRAFFIC = {
   stoppedSpeed: 1,
   neighborMeters: 12,
   minimumCars: 2,
-  despawnSeconds: 5,
+  hornDelaySeconds: 8,
+  hornIntervalSeconds: 6,
   respawnDelaySeconds: 10,
   respawnSeconds: 5,
   spawnPlayerDistance: 65,
@@ -22,6 +24,7 @@ interface Progress {
   x: number;
   z: number;
   since: number;
+  nextHorn: number;
 }
 interface Replacement {
   model: VehicleModel;
@@ -46,18 +49,17 @@ const makeSpawnSites = (navigation: Navigation) =>
     ),
   );
 
-/** Low-frequency authoritative gridlock cleanup, separate from driving recovery. */
+/** Track blocked traffic and replenish only expired wrecks. */
 export class TrafficManager {
   private spawnSites?: ReturnType<typeof makeSpawnSites>;
   private progress = new Map<string, Progress>();
   private replacements: Replacement[] = [];
   private nextSample = 0;
-  private nextDespawn = 0;
   private nextRespawn = 0;
   private cursor = 0;
   private jammedCars = 0;
   private jamCount = 0;
-  private despawned = 0;
+  private honks = 0;
   private respawned = 0;
 
   scheduleReplacement(car: Entity, time: number) {
@@ -72,7 +74,18 @@ export class TrafficManager {
     if (sim.time < this.nextSample) return false;
     this.nextSample = sim.time + TRAFFIC.sampleSeconds;
     const all = [...sim.entities.values()];
-    const cars = all.filter((e) => e.kind === "car" && !e.vehicle && e.y < 0.5);
+    const cars = all.filter(
+      (e) =>
+        e.kind === "car" &&
+        e.ai &&
+        !e.driver &&
+        !e.vehicle &&
+        carGrounded(e, sim.city) &&
+        e.health > 0 &&
+        e.burning === undefined &&
+        !e.wreck &&
+        sim.ai.routes.has(e.id),
+    );
     const present = new Set(cars.map((e) => e.id));
     for (const id of this.progress.keys())
       if (!present.has(id)) this.progress.delete(id);
@@ -80,10 +93,24 @@ export class TrafficManager {
       let progress = this.progress.get(e.id);
       if (
         !progress ||
+        sim.ai.routes.get(e.id)?.waitingAtSignal ||
         Math.hypot(e.x - progress.x, e.z - progress.z) >= TRAFFIC.progressMeters
       ) {
-        progress = { x: e.x, z: e.z, since: sim.time };
+        progress = {
+          x: e.x,
+          z: e.z,
+          since: sim.time,
+          nextHorn: sim.time + TRAFFIC.hornDelaySeconds,
+        };
         this.progress.set(e.id, progress);
+      }
+      if (
+        Math.hypot(e.vx, e.vz) < TRAFFIC.stoppedSpeed &&
+        sim.time >= progress.nextHorn
+      ) {
+        sim.events.push({ kind: "horn", sound: "horn", x: e.x, y: e.y + 1, z: e.z });
+        progress.nextHorn = sim.time + TRAFFIC.hornIntervalSeconds;
+        this.honks++;
       }
       return (
         Math.hypot(e.vx, e.vz) < TRAFFIC.stoppedSpeed &&
@@ -113,45 +140,7 @@ export class TrafficManager {
       }
     }
     this.jammedCars = jammed.length;
-    let changed = false;
-    if (sim.time >= this.nextDespawn) {
-      const candidates = jammed.filter(
-        (e) =>
-          e.ai &&
-          sim.ai.routes.has(e.id) &&
-          !e.driver &&
-          occupiedSeats(e) === 0 &&
-          e.burning === undefined &&
-          !e.wreck &&
-          !all.some((p) => p.vehicle === e.id),
-      );
-      // Relieve the densest part first; never remove a whole queue in one tick.
-      const density = (car: Entity) =>
-        jammed.filter(
-          (other) =>
-            Math.hypot(other.x - car.x, other.z - car.z) <= TRAFFIC.neighborMeters,
-        ).length;
-      const densities = new Map(candidates.map((car) => [car.id, density(car)]));
-      candidates.sort(
-        (a, b) =>
-          densities.get(b.id)! - densities.get(a.id)! ||
-          this.progress.get(a.id)!.since - this.progress.get(b.id)!.since ||
-          a.id.localeCompare(b.id),
-      );
-      const car = candidates[0];
-      if (car) {
-        this.scheduleReplacement(car, sim.time);
-        sim.entities.delete(car.id);
-        sim.ai.routes.delete(car.id);
-        sim.inputs.delete(car.id);
-        this.progress.delete(car.id);
-        this.despawned++;
-        this.nextDespawn = sim.time + TRAFFIC.despawnSeconds;
-        changed = true;
-      }
-    }
-    if (this.replenish(sim)) changed = true;
-    return changed;
+    return this.replenish(sim);
   }
 
   private replenish(sim: Simulation) {
@@ -177,7 +166,7 @@ export class TrafficManager {
         all.some(
           (e) =>
             !e.vehicle &&
-            e.y < 2 &&
+            Math.abs(e.y - groundLevel(site.x, site.z, sim.city)) < 2 &&
             Math.hypot(e.x - site.x, e.z - site.z) < TRAFFIC.spawnCarDistance,
         )
       )
@@ -203,7 +192,7 @@ export class TrafficManager {
     return {
       jamCount: this.jamCount,
       jammedCars: this.jammedCars,
-      despawned: this.despawned,
+      honks: this.honks,
       respawned: this.respawned,
       pendingRespawns: this.replacements.length,
     };

@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-11T19:19:09.897Z",
+  "date": "2026-10-12T13:55:11.453Z",
   "passed": true,
   "scope": "100 simulated seconds of real AI/contact physics in a barricaded street; not a WAN or hardware performance test",
   "tuning": {
@@ -9,25 +9,13 @@
     "stoppedSpeed": 1,
     "neighborMeters": 12,
     "minimumCars": 2,
-    "despawnSeconds": 5,
+    "hornDelaySeconds": 8,
+    "hornIntervalSeconds": 6,
     "respawnDelaySeconds": 10,
     "respawnSeconds": 5,
     "spawnPlayerDistance": 65,
     "spawnCarDistance": 12
   },
-  "despawns": [30.866666666665555, 62.89999999999707, 95.93333333335575],
-  "respawns": [
-    {
-      "time": 41.199999999998305,
-      "id": "e121",
-      "distanceFromPlayer": 285.020367693258
-    },
-    {
-      "time": 72.93333333333744,
-      "id": "e122",
-      "distanceFromPlayer": 277.0867914571173
-    }
-  ],
   "samples": [
     {
       "time": 0.03333333333333333,
@@ -35,7 +23,7 @@
       "activeCars": 6,
       "jamCount": 0,
       "jammedCars": 0,
-      "despawned": 0,
+      "honks": 0,
       "respawned": 0,
       "pendingRespawns": 0
     },
@@ -45,7 +33,7 @@
       "activeCars": 6,
       "jamCount": 0,
       "jammedCars": 0,
-      "despawned": 0,
+      "honks": 0,
       "respawned": 0,
       "pendingRespawns": 0
     },
@@ -55,7 +43,7 @@
       "activeCars": 6,
       "jamCount": 0,
       "jammedCars": 0,
-      "despawned": 0,
+      "honks": 0,
       "respawned": 0,
       "pendingRespawns": 0
     },
@@ -65,7 +53,7 @@
       "activeCars": 6,
       "jamCount": 0,
       "jammedCars": 0,
-      "despawned": 0,
+      "honks": 0,
       "respawned": 0,
       "pendingRespawns": 0
     },
@@ -75,7 +63,7 @@
       "activeCars": 6,
       "jamCount": 0,
       "jammedCars": 0,
-      "despawned": 0,
+      "honks": 2,
       "respawned": 0,
       "pendingRespawns": 0
     },
@@ -85,7 +73,7 @@
       "activeCars": 6,
       "jamCount": 0,
       "jammedCars": 0,
-      "despawned": 0,
+      "honks": 6,
       "respawned": 0,
       "pendingRespawns": 0
     },
@@ -95,146 +83,146 @@
       "activeCars": 6,
       "jamCount": 0,
       "jammedCars": 0,
-      "despawned": 0,
+      "honks": 9,
       "respawned": 0,
       "pendingRespawns": 0
     },
     {
       "time": 35.03333333333199,
-      "originalCarsRemaining": 5,
-      "activeCars": 5,
-      "jamCount": 0,
-      "jammedCars": 0,
-      "despawned": 1,
-      "respawned": 0,
-      "pendingRespawns": 1
-    },
-    {
-      "time": 40.033333333331704,
-      "originalCarsRemaining": 5,
-      "activeCars": 5,
-      "jamCount": 0,
-      "jammedCars": 0,
-      "despawned": 1,
-      "respawned": 0,
-      "pendingRespawns": 1
-    },
-    {
-      "time": 45.03333333333142,
-      "originalCarsRemaining": 5,
+      "originalCarsRemaining": 6,
       "activeCars": 6,
       "jamCount": 0,
       "jammedCars": 0,
-      "despawned": 1,
-      "respawned": 1,
+      "honks": 10,
+      "respawned": 0,
+      "pendingRespawns": 0
+    },
+    {
+      "time": 40.033333333331704,
+      "originalCarsRemaining": 6,
+      "activeCars": 6,
+      "jamCount": 0,
+      "jammedCars": 0,
+      "honks": 13,
+      "respawned": 0,
+      "pendingRespawns": 0
+    },
+    {
+      "time": 45.03333333333142,
+      "originalCarsRemaining": 6,
+      "activeCars": 6,
+      "jamCount": 1,
+      "jammedCars": 2,
+      "honks": 16,
+      "respawned": 0,
       "pendingRespawns": 0
     },
     {
       "time": 50.033333333331136,
-      "originalCarsRemaining": 5,
+      "originalCarsRemaining": 6,
       "activeCars": 6,
-      "jamCount": 0,
-      "jammedCars": 0,
-      "despawned": 1,
-      "respawned": 1,
+      "jamCount": 1,
+      "jammedCars": 2,
+      "honks": 20,
+      "respawned": 0,
       "pendingRespawns": 0
     },
     {
       "time": 55.03333333333085,
-      "originalCarsRemaining": 5,
+      "originalCarsRemaining": 6,
       "activeCars": 6,
       "jamCount": 0,
       "jammedCars": 0,
-      "despawned": 1,
-      "respawned": 1,
+      "honks": 21,
+      "respawned": 0,
       "pendingRespawns": 0
     },
     {
       "time": 60.03333333333057,
-      "originalCarsRemaining": 5,
+      "originalCarsRemaining": 6,
       "activeCars": 6,
       "jamCount": 0,
       "jammedCars": 0,
-      "despawned": 1,
-      "respawned": 1,
+      "honks": 23,
+      "respawned": 0,
       "pendingRespawns": 0
     },
     {
       "time": 65.03333333333116,
-      "originalCarsRemaining": 4,
-      "activeCars": 5,
-      "jamCount": 0,
-      "jammedCars": 0,
-      "despawned": 2,
-      "respawned": 1,
-      "pendingRespawns": 1
+      "originalCarsRemaining": 6,
+      "activeCars": 6,
+      "jamCount": 1,
+      "jammedCars": 2,
+      "honks": 26,
+      "respawned": 0,
+      "pendingRespawns": 0
     },
     {
       "time": 70.03333333333514,
-      "originalCarsRemaining": 4,
-      "activeCars": 5,
-      "jamCount": 0,
-      "jammedCars": 0,
-      "despawned": 2,
-      "respawned": 1,
-      "pendingRespawns": 1
+      "originalCarsRemaining": 6,
+      "activeCars": 6,
+      "jamCount": 1,
+      "jammedCars": 2,
+      "honks": 28,
+      "respawned": 0,
+      "pendingRespawns": 0
     },
     {
       "time": 75.03333333333912,
-      "originalCarsRemaining": 4,
+      "originalCarsRemaining": 6,
       "activeCars": 6,
-      "jamCount": 0,
-      "jammedCars": 0,
-      "despawned": 2,
-      "respawned": 2,
+      "jamCount": 1,
+      "jammedCars": 2,
+      "honks": 31,
+      "respawned": 0,
       "pendingRespawns": 0
     },
     {
       "time": 80.0333333333431,
-      "originalCarsRemaining": 4,
+      "originalCarsRemaining": 6,
       "activeCars": 6,
       "jamCount": 0,
       "jammedCars": 0,
-      "despawned": 2,
-      "respawned": 2,
+      "honks": 31,
+      "respawned": 0,
       "pendingRespawns": 0
     },
     {
       "time": 85.03333333334707,
-      "originalCarsRemaining": 4,
+      "originalCarsRemaining": 6,
       "activeCars": 6,
       "jamCount": 0,
       "jammedCars": 0,
-      "despawned": 2,
-      "respawned": 2,
+      "honks": 32,
+      "respawned": 0,
       "pendingRespawns": 0
     },
     {
       "time": 90.03333333335105,
-      "originalCarsRemaining": 4,
+      "originalCarsRemaining": 6,
       "activeCars": 6,
       "jamCount": 0,
       "jammedCars": 0,
-      "despawned": 2,
-      "respawned": 2,
+      "honks": 34,
+      "respawned": 0,
       "pendingRespawns": 0
     },
     {
       "time": 95.03333333335503,
-      "originalCarsRemaining": 4,
+      "originalCarsRemaining": 6,
       "activeCars": 6,
       "jamCount": 0,
       "jammedCars": 0,
-      "despawned": 2,
-      "respawned": 2,
+      "honks": 36,
+      "respawned": 0,
       "pendingRespawns": 0
     }
   ],
   "final": {
     "jamCount": 0,
     "jammedCars": 0,
-    "despawned": 3,
-    "respawned": 2,
-    "pendingRespawns": 1
+    "honks": 39,
+    "respawned": 0,
+    "pendingRespawns": 0
   }
 }

@@ -621,3 +621,24 @@ test("corrections restore physics immediately and ease position and wrapped yaw 
   assert.equal(prediction.render(10000)!.body.x, 20, "teleports snap immediately");
   s.destruction.dispose();
 });
+
+test("remote aim crosses pi smoothly while walking yaw stays separate", () => {
+  const p: Entity = {
+    id: "p",
+    kind: "player",
+    x: 0,
+    y: 0,
+    z: 0,
+    vx: 0,
+    vy: 0,
+    vz: 0,
+    angle: 0,
+    aim: Math.PI - 0.1,
+    health: 100,
+    color: "#fff",
+  };
+  const pose = interpolate(p, { ...p, aim: -Math.PI + 0.1 }, 0.5);
+  assert.ok(Math.abs(pose.aim! - Math.PI) < 1e-8);
+  assert.equal(pose.angle, 0);
+  assert.equal(interpolate(p, { ...p, aim: undefined }, 1).aim, undefined);
+});

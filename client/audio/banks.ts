@@ -28,6 +28,13 @@ const bank = (
   ...options,
 });
 export const SOUND_BANKS = {
+  horn: bank(clips("horn", 2), {
+    volume: 0.35,
+    pitch: 0.4,
+    range: 80,
+    cooldown: 0.25,
+    voices: 4,
+  }),
   engineSedan: bank(["engine-1", "engine-2"], {
     loop: true,
     volume: 0.2,

@@ -33,7 +33,7 @@ export class CityStream {
   setView(
     player: { x: number; z: number } | undefined,
     camera: { x: number; z: number },
-    radius = 160,
+    radius = TUNING.entityRenderRadius,
   ) {
     const visible = new Set(chunksAround(camera.x, camera.z, radius)),
       visibilityChanged =
@@ -89,7 +89,7 @@ export class CityStream {
   async prepare(center = { x: 11, z: 25 }) {
     const deadline = Date.now() + 30000;
     do {
-      this.setView(undefined, center);
+      this.setView(undefined, center, COLLISION_RADIUS);
       if ([...this.wanted].every((key) => this.chunks.has(key))) return;
       if (Date.now() > deadline)
         throw Error(this.error || "Neighborhood download timed out");

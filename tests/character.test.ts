@@ -1,3 +1,5 @@
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import type { Entity } from "../shared/world.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine";
@@ -14,7 +16,7 @@ import { Simulation } from "../server/simulation.ts";
 import { loadCity } from "../server/city-loader.ts";
 import { idle } from "../shared/world.ts";
 import { predictStep } from "../shared/physics/movement.ts";
-import { buildCharacter } from "../client/models/character.ts";
+import { buildCharacter, poseCharacter } from "../client/models/character.ts";
 
 test("join validates character choices and never accepts client stats", () => {
   const join = {
@@ -131,6 +133,85 @@ test("all body parts render using the same model as the menu, with distinct phys
           }
     }
     assert.equal(scene.meshes.length, 0);
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
+});
+
+test("walking yaw and mouse aim stay independent in authority and prediction", async () => {
+  const city = await loadCity();
+  city.buildings = [];
+  city.props = [];
+  city.ramps = [];
+  const sim = new Simulation(city);
+  sim.entities.clear();
+  const player = sim.join("Strafe", "#fff");
+  player.x = player.z = 0;
+  const predicted = structuredClone(player);
+  try {
+    for (const aim of [Math.PI / 2, Math.PI, undefined]) {
+      const input = { ...idle(), up: true, aim };
+      sim.inputs.set(player.id, input);
+      for (let tick = 0; tick < 30; tick++) {
+        sim.tick(1 / 30);
+        predictStep(predicted, input, city, [], 1 / 30);
+        assert.equal(player.aim, aim);
+        assert.equal(predicted.aim, aim);
+        assert.ok(Math.abs(player.angle) < 1e-8);
+        assert.ok(Math.abs(predicted.angle) < 1e-8);
+        assert.ok(Math.abs(player.z - predicted.z) < 1e-8);
+        assert.ok(Math.abs(player.x) < 1e-8);
+      }
+    }
+    assert.ok(player.z > 12);
+  } finally {
+    sim.destruction.dispose();
+  }
+});
+
+test("upper body and raised arms face aim while legs keep walking direction", () => {
+  const engine = new NullEngine(),
+    scene = new Scene(engine);
+  const root = new TransformNode("character", scene);
+  const mat = new StandardMaterial("test", scene);
+  const upper = buildCharacter(root, "#fff", () => mat);
+  const entity: Entity = {
+    id: "p",
+    kind: "player",
+    x: 0,
+    y: 0,
+    z: 0,
+    vx: 0,
+    vy: 0,
+    vz: 0,
+    angle: -Math.PI / 2,
+    aim: Math.PI / 2,
+    health: 100,
+    color: "#fff",
+  };
+  try {
+    root.rotation.y = entity.angle;
+    poseCharacter(root, entity);
+    const yaw = (node: TransformNode) => {
+      node.computeWorldMatrix(true);
+      const forward = node.getDirection(Vector3.Forward());
+      return Math.atan2(forward.x, forward.z);
+    };
+    assert.ok(Math.abs(yaw(upper) - Math.PI / 2) < 1e-6);
+    for (const leg of root.getChildMeshes().filter((m) => m.name === "leg"))
+      assert.ok(Math.abs(yaw(leg) + Math.PI / 2) < 1e-6);
+    for (const hand of root.getChildMeshes().filter((m) => m.name === "hand")) {
+      hand.computeWorldMatrix(true);
+      assert.ok(Math.abs(hand.absolutePosition.y - 1.38) < 1e-6);
+      assert.ok(hand.absolutePosition.x > 0.5);
+    }
+    poseCharacter(root, { ...entity, aim: undefined });
+    assert.equal(upper.rotation.y, 0);
+    for (const arm of upper
+      .getChildTransformNodes(true)
+      .filter((n) => n.name === "arm pivot"))
+      assert.equal(arm.rotation.x, 0);
   } finally {
     scene.dispose();
     engine.dispose();

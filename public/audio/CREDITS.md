@@ -72,3 +72,5 @@ bun run audio:prepare --source-dir /path/to/originals
 The manual script uses the installed development-only FFmpeg, converts to mono 44.1 kHz 16-bit PCM, removes DC and leading silence, applies short edge fades, and crossfades loop seams. Gain targets an RMS level with a hard peak ceiling of 0.5, leaving at least 6 dB of sample headroom. It writes the WAV files, hashes, and sound-bank manifest. The game never runs this script or downloads originals.
 
 Open `/audio.html` for the listening page, which uses the same `GameAudio` engine as gameplay. N toggles sound in the game.
+
+Traffic horns use Joseph SARDIN’s [Recent car horn #2](https://bigsoundbank.com/recent-car-horn-2-s0258.html) and [Recent car horn #1](https://bigsoundbank.com/recent-car-horn-1-s0257.html), both CC0. Source files are `horn-0258.mp3` and `horn-0257.mp3`, downloaded from the corresponding `/UPLOAD/mp3/` URLs on BigSoundBank. License text verified on 2026-10-12. Recipes, original hashes and page evidence are included in the normal audio manifests.

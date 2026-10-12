@@ -14,8 +14,9 @@ export class Grenades {
   private serial = 0;
   throw(p: Entity, time: number) {
     if (this.active.size >= this.maxActive) return false;
-    const dx = Math.sin(p.angle),
-      dz = Math.cos(p.angle);
+    const aim = p.aim ?? p.angle,
+      dx = Math.sin(aim),
+      dz = Math.cos(aim);
     const g: GrenadeState = {
       id: `grenade:${++this.serial}`,
       owner: p.id,

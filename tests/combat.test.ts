@@ -75,3 +75,32 @@ test("missed melee attacks emit a swing and empty weapons emit rate-limited dry 
   assert.ok(p.reloadUntil);
   assert.deepEqual(s.drainEvents(), []);
 });
+
+test("guns, flames, melee and grenade throws follow aim instead of walking yaw", () => {
+  for (const weapon of ["pistol", "flamethrower", "fists", "grenade"] as const) {
+    const { s, p } = setup();
+    try {
+      if (weapon === "fists") s.inventory.equip(p, 0);
+      else s.inventory.give(p, weapon);
+      p.angle = 0;
+      p.aim = Math.PI / 2;
+      const distance = weapon === "fists" ? 1 : 3;
+      const aimed = s.spawn("pedestrian", distance, 0);
+      const ahead = s.spawn("pedestrian", 0, distance);
+      s.attack(p);
+      assert.equal(ahead.health, 100, weapon);
+      if (weapon === "grenade") {
+        const grenade = [...s.grenades.active.values()][0];
+        assert.ok(grenade);
+        assert.equal(grenade.vx, 15);
+        assert.ok(Math.abs(grenade.vz) < 1e-8);
+      } else assert.ok(aimed.health < 100, weapon);
+      assert.equal(p.angle, 0);
+      const directional = s.drainEvents().filter((e) => e.angle !== undefined);
+      assert.ok(directional.length > 0);
+      for (const event of directional) assert.equal(event.angle, Math.PI / 2);
+    } finally {
+      s.destruction.dispose();
+    }
+  }
+});

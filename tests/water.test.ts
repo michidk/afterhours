@@ -18,7 +18,7 @@ import {
   resolveMovementContacts,
 } from "../shared/physics/index.ts";
 import { debugCommandSchema } from "../shared/debug.ts";
-import { CityStream } from "../client/world/stream.ts";
+import { CityStream, COLLISION_RADIUS } from "../client/world/stream.ts";
 import { CityStore } from "../server/city-stream.ts";
 import { chunksAround } from "../shared/city-stream.ts";
 
@@ -101,7 +101,7 @@ test("the immutable saved map supplies every model safely without enlarging land
   );
   assert.deepEqual(chunksAround(-LIMIT - 214, 0, 48), []);
   const stream = new CityStream(new CityStore(saved).manifest, () => {});
-  assert.equal(stream.ready({ x: -LIMIT - 214, z: 0 }), true);
+  assert.equal(stream.ready({ x: -LIMIT - COLLISION_RADIUS - 1, z: 0 }), true);
   assert.equal(
     stream.ready({ x: -LIMIT - 4, z: 0 }),
     false,

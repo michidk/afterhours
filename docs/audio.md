@@ -1,6 +1,6 @@
 # Sound inventory
 
-The library replaces all eleven previous WAVs with 114 edited CC0 clips across 36 sound banks. Every bank has at least two takes. Sources, author credits, and reproduction instructions are in [audio credits](../public/audio/CREDITS.md). `/audio.html` is an explicit listening page and uses the gameplay engine.
+The library replaces all eleven previous WAVs with 116 edited CC0 clips across 37 sound banks. Every bank has at least two takes. Sources, author credits, and reproduction instructions are in [audio credits](../public/audio/CREDITS.md). `/audio.html` is an explicit listening page and uses the gameplay engine.
 
 ## Shipped sounds
 
@@ -9,6 +9,7 @@ The library replaces all eleven previous WAVs with 114 edited CC0 clips across 3
 | engineSedan  |     2 | Active sedan                                  | Separate car recordings; speed controls pitch                                |
 | engineSport  |     2 | Active sport car                              | Separate steady AC Cobra excerpts; speed controls pitch                      |
 | engineVan    |     2 | Active van                                    | Separate truck and diesel recordings; speed controls pitch                   |
+| horn         |     2 | AI traffic blocked for eight seconds          | Two car recordings; repeats every six seconds; audible within 80 m           |
 | helicopter   |     3 | Active helicopter                             | Different recording sections; lower pitch during takeoff                     |
 | plane        |     3 | Active plane                                  | Different flyby sections; speed controls pitch                               |
 | skid         |     3 | Nearby skidding car                           | Different tyre squeals; speed controls intensity                             |
@@ -59,7 +60,7 @@ Combat sounds come from server events. Inventory, boarding, reload, parachute, a
 
 The existing single clips had no alternate takes. Swing, prop-break, handling, footsteps, fire, water, and parachute actions were silent or shared unrelated impacts. The former racing-car loop pack described its alternates as pitch-only copies. The replacement uses separate recordings or different recorded events, with runtime property variation in addition to sample selection. The selected handgun and SMG source takes avoid the full-scale peaks in other prepared firearm files.
 
-The follow-up source audit checked all 29 pages used by the current library. [Machine-readable provenance](../public/audio/sources.json) maps every downloaded original or archive member to its author, CC0 declaration, and source page. Tests require that this inventory exactly covers the source hashes.
+The follow-up source audit checked all 31 pages used by the current library. [Machine-readable provenance](../public/audio/sources.json) maps every downloaded original or archive member to its author, CC0 declaration, and source page. Tests require that this inventory exactly covers the source hashes.
 
 The new recordings replace nine clips for dry fire, parachute deployment, and hydrant water. Six more clips add firearm handling and canopy flutter. Deployment recordings are designed foley made with coats, pants, and ropes, rather than recordings from a real jump. The canopy loops use hand-moved fabric recorded as flag flutter. Hydrants use a large leaking pipe.
 
@@ -92,4 +93,6 @@ Field-recorded loops are edited excerpts, not multi-layer studio engine recordin
 
 The browser check decodes the real assets, plays the same engine, exercises loop lifecycle and mute, and checks playback diagnostics. A live game session confirmed pickup, authoritative pistol shots, reload, and N muting and resuming vehicle loops. Headless browser rendering can prove that audio produces a valid signal; it cannot replace listening on real speakers or headphones.
 
-The integrated gameplay suite passes all 153 tests, formatting, types, boundaries, and the production build in [CI](https://github.com/michidk/afterhours/actions/runs/38181999709). The user confirmed real-device listening on 2026-10-11: "I listened; no adjustments needed." No recording or mix changes were requested. This acceptance is separate from the automated signal checks and does not certify every audio device. [Headless browser evidence](audio-browser-check.json) records the earlier decoding and mixer checks.
+The integrated gameplay suite passes all 153 tests, formatting, types, boundaries, and the production build in [CI](https://github.com/michidk/afterhours/actions/runs/38181999709). Before the horn additions, the user confirmed real-device listening on 2026-10-11: "I listened; no adjustments needed." No recording or mix changes were requested. This acceptance is separate from the automated signal checks and does not certify every audio device. [Headless browser evidence](audio-browser-check.json) records the earlier decoding and mixer checks.
+
+The two traffic-horn recordings were also decoded and played through the sound-library UI in the shared T3 browser on 2026-10-12, with no console errors. Their real-speaker mix has not been reviewed.

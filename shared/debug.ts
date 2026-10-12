@@ -61,7 +61,7 @@ export interface DebugState {
   traffic: {
     jamCount: number;
     jammedCars: number;
-    despawned: number;
+    honks: number;
     respawned: number;
     pendingRespawns: number;
   };

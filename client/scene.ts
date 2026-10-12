@@ -1,6 +1,6 @@
 import { buildTerrain } from "./world/terrain.ts";
 import { buildHeadlightCones, CarLights } from "./models/car-lights.ts";
-import { buildCharacter } from "./models/character.ts";
+import { buildCharacter, poseCharacter } from "./models/character.ts";
 import { buildRoad } from "./models/road.ts";
 import { buildBuilding } from "./models/buildings/index.ts";
 import "@babylonjs/core/Shaders/default.vertex";
@@ -431,7 +431,12 @@ export class CityScene {
     const root = new TransformNode(e.id, this.scene);
     const human = e.kind === "player" || e.kind === "pedestrian";
     if (human) {
-      buildCharacter(root, e.color, (color) => this.mat(color), e.character);
+      const upper = buildCharacter(
+        root,
+        e.color,
+        (color) => this.mat(color),
+        e.character,
+      );
       if (e.kind === "player") {
         buildParachute(this, root);
         for (const side of [-1, 1]) {
@@ -469,7 +474,7 @@ export class CityScene {
           flame.setEnabled(false);
         }
         for (const kind of Object.keys(WEAPONS))
-          if (isWeaponKind(kind)) buildWeapon(this, root, kind, true);
+          if (isWeaponKind(kind)) buildWeapon(this, upper, kind, true);
         for (const child of root.getChildMeshes())
           if (child.name.startsWith("held:")) child.setEnabled(false);
 
@@ -616,7 +621,8 @@ export class CityScene {
       n.setEnabled(
         !e.vehicle &&
           (e.health > 0 || e.wreck !== undefined) &&
-          Math.hypot(e.x - this.target.x, e.z - this.target.z) < 95,
+          Math.hypot(e.x - this.target.x, e.z - this.target.z) <
+            TUNING.entityRenderRadius,
       );
       // Networking already provides a continuous pose. Smoothing it a second
       // time adds delay and makes turns trail behind authoritative traffic.
@@ -696,6 +702,7 @@ export class CityScene {
         }
       }
       if (e.kind === "player" || e.kind === "pedestrian") {
+        poseCharacter(n, e);
         if (e.parachute) {
           n.rotation.x = -e.vz * 0.025;
           n.rotation.z += e.vx * 0.025;
@@ -739,7 +746,11 @@ export class CityScene {
       }
     }
     this.tyreTracks.sample(
-      entities.filter((e) => Math.hypot(e.x - this.target.x, e.z - this.target.z) < 95),
+      entities.filter(
+        (e) =>
+          Math.hypot(e.x - this.target.x, e.z - this.target.z) <
+          TUNING.entityRenderRadius,
+      ),
       (mark) => this.effects.trails.add(mark),
     );
     this.effects.update(dt, this.target);

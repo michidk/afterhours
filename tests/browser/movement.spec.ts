@@ -44,7 +44,8 @@ for (const delay of [0, 150]) {
         errors.push(`${response.status()} ${response.url()}`);
     });
     await page.goto("/");
-    await expect(page.locator("#play")).toBeEnabled();
+    // Startup has separate 30-second download and render-readiness deadlines.
+    await expect(page.locator("#play")).toBeEnabled({ timeout: 90_000 });
     await page.locator("#name").fill("Walking test");
     await page.locator("#name").press("Enter");
     await expect(page.locator("#entry")).toBeHidden();
@@ -179,13 +180,18 @@ for (const delay of [0, 150]) {
       const d = window.afterhoursDebug;
       const p = d?.network.entities.get(d.network.playerId);
       const node = p && d?.scene.nodes.get(p.id);
+      const upper = node
+        ?.getChildTransformNodes(true)
+        .find((n) => n.name === "upper body");
       const point = d?.scene.aimPoint(500, 300);
-      if (!p || !node || !point) return false;
+      if (!p || !node || !upper || !point || p.aim === undefined) return false;
       const target = Math.atan2(point.x - node.position.x, point.z - node.position.z);
       const difference = (a: number, b: number) =>
         Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
       return (
-        difference(p.angle, target) < 0.15 &&
+        difference(p.aim, target) < 0.15 &&
+        difference(node.rotation.y + upper.rotation.y, target) < 0.15 &&
+        difference(p.angle, 0) < 0.15 &&
         difference(node.rotation.y, p.angle) < 0.15
       );
     });
@@ -196,12 +202,23 @@ for (const delay of [0, 150]) {
       const d = window.afterhoursDebug;
       const p = d?.network.entities.get(d.network.playerId);
       const node = p && d?.scene.nodes.get(p.id);
+      const upper = node
+        ?.getChildTransformNodes(true)
+        .find((n) => n.name === "upper body");
       const point = d?.scene.aimPoint(500, 300);
-      if (!p || !node || !point) return false;
+      if (!p || !node || !upper || !point || p.aim === undefined) return false;
       const target = Math.atan2(point.x - node.position.x, point.z - node.position.z);
       return (
-        Math.abs(Math.atan2(Math.sin(p.angle - target), Math.cos(p.angle - target))) <
-        0.15
+        Math.abs(Math.atan2(Math.sin(p.aim - target), Math.cos(p.aim - target))) <
+          0.15 &&
+        Math.abs(p.angle + Math.PI / 2) < 0.15 &&
+        Math.abs(node.rotation.y + Math.PI / 2) < 0.15 &&
+        Math.abs(
+          Math.atan2(
+            Math.sin(node.rotation.y + upper.rotation.y - target),
+            Math.cos(node.rotation.y + upper.rotation.y - target),
+          ),
+        ) < 0.15
       );
     });
     expect(errors).toEqual([]);

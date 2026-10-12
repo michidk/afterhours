@@ -87,7 +87,8 @@ export interface WorldEvent {
     | "impactWood"
     | "impactBody"
     | "swing"
-    | "dryFire";
+    | "dryFire"
+    | "horn";
 }
 export interface Input {
   up: boolean;

@@ -1,5 +1,7 @@
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
-import type { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import { wrap } from "../../shared/physics/vehicle.ts";
+import type { Entity } from "../../shared/world.ts";
 import type { Material } from "@babylonjs/core/Materials/material";
 import {
   DEFAULT_CHARACTER,
@@ -14,6 +16,8 @@ export function buildCharacter(
   character: Character = DEFAULT_CHARACTER,
 ) {
   const scene = root.getScene();
+  const upper = new TransformNode("upper body", scene);
+  upper.parent = root;
   const width = PHYSIQUES[character.physique].width;
   function box(
     name: string,
@@ -28,7 +32,7 @@ export function buildCharacter(
     const mesh = MeshBuilder.CreateBox(name, { width: w, height: h, depth: d }, scene);
     mesh.position.set(x, y, z);
     mesh.material = mat(color);
-    mesh.parent = root;
+    mesh.parent = upper;
     return mesh;
   }
   const skin = character.skin,
@@ -51,6 +55,7 @@ export function buildCharacter(
       0.28,
       character.legs === "shorts" ? skin : pants,
     );
+    leg.parent = root;
     if (character.legs === "shorts") {
       const shorts = box("shorts", 0, 0.22, 0, 0.27 * width, 0.31, 0.3, pants);
       shorts.parent = leg;
@@ -70,7 +75,7 @@ export function buildCharacter(
     }
     const shoe = box("shoe", 0, -0.34, 0.07, 0.27 * width, 0.16, 0.43, "#ddd9c9");
     shoe.parent = leg;
-    box(
+    const arm = box(
       "arm",
       side * 0.43 * width,
       1.1,
@@ -80,7 +85,23 @@ export function buildCharacter(
       0.27,
       character.top === "vest" ? skin : color,
     );
-    box("hand", side * 0.43 * width, 0.77, 0, 0.17 * width, 0.18, 0.22, skin);
+    const hand = box(
+      "hand",
+      side * 0.43 * width,
+      0.77,
+      0,
+      0.17 * width,
+      0.18,
+      0.22,
+      skin,
+    );
+    const shoulder = new TransformNode("arm pivot", scene);
+    shoulder.parent = upper;
+    shoulder.position.set(side * 0.43 * width, 1.38, 0);
+    for (const part of [arm, hand]) {
+      part.parent = shoulder;
+      part.position.subtractInPlace(shoulder.position);
+    }
     if (character.top === "jacket") {
       box("jacket lapel", side * 0.09, 1.26, 0.205, 0.09, 0.34, 0.04, "#ded8bf");
       box("jacket pocket", side * 0.18 * width, 0.98, 0.205, 0.14, 0.13, 0.035, ink);
@@ -102,10 +123,27 @@ export function buildCharacter(
         );
         curl.position.set(x, 1.96, z);
         curl.material = mat(ink);
-        curl.parent = root;
+        curl.parent = upper;
       }
   } else if (character.hair === "cap") {
     box("cap", 0, 1.935, 0, 0.43, 0.17, 0.4, "#344842");
     box("cap brim", 0, 1.87, 0.25, 0.44, 0.045, 0.28, "#344842");
   }
+  return upper;
+}
+
+export function poseCharacter(root: TransformNode, e: Entity) {
+  const upper = root
+    .getChildTransformNodes(true)
+    .find((node) => node.name === "upper body");
+  if (!upper) return;
+  const aiming = e.aim !== undefined && !e.down && !e.parachute && !e.vehicle;
+  upper.rotation.y = aiming ? wrap(e.aim! - e.angle) : 0;
+  const holding =
+    !e.down &&
+    !e.parachute &&
+    !e.vehicle &&
+    (aiming || (e.weapon && e.weapon !== "fists"));
+  for (const arm of upper.getChildTransformNodes(true))
+    if (arm.name === "arm pivot") arm.rotation.x = holding ? -Math.PI / 2 : 0;
 }

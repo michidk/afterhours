@@ -1,4 +1,14 @@
 {
+  "horn": {
+    "files": ["horn-1", "horn-2"],
+    "volume": 0.35,
+    "pitch": 0.4,
+    "gainVariation": 0.12,
+    "range": 80,
+    "cooldown": 0.25,
+    "voices": 4,
+    "loop": false
+  },
   "engineSedan": {
     "files": ["engine-1", "engine-2"],
     "volume": 0.2,

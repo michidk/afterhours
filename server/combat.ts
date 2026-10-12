@@ -33,7 +33,8 @@ export class Combat {
     if ((p.cooldown || 0) > 0 || p.vehicle || p.down || p.parachute || p.reloadUntil)
       return;
     const item = sim.inventory.equipped(p),
-      spec = WEAPONS[item?.kind || "fists"];
+      spec = WEAPONS[item?.kind || "fists"],
+      aim = p.aim ?? p.angle;
     if (spec.mode !== "melee" && item) {
       if (item.ammo <= 0) {
         sim.inventory.reload(p, sim.time);
@@ -54,11 +55,11 @@ export class Combat {
     }
     p.cooldown = spec.cooldown;
     if (spec.mode === "throw") {
-      sim.events.push({ kind: "throw", x: p.x, y: p.y + 1, z: p.z, angle: p.angle });
+      sim.events.push({ kind: "throw", x: p.x, y: p.y + 1, z: p.z, angle: aim });
       return;
     }
-    const dx = Math.sin(p.angle),
-      dz = Math.cos(p.angle),
+    const dx = Math.sin(aim),
+      dz = Math.cos(aim),
       range = spec.range;
     const wallDistance = (x: number, z: number) =>
       Math.min(
@@ -74,7 +75,7 @@ export class Combat {
         x: p.x,
         y: p.y + 1,
         z: p.z,
-        angle: p.angle,
+        angle: aim,
         length: range,
       });
       for (const e of sim.entities.values()) {
@@ -161,7 +162,7 @@ export class Combat {
       x: p.x,
       z: p.z,
       y: p.y + 1,
-      angle: p.angle,
+      angle: aim,
       length,
     });
     if (propHit) {

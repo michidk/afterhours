@@ -12,4 +12,4 @@ Shutdown releases connections with "Server restarting". Browsers retry; a restar
 
 The local deployment acceptance test checks HTTPS content, WSS joining, production cheat gating, artifact delivery, health, and reconnect after `docker compose restart game`. A public-domain launch remains an operator action requiring a domain/host; no public deployment is implied by local container validation.
 
-Health includes `traffic` counters for persistent jam groups/cars, cumulative AI despawns/replacements, and pending replacements. A growing replacement queue usually means clear road sites are unavailable; the server retries without forcing overlaps. Traffic cleanup and the queue reset on process restart. See [traffic lifecycle](traffic.md).
+Health includes `traffic` counters for persistent jam groups/cars, cumulative horns and wreck replacements, and pending replacements. A growing replacement queue usually means clear road sites are unavailable; the server retries without forcing overlaps. Traffic diagnostics and the queue reset on process restart. See [traffic lifecycle](traffic.md).

@@ -1,5 +1,5 @@
 import { mountCharacterMenu } from "./ui/character-menu.ts";
-import { VEHICLES, WEAPONS, isVehicleModel } from "../shared/catalog.ts";
+import { TUNING, VEHICLES, WEAPONS, isVehicleModel } from "../shared/catalog.ts";
 import { availableSeat, occupiedSeats, seatCapacity } from "../shared/seats.ts";
 import type { Pickup } from "../shared/protocol.ts";
 import "./style.css";
@@ -494,7 +494,7 @@ async function boot() {
           groundDistance =
             Math.max(0, scene.camera.position.y) / Math.max(0.15, -forward.y),
           radius = Math.max(
-            160,
+            TUNING.entityRenderRadius,
             groundDistance *
               Math.tan(scene.camera.fov / 2) *
               Math.max(

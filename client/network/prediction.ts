@@ -210,5 +210,9 @@ export function interpolate(
     vz: a.vz + (b.vz - a.vz) * t,
     vy: a.vy + (b.vy - a.vy) * t,
     angle: a.angle + wrap(b.angle - a.angle) * fraction,
+    aim:
+      b.aim === undefined
+        ? undefined
+        : (a.aim ?? a.angle) + wrap(b.aim - (a.aim ?? a.angle)) * fraction,
   };
 }

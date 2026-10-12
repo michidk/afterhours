@@ -48,10 +48,8 @@ export function characterForces(
     x = (x / length) * speed;
     z = (z / length) * speed;
   }
-  if (input.aim !== undefined) {
-    e.angle = input.aim;
-    e.aim = input.aim;
-  } else if (length)
+  e.aim = input.aim;
+  if (length)
     e.angle = wrap(
       e.angle + clamp(wrap(Math.atan2(x, z) - e.angle), -14 * dt, 14 * dt),
     );

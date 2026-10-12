@@ -1,24 +1,22 @@
-# Traffic gridlock cleanup
+# Persistent traffic and horns
 
-Driving and cleanup run on the authoritative CPU server. Cars still brake for signals/vehicles, follow routes, and try reversing out of a collision. `server/traffic.ts` adds a separate low-frequency lifecycle controller so persistent jams gradually lose obstructing AI cars.
+Traffic AI and physics run across the entire loaded island, regardless of player distance. Clients receive entities within 220 m and render them within 200 m. Prediction requires static collision coverage within 252 m and prefetches to 380 m; the initial loading screen prepares the spawn collision area before entry.
 
-The controller samples once per simulated second. A car is stalled when it stays within three metres of its progress anchor for 30 seconds and is currently moving below 1 m/s. Two or more stalled cars connected by gaps of at most 12 metres form a jam. The anchor survives short reverse/forward recovery wiggles; meaningful movement resets it. The 30-second grace exceeds the full 18-second signal cycle, protecting ordinary red-light queues that move during their green phase.
+Living AI cars never despawn to clear congestion. They retain their identity, route, damage and position, including during prolonged gridlock. Existing steering, following distances, signal stops and reversing maneuvers continue to attempt recovery.
 
-At most one car is removed globally every five seconds, starting in the densest part of a jam. Only unoccupied AI cars with active routes qualify. Player-controlled/stolen cars, driver/passenger seats, player-to-vehicle attachments, burning cars, and wrecks are protected. Cleanup stops when traffic makes progress or no eligible clustered cars remain. Removal updates entities, AI routes, input state, and spatial interest immediately, so ordinary snapshot deltas remove the car on every client.
+The server samples progress once a second. A grounded AI car that moves less than three metres from its progress anchor starts honking after eight seconds, when its speed is below 1 m/s. Subsequent horns are at least six seconds apart. Moving three metres resets the delay; short recovery wiggles do not. Waiting directly at a red signal resets the delay. Parked, player-driven, airborne, burning and destroyed cars do not honk. Horn events use two CC0 recordings through the existing spatial audio system, audible within 80 m with mute, cooldown and voice limits.
 
-Each removed car gets a replacement after at least ten seconds. Replacements are paced to one every five seconds, retain model/colour, and start aligned with a road lane and a fresh reachable route. Sites must be clear of static geometry, at least 12 metres from other ground entities, and at least 65 metres from every player. If no site is clear, the replacement remains queued for a later retry. AI wreck expiry uses the same safe delayed replacement path. Traffic can temporarily become thinner; cleanup does not increase the population or continually replace stolen cars.
+Destroyed wrecks retain their existing three-minute lifetime. Expired AI wrecks queue a replacement of the same model and colour after ten seconds. Replacement sites must have clear geometry and spacing from other bodies and players; unavailable sites retry later. This is separate from blocked, living traffic, which stays in the world.
 
-`/health` and `await window.afterhoursDebug.state()` expose `traffic` diagnostics: `jamCount`, `jammedCars` (latest sample), cumulative `despawned`/`respawned`, and `pendingRespawns`. Tuning is collected in `TRAFFIC` in `server/traffic.ts`.
+`/health` and the opt-in debug interface expose `jamCount`, `jammedCars`, cumulative `honks` and `respawned`, and `pendingRespawns`. Connected groups of at least two cars with no progress for thirty seconds count as jams. Tuning lives in `server/traffic.ts`.
 
 ## Verification
 
-`bun run test` includes nine traffic regressions covering connected jams, cooldowns, normal signal queues, two-car gridlock, progress resets, unrelated parked cars, short recovery wiggles, protected ownership/lifecycle states, clear replacement lanes, blocked-site retries, spatial snapshot interest, and AI wreck replacement.
+Traffic tests cover delayed and repeated horns, retained identities/routes after ten simulated minutes, movement resets, red lights, recovery wiggles, player takeover, ineligible lifecycle states and safe wreck replacements. Streaming tests check startup collision coverage and global simulation; a real WebSocket test verifies that a car at 180 m reaches the client while one beyond 220 m does not.
 
-`bun run test:traffic` runs an isolated simulation with six normally driven AI cars inside a barricaded street. It does not modify the city artifact or the running server. [Recorded report](traffic-test.json): in 100 simulated seconds, three jam cars were removed at approximately 30.87, 62.90, and 95.93 seconds. Two replacements appeared at approximately 41.20 and 72.93 seconds, over 270 metres from the observer; the third remained in its ten-second delay at the end. After each removal, the remaining cars advanced and reset their grace period. Active cars plus queued replacements stayed exactly six throughout.
+`bun run test:traffic` drives six AI cars with ordinary contact physics inside an isolated barricaded street. [Recorded report](traffic-test.json): all six identities remained throughout 100 simulated seconds, with 39 horns and no replacements. The fixture changes only its in-memory world. It does not modify the saved city or a live server.
 
-This is local simulation evidence, not a WAN or client performance test. Cleanup is a fallback for persistent gridlock; it cannot guarantee congestion-free traffic when players deliberately block roads. Removal can be visible near a player. Replacement sites are kept away from players, though a distant debug camera can still see one appear.
-
-The complete 68-test suite, formatting/boundary/type checks, and production build passed. A fresh 30-second run with 16 moving WebSocket clients measured CPU tick p95 26.19 ms, max 35.40 ms, no catch-up drops, and about 26 KB/s per player: [load report](load-test.json). This short local run includes the jam scanner, but a long-duration/WAN soak remains further scope.
+These checks cover behavior, not WAN or hardware performance. Persistent congestion is intentional; traffic can remain blocked indefinitely. Wider snapshots and visibility increase bandwidth and rendering work.
 
 ## Personalities and accidents
 

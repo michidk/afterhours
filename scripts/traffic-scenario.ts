@@ -15,7 +15,7 @@ sim.city.buildings.push(
   { x: 3.5, z: 16, w: 5, d: 1, h: 3, color: "#fff", style: 0 },
   { x: 3.5, z: 55, w: 5, d: 1, h: 3, color: "#fff", style: 0 },
 );
-const observer = sim.join("Traffic observer", "#fff");
+sim.join("Traffic observer", "#fff");
 const original = Array.from({ length: 6 }, (_, i) => {
   const car = sim.spawn(
     "car",
@@ -25,23 +25,17 @@ const original = Array.from({ length: 6 }, (_, i) => {
     (["sedan", "sport", "van"] as const)[i % 3],
   );
   sim.ai.assignCar(car, 24, 25, (20 + i * 6) / 64, i);
+  car.x = 3.5;
+  car.z = 20 + i * 6;
+  car.angle = 0;
+  sim.ai.routes.get(car.id)!.points = [{ x: 3.5, z: 75 }];
   return car.id;
 });
 const samples = [];
-const despawns: number[] = [];
-const respawns: { time: number; id: string; distanceFromPlayer: number }[] = [];
-let previous = sim.traffic.diagnostics;
 for (let tick = 0; tick < 100 * 30; tick++) {
-  const before = new Set(sim.entities.keys());
   sim.tick(1 / 30);
   const current = sim.traffic.diagnostics;
-  if (current.despawned > previous.despawned) despawns.push(sim.time);
-  if (current.respawned > previous.respawned) {
-    const car = [...sim.entities.values()].find((e) => !before.has(e.id))!;
-    const distance = Math.hypot(car.x - observer.x, car.z - observer.z);
-    assert.ok(distance >= TRAFFIC.spawnPlayerDistance);
-    respawns.push({ time: sim.time, id: car.id, distanceFromPlayer: distance });
-  }
+  sim.drainEvents();
   const cars = [...sim.entities.values()].filter((e) => e.kind === "car");
   assert.equal(cars.length + current.pendingRespawns, original.length);
   if (tick % 150 === 0)
@@ -51,22 +45,19 @@ for (let tick = 0; tick < 100 * 30; tick++) {
       activeCars: cars.length,
       ...current,
     });
-  previous = current;
 }
-assert.ok(despawns.length > 0, "Physical gridlock was not detected");
-assert.ok(respawns.length > 0, "Traffic was not replenished");
-for (let i = 1; i < despawns.length; i++)
-  assert.ok(despawns[i] - despawns[i - 1] >= TRAFFIC.despawnSeconds);
-for (let i = 1; i < respawns.length; i++)
-  assert.ok(respawns[i].time - respawns[i - 1].time >= TRAFFIC.respawnSeconds);
+assert.ok(sim.traffic.diagnostics.honks > 0, "Blocked AI cars must honk");
+assert.ok(
+  original.every((id) => sim.entities.has(id)),
+  "Blocked cars must retain their identities",
+);
+assert.equal(sim.traffic.diagnostics.respawned, 0);
 const report = {
   date: new Date().toISOString(),
   passed: true,
   scope:
     "100 simulated seconds of real AI/contact physics in a barricaded street; not a WAN or hardware performance test",
   tuning: TRAFFIC,
-  despawns,
-  respawns,
   samples,
   final: sim.traffic.diagnostics,
 };

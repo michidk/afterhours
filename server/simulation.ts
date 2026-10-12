@@ -538,7 +538,7 @@ export class Simulation {
       h = dt / steps;
     for (let i = 0; i < steps; i++) this.step(h);
     if (this.traffic.update(this)) {
-      // Snapshot interest must immediately see despawns/new cars in this tick.
+      // Newly replenished cars must enter snapshot interest in this tick.
       this.spatial.clear();
       for (const e of this.entities.values())
         if (!e.vehicle) this.spatial.insert(e, e.x, e.z, 6);

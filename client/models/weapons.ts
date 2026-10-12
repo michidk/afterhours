@@ -26,7 +26,7 @@ export function buildWeapon(
   const spec = SHAPES[kind],
     name = held ? "held:" + kind : "pickup weapon",
     x = held ? 0.45 : 0,
-    y = held ? 1 : 0.7,
+    y = held ? 1.38 : 0.7,
     z = held ? 0.55 : 0;
   const mesh =
     kind === "grenade"

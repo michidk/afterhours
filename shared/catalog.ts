@@ -20,7 +20,8 @@ export const TUNING = {
   npcRecoverySeconds: 30,
   debrisFadeSeconds: 3,
   pickupSeconds: 120,
-  interestRadius: 110,
+  interestRadius: 220,
+  entityRenderRadius: 200,
   maxPlayers: 16,
   lagCompensation: 0.2,
 };

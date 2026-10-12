@@ -32,8 +32,11 @@ const fixture = () => {
 };
 const settle = () => new Promise((r) => setTimeout(r, 5));
 test("offshore coverage excludes land chunks when the clipped bounds do not overlap", () => {
-  assert.deepEqual(chunksAround(-LIMIT - 214, 0, COLLISION_RADIUS), []);
-  assert.deepEqual(chunksAround(0, LIMIT + 214, COLLISION_RADIUS), []);
+  assert.deepEqual(
+    chunksAround(-LIMIT - COLLISION_RADIUS - 1, 0, COLLISION_RADIUS),
+    [],
+  );
+  assert.deepEqual(chunksAround(0, LIMIT + COLLISION_RADIUS + 1, COLLISION_RADIUS), []);
   assert.deepEqual(chunksAround(-LIMIT - 4, 0, 48), ["-12,-1", "-12,0"]);
 });
 test("saved map identity is stable and chunks duplicate only boundary features with stable IDs", () => {
@@ -71,9 +74,10 @@ test("client fetches nearby chunks, deduplicates seams, evicts distant data and 
   await stream.prepare();
   assert.deepEqual(
     [...stream.chunks.keys()].sort(),
-    chunksAround(11, 25, 160).sort(),
-    "startup downloads only spawn scenery, without the outer prefetch ring",
+    chunksAround(11, 25, COLLISION_RADIUS).sort(),
+    "startup covers spawn collisions, without the outer prefetch ring",
   );
+  assert.equal(stream.ready({ x: 11, z: 25 }), true);
   assert.ok(stream.chunks.size < store.chunks.size / 4);
   assert.equal(stream.city.buildings.length, 1);
   assert.equal(stream.city.buildings[0].x, 127);
