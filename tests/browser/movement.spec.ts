@@ -16,10 +16,35 @@ declare global {
   interface Window {
     afterhoursDebug?: AgentInterface;
     movementSamples: MovementSample[];
+    movementStages: Record<
+      "prediction" | "reconcile" | "update" | "render" | "input",
+      number[]
+    >;
   }
 }
 
 const test = base.extend({
+  page: async ({ page }, use, testInfo) => {
+    if (!process.env.BROWSER_CPU_PROFILE) {
+      await use(page);
+      return;
+    }
+    const session = await page.context().newCDPSession(page);
+    await session.send("Profiler.enable");
+    await session.send("Profiler.start");
+    try {
+      await use(page);
+    } finally {
+      const { profile } = await session.send("Profiler.stop");
+      const path = testInfo.outputPath("browser.cpuprofile");
+      await writeFile(path, JSON.stringify(profile));
+      await testInfo.attach("browser CPU profile", {
+        path,
+        contentType: "application/json",
+      });
+      await session.detach();
+    }
+  },
   browser: async ({ playwright }, use) => {
     const browser = process.env.CHROMIUM_CDP_URL
       ? await playwright.chromium.connectOverCDP(process.env.CHROMIUM_CDP_URL)
@@ -45,7 +70,9 @@ for (const delay of [0, 150]) {
     });
     await page.goto("/");
     // Startup has separate 30-second download and render-readiness deadlines.
-    await expect(page.locator("#play")).toBeEnabled({ timeout: 90_000 });
+    await expect(page.locator("#play")).toBeEnabled({
+      timeout: Math.max(90_000, testInfo.timeout - 30_000),
+    });
     await page.locator("#name").fill("Walking test");
     await page.locator("#name").press("Enter");
     await expect(page.locator("#entry")).toBeHidden();
@@ -67,7 +94,43 @@ for (const delay of [0, 150]) {
       // Reduce only raster resolution for software WebGL; run the real update/render loop.
       debug.scene.engine.setHardwareScalingLevel(2);
       window.movementSamples = [];
+      window.movementStages = {
+        prediction: [],
+        reconcile: [],
+        update: [],
+        render: [],
+        input: [],
+      };
       let held = false;
+      const measure =
+        <A extends unknown[], R>(
+          stage: keyof Window["movementStages"],
+          run: (...args: A) => R,
+        ) =>
+        (...args: A): R => {
+          const start = performance.now();
+          try {
+            return run(...args);
+          } finally {
+            if (held) window.movementStages[stage].push(performance.now() - start);
+          }
+        };
+      debug.network.renderEntities = measure(
+        "prediction",
+        debug.network.renderEntities.bind(debug.network),
+      );
+      debug.network.input = measure("input", debug.network.input.bind(debug.network));
+      const prediction = debug.network.prediction;
+      if (prediction)
+        prediction.reconcile = measure(
+          "reconcile",
+          prediction.reconcile.bind(prediction),
+        );
+      debug.scene.update = measure("update", debug.scene.update.bind(debug.scene));
+      debug.scene.scene.render = measure(
+        "render",
+        debug.scene.scene.render.bind(debug.scene.scene),
+      );
       const sample = (kind: MovementSample["kind"]) => {
         if (!held) return;
         const network = debug.network;
@@ -104,11 +167,23 @@ for (const delay of [0, 150]) {
     await page.waitForTimeout(3000);
     await page.keyboard.up("w");
     const samples = await page.evaluate(() => window.movementSamples);
+    const stages = await page.evaluate(() => window.movementStages);
+    const renderer = await page.evaluate(() => {
+      const scene = window.afterhoursDebug?.scene.scene;
+      return (
+        scene && {
+          meshes: scene.meshes.length,
+          activeMeshes: scene.getActiveMeshes().length,
+          vertices: scene.getTotalVertices(),
+          materials: scene.materials.length,
+        }
+      );
+    });
     const health = await (await request.get("http://127.0.0.1:4175/health")).json();
     const evidence = testInfo.outputPath("movement.json");
     await writeFile(
       evidence,
-      JSON.stringify({ delay, samples, health, errors }, null, 2),
+      JSON.stringify({ delay, samples, stages, renderer, health, errors }, null, 2),
     );
     await testInfo.attach("movement", {
       path: evidence,
@@ -144,9 +219,9 @@ for (const delay of [0, 150]) {
     let stalledAt = rendered[0].wall;
     let longestStall = 0;
     for (let i = 1; i < rendered.length; i++) {
+      longestStall = Math.max(longestStall, rendered[i].wall - stalledAt);
       if (Math.abs(rendered[i].displayed - rendered[i - 1].displayed) > 0.001)
         stalledAt = rendered[i].wall;
-      longestStall = Math.max(longestStall, rendered[i].wall - stalledAt);
     }
     expect(
       longestStall,

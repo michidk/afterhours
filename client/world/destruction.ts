@@ -136,7 +136,7 @@ export class DestructionRenderer {
   private make(p: DebrisState["source"], live: boolean): Model {
     const h = this.host,
       root = new TransformNode(`${live ? "fixture" : "debris"}:${p.id}`, h.scene),
-      before = new Set(h.scene.meshes);
+      meshStart = h.scene.meshes.length;
     let bulb: Mesh | undefined;
     if (p.kind === "palm") h.palm(0, 0, p.h);
     else if (p.kind === "tree") {
@@ -207,7 +207,7 @@ export class DestructionRenderer {
       for (const mesh of body.getChildMeshes()) mesh.setParent(null);
       body.dispose();
     }
-    const created = h.scene.meshes.filter((mesh) => !before.has(mesh)) as Mesh[],
+    const created = h.scene.meshes.slice(meshStart) as Mesh[],
       groups = new Map<number, Mesh[]>();
     for (const mesh of created) {
       h.shadows.removeShadowCaster(mesh);

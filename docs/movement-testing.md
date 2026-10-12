@@ -15,6 +15,10 @@ The test enters through the name form, waits for gameplay shaders and two render
 
 The measured interval starts after shader readiness. Cold-start rendering stalls and real-device frame rates need separate checks.
 
+Movement attachments also record prediction, reconciliation, scene-update, render and input-handler durations, plus mesh and vertex counts. Set `BROWSER_CPU_PROFILE=1` when running the suite to attach a Chrome CPU profile even when startup fails. Profiling adds overhead; use it to locate work, then rerun without it for the movement acceptance check.
+
+For a diagnostic run on a busy host, `--timeout 300000` also extends startup's wait while reserving 30 seconds for gameplay. The default startup wait remains 90 seconds. The held-key interval and movement thresholds stay unchanged. The freeze check includes the gap before each moved frame, so a low frame rate cannot pass merely because every sampled frame moved.
+
 These checks deliberately fail when the server cannot sustain movement. They do not replace a wall-clock failure with a longer wait for eventual movement. Inspect frame intervals and `/health` alongside movement samples to distinguish browser stalls, slow server ticks and network delay. The viewport is 640 by 450, with raster resolution halved for software WebGL. It checks movement in actual rendered frames without setting a GPU frame-rate target; deterministic prediction tests check the poses between snapshots.
 
 For an isolated game server and containerized Chromium:
@@ -46,3 +50,7 @@ The existing project headless browser harness subsequently passed a separate fun
 A public preview could join successfully but show a frozen city with no player. The renderer threw while creating an NPC corpse: MessagePack encoded an explicitly undefined optional `character` property as null, bypassing the character builder's default argument. Snapshot encoding now omits undefined object fields while preserving explicit null entity-delta removals. The destruction-render regression sends an NPC corpse through the real encoder/decoder and verifies that it renders with the default appearance.
 
 `bun run test:browser:docker --grep 'nighttime scenery'` checks the production build: at least 81 spawn chunks finish before entry, buildings more than 400 m away are resident, every intact loaded lamp has a nighttime ground-light pool, approaching a distant lamp leaves its pool lit, and daylight turns pools off. The 2026-10-12 headless run passed and captured both spawn and a distant street at midnight. This verifies behavior; it does not establish hardware frame-rate performance.
+
+Local profiling subsequently found repeated whole-scene mesh scans in streamed geometry and fixture construction. Each synchronous builder now captures the appended mesh suffix, including batching replacements, rather than allocating a set of every existing mesh and filtering the scene. The ownership tests cover batching, eviction, pre-existing scenery and fixture lights. This removes work that grew with the loaded city; it does not by itself certify smooth movement or server capacity.
+
+The subsequent unprofiled local held-W run still failed. During a 3.27-second sample it sent 60 inputs, authority advanced 6.245 m and only three rendered frames completed. Health reported a 136 ms tick p95, zero rejected messages and 241 entities. The renderer contained 10,592 meshes but only 239 active meshes. Both authority and rendering missed their timing targets. Concurrent workspace load was high, so this is a failed acceptance check, not a before/after speed comparison. All 220 unit/integration tests, the production container build, formatting, boundaries and TypeScript passed. Production promotion remains deferred.

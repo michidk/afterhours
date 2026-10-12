@@ -83,14 +83,14 @@ export class CityRenderer {
   }
   private group(city: City, options: GeometryOptions): Group {
     const h = this.host,
-      before = new Set(h.scene.meshes),
+      meshStart = h.scene.meshes.length,
       lampStart = h.lighting.lamps.length,
       signStart = h.lighting.signs.length;
     // Babylon defers onNewMeshAdded notifications. Capture synchronously so
     // batching and disposal own every mesh created by this group.
     h.build(city, options);
-    h.batchStatic(h.scene.meshes.filter((mesh) => !before.has(mesh)));
-    const meshes = h.scene.meshes.filter((mesh) => !before.has(mesh)) as Mesh[],
+    h.batchStatic(h.scene.meshes.slice(meshStart));
+    const meshes = h.scene.meshes.slice(meshStart) as Mesh[],
       meshSet = new Set(meshes),
       lamps = h.lighting.lamps.slice(lampStart),
       signs = h.lighting.signs.slice(signStart),

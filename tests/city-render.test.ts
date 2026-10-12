@@ -14,7 +14,9 @@ import { emptyCity } from "../shared/city-stream.ts";
 test("streamed meshes batch synchronously, boundary buildings render once and eviction disposes geometry", () => {
   const engine = new NullEngine(),
     scene = new Scene(engine),
-    material = new StandardMaterial("shared", scene);
+    material = new StandardMaterial("shared", scene),
+    existing = MeshBuilder.CreateBox("existing scenery", {}, scene);
+  existing.material = material;
   const city = emptyCity({ seed: 42, airport: { x: 600, z: 600, w: 20, d: 40 } });
   city.buildings = [{ x: 127, z: 20, w: 8, d: 8, h: 20, color: "#ffffff", style: 0 }];
   city.roads = [
@@ -67,13 +69,14 @@ test("streamed meshes batch synchronously, boundary buildings render once and ev
   try {
     renderer.sync([store.chunks.get("0,0")!, store.chunks.get("1,0")!]);
     assert.equal(buildingBuilds, 1);
-    assert.equal(scene.meshes.length, 2);
+    assert.equal(scene.meshes.length, 3);
     assert.equal(batches, 2);
     renderer.sync([store.chunks.get("1,0")!]);
     assert.equal(buildingBuilds, 1);
-    assert.equal(scene.meshes.length, 2);
+    assert.equal(scene.meshes.length, 3);
     renderer.sync([]);
-    assert.equal(scene.meshes.length, 0);
+    assert.deepEqual(scene.meshes, [existing]);
+    assert.equal(existing.isDisposed(), false);
     assert.equal(casters.length, 0);
     assert.equal(host.shadowCandidates.length, 0);
     assert.ok(
@@ -82,7 +85,7 @@ test("streamed meshes batch synchronously, boundary buildings render once and ev
     );
     renderer.sync([store.chunks.get("0,0")!]);
     assert.equal(buildingBuilds, 2);
-    assert.equal(scene.meshes.length, 2);
+    assert.equal(scene.meshes.length, 3);
   } finally {
     scene.dispose();
     engine.dispose();
