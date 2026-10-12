@@ -2,7 +2,7 @@ import { PHYSIQUES } from "../character.ts";
 import { staticGeometry } from "./static.ts";
 import { fallAircraft } from "./abandoned-aircraft.ts";
 import { JETPACK, jetpackThrust } from "./jetpack.ts";
-import { idle, type City, type Entity, type Input } from "../world.ts";
+import { idle, inputX, inputY, type City, type Entity, type Input } from "../world.ts";
 import {
   groundLevel,
   isWater,
@@ -30,8 +30,8 @@ export function characterForces(
   direction?: { x: number; z: number; speed: number },
   city?: City,
 ) {
-  let x = direction?.x ?? Number(input.right) - Number(input.left),
-    z = direction?.z ?? Number(input.up) - Number(input.down);
+  let x = direction?.x ?? inputX(input),
+    z = direction?.z ?? inputY(input);
   const length = Math.hypot(x, z),
     speed =
       direction?.speed ??
@@ -130,8 +130,8 @@ export function predictStep(
       carForces(
         e,
         {
-          throttle: Number(input.up) - Number(input.down),
-          steer: Number(input.right) - Number(input.left),
+          throttle: inputY(input),
+          steer: inputX(input),
           brake: input.brake,
         },
         h,
@@ -141,8 +141,8 @@ export function predictStep(
       watercraftForces(
         e,
         {
-          throttle: Number(input.up) - Number(input.down),
-          steer: Number(input.right) - Number(input.left),
+          throttle: inputY(input),
+          steer: inputX(input),
           brake: input.brake,
         },
         h,

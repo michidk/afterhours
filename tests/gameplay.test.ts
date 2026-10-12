@@ -35,6 +35,19 @@ test("four tyres provide symmetric rolling resistance and steering torque", () =
     carForces(car, { throttle: 0, steer: 0, brake: false }, 1 / 120);
   assert.equal(car.rearGripLoss, 0);
 });
+test("car steering builds to full lock and recentres faster on release", () => {
+  const car = empty().spawn("car", 0, 0);
+  carForces(car, { throttle: 0, steer: 1, brake: false }, 1 / 30);
+  assert.ok((car.steering || 0) > 0 && (car.steering || 0) < 0.55);
+  for (let i = 0; i < 15; i++)
+    carForces(car, { throttle: 0, steer: 1, brake: false }, 1 / 30);
+  assert.equal(car.steering, 0.55);
+  carForces(car, { throttle: 0, steer: 0, brake: false }, 1 / 30);
+  assert.ok((car.steering || 0) < 0.5);
+  for (let i = 0; i < 6; i++)
+    carForces(car, { throttle: 0, steer: 0, brake: false }, 1 / 30);
+  assert.equal(car.steering, 0);
+});
 test("off-centre collision spins a car without adding linear energy", () => {
   const s = empty(),
     a = s.spawn("car", 0, 0),

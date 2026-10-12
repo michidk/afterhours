@@ -17,6 +17,9 @@ export const CAR = {
   rolling: 32.5,
   lateral: 1100,
   steer: 0.55,
+  steerRate: 1.65,
+  steerReturn: 2.8,
+  counterSteerRate: 3.5,
   rearGrip: 0.15,
   handbrakeStrength: 0.75,
   brakeRolling: 8,
@@ -43,7 +46,16 @@ export function carForces(e: Entity, input: Drive, dt: number, grounded = e.y <=
   e.rearGripLoss = input.brake
     ? 1
     : Math.max(0, (e.rearGripLoss || 0) - dt / CAR.recovery);
-  e.steering = input.steer * CAR.steer;
+  const steering = e.steering || 0,
+    targetSteering = input.steer * CAR.steer,
+    steeringRate =
+      targetSteering === 0
+        ? CAR.steerReturn
+        : steering * targetSteering < 0
+          ? CAR.counterSteerRate
+          : CAR.steerRate;
+  e.steering =
+    steering + clamp(targetSteering - steering, -steeringRate * dt, steeringRate * dt);
   e.wheelSkids ??= [false, false, false, false];
   if (!grounded) {
     e.skidding = false;

@@ -6,6 +6,8 @@ import {
   LIMIT,
   type City,
   type Entity,
+  inputX,
+  inputY,
   type Input,
   type Kind,
   type WorldEvent,
@@ -646,8 +648,8 @@ export class Simulation {
           : e.ai
             ? this.ai.car(e, this.spatial.query(e.x, e.z, 24), this.time, dt)
             : {
-                throttle: Number(input.up) - Number(input.down),
-                steer: Number(input.right) - Number(input.left),
+                throttle: inputY(input),
+                steer: inputX(input),
                 brake: input.brake,
               };
         carForces(e, drive, dt, carGrounded(e, this.city));
@@ -656,8 +658,8 @@ export class Simulation {
           e.ai && !e.wreck
             ? this.ai.watercraft(e, this.spatial.query(e.x, e.z, 30))
             : {
-                throttle: Number(input.up) - Number(input.down),
-                steer: Number(input.right) - Number(input.left),
+                throttle: inputY(input),
+                steer: inputX(input),
                 brake: input.brake || !!e.wreck,
               };
         watercraftForces(e, drive, dt);

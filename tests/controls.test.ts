@@ -48,3 +48,30 @@ test("all control presses survive release between network samples without adding
   assert.equal(controls.aim, undefined);
   assert.equal(controls.pointer, undefined);
 });
+
+test("standard gamepads provide analog movement and edge-triggered actions", () => {
+  const buttons = Array.from({ length: 16 }, () => ({ pressed: false, value: 0 }));
+  const pad = { axes: [0.6, 0], buttons };
+  const controls = new Controls(() => [pad]);
+
+  buttons[0] = { pressed: true, value: 1 };
+  buttons[3] = { pressed: true, value: 1 };
+  buttons[7] = { pressed: true, value: 0.75 };
+  const input = controls.sample();
+  assert.ok(Math.abs((input.moveX || 0) - 0.5) < 1e-8);
+  assert.ok(Math.abs((input.moveY || 0) - 0.6875) < 1e-8);
+  assert.equal(input.brake, true);
+  assert.equal(controls.gamepadPressed(3), true);
+  controls.sample();
+  assert.equal(
+    controls.gamepadPressed(3),
+    false,
+    "holding an action must not repeat it",
+  );
+
+  buttons[3] = { pressed: false, value: 0 };
+  controls.sample();
+  buttons[3] = { pressed: true, value: 1 };
+  controls.sample();
+  assert.equal(controls.gamepadPressed(3), true, "a new press must trigger again");
+});

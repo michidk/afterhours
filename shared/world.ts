@@ -95,6 +95,8 @@ export interface Input {
   down: boolean;
   left: boolean;
   right: boolean;
+  moveX?: number;
+  moveY?: number;
   brake: boolean;
   sprint?: boolean;
   ascend: boolean;
@@ -114,6 +116,10 @@ export const idle = (): Input => ({
   descend: false,
   attack: false,
 });
+export const inputX = (input: Input) =>
+  input.moveX ?? Number(input.right) - Number(input.left);
+export const inputY = (input: Input) =>
+  input.moveY ?? Number(input.up) - Number(input.down);
 export interface Building {
   /** Replaceable visual recipe; dimensions remain authoritative collision bounds. */
   asset?: BuildingAssetId;

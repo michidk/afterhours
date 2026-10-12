@@ -1,5 +1,5 @@
 import { staticGeometry } from "./static.ts";
-import { LIMIT, type Entity, type City, type Input } from "../world.ts";
+import { LIMIT, inputX, inputY, type Entity, type City, type Input } from "../world.ts";
 import { clamp, wrap } from "./vehicle.ts";
 import { TUNING, VEHICLES } from "../catalog.ts";
 import { shape } from "./collision.ts";
@@ -92,8 +92,8 @@ export function flyHelicopter(
       e.vx = e.vz = 0;
     }
   }
-  let dx = Number(input.right) - Number(input.left),
-    dz = Number(input.up) - Number(input.down);
+  let dx = inputX(input),
+    dz = inputY(input);
   let maxSpeed: number = e.model ? VEHICLES[e.model].speed : 15;
   if (e.flight === "landing") {
     dx = (e.landingX ?? e.x) - e.x;

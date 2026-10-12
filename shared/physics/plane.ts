@@ -1,4 +1,4 @@
-import type { City, Entity, Input } from "../world.ts";
+import { inputX, inputY, type City, type Entity, type Input } from "../world.ts";
 import { clamp } from "./vehicle.ts";
 import { VEHICLES } from "../catalog.ts";
 import { groundLevel } from "../water.ts";
@@ -13,11 +13,10 @@ export function flyPlane(e: Entity, input: Input, dt: number, city?: City) {
     sz = Math.cos(e.angle),
     speed = Math.hypot(e.vx, e.vz);
   e.angularVelocity =
-    (e.wreck ? 0 : Number(input.right) - Number(input.left)) *
+    (e.wreck ? 0 : inputX(input)) *
     Math.min(speed / 8, 1) *
     (e.y > floor + 0.2 ? tuning.turn : tuning.taxiTurn);
-  const thrust =
-    e.wreck || !e.driver ? 0 : (Number(input.up) - Number(input.down)) * tuning.thrust;
+  const thrust = e.wreck || !e.driver ? 0 : inputY(input) * tuning.thrust;
   const damping = input.brake ? tuning.braking : tuning.drag;
   e.vx = (e.vx + sx * thrust * dt) * Math.exp(-damping * dt);
   e.vz = (e.vz + sz * thrust * dt) * Math.exp(-damping * dt);

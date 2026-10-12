@@ -14,6 +14,8 @@ const controls = {
   down: z.boolean().default(false),
   left: z.boolean().default(false),
   right: z.boolean().default(false),
+  moveX: z.number().finite().min(-1).max(1).optional(),
+  moveY: z.number().finite().min(-1).max(1).optional(),
   brake: z.boolean().default(false),
   sprint: z.boolean().default(false),
   ascend: z.boolean().default(false),

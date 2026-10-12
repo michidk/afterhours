@@ -1,5 +1,5 @@
 import { WORLD_LIMIT } from "../../shared/water.ts";
-import type { Input } from "../../shared/world.ts";
+import { inputX, inputY, type Input } from "../../shared/world.ts";
 export type CameraMode = "follow" | "free" | "fly";
 export interface CameraPoint {
   x: number;
@@ -78,8 +78,8 @@ export class DebugCamera {
   }
   update(input: Input, dt: number) {
     if (!this.active) return;
-    const forward = Number(input.up) - Number(input.down),
-      side = Number(input.right) - Number(input.left);
+    const forward = inputY(input),
+      side = inputX(input);
     const vertical = Number(input.ascend) - Number(input.descend);
     const speed = input.brake || input.sprint ? 75 : 25;
     let x = side,

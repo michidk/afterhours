@@ -54,6 +54,8 @@ Startup downloads the spawn chunks before building their 3D scenery, so mesh con
 | Enter / H / Escape | Chat / help / close panels                                                                  |
 | M / N / F1         | Island map / mute sound / development menu with tools, clock, and camera selection          |
 
+Standard gamepads use the left stick to move and steer, LT/RT to reverse/accelerate, A to brake or sprint, X to attack, Y to enter/exit, LB/RB to descend/ascend, B to reload, and the D-pad for inventory slots. View opens the map, Menu opens help, and the stick clicks toggle the jetpack and vehicle lights. Analog sticks and triggers retain proportional input. Keyboard car steering builds to full lock over about a third of a second and recentres faster when released instead of snapping between extremes.
+
 On debug-enabled servers, F1 shows a live networking panel: round-trip ping, ping variation, snapshot age/gap and rate, sent/applied input sequence numbers, applied input age, pending replay, prediction status, correction distance/yaw, visual offset, outgoing socket buffer, and resync count. Production servers require `ALLOW_DEBUG=1`.
 
 F1 also selects an elevated free camera or first-person fly camera. Both move independently of the player: WASD/arrows move, E/Q raise/lower, Shift or Space moves faster, and the wheel zooms without fixed zoom caps. Right-drag looks around in fly mode. Escape returns to player follow and restores gameplay controls. In debug camera mode the server receives idle player controls while the city keeps simulating. [Detailed controls and recorded day/night comparisons](docs/debugging.md).
@@ -139,4 +141,4 @@ Before joining, choose a Runner, Regular, or Tank and customize headwear/hair, u
 | Regular | 100    | 100%        |
 | Tank    | 150    | 80%         |
 
-The server owns health and movement. Physiques affect walking and sprinting; swimming, parachutes, jetpacks, vehicles, and collision sizes are shared. Recovery restores the chosen build's health; corpses retain the chosen appearance. Reconnecting preserves the active character. To choose again, refresh and join a new session; there is no in-game wardrobe. The responsive menu works at narrow widths, but gameplay still requires a keyboard and mouse. Protocol version 5 requires clients to refresh after deployment.
+The server owns health and movement. Physiques affect walking and sprinting; swimming, parachutes, jetpacks, vehicles, and collision sizes are shared. Recovery restores the chosen build's health; corpses retain the chosen appearance. Reconnecting preserves the active character. To choose again, refresh and join a new session; there is no in-game wardrobe. The responsive menu works at narrow widths, and gameplay supports keyboard/mouse or a standard gamepad. Protocol version 6 requires clients to refresh after deployment.

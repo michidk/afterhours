@@ -73,6 +73,20 @@ test("both Shift keys sprint through server and prediction without handbraking v
       .success,
     false,
   );
+  assert.equal(
+    messageSchema.safeParse({ type: "input", seq: 0, timestamp: 0, moveX: 1.1 })
+      .success,
+    false,
+  );
+  const analog = messageSchema.parse({
+    type: "input",
+    seq: 0,
+    timestamp: 0,
+    moveX: 0.5,
+  });
+  assert.equal(analog.type, "input");
+  if (analog.type !== "input") throw Error("Expected input");
+  assert.equal(analog.moveX, 0.5);
 });
 
 test("map zoom keeps the world under the cursor fixed and panning follows the pointer", () => {

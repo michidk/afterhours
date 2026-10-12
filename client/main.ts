@@ -65,6 +65,24 @@ function toast(message: string) {
 function send(data: object) {
   network?.send(data);
 }
+function handleGamepadActions() {
+  if (controls.gamepadPressed(8)) {
+    audio.ui();
+    cityMap?.setOpen(!cityMap.open);
+  }
+  if (controls.gamepadPressed(9)) {
+    audio.ui();
+    $("#help").classList.toggle("hidden");
+  }
+  if (cityMap?.open || scene.debugCamera.active) return;
+  if (controls.gamepadPressed(3)) send({ type: "interact" });
+  if (controls.gamepadPressed(1)) send({ type: "reload" });
+  if (controls.gamepadPressed(10)) send({ type: "jetpack" });
+  if (controls.gamepadPressed(11)) send({ type: "lights" });
+  [12, 15, 13, 14].forEach((button, slot) => {
+    if (controls.gamepadPressed(button)) send({ type: "equip", slot });
+  });
+}
 function loading(text: string) {
   const status = document.querySelector("#boot-status") ?? $("#loading");
   status.textContent = text;
@@ -301,14 +319,17 @@ setInterval(() => {
     point && position && !p?.vehicle
       ? Math.atan2(point.x - position.x, point.z - position.z)
       : undefined;
-  if (joined && !document.hidden)
+  if (joined && !document.hidden) {
+    const input = controls.sample();
+    handleGamepadActions();
     network?.input(
       cityMap?.open ||
         scene.debugCamera.active ||
         ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName || "")
         ? idle()
-        : automation?.input || controls.sample(),
+        : automation?.input || input,
     );
+  }
 }, 1000 / 30);
 setInterval(() => {
   if (debugAllowed && network && !$("#debug").classList.contains("hidden"))
