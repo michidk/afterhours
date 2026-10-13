@@ -67,6 +67,10 @@ import type { Vec3 } from "../shared/destruction.ts";
 import { Grenades } from "./grenades.ts";
 import type { PickupPayload } from "../shared/protocol.ts";
 import type { Intent } from "./citizens.ts";
+/** Damage a vehicle takes from an impact at this closing speed in m/s. */
+function crashDamage(speed: number) {
+  return Math.max(0, speed - TUNING.crashSafeSpeed) ** 2 * TUNING.crashDamage;
+}
 export class Simulation {
   city: City;
   entities = new Map<string, Entity>();
@@ -875,7 +879,7 @@ export class Simulation {
             }
             const speed = resolveContact(e, undefined, c);
             if (pass === 0 && vehicle(e) && speed > 3) {
-              this.damage(e, (speed - 3) ** 2 * TUNING.wallDamage);
+              this.damage(e, crashDamage(speed));
               this.events.push({ kind: "hit", x: c.x, z: c.z, y: e.y + 0.5 });
             }
           }
@@ -883,13 +887,12 @@ export class Simulation {
         for (const c of rampContacts(e, this.city)) {
           const speed = resolveContact(e, undefined, c);
           if (pass === 0 && vehicle(e) && speed > 3) {
-            this.damage(e, (speed - 3) ** 2 * TUNING.wallDamage);
+            this.damage(e, crashDamage(speed));
             this.events.push({ kind: "hit", x: c.x, z: c.z, y: e.y + 0.5 });
           }
         }
         const impact = resolveWorldBounds(e, this.city);
-        if (vehicle(e) && pass === 0)
-          this.damage(e, Math.max(0, impact - 3) ** 2 * TUNING.wallDamage);
+        if (vehicle(e) && pass === 0) this.damage(e, crashDamage(impact));
       }
       for (const [a, b] of collisionPairs(list)) {
         if (
@@ -929,7 +932,11 @@ export class Simulation {
                 : undefined;
         const speed = Math.min(resolveContact(a, b, c), vehicleApproach);
         if (pass === 0 && speed > 3) {
-          const severity = (speed - 3) ** 2 * TUNING.collisionDamage;
+          // Two vehicles use the vehicle curve; a person struck by one keeps the harsher one.
+          const severity =
+            vehicle(a) && vehicle(b)
+              ? crashDamage(speed)
+              : (speed - 3) ** 2 * TUNING.collisionDamage;
           this.damage(a, severity * Math.min(1, mass(b) / mass(a)), responsible);
           this.damage(b, severity * Math.min(1, mass(a) / mass(b)), responsible);
           if (!vehicle(a) && vehicle(b)) a.down = Math.max(a.down || 0, 0.8);

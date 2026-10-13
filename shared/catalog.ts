@@ -19,6 +19,14 @@ export const TUNING = {
   helicopterBoardingSeconds: 1,
   wallDamage: 0.35,
   collisionDamage: 0.5,
+  /**
+   * Vehicle crash damage is (impact speed - crashSafeSpeed)^2 * crashDamage, used for walls,
+   * ramps, world bounds and other vehicles. A sedan (100 health) loses about a third at
+   * 20 m/s (72 km/h) and survives a 28 m/s (100 km/h) wall without fire; fire starts at
+   * 25 health, around 29 m/s. People and falling aircraft keep wallDamage/collisionDamage.
+   */
+  crashSafeSpeed: 4,
+  crashDamage: 0.12,
   fireThreshold: 0.25,
   explosionRadius: 12,
   explosionDamage: 130,

@@ -353,3 +353,41 @@ test("AI cars and pedestrians remain active over a full traffic cycle", () => {
     ).length > 40,
   );
 });
+test("a sedan survives ordinary crashes and burns only from a very hard wall impact", () => {
+  const crash = (speed: number) => {
+    const s = empty(),
+      car = s.spawn("car", 0, 0);
+    s.city.buildings = [{ x: 0, z: 10, w: 12, d: 1, h: 10, color: "#fff", style: 0 }];
+    car.vz = speed;
+    run(s, 1.2);
+    return car;
+  };
+  const slow = crash(10),
+    town = crash(20),
+    fast = crash(28),
+    flat = crash(40);
+  assert.ok(slow.health > 90, `a bump at 36 km/h barely scratches: ${slow.health}`);
+  assert.ok(
+    town.health > 55 && town.health < 80,
+    `a 72 km/h wall costs about a third: ${town.health}`,
+  );
+  assert.equal(town.burning, undefined);
+  assert.ok(fast.health > 25, `a 100 km/h wall does not set it alight: ${fast.health}`);
+  assert.equal(fast.burning, undefined);
+  assert.ok(flat.burning !== undefined, "a 144 km/h wall wrecks it");
+  // The first crash no longer decides the car: a second one at the same speed does.
+  const s = empty(),
+    car = s.spawn("car", 0, 0);
+  s.city.buildings = [{ x: 0, z: 10, w: 12, d: 1, h: 10, color: "#fff", style: 0 }];
+  car.vz = 20;
+  run(s, 1.2);
+  const afterFirst = car.health;
+  car.z = 0;
+  car.vz = 20;
+  run(s, 1.2);
+  assert.ok(
+    car.health < afterFirst - 20 && car.health > 0,
+    `second hit: ${car.health}`,
+  );
+  assert.equal(car.burning, undefined, "two 72 km/h crashes still leave it running");
+});
