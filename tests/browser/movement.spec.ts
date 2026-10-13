@@ -214,6 +214,12 @@ for (const delay of [0, 150]) {
       const scene = window.afterhoursDebug?.scene.scene;
       return (
         scene && {
+          browser: navigator.userAgent,
+          hardwareConcurrency: navigator.hardwareConcurrency,
+          graphics: window.afterhoursDebug!.scene.engine.getGlInfo(),
+          hardwareScaling: scene.getEngine().getHardwareScalingLevel(),
+          renderWidth: scene.getEngine().getRenderWidth(),
+          renderHeight: scene.getEngine().getRenderHeight(),
           meshes: scene.meshes.length,
           candidates: scene.getActiveMeshCandidates().length,
           activeMeshes: scene.getActiveMeshes().length,
