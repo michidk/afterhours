@@ -1,6 +1,6 @@
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { segmentHitsBox } from "./occluders.ts";
+import { segmentHitsBuilding, type Footprint } from "./occluders.ts";
 import {
   STATIC_FIELDS,
   emptyCity,
@@ -23,10 +23,15 @@ export type GeometryOptions = {
   index?: number;
 };
 type Group = { meshes: Mesh[]; dispose(): void };
+/** The sight line ends at the player's torso, and is as thick as a person is wide. */
+const SIGHT_HEIGHT = 1;
+const SIGHT_PAD = 0.35;
 
 /** Reference-count by stable feature IDs so objects crossing chunk seams are drawn once. */
 export class CityRenderer {
   private features = new Map<string, Group>();
+  /** Solid volume of each loaded building, for the camera sight-line test. */
+  private footprints = new Map<string, Footprint>();
   /** Street polygons per chunk key; a chunk's streets never cross its seam. */
   private streets = new Map<string, Mesh[]>();
   private airport?: Group;
@@ -71,9 +76,12 @@ export class CityRenderer {
       if (!wanted.has(key)) {
         group.dispose();
         this.features.delete(key);
+        this.footprints.delete(key);
       }
     for (const [key, entry] of wanted)
       if (!this.features.has(key)) {
+        if (entry.field === "buildings")
+          this.footprints.set(key, entry.value as Footprint);
         const city = emptyCity(this.map);
         Object.assign(city, { [entry.field]: [entry.value] });
         this.features.set(
@@ -128,18 +136,19 @@ export class CityRenderer {
       this.airport = undefined;
     }
   }
-  /** Dither out buildings crossing the camera→player line so the player stays visible. */
+  /**
+   * Dither out only the buildings the camera's line of sight to the player really crosses.
+   * Standing beside a wall, or having a tower nearby, leaves it solid; the building fades
+   * when it is between the camera and the player, or when the camera is inside it.
+   */
   fadeOccluders(camera: Vector3, target: Vector3, dt: number) {
-    const dir = camera.subtract(target).normalize(),
-      start = target.add(dir.scale(6)),
+    const eye = { x: camera.x, y: camera.y, z: camera.z },
+      body = { x: target.x, y: target.y + SIGHT_HEIGHT, z: target.z },
       blend = 1 - Math.exp(-dt * 10);
     for (const [key, group] of this.features) {
-      if (!key.startsWith("buildings:")) continue;
-      const hit = group.meshes.some((mesh) => {
-          const box = mesh.getBoundingInfo().boundingBox;
-          return segmentHitsBox(start, camera, box.minimumWorld, box.maximumWorld, 4);
-        }),
-        goal = hit ? 0 : 1;
+      const building = this.footprints.get(key);
+      if (!building) continue;
+      const goal = segmentHitsBuilding(eye, body, building, SIGHT_PAD) ? 0 : 1;
       for (const mesh of group.meshes)
         mesh.visibility =
           Math.abs(goal - mesh.visibility) < 0.01
