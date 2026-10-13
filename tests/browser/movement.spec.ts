@@ -445,3 +445,133 @@ test("nighttime scenery is ready far ahead and lamp pools stay lit when approach
     );
   }
 });
+
+for (const model of ["sedan", "scout"] as const) {
+  test(`${model} renders continuous held-key movement and stops`, async ({
+    page,
+    request,
+  }, testInfo) => {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto("/");
+    await expect(page.locator("#play")).toBeEnabled({ timeout: 90_000 });
+    await page.locator("#name").fill(`${model} test`);
+    await page.locator("#play").click();
+    await expect(page.locator("#entry")).toBeHidden();
+    await page.waitForFunction(
+      () => !!window.afterhoursDebug?.network.prediction?.body,
+    );
+    const manifest: MapManifest = await (await request.get("/city")).json();
+    const vehicleId = await page.evaluate(
+      async ({ model, airport }) => {
+        const d = window.afterhoursDebug!;
+        d.scene.engine.setHardwareScalingLevel(2);
+        await d.teleport(airport.x + 32, airport.z);
+        const before = new Set((await d.state()).entities.map((e) => e.id));
+        const state = await d.spawn(model);
+        const vehicle = state.entities.find(
+          (e) => e.model === model && !before.has(e.id),
+        );
+        if (!vehicle) throw Error("Vehicle was not spawned");
+        await d.teleport(vehicle.x + 3, vehicle.z);
+        return vehicle.id;
+      },
+      { model, airport: manifest.airport },
+    );
+    await page.keyboard.press("f");
+    await page.waitForFunction((id) => {
+      const d = window.afterhoursDebug!;
+      return d.network.entities.get(d.network.playerId)?.vehicle === id;
+    }, vehicleId);
+    if (model === "scout") {
+      await page.keyboard.down("Space");
+      try {
+        await page.waitForFunction(
+          (id) =>
+            window.afterhoursDebug!.network.entities.get(id)?.flight === "cruising",
+          vehicleId,
+        );
+      } finally {
+        await page.keyboard.up("Space");
+      }
+    }
+    await page.evaluate(async (id) => {
+      const d = window.afterhoursDebug!;
+      await d.scene.scene.whenReadyAsync();
+      await d.settle();
+      window.movementSamples = [];
+      let held = false;
+      const sample = (kind: MovementSample["kind"]) => {
+        if (!held) return;
+        const body = d.network.entities.get(id);
+        const node = d.scene.nodes.get(id);
+        if (!body || !node) throw Error("Controlled vehicle missing");
+        window.movementSamples.push({
+          kind,
+          wall: performance.now(),
+          server: d.network.serverTime,
+          frame: d.network.frame,
+          seq: d.network.seq,
+          authority: body.z,
+          displayed: node.position.z,
+          pending: d.network.prediction?.pending.length ?? 0,
+        });
+      };
+      window.addEventListener("keydown", (event) => {
+        if (event.code !== "KeyW" || event.repeat) return;
+        held = true;
+        sample("input");
+      });
+      window.addEventListener("keyup", (event) => {
+        if (event.code !== "KeyW") return;
+        sample("input");
+        held = false;
+      });
+      d.scene.scene.onAfterRenderObservable.add(() => sample("render"));
+    }, vehicleId);
+    await page.keyboard.down("w");
+    await page.waitForTimeout(3000);
+    await page.keyboard.up("w");
+    const samples = await page.evaluate(() => window.movementSamples);
+    const path = testInfo.outputPath("vehicle-movement.json");
+    await writeFile(path, JSON.stringify({ model, samples, errors }, null, 2));
+    await testInfo.attach("vehicle movement", {
+      path,
+      contentType: "application/json",
+    });
+    expect(errors).toEqual([]);
+    expect(samples.length).toBeGreaterThan(2);
+    expect(samples.at(-1)!.seq - samples[0].seq).toBeGreaterThan(30);
+    expect(samples.at(-1)!.authority - samples[0].authority).toBeGreaterThan(8);
+    expect(samples.at(-1)!.displayed - samples[0].displayed).toBeGreaterThan(8);
+    const rendered = samples.filter((s) => s.kind === "render");
+    expect(rendered.length).toBeGreaterThan(1);
+    for (let i = 1; i < rendered.length; i++) {
+      expect(
+        rendered[i].wall - rendered[i - 1].wall,
+        "rendered movement must not freeze",
+      ).toBeLessThan(250);
+      expect(
+        rendered[i].displayed - rendered[i - 1].displayed,
+        "vehicle must not rewind while accelerating",
+      ).toBeGreaterThan(-0.01);
+    }
+    if (model === "sedan") await page.keyboard.down("Space");
+    try {
+      await page.waitForFunction((id) => {
+        const d = window.afterhoursDebug!;
+        const body = d.network.entities.get(id);
+        const node = d.scene.nodes.get(id);
+        return (
+          body &&
+          node &&
+          Math.hypot(body.vx, body.vz) < 0.05 &&
+          Math.hypot(body.x - node.position.x, body.z - node.position.z) < 0.15
+        );
+      }, vehicleId);
+    } finally {
+      await page.keyboard.up("Space");
+    }
+    expect(errors).toEqual([]);
+  });
+}
