@@ -12,6 +12,8 @@ import { VERSION } from "../shared/version.ts";
 const production = process.argv.includes("--production"),
   port = Number(process.env.PORT || 5173);
 const sim = new Simulation(await loadCity());
+// Build terrain colliders before accepting players, not on the first prop impact.
+sim.destruction.prepare();
 const cityStore = new CityStore(sim.city);
 await loadCityMeshes(cityStore);
 const vite = production

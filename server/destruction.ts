@@ -47,6 +47,9 @@ export class Destruction {
     for (const p of this.fixtures.values())
       this.grid.insert(p, p.x, p.z, Math.max(p.w, p.d));
   }
+  prepare() {
+    this.world();
+  }
   private world() {
     if (!this.physics) {
       this.physics = new RAPIER.World({ x: 0, y: -18, z: 0 });
@@ -301,8 +304,8 @@ export class Destruction {
     if (!this.physics) return;
     const world = this.physics;
     if (!this.active.size) {
-      world.free();
-      this.physics = undefined;
+      for (const collider of this.fixed.values()) world.removeCollider(collider, false);
+      for (const body of this.proxies.values()) world.removeRigidBody(body);
       this.fixed.clear();
       this.proxies.clear();
       return;

@@ -49,6 +49,12 @@ Protocol 7 rejects older clients whose collision solver or map manifest differs.
 
 ## Server overload
 
+The server prepares the debris physics world and terrain collider before listening.
+It retains that terrain world when debris becomes idle, removing only temporary
+colliders and actor proxies so later impacts do not rebuild it.
+Creating them lazily on the first prop impact blocked a live simulation tick for
+roughly 300–500 ms, delaying acknowledgements even with no network latency.
+
 The stepped-walking investigation reproduced only 1.8 m of movement in three seconds while the development shell was CPU-throttled. The fixed-step runtime could perform four expensive catch-up ticks without letting socket events run. It now yields once its callback consumes one tick budget, while retaining the four-step limit for cheap catch-up. Spatial queries reuse cell-range candidates until insertion or clearing invalidates them; returned arrays remain independent.
 
 Both managed previews now run immutable production Docker images outside the development shell's CPU quota. `PUBLIC_ORIGIN` permits the exact public origin behind container NAT without trusting forwarded headers from arbitrary peers. Prediction remains bounded and server authority is unchanged. Sustained overload still slows the simulation; yielding does not manufacture CPU capacity.
