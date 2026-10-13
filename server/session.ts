@@ -188,8 +188,8 @@ export class Sessions {
       c.lastInput = now;
       const { type, seq, timestamp, ...input } = m;
       c.queue.push({ seq, timestamp, input });
-      // Keep two ticks of jitter buffering; shed old controls rather than a new stop.
-      if (c.queue.length > 2) c.queue.shift();
+      // An 80 ms client wakeup batches three ticks; retain them without slowing authority.
+      if (c.queue.length > 3) c.queue.shift();
       return;
     }
     if (m.type === "resync") {

@@ -4,7 +4,7 @@ The server owns movement outcomes, damage, knockdown, seats and inventory. Clien
 
 ## Input scheduling
 
-The browser uses an elapsed-time accumulator for its 30 Hz input commands. Both timer wakeups and rendered frames pump the same clock, so overlapping callbacks cannot duplicate ticks. Short delays retain the fractional remainder and catch up with individually timestamped commands. A delay over 250 ms discards stale clock debt; hidden tabs reset the clock. The server still advances only one fixed physics tick at a time, regardless of packet bursts.
+The browser uses an elapsed-time accumulator for its 30 Hz input commands. Both timer wakeups and rendered frames pump the same clock, so overlapping callbacks cannot duplicate ticks. Short delays retain the fractional remainder and catch up with individually timestamped commands. A delay over 250 ms discards stale clock debt; hidden tabs reset the clock. The server still advances only one fixed physics tick at a time, regardless of packet bursts. It retains three queued commands: an 80 ms browser wakeup can produce three 30 Hz inputs. The former two-command cap discarded part of these ordinary batches, causing alternating one-tick corrections during steady driving and flight. Overflow still drops the oldest command, bounding application of the newest control to three ticks (100 ms) plus network transit.
 
 Counting timer callbacks as ticks made prediction run slow whenever the browser delivered a nominal 33 ms callback after 50 or 80 ms. The server continued its held input during those gaps, causing recurring corrections. Scheduled command timestamps also keep fractional render extrapolation aligned with the accumulated ticks.
 

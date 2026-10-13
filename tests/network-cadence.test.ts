@@ -11,9 +11,11 @@ import { generateCity } from "../scripts/city-generator.ts";
 import { idle } from "../shared/world.ts";
 
 // Real sockets, codecs and physics; virtual scheduling isolates transport from CPU load.
-for (const distance of [8, 80])
+for (const [kind, distance] of (["player", "car", "helicopter"] as const).flatMap(
+  (kind) => [8, 80].map((distance) => [kind, distance] as const),
+))
   for (const wakeup of [33, 50, 80]) {
-    test(`bidirectional jitter preserves held movement with ${wakeup} ms client wakeups and a neighbour at ${distance} m`, async (t) => {
+    test(`bidirectional jitter preserves ${kind} movement with ${wakeup} ms client wakeups and a neighbour at ${distance} m`, async (t) => {
       const city = generateCity();
       city.props = [];
       city.buildings = [];
@@ -50,6 +52,15 @@ for (const distance of [8, 80])
         await welcome;
         const player = sim.entities.get(network.playerId)!;
         player.x = player.z = 0;
+        const controlled = kind === "player" ? player : sim.spawn(kind, 0, 0);
+        if (kind !== "player") {
+          controlled.driver = player.id;
+          player.vehicle = controlled.id;
+          if (kind === "helicopter") {
+            controlled.flight = "cruising";
+            controlled.y = 30;
+          } else controlled.vz = 25;
+        }
         const remote = sim.join("Remote", "#ffffff");
         remote.x = distance;
         remote.z = 0;
@@ -94,10 +105,24 @@ for (const distance of [8, 80])
         let remoteAtStop = 0;
         let movedAt = 1000;
         let freeze = 0;
-        for (now = 0; now <= 4500; now++) {
+        let cruiseCorrections: number | undefined;
+        let lastCruiseCorrections = 0;
+        for (
+          now = 0;
+          now <= (kind === "player" ? 4500 : kind === "car" ? 20000 : 8000);
+          now++
+        ) {
           if (now % wakeup === 0)
             clock.advance(now, (timestamp) =>
-              network.input({ ...idle(), up: now < 3000, aim: Math.PI / 2 }, timestamp),
+              network.input(
+                {
+                  ...idle(),
+                  up: now < 3000,
+                  brake: kind === "car" && now >= 3000,
+                  aim: Math.PI / 2,
+                },
+                timestamp,
+              ),
             );
           while (outgoing[0]?.at <= now) {
             const delivered = once(peer, "message");
@@ -120,17 +145,19 @@ for (const distance of [8, 80])
           while (incoming[0]?.at <= now) receive.call(socket, incoming.shift()!.event);
           if (now % 16 === 0) {
             const rendered = network.renderEntities(now);
-            const pose = rendered.find((e) => e.id === player.id)!;
+            const pose = rendered.find((e) => e.id === controlled.id)!;
             const other = rendered.find((e) => e.id === remote.id)!;
             remoteBackward = Math.max(remoteBackward, remotePrevious - other.z);
             remotePrevious = other.z;
             if (now < 3000) remoteAtStop = other.z;
             if (now >= 1000 && now < 2800) {
+              cruiseCorrections ??= network.prediction!.corrections;
+              lastCruiseCorrections = network.prediction!.corrections;
               freeze = Math.max(freeze, now - movedAt);
               if (pose.z - previous > 0.001) movedAt = now;
             }
             backward = Math.max(backward, previous - pose.z);
-            maxError = Math.max(maxError, Math.abs(pose.z - player.z));
+            maxError = Math.max(maxError, Math.abs(pose.z - controlled.z));
             previous = pose.z;
             if (now < 3000) displayedAtStop = pose.z;
           }
@@ -139,14 +166,25 @@ for (const distance of [8, 80])
           network.seq >= 134,
           "client simulates 30 input ticks per second despite delayed wakeups",
         );
-        assert.ok(player.z > 11, `authority travels at walking speed: ${player.z}`);
+        assert.ok(controlled.z > 11, `authority makes progress: ${controlled.z}`);
         assert.ok(
           displayedAtStop > 10,
           `display progresses while held: ${displayedAtStop}`,
         );
         assert.ok(backward < 0.15, `no visible backward corrections: ${backward}`);
-        assert.ok(maxError < 1.5, `prediction remains near authority: ${maxError}`);
-        assert.ok(Math.abs(previous - player.z) < 0.03, "stop converges to authority");
+        assert.equal(
+          lastCruiseCorrections - (cruiseCorrections ?? 0),
+          0,
+          "steady travel must not repeatedly correct by more than 30 cm",
+        );
+        assert.ok(
+          maxError < (kind === "player" ? 1.5 : 9),
+          `prediction remains near authority: ${maxError}`,
+        );
+        assert.ok(
+          Math.abs(previous - controlled.z) < 0.03,
+          `stop converges to authority: error=${Math.abs(previous - controlled.z)} velocity=${controlled.vz}`,
+        );
         assert.ok(freeze <= 100, `no frozen local pose between snapshots: ${freeze}`);
         assert.ok(
           remoteAtStop > 10,
@@ -157,8 +195,8 @@ for (const distance of [8, 80])
           `remote interpolation never reverses: ${remoteBackward}`,
         );
         assert.ok(Math.abs(remotePrevious - remote.z) < 0.03, "remote stop settles");
-        assert.equal(player.vz, 0);
-        assert.equal(player.aim, Math.PI / 2);
+        assert.ok(Math.abs(controlled.vz) < 0.05, "release stops the controlled body");
+        if (kind === "player") assert.equal(player.aim, Math.PI / 2);
         assert.equal(sessions.rejected, 0);
         assert.ok(network.prediction!.pending.length < 8);
       } finally {

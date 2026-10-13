@@ -70,13 +70,18 @@ test("an input burst cannot delay the newest stop, duplicate it, or accelerate a
     }
     sessions.tick();
     sim.tick(1 / 30);
-    assert.equal(session.ack, 10, "retain at most two ticks of jitter buffering");
+    assert.equal(session.ack, 9, "retain at most three ticks of jitter buffering");
     sessions.tick();
     sim.tick(1 / 30);
-    assert.equal(session.ack, 11, "the newest stop is applied within two ticks");
+    assert.equal(session.ack, 10);
+    sessions.tick();
+    sim.tick(1 / 30);
+    assert.equal(session.ack, 11, "the newest stop is applied within three ticks");
+    sessions.tick();
+    sim.tick(1 / 30);
     assert.ok(
-      Math.abs(p.z - 0.04125) < 1e-8,
-      "one accelerating tick and one braking tick",
+      Math.abs(p.z - 791 / 4800) < 1e-8,
+      "two accelerating ticks and two braking ticks",
     );
     const stopped = p.z;
     prediction.reconcile(p, [p], session.ack);
@@ -96,7 +101,7 @@ test("an input burst cannot delay the newest stop, duplicate it, or accelerate a
     }
     sessions.tick();
     sim.tick(1 / 30);
-    assert.equal(session.ack, 22);
+    assert.equal(session.ack, 21);
     assert.ok(
       p.z > stopped && p.z - stopped < 0.03,
       "a burst grants one fixed tick, not twelve",
@@ -110,12 +115,12 @@ test("an input burst cannot delay the newest stop, duplicate it, or accelerate a
     const snapshot = await received;
     assert.equal(
       snapshot.ackTimestamp,
-      22 * 33,
+      21 * 33,
       "ack echoes applied browser timestamp",
     );
     assert.equal(
       snapshot.ack,
-      22,
+      21,
       "wire ack marks the applied input after shedding old backlog",
     );
     const entities = new Map<string, Entity>();
@@ -123,13 +128,15 @@ test("an input burst cannot delay the newest stop, duplicate it, or accelerate a
     prediction.reconcile(entities.get(p.id)!, [...entities.values()], snapshot.ack);
     assert.deepEqual(
       prediction.pending.map((frame) => frame.seq),
-      [23],
+      [22, 23],
     );
+    sessions.tick();
+    sim.tick(1 / 30);
     sessions.tick();
     sim.tick(1 / 30);
     assert.ok(
       Math.abs(prediction.body!.z - p.z) < 0.002,
-      "replay predicts the remaining tick within wire quantization",
+      "replay predicts the remaining ticks within wire quantization",
     );
   } finally {
     ws.terminate();
