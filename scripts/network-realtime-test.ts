@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { setTimeout as pause } from "node:timers/promises";
 import { GameNetwork } from "../client/network/index.ts";
+import { OrderedDelay } from "./ordered-delay.ts";
 import { InputClock } from "../client/input/clock.ts";
 import { loadCity } from "../server/city-loader.ts";
 import { CityStore } from "../server/city-stream.ts";
@@ -30,7 +31,7 @@ for (const delay of [0, 150, 360]) {
     },
   );
   const clients: GameNetwork[] = [];
-  const timers = new Set<ReturnType<typeof setTimeout>>();
+  const delays: OrderedDelay[] = [];
   const intervals: ReturnType<typeof setInterval>[] = [];
   let serverOutput = "";
   child.stderr.on("data", (data) => {
@@ -94,22 +95,15 @@ for (const delay of [0, 150, 360]) {
       let outgoingAt = 0,
         incomingAt = 0,
         packet = 0;
-      const schedule = (at: number, deliver: () => void) => {
-        const timer = setTimeout(
-          () => {
-            timers.delete(timer);
-            deliver();
-          },
-          Math.max(0, at - performance.now()),
-        );
-        timers.add(timer);
-      };
+      const outgoing = new OrderedDelay();
+      const incoming = new OrderedDelay();
+      delays.push(outgoing, incoming);
       socket.send = (data) => {
         outgoingAt = Math.max(
           outgoingAt,
           performance.now() + (delay ? 30 + (++packet % 3) * 10 : 0),
         );
-        schedule(outgoingAt, () => {
+        outgoing.schedule(outgoingAt, () => {
           if (socket.readyState === WebSocket.OPEN) send(data);
         });
       };
@@ -118,7 +112,7 @@ for (const delay of [0, 150, 360]) {
           incomingAt,
           performance.now() + delay + (delay ? (++packet % 3) * 10 : 0),
         );
-        schedule(incomingAt, () => receive.call(socket, event));
+        incoming.schedule(incomingAt, () => receive.call(socket, event));
       };
     }
     let held = false;
@@ -283,7 +277,7 @@ for (const delay of [0, 150, 360]) {
     failures.push(error instanceof Error ? error : new Error(String(error)));
     console.error(error);
   } finally {
-    for (const timer of timers) clearTimeout(timer);
+    for (const delay of delays) delay.clear();
     for (const interval of intervals) clearInterval(interval);
     for (const client of clients) client.close();
     child.kill("SIGTERM");
