@@ -330,7 +330,11 @@ test("missing collision chunks disable input, replay and extrapolation until loa
   prediction.input(frame, [p]);
   assert.deepEqual(prediction.body, p);
   assert.equal(prediction.pending.length, 0);
-  assert.equal(prediction.render(1016), undefined);
+  assert.deepEqual(
+    prediction.render(1016)!.body,
+    p,
+    "render authority without predicting through missing data",
+  );
   release();
   await new Promise((resolve) => setTimeout(resolve, 5));
   assert.equal(stream.ready(p), true);
@@ -353,7 +357,10 @@ test("missing collision chunks disable input, replay and extrapolation until loa
   prediction.reconcile(p, [p], -1);
   assert.deepEqual(prediction.body, p);
   assert.equal(prediction.pending.length, 0, "do not replay through an unloaded wall");
-  assert.equal(prediction.render(2016), undefined);
+  assert.ok(
+    prediction.render(2016),
+    "retain presentation while physics waits for data",
+  );
 });
 
 test("prediction checks the replayed and displayed positions, not only the snapshot", () => {
@@ -386,9 +393,9 @@ test("prediction checks the replayed and displayed positions, not only the snaps
   prediction.input({ seq: 0, timestamp: 1000, input: idle() }, [p, car]);
   assert.ok(prediction.body!.x > 1);
   assert.equal(
-    prediction.render(1016),
-    undefined,
-    "display extrapolation exceeds data",
+    prediction.render(1016)!.body.x,
+    0,
+    "display extrapolation cannot advance beyond collision data",
   );
   prediction.input({ seq: 1, timestamp: 1033, input: idle() }, [p, car]);
   prediction.reconcile(p, [p, car], -1);
@@ -701,4 +708,105 @@ test("remote aim crosses pi smoothly while walking yaw stays separate", () => {
   assert.ok(Math.abs(pose.aim! - Math.PI) < 1e-8);
   assert.equal(pose.angle, 0);
   assert.equal(interpolate(p, { ...p, aim: undefined }, 1).aim, undefined);
+});
+
+test("collision-map loss and recovery preserve the displayed car without predicting unknown collisions", () => {
+  const city = emptyCity({ seed: 42, airport: { x: 640, z: -640, w: 128, d: 200 } });
+  const car: Entity = {
+    id: "car",
+    kind: "car",
+    model: "sedan",
+    driver: "p",
+    x: 0,
+    z: 0,
+    y: 0,
+    vx: 0,
+    vz: 10,
+    vy: 0,
+    angle: 0,
+    health: 100,
+    color: "#fff",
+  };
+  const player: Entity = {
+    ...car,
+    id: "p",
+    kind: "player",
+    model: undefined,
+    driver: undefined,
+    vehicle: car.id,
+  };
+  const network = new GameNetwork(
+    { welcome() {}, state() {}, chat() {}, status() {} },
+    "Test",
+    "#fff",
+    city,
+  );
+  network.playerId = player.id;
+  network.entities = new Map([
+    [player.id, player],
+    [car.id, car],
+  ]);
+  let ready = true;
+  const prediction = (network.prediction = new Prediction(city, () => ready));
+  prediction.reconcile(player, [player, car], -1, 0);
+  for (let seq = 0; seq < 6; seq++)
+    prediction.input(
+      { seq, timestamp: (seq * 1000) / 30, input: { ...idle(), up: true } },
+      [player, car],
+    );
+  const display = (now: number) =>
+    network.renderEntities(now).find((e) => e.id === car.id)!;
+  const before = display(200);
+  assert.ok(before.z > 2, "the car has a visible prediction lead");
+  ready = false;
+  assert.equal(
+    display(216).z,
+    before.z,
+    "coverage loss must not snap back to authority",
+  );
+  let previous = before.z;
+  for (let tick = 1; tick <= 30; tick++) {
+    const now = 216 + (tick * 1000) / 30;
+    car.z = tick / 3;
+    prediction.reconcile(player, [player, car], 5, now);
+    prediction.input(
+      { seq: 5 + tick, timestamp: now, input: { ...idle(), up: true } },
+      [player, car],
+    );
+    assert.deepEqual(
+      prediction.body,
+      car,
+      "no physics steps while collision data is absent",
+    );
+    assert.equal(prediction.pending.length, 0);
+    const pose = display(now);
+    assert.ok(pose.z >= previous - 0.001, "fallback cannot rewind a moving car");
+    previous = pose.z;
+  }
+  car.vz = 0;
+  prediction.reconcile(player, [player, car], 35, 1250);
+  for (let now = 1250; now <= 3000; now += 16) display(now);
+  assert.ok(
+    Math.abs(display(3000).z - car.z) < 0.001,
+    "stopped presentation converges",
+  );
+  ready = true;
+  prediction.reconcile(player, [player, car], 35, 3010);
+  prediction.input({ seq: 36, timestamp: 3010, input: { ...idle(), up: true } }, [
+    player,
+    car,
+  ]);
+  assert.ok(
+    Math.abs(display(3010).z - car.z) < 0.001,
+    "resuming prediction preserves presentation",
+  );
+  assert.ok(prediction.body!.z > car.z, "physics resumes only with complete coverage");
+  ready = false;
+  car.z = 1000;
+  prediction.reconcile(player, [player, car], 36, 3100);
+  assert.equal(
+    display(3100).z,
+    1000,
+    "an authoritative teleport still resets presentation",
+  );
 });

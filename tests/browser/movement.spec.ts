@@ -12,6 +12,14 @@ interface MovementSample {
   authority: number;
   displayed: number;
   pending: number;
+  prediction?: {
+    status: string;
+    authorityReady: boolean;
+    bodyReady: boolean;
+    z: number | undefined;
+    offset: number;
+    correction: number;
+  };
 }
 declare global {
   interface Window {
@@ -515,6 +523,16 @@ for (const model of ["sedan", "scout"] as const) {
           authority: body.z,
           displayed: node.position.z,
           pending: d.network.prediction?.pending.length ?? 0,
+          prediction: {
+            status: d.network.prediction?.status ?? "missing",
+            authorityReady: d.network.worldReady(body),
+            bodyReady:
+              !!d.network.prediction?.body &&
+              d.network.worldReady(d.network.prediction.body),
+            z: d.network.prediction?.body?.z,
+            offset: d.network.prediction?.offset.z ?? 0,
+            correction: d.network.prediction?.lastCorrection.distance ?? 0,
+          },
         });
       };
       window.addEventListener("keydown", (event) => {

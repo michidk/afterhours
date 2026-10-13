@@ -21,7 +21,10 @@ export class Prediction {
   private smoothedAt = 0;
   private lastReconcile = 0;
   private lastInput: InputFrame | undefined;
-  private displayed: { x: number; y: number; z: number } | undefined;
+  private displayed: Pick<Entity, "x" | "y" | "z" | "angle"> | undefined;
+  private authoritative: Entity | undefined;
+  private presentationMode: "predicted" | "authoritative" | undefined;
+  private missingMap = false;
   private nearby: Entity[] = [];
   private shadows: Entity[] = [];
   private contacts = new Set<string>();
@@ -38,6 +41,9 @@ export class Prediction {
     this.offset = { x: 0, z: 0, y: 0, angle: 0 };
     this.lastInput = undefined;
     this.displayed = undefined;
+    this.authoritative = undefined;
+    this.presentationMode = undefined;
+    this.missingMap = false;
     this.nearby = [];
     this.shadows = [];
     this.contacts.clear();
@@ -50,7 +56,7 @@ export class Prediction {
   }
   get status() {
     if (!this.body) return "waiting for authority";
-    if (!this.worldReady(this.body)) return "waiting for map";
+    if (this.missingMap || !this.worldReady(this.body)) return "waiting for map";
     return this.suspended || this.pending.length > MAX_PREDICTION_STEPS
       ? "waiting for acknowledgements"
       : "predicting";
@@ -68,52 +74,46 @@ export class Prediction {
       this.ownership = authoritative.id;
     }
     this.decayOffset(now);
-    const previous =
-      this.body && this.worldReady(this.body)
-        ? this.extrapolate(this.body, now).body
-        : undefined;
+    const previous = this.sample(now)?.body;
     const gap = Math.min(2, Math.max(0, (now - this.lastReconcile) / 1000));
     this.lastReconcile = now;
     const acknowledged = this.pending.find((frame) => frame.seq === ack);
     this.pending = this.pending.filter((frame) => frame.seq > ack);
+    this.authoritative = structuredClone(authoritative);
     this.body = structuredClone(authoritative);
     this.nearby = entities;
     this.shadows = predictionWorld(this.body, entities);
     this.contacts = new Set([this.body.id]);
-    if (!this.worldReady(this.body)) {
-      this.pending = [];
-      this.lastInput = undefined;
-      this.offset = { x: 0, z: 0, y: 0, angle: 0 };
-      return;
-    }
     this.suspended = ack < this.discardedThrough;
-    // Replay a complete prefix, never a suffix or an unbounded backlog.
-    const replay = this.suspended ? [] : this.pending.slice(0, MAX_PREDICTION_STEPS);
-    this.lastInput = this.suspended
-      ? undefined
-      : (replay.at(-1) ?? acknowledged ?? this.lastInput);
-    for (const frame of replay) {
-      if (!this.worldReady(this.body)) break;
-      predictStep(
-        this.body,
-        frame.input,
-        this.city,
-        entities,
-        TUNING.tick,
-        this.shadows,
-        this.contacts,
-      );
+    if (this.worldReady(this.body)) {
+      // Replay a complete prefix, never a suffix or an unbounded backlog.
+      const replay = this.suspended ? [] : this.pending.slice(0, MAX_PREDICTION_STEPS);
+      this.lastInput = this.suspended
+        ? undefined
+        : (replay.at(-1) ?? acknowledged ?? this.lastInput);
+      for (const frame of replay) {
+        if (!this.worldReady(this.body)) break;
+        predictStep(
+          this.body,
+          frame.input,
+          this.city,
+          entities,
+          TUNING.tick,
+          this.shadows,
+          this.contacts,
+        );
+      }
     }
-    if (!this.worldReady(this.body)) {
+    this.missingMap = !this.worldReady(this.body);
+    if (this.missingMap) {
       this.pending = [];
       this.lastInput = undefined;
       this.body = structuredClone(authoritative);
       this.shadows = predictionWorld(this.body, entities);
-      this.offset = { x: 0, z: 0, y: 0, angle: 0 };
-      return;
+      this.contacts = new Set([this.body.id]);
     }
     if (previous) {
-      const next = this.extrapolate(this.body, now).body,
+      const next = this.sample(now)!.body,
         dx = previous.x - next.x,
         dz = previous.z - next.z,
         dy = previous.y - next.y;
@@ -181,8 +181,18 @@ export class Prediction {
   render(now: number) {
     this.decayOffset(now);
     this.lastRender = now;
-    if (!this.body || !this.worldReady(this.body)) return undefined;
-    const { body: pose, neighbours, contacts } = this.extrapolate(this.body, now);
+    const sample = this.sample(now);
+    if (!sample) return undefined;
+    const { body: pose, neighbours, contacts, mode } = sample;
+    if (this.displayed && this.presentationMode !== mode) {
+      this.offset = {
+        x: this.displayed.x - pose.x,
+        y: this.displayed.y - pose.y,
+        z: this.displayed.z - pose.z,
+        angle: wrap(this.displayed.angle - pose.angle),
+      };
+    }
+    this.presentationMode = mode;
     pose.x += this.offset.x;
     pose.z += this.offset.z;
     pose.y += this.offset.y;
@@ -190,7 +200,7 @@ export class Prediction {
     const speed = Math.hypot(pose.vx, pose.vy, pose.vz);
     const leading =
       this.offset.x * pose.vx + this.offset.y * pose.vy + this.offset.z * pose.vz;
-    if (this.displayed && speed > 0.1 && leading > 0) {
+    if (this.displayed && speed > 0.1 && (leading > 0 || mode === "authoritative")) {
       const rewind =
         ((this.displayed.x - pose.x) * pose.vx +
           (this.displayed.y - pose.y) * pose.vy +
@@ -208,15 +218,29 @@ export class Prediction {
         pose.z += dz;
       }
     }
-    if (!this.worldReady(pose)) return undefined;
     // A visual correction must not pull the controlled body through an obstacle.
     if (
       Math.hypot(this.offset.x, this.offset.z) > 0.001 ||
       Math.abs(this.offset.angle) > 0.001
     )
       constrainRenderPose(pose, this.city, neighbours);
-    this.displayed = { x: pose.x, y: pose.y, z: pose.z };
+    this.displayed = { x: pose.x, y: pose.y, z: pose.z, angle: pose.angle };
     return { body: pose, neighbours, contacts };
+  }
+  private sample(now: number) {
+    if (this.body && !this.missingMap && this.worldReady(this.body)) {
+      const predicted = this.extrapolate(this.body, now);
+      if (this.worldReady(predicted.body))
+        return { ...predicted, mode: "predicted" as const };
+    }
+    if (!this.authoritative) return undefined;
+    // Missing collision data disables physics, not presentation smoothing.
+    return {
+      body: structuredClone(this.authoritative),
+      neighbours: structuredClone(this.nearby),
+      contacts: new Set<string>(),
+      mode: "authoritative" as const,
+    };
   }
   private extrapolate(body: Entity, now: number) {
     const pose = {
@@ -248,7 +272,7 @@ export class Prediction {
   }
   input(frame: InputFrame, nearby: Entity[]) {
     if (!this.body) return;
-    if (!this.worldReady(this.body)) {
+    if (this.missingMap || !this.worldReady(this.body)) {
       this.pending = [];
       this.lastInput = undefined;
       return;
