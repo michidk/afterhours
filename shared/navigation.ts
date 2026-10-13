@@ -107,35 +107,63 @@ export class Navigation {
     return path(this.roads, start, goal, (n) => n.edges);
   }
   sidewalkPath(start: number, goal: number): Waypoint[] {
-    const ids = path(this.sidewalks, start, goal, (n) => n.edges.map((e) => e.id));
+    let links = sidewalkLinks.get(this);
+    if (!links) {
+      links = this.sidewalks.map((n) => n.edges.map((e) => e.id));
+      sidewalkLinks.set(this, links);
+    }
+    const ids = path(this.sidewalks, start, goal, (n) => links[n.id]);
     return ids.slice(1).map((id, i) => ({
       ...this.sidewalks[id],
       crossing: this.sidewalks[ids[i]].edges.find((e) => e.id === id)?.crossing,
     }));
   }
 }
-function path<T>(
+/** Neighbour ids per sidewalk node, derived once from the finished graph. */
+const sidewalkLinks = new WeakMap<Navigation, number[][]>();
+/** Reusable search state per graph: a route search must not allocate per node it visits. */
+const scratch = new WeakMap<object, { parent: Int32Array; queue: Int32Array }>();
+/**
+ * Shortest route by hop count, ties broken by edge order, so it is stable across runs.
+ * Breadth first search over typed arrays; `edges` must return the neighbour ids of a node.
+ */
+export function path<T>(
   nodes: T[],
   start: number,
   goal: number,
-  edges: (n: T) => number[],
+  edges: (n: T) => ArrayLike<number>,
 ): number[] {
   if (!nodes[start] || !nodes[goal]) return [];
-  const queue = [start],
-    parents = new Map([[start, -1]]);
-  for (let i = 0; i < queue.length; i++) {
-    const id = queue[i];
-    if (id === goal) break;
-    for (const next of edges(nodes[id]))
-      if (!parents.has(next)) {
-        parents.set(next, id);
-        queue.push(next);
-      }
+  let state = scratch.get(nodes);
+  if (!state || state.parent.length !== nodes.length) {
+    state = {
+      parent: new Int32Array(nodes.length),
+      queue: new Int32Array(nodes.length),
+    };
+    scratch.set(nodes, state);
   }
-  if (!parents.has(goal)) return [];
-  const result = [goal];
-  while (result[0] !== start) result.unshift(parents.get(result[0])!);
-  return result;
+  const { parent, queue } = state;
+  parent.fill(-2);
+  parent[start] = -1;
+  let head = 0,
+    tail = 0;
+  queue[tail++] = start;
+  while (head < tail) {
+    const id = queue[head++];
+    if (id === goal) break;
+    const list = edges(nodes[id]);
+    for (let i = 0; i < list.length; i++) {
+      const next = list[i];
+      if (parent[next] === -2) {
+        parent[next] = id;
+        queue[tail++] = next;
+      }
+    }
+  }
+  if (parent[goal] === -2) return [];
+  const result: number[] = [];
+  for (let at = goal; at !== -1; at = parent[at]) result.push(at);
+  return result.reverse();
 }
 const cache = new WeakMap<City, { roads: Road[]; navigation: Navigation }>();
 export function navigationFor(city: City) {
