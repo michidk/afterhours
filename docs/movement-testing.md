@@ -11,6 +11,16 @@ production stalls. It deliberately fails if CPU starvation slows
 simulated time; it does not wait longer to make slow movement pass. Run it without
 other local builds when comparing results. CI runs it after the build.
 
+`bun run test:browser` holds a key in a real Chromium and checks the rendered
+movement. Off CI it also fails any rendered freeze of 250 ms or more. Hosted CI
+sets `CI`, which disables only that frame-pacing limit (`freezeLimitMs` in
+`tests/browser/movement.spec.ts`): its software WebGL renders the full city at
+250–400 ms frame gaps on a shared runner, so the result says nothing about game code
+or real hardware. Input cadence, authority speed, displayed progress, rewind and
+stop checks still run in CI. The 250 ms limit stays the acceptance check on a
+local or hardware-backed run, and the open full-city frame-pacing failures
+recorded below remain unresolved.
+
 `bun run bench:simulation --seconds 900` runs fifteen simulated minutes of the
 saved city as fast as possible, reporting wall time and main-thread CPU time per
 tick in one-minute windows. A large gap between them indicates time outside main-thread
