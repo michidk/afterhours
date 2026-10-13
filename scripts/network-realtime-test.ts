@@ -117,6 +117,7 @@ for (const delay of [0, 150, 360]) {
     }
     let held = false;
     let climbing = false;
+    let driving = false;
     for (const [i, client] of clients.entries()) {
       const clock = new InputClock();
       intervals.push(
@@ -128,6 +129,7 @@ for (const delay of [0, 150, 360]) {
                   ...idle(),
                   up: i === 0 && held,
                   ascend: i === 0 && climbing,
+                  brake: i === 0 && driving && !held,
                   aim: Math.PI / 2,
                 },
                 timestamp,
@@ -137,7 +139,10 @@ for (const delay of [0, 150, 360]) {
         ),
       );
     }
-    async function measureRun(scenario: "walking" | "helicopter", bodyId: string) {
+    async function measureRun(
+      scenario: "walking" | "car" | "helicopter",
+      bodyId: string,
+    ) {
       await pause(750);
       const initial = walker.entities.get(bodyId)!;
       const initialZ = initial.z,
@@ -171,7 +176,7 @@ for (const delay of [0, 150, 360]) {
       const heldSeconds = (performance.now() - started) / 1000;
       const distance = walker.entities.get(bodyId)!.z - initialZ;
       const commands = walker.seq - initialSeq;
-      await pause(3000);
+      await pause(scenario === "car" ? 15000 : 3000);
       clearInterval(sampling);
       const moving = samples.filter((s) => s.at >= 750 && s.at < 2800);
       const measure = (key: "local" | "remote") => {
@@ -207,6 +212,7 @@ for (const delay of [0, 150, 360]) {
           remote,
           pending: Math.max(...samples.map((s) => s.pending)),
           stopError: Math.abs(final.local - player.z),
+          resyncs: clients.map((client) => client.resyncs),
           health,
         }),
       );
@@ -243,36 +249,52 @@ for (const delay of [0, 150, 360]) {
       failures.push(error);
       console.error(error);
     });
-    await observer.debug({
-      kind: "teleport",
-      x: city.airport.x + 50,
-      z: city.airport.z,
-    });
-    await walker.debug({ kind: "teleport", x: city.airport.x + 32, z: city.airport.z });
-    await pause(150);
-    const before = new Set(
-      (await walker.debug({ kind: "state" })).entities.map((e) => e.id),
-    );
-    await pause(150);
-    const spawned = await walker.debug({ kind: "spawn", model: "scout" });
-    const helicopter = spawned.entities.find(
-      (e) => e.model === "scout" && !before.has(e.id),
-    );
-    assert.ok(helicopter, "spawn a helicopter in the airfield");
-    await pause(150);
-    await walker.debug({ kind: "teleport", x: helicopter.x + 3, z: helicopter.z });
-    walker.send({ type: "interact" });
-    await until(
-      () => walker.entities.get(walker.playerId)?.vehicle === helicopter.id,
-      "pilot boards",
-    );
-    climbing = true;
-    await until(
-      () => walker.entities.get(helicopter.id)?.flight === "cruising",
-      "helicopter takes off",
-    );
-    climbing = false;
-    await measureRun("helicopter", helicopter.id);
+    for (const model of ["sedan", "scout"] as const) {
+      driving = model === "sedan";
+      await observer.debug({
+        kind: "teleport",
+        x: city.airport.x + 50,
+        z: city.airport.z,
+      });
+      await walker.debug({
+        kind: "teleport",
+        x: city.airport.x + 32,
+        z: city.airport.z,
+      });
+      await pause(150);
+      const before = new Set(
+        (await walker.debug({ kind: "state" })).entities.map((e) => e.id),
+      );
+      await pause(150);
+      const spawned = await walker.debug({ kind: "spawn", model });
+      const vehicle = spawned.entities.find(
+        (e) => e.model === model && !before.has(e.id),
+      );
+      assert.ok(vehicle, `spawn ${model} in the airfield`);
+      await pause(150);
+      await walker.debug({ kind: "teleport", x: vehicle.x + 3, z: vehicle.z });
+      walker.send({ type: "interact" });
+      await until(
+        () => walker.entities.get(walker.playerId)?.vehicle === vehicle.id,
+        "driver boards",
+      );
+      if (model === "scout") {
+        climbing = true;
+        await until(
+          () => walker.entities.get(vehicle.id)?.flight === "cruising",
+          "helicopter takes off",
+        );
+        climbing = false;
+      }
+      await measureRun(driving ? "car" : "helicopter", vehicle.id).catch(
+        (error: Error) => {
+          failures.push(error);
+          console.error(error);
+        },
+      );
+      walker.send({ type: "interact" });
+      await until(() => !walker.entities.get(walker.playerId)?.vehicle, "driver exits");
+    }
   } catch (error) {
     failures.push(error instanceof Error ? error : new Error(String(error)));
     console.error(error);
