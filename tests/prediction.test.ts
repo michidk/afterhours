@@ -621,6 +621,21 @@ test("remote traffic remains continuous under uneven snapshot delivery", () => {
   );
 });
 
+test("a delayed snapshot after a render stall cannot rewind remote movement", () => {
+  const s = new Simulation(generateCity()),
+    car = s.spawn("car", 0, 0);
+  car.vx = 10;
+  const timeline = new SnapshotTimeline();
+  timeline.push(1, [{ ...car, x: 10 }], 0);
+  timeline.sample(0);
+  const before = timeline.sample(200)[0].x;
+  assert.ok(Math.abs(before - 11) < 1e-8, "reach the bounded extrapolated pose");
+
+  timeline.push(1 + 1 / 15, [{ ...car, x: (1 + 1 / 15) * 10 }], 600);
+  const after = timeline.sample(600)[0].x;
+  assert.ok(Math.abs(after - 11) < 1e-8, "resume from the last displayed pose");
+});
+
 test("remote movement stays continuous when server time runs slower than wall time", () => {
   const s = new Simulation(generateCity()),
     car = s.spawn("car", 0, 0);

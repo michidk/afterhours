@@ -32,7 +32,8 @@ export class SnapshotTimeline {
     const desired = latest.time + ((now - latest.received) / 1000) * playback - 0.1;
     const dt = Math.max(0, (now - (this.lastFrame ?? now)) / 1000);
     this.lastFrame = now;
-    if (this.clock === undefined || dt > 0.25) this.clock = desired;
+    if (this.clock === undefined) this.clock = desired;
+    else if (dt > 0.25) this.clock = Math.max(this.clock, desired);
     else {
       const error = desired - this.clock;
       const rate = playback * (1 + Math.max(-0.1, Math.min(0.1, error * 2)));

@@ -34,6 +34,9 @@ gate below. The deterministic socket regression also tests a neighbour at both
 8 and 80 metres: ordinary nearby players must stay on buffered interpolation.
 Only contact-connected bodies use provisional collision poses, then blend back to
 the buffered timeline over 500 ms. Server snapshots remain authoritative.
+The remote timeline regression also delivers a late snapshot after a 400 ms render
+pause: resuming playback must preserve the last displayed position instead of
+resetting the presentation clock backward.
 
 Run the production browser test from a checkout that nobody else is editing:
 
