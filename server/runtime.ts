@@ -14,6 +14,9 @@ export class Runtime {
   start() {
     let last = performance.now(),
       accumulator = 0;
+    const snapshotInterval = TUNING.tick * 2000;
+    let nextSnapshot = last + snapshotInterval;
+    let lastSnapshotTick = this.ticks;
     this.timer = setInterval(() => {
       const now = performance.now();
       accumulator += Math.min(0.2, (now - last) / 1000);
@@ -27,11 +30,22 @@ export class Runtime {
         const start = performance.now();
         this.sessions.tick();
         this.sim.tick(TUNING.tick);
-        if (++this.ticks % 2 === 0) this.sessions.broadcast();
+        this.ticks++;
         this.samples.push(performance.now() - start);
         if (this.samples.length > 600) this.samples.shift();
         accumulator -= TUNING.tick;
         catchup++;
+      }
+      if (this.ticks !== lastSnapshotTick && performance.now() >= nextSnapshot) {
+        const start = performance.now();
+        this.sessions.broadcast();
+        lastSnapshotTick = this.ticks;
+        const finished = performance.now();
+        // Publish the latest completed state once, skipping missed deadlines.
+        nextSnapshot +=
+          (Math.floor((finished - nextSnapshot) / snapshotInterval) + 1) *
+          snapshotInterval;
+        this.samples[this.samples.length - 1] += finished - start;
       }
       if (accumulator > 0.15) {
         this.late++;

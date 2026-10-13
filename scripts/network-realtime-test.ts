@@ -154,13 +154,15 @@ for (const delay of [0, 150, 360]) {
         authority: number;
         pending: number;
       }[] = [];
+      let pendingPeak:
+        { at: number; stats: ReturnType<GameNetwork["stats"]> } | undefined;
       const started = performance.now();
       const sampling = setInterval(() => {
         const now = performance.now();
         const local = walker.renderEntities(now).find((e) => e.id === bodyId);
         const remote = observer.renderEntities(now).find((e) => e.id === bodyId);
         const authority = walker.entities.get(bodyId);
-        if (local && remote && authority)
+        if (local && remote && authority) {
           samples.push({
             at: now - started,
             local: local.z,
@@ -168,6 +170,9 @@ for (const delay of [0, 150, 360]) {
             authority: authority.z,
             pending: walker.prediction?.pending.length ?? 0,
           });
+          if (!pendingPeak || samples.at(-1)!.pending > pendingPeak.stats.pending)
+            pendingPeak = { at: now - started, stats: walker.stats(now) };
+        }
       }, 16);
       intervals.push(sampling);
       held = true;
@@ -211,6 +216,7 @@ for (const delay of [0, 150, 360]) {
           local,
           remote,
           pending: Math.max(...samples.map((s) => s.pending)),
+          pendingPeak,
           stopError: Math.abs(final.local - player.z),
           resyncs: clients.map((client) => client.resyncs),
           health,

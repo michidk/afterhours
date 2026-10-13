@@ -1,11 +1,13 @@
 # Movement regression tests
 
 `bun run test:network` runs two real clients against a separate production server
-using the saved city. It measures walking and helicopter movement with 0, 150 and
+using the saved city. It measures walking, driving and helicopter movement with 0, 150 and
 360 ms incoming delay plus ordered bidirectional jitter. It checks input cadence,
 authoritative speed, local and nearby remote poses, backward jumps, release,
-convergence and bounded unacknowledged inputs. Each scenario prints timings and
-server health before asserting. It deliberately fails if CPU starvation slows
+convergence and bounded unacknowledged inputs. Each scenario prints timings,
+server health and the networking counters at peak pending input before asserting.
+Snapshot age and acknowledged-input age distinguish delayed snapshots from input
+production stalls. It deliberately fails if CPU starvation slows
 simulated time; it does not wait longer to make slow movement pass. Run it without
 other local builds when comparing results. CI runs it after the build.
 
@@ -46,7 +48,7 @@ bun run test:browser:docker
 
 This builds the existing Dockerfile, starts pinned headless Chromium with a loopback-only random CDP port, discovers the bridge gateway, and tears down its containers and image tag on exit. The game's test HTTP listener uses port 4175 so the browser container can reach it. This run is headless and does not appear in the shared T3 tab. No external skill helper is required. Use Docker on the shared VibePod host to keep the simulation out of the development shell's CPU-throttled cgroup.
 
-`tests/runtime.test.ts` uses a controlled clock to reproduce a server tick taking 40 ms. It requires the runtime to yield to socket events after that tick, while permitting at most four catch-up ticks when they are cheap. `tests/input-timing.test.ts` checks actual socket input batching and acknowledgements with manually stepped authority. `tests/prediction.test.ts` covers delayed snapshots, collision agreement, bounded speculation and acknowledgement recovery without relying on machine speed.
+`tests/runtime.test.ts` uses a controlled clock to reproduce slow server ticks. It requires the runtime to yield to socket events after a 40 ms tick, while permitting at most four catch-up ticks when they are cheap. Snapshot delivery targets 15 Hz in wall time, publishes only completed states, and skips missed deadlines instead of sending catch-up bursts. With 80 ms physics ticks, each completed state is delivered without waiting for a second tick. `tests/input-timing.test.ts` checks actual socket input batching and acknowledgements with manually stepped authority. `tests/prediction.test.ts` covers delayed snapshots, collision agreement, bounded speculation and acknowledgement recovery without relying on machine speed.
 
 ## Managed preview runtime
 
