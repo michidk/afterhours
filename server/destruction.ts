@@ -1,4 +1,4 @@
-import { terrainMesh } from "../shared/terrain.ts";
+import { terrainHeight, terrainMesh } from "../shared/terrain.ts";
 import RAPIER from "@dimforge/rapier3d-compat";
 import {
   destructibles,
@@ -48,7 +48,22 @@ export class Destruction {
       this.grid.insert(p, p.x, p.z, Math.max(p.w, p.d));
   }
   prepare() {
-    this.world();
+    const world = this.world();
+    // The first step builds the terrain's acceleration structures and warms the wasm contact
+    // paths, which took over 80 ms on the first live prop impact and stalled every player.
+    // A throwaway body resting on the terrain pays for that here, before anyone connects.
+    const x = this.city.centre?.x ?? 0,
+      z = this.city.centre?.z ?? 0;
+    const body = world.createRigidBody(
+      RAPIER.RigidBodyDesc.dynamic().setTranslation(
+        x,
+        terrainHeight(x, z, this.city) + 0.3,
+        z,
+      ),
+    );
+    world.createCollider(RAPIER.ColliderDesc.cuboid(0.3, 0.3, 0.3), body);
+    for (let i = 0; i < 4; i++) world.step();
+    world.removeRigidBody(body);
   }
   private world() {
     if (!this.physics) {
