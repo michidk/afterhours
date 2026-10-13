@@ -42,6 +42,63 @@ export class SpatialGrid<T> {
       }
     }
   }
+  /** Remove an item previously inserted with the same position and radius. */
+  remove(item: T, x: number, z: number, radius = 0) {
+    this.queries.clear();
+    this.visited.delete(item);
+    for (
+      let ix = Math.floor((x - radius) / this.size);
+      ix <= Math.floor((x + radius) / this.size);
+      ix++
+    ) {
+      const column = this.cells.get(ix);
+      if (!column) continue;
+      for (
+        let iz = Math.floor((z - radius) / this.size);
+        iz <= Math.floor((z + radius) / this.size);
+        iz++
+      ) {
+        const cell = column.get(iz);
+        const at = cell ? cell.indexOf(item) : -1;
+        if (cell && at >= 0) cell.splice(at, 1);
+      }
+    }
+  }
+  /**
+   * Insert keeping every cell ascending by `rank`, so an item put back later lands exactly
+   * where a grid built from scratch would have placed it. Query order stays reproducible.
+   */
+  insertRanked(
+    item: T,
+    x: number,
+    z: number,
+    radius: number,
+    rank: (item: T) => number,
+  ) {
+    this.queries.clear();
+    const mine = rank(item);
+    for (
+      let ix = Math.floor((x - radius) / this.size);
+      ix <= Math.floor((x + radius) / this.size);
+      ix++
+    ) {
+      let column = this.cells.get(ix);
+      if (!column) this.cells.set(ix, (column = this.spareColumns.pop() ?? new Map()));
+      for (
+        let iz = Math.floor((z - radius) / this.size);
+        iz <= Math.floor((z + radius) / this.size);
+        iz++
+      ) {
+        const cell = column.get(iz) ?? this.spareCells.pop() ?? [];
+        if (!cell.includes(item)) {
+          let at = cell.length;
+          while (at > 0 && rank(cell[at - 1]) > mine) at--;
+          cell.splice(at, 0, item);
+        }
+        column.set(iz, cell);
+      }
+    }
+  }
   query(x: number, z: number, radius: number) {
     const minX = Math.floor((x - radius) / this.size),
       maxX = Math.floor((x + radius) / this.size),
