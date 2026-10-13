@@ -57,6 +57,20 @@ Authority and prediction use the same sweep broad phase. It sorts bodies along X
 
 Protocol 7 rejects older clients whose collision solver or map manifest differs. Physics remains at 120 Hz and authority at 30 Hz; the optimization does not lower collision frequency or give the client additional simulation time.
 
+## Server tick cost (2026-10-13)
+
+Production could not hold 30 Hz. Two samples of the public `/health` showed the simulation advancing 17.9 s in about 25 s of wall time with two players (72% of real time) and 26.9 s in 30.7 s with nobody connected (88%), at 26 ticks per second, with a tick p95 of 49 to 70 ms against the 33 ms budget. Every client then saw slow motion, stretched playback and constant corrections, and a second player made it worse. The cost is the simulation, not the players: with nobody connected the process still spent about 0.8 CPU cores.
+
+Profiling the real server loop (`bun run bench:server`) put about 85% of the tick in the four 120 Hz physics substeps, each of which touches every AI body in the city, while snapshots and sockets were a few percent. Production ran about four times slower per tick than the development machine, so the worst cases were the ones to fix. Changes, each measured and covered by tests:
+
+- **Level of detail for bodies nobody can reach** (`Simulation.distantAi`). An AI body farther than `contactRange` from every human takes one 30 Hz step per tick instead of four, with its timers advanced by the whole tick, and joins only the first contact pass. `contactRange` is the same function the client uses to decide which neighbours to predict, so a body a client could predict a contact with is always simulated at full rate. Distant pedestrians re-plan every fourth tick, staggered by id, with the real elapsed time and without repeating attacks. Over 2,400 ticks per variant, alternating in one process, the mean tick fell about three times (9.5 to 3.1 ms thread CPU), with players downtown or far from it. A distant body integrates once per tick and ends within a few centimetres of the full-rate result; `tests/server-lod.test.ts` pins both facts, and that a body within reach is bit-identical to the old path.
+- **Route search.** Breadth-first search now uses typed arrays and cached neighbour ids instead of a hash map and a new array per visited node: the same routes (checked against the original algorithm on the generated city), 3.7 times faster for roads and 7 times for sidewalks, worst case 10.5 to 2.7 ms.
+- **Static collision grid.** Breaking or restoring a prop rebuilt the grid of every collider (9,719 props in the saved city): median 12.8 ms, up to 40 ms, on the server and in every browser. The grid is now updated in place and keeps colliders in their original order, so queries match a fresh build exactly; the update costs well under a millisecond.
+- **First debris event.** Rapier built the terrain acceleration structures on the first live step, 84 ms inside a tick. `prepare()` now runs a throwaway body against the terrain before the server listens; the first impact costs about 30 ms in total.
+- The spatial index of moving bodies is rebuilt only on the substeps where AI decisions read it.
+
+Wall-clock timing on a shared machine is noisy, so the comparisons use alternating blocks and thread CPU time (`bun run bench:lod`). They show relative cost, not production capacity: measure `/health` after a rollout (`ticks` against wall time, `late`, `tickP95Ms`). Distant bodies beyond a human's view are simulated more coarsely by design; a debug camera that moves snapshot interest far from every human will show them.
+
 ## Server overload
 
 The server prepares the debris physics world and terrain collider before listening.

@@ -96,6 +96,7 @@ This runs one non-root Node process behind Caddy with HTTPS, WebSockets, health 
 - The urban plateau is level and building collision is rectangular. The generator does not yet place ramps or paved surfaces.
 - Vehicles use a planar solver with separate altitude, not full suspension or aerodynamics.
 - The server buffers two spare input commands per player, kept there by the browser's input clock; a tick with nothing buffered repeats the last movement controls and acknowledges that slot in advance, so the late command is never stepped twice and the driver sees a correction only if it changed controls at exactly that moment. Other players see no stutter. Stalls longer than 250 ms release controls and correct.
+- AI traffic and pedestrians that no player can reach within the prediction horizon are simulated at 30 Hz instead of 120 Hz, and distant pedestrians re-plan every fourth tick; everything within reach keeps full-rate physics. A debug camera moved far from every player can show them. See [networking](docs/networking.md).
 - Sixteen moving clients have been tested locally, never over a real WAN. Server tick time under load has exceeded the 33 ms budget in some measurements; see [operations](docs/operations.md).
 - Automated browser tests use software rendering (SwiftShader), so their frame times are not hardware evidence. CI therefore skips the 250 ms frame-freeze check that local runs enforce.
 - The wire protocol is versioned, so clients must refresh after a deployment.

@@ -43,6 +43,8 @@ Delay, jitter and spikes apply to its socket only, so it can run beside a real b
 session to compare what each player sees, or against the production URL with
 `--model none` to walk.
 
+`bun run bench:server --players 2` runs the real server loop (runtime, sessions, snapshot encoding, WebSockets) with bots and prints the busiest functions by self and inclusive time. `bun run bench:ticks --seconds 600` times every section of every tick and lists the slowest ticks with their causes. `bun run bench:lod` compares full-rate and level-of-detail simulation in alternating blocks by thread CPU time, which other load on the machine distorts far less than wall time (Windows quantises it to about 16 ms, so read the means, not the percentiles).
+
 `bun run bench:simulation --seconds 900` runs fifteen simulated minutes of the
 saved city as fast as possible, reporting wall time and main-thread CPU time per
 tick in one-minute windows. A large gap between them indicates time outside main-thread
