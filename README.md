@@ -51,9 +51,11 @@ Standard gamepads use the left stick to move and steer, LT/RT to reverse/acceler
 - **Vehicles:** cars, helicopters, planes, boats and jet skis with shared multi-seat rides, plus jetpacks and parachutes.
 - **Combat:** fists, bats, knives, pistols, SMGs, machine guns, flamethrowers and grenades, with server-owned inventory, ammunition and lag-compensated hits.
 - **Population:** 84 AI traffic cars and 130 pedestrians with personalities, routes, signals and reactions to crime and crashes. See [traffic](docs/traffic.md).
+- **Crashes:** cars take damage from the speed of an impact: a bump below 15 km/h is free, a 70 km/h wall costs about a third of a sedan's health, a 100 km/h wall leaves it running, and only harder hits set it alight, followed by an explosion six seconds later. Fast, sliding or handbraked turns leave rubber on streets, hills and the airfield. Tuning lives in `TUNING.crashSafeSpeed` and `TUNING.crashDamage`.
 - **Destruction:** palms, lamps, signs and hydrants can be knocked over or destroyed, then restore. See [destruction](docs/destruction.md).
 - **Characters:** three builds (Runner, Regular, Tank) with customizable appearance, saved on the device.
-- **Atmosphere:** day/night lighting and 149 CC0 sound clips ([credits](public/audio/CREDITS.md), [audio notes](docs/audio.md)).
+- **Camera:** the follow camera dithers a building out only while that building is between the camera and the player, or the camera is inside it. A building beside you stays solid. The fade is a screen-door pattern, not transparency, so shadows and depth stay intact.
+- **Atmosphere:** day/night lighting and 149 CC0 sound clips ([credits](public/audio/CREDITS.md), [audio notes](docs/audio.md)). Sounds are local: engines, tyres, fire and footsteps fade out within about 30 m, aircraft and horns within 45 m, gunfire within 55 m and explosions within 75 m, and another player's inventory or life-state cues are never heard.
 
 ## The city
 
