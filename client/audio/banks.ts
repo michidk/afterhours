@@ -6,6 +6,11 @@ export interface SoundBank {
   volume: number;
   pitch: number;
   gainVariation: number;
+  /**
+   * Metres at which the sound has faded to silence; gain follows (1 - distance / range)^2.
+   * Zero marks a cue for the listener alone (interface, inventory, own life state, own
+   * parachute): it is never played for a source away from the listener.
+   */
   range: number;
   cooldown: number;
   voices: number;
@@ -31,7 +36,7 @@ export const SOUND_BANKS = {
   horn: bank(clips("horn", 2), {
     volume: 0.35,
     pitch: 0.4,
-    range: 80,
+    range: 50,
     cooldown: 0.25,
     voices: 4,
   }),
@@ -39,127 +44,127 @@ export const SOUND_BANKS = {
     loop: true,
     volume: 0.2,
     pitch: 0.5,
-    range: 55,
+    range: 36,
   }),
   engineSport: bank(["engine-3", "engine-4"], {
     loop: true,
     volume: 0.22,
     pitch: 0.5,
-    range: 55,
+    range: 36,
   }),
   engineVan: bank(["engine-5", "engine-6"], {
     loop: true,
     volume: 0.2,
     pitch: 0.5,
-    range: 55,
+    range: 36,
   }),
   helicopter: bank(clips("helicopter", 3), {
     loop: true,
     volume: 0.3,
     pitch: 0.35,
-    range: 80,
+    range: 60,
   }),
-  plane: bank(clips("plane", 3), { loop: true, volume: 0.28, pitch: 0.35, range: 80 }),
-  skid: bank(clips("skid", 3), { loop: true, volume: 0.22, pitch: 1.5, range: 45 }),
+  plane: bank(clips("plane", 3), { loop: true, volume: 0.28, pitch: 0.35, range: 60 }),
+  skid: bank(clips("skid", 3), { loop: true, volume: 0.22, pitch: 1.5, range: 30 }),
   tyreSqueal: bank(clips("tyre-squeal", 3), {
     loop: true,
     volume: 0.3,
     pitch: 0.4,
-    range: 55,
+    range: 34,
   }),
   tyreOnset: bank(clips("tyre-onset", 2), {
     volume: 0.2,
     pitch: 0.6,
-    range: 45,
+    range: 30,
     cooldown: 0.8,
   }),
   sedanIdle: bank(clips("sedan-idle", 2), {
     loop: true,
     volume: 0.2,
     pitch: 0.2,
-    range: 55,
+    range: 36,
   }),
   sedanHigh: bank(clips("sedan-high", 2), {
     loop: true,
     volume: 0.22,
     pitch: 0.2,
-    range: 55,
+    range: 36,
   }),
   sedanCoast: bank(clips("sedan-coast", 2), {
     loop: true,
     volume: 0.16,
     pitch: 0.2,
-    range: 55,
+    range: 36,
   }),
   sportIdle: bank(clips("sport-idle", 2), {
     loop: true,
     volume: 0.22,
     pitch: 0.2,
-    range: 55,
+    range: 36,
   }),
   sportHigh: bank(clips("sport-high", 2), {
     loop: true,
     volume: 0.26,
     pitch: 0.2,
-    range: 65,
+    range: 40,
   }),
   sportCoast: bank(clips("sport-coast", 2), {
     loop: true,
     volume: 0.18,
     pitch: 0.2,
-    range: 55,
+    range: 36,
   }),
   vanIdle: bank(clips("van-idle", 2), {
     loop: true,
     volume: 0.2,
     pitch: 0.2,
-    range: 55,
+    range: 36,
   }),
   vanHigh: bank(clips("van-high", 2), {
     loop: true,
     volume: 0.23,
     pitch: 0.2,
-    range: 55,
+    range: 36,
   }),
   vanCoast: bank(clips("van-coast", 2), {
     loop: true,
     volume: 0.17,
     pitch: 0.2,
-    range: 55,
+    range: 36,
   }),
   boatMotor: bank(clips("boat-motor", 2), {
     loop: true,
     volume: 0.22,
     pitch: 0.3,
-    range: 65,
+    range: 42,
   }),
   jetskiMotor: bank(clips("jetski-motor", 2), {
     loop: true,
     volume: 0.2,
     pitch: 0.3,
-    range: 60,
+    range: 40,
   }),
-  wake: bank(clips("wake", 2), { loop: true, volume: 0.17, pitch: 0.5, range: 35 }),
+  wake: bank(clips("wake", 2), { loop: true, volume: 0.17, pitch: 0.5, range: 25 }),
   engineStart: bank(clips("engine-start", 2), {
     volume: 0.2,
     pitch: 0.4,
-    range: 40,
+    range: 26,
     cooldown: 1,
   }),
   engineStop: bank(clips("engine-stop", 2), {
     volume: 0.16,
     pitch: 0.4,
-    range: 35,
+    range: 24,
     cooldown: 1,
   }),
-  fire: bank(clips("fire", 3), { loop: true, volume: 0.22, pitch: 0.5, range: 25 }),
+  fire: bank(clips("fire", 3), { loop: true, volume: 0.22, pitch: 0.5, range: 20 }),
   wind: bank(clips("wind", 3), { loop: true, volume: 0.12, pitch: 0.5, range: 0 }),
-  jetpack: bank(clips("wind", 3), { loop: true, volume: 0.12, pitch: 0.5, range: 35 }),
+  jetpack: bank(clips("wind", 3), { loop: true, volume: 0.12, pitch: 0.5, range: 28 }),
   canopy: bank(clips("canopy", 3), { loop: true, volume: 0.08, pitch: 0.5, range: 0 }),
   water: bank(clips("water", 3), { loop: true, volume: 0.18, pitch: 0.5, range: 22 }),
   coast: bank(clips("coast", 3), { loop: true, volume: 0.12, pitch: 0.35, range: 0 }),
-  pistol: bank(clips("pistol", 3), { volume: 0.55, pitch: 0.6, range: 90, voices: 8 }),
-  smg: bank(clips("smg", 3), { volume: 0.45, pitch: 0.6, range: 80, voices: 8 }),
+  pistol: bank(clips("pistol", 3), { volume: 0.55, pitch: 0.6, range: 65, voices: 8 }),
+  smg: bank(clips("smg", 3), { volume: 0.45, pitch: 0.6, range: 60, voices: 8 }),
   reloadPistol: bank(clips("reload-pistol", 2), {
     volume: 0.28,
     pitch: 0.35,
@@ -173,15 +178,15 @@ export const SOUND_BANKS = {
   impact: bank(clips("impact", 5), {
     volume: 0.52,
     pitch: 1.8,
-    range: 55,
+    range: 38,
     cooldown: 0.08,
   }),
-  impactWood: bank(clips("wood", 5), { volume: 0.5, pitch: 1.5, range: 45 }),
+  impactWood: bank(clips("wood", 5), { volume: 0.5, pitch: 1.5, range: 32 }),
   impactBody: bank(clips("body", 5), { volume: 0.35, pitch: 1.2, range: 25 }),
   explosion: bank(clips("explosion", 3), {
     volume: 0.7,
     pitch: 0.6,
-    range: 110,
+    range: 85,
     voices: 4,
   }),
   footConcrete: bank(clips("foot-concrete", 5), {
@@ -209,6 +214,10 @@ export const SOUND_BANKS = {
 } satisfies Record<string, SoundBank> &
   Record<NonNullable<WorldEvent["sound"]>, SoundBank>;
 export type Sound = keyof typeof SOUND_BANKS;
+/** Farthest any looping sound carries; sources beyond it are never mixed at all. */
+export const LOOP_HEARING_RANGE = Math.max(
+  ...Object.values<SoundBank>(SOUND_BANKS).map((bank) => (bank.loop ? bank.range : 0)),
+);
 
 export interface DriftSoundMix {
   squealRate: number;

@@ -2,14 +2,16 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { GameAudio } from "../client/audio/index.ts";
 import {
   SOUND_BANKS,
+  LOOP_HEARING_RANGE,
   SoundPicker,
   transitionSounds,
   engineSound,
   type Sound,
 } from "../client/audio/banks.ts";
-import { random, type Entity } from "../shared/world.ts";
+import { random, type Entity, type WorldEvent } from "../shared/world.ts";
 
 function isSound(name: string): name is Sound {
   return Object.hasOwn(SOUND_BANKS, name);
@@ -211,4 +213,135 @@ test("confirmed firearm equips use gun handling and keep other handling local", 
   assert.deepEqual(transitionSounds(armed, before, true), ["equip"]);
   assert.deepEqual(transitionSounds(before, armed, false), []);
   assert.deepEqual(transitionSounds(armed, structuredClone(armed), true), []);
+});
+
+// Hearing distance policy: amplitude is master gain (0.65) x volume x (1 - d / range)^2,
+// and 0.01 (-40 dBFS) is where a sound stops being worth mixing.
+const MASTER = 0.65,
+  FLOOR = 0.01;
+const audibleDistance = (sound: Sound) => {
+  const bank = SOUND_BANKS[sound];
+  return bank.range * (1 - Math.sqrt(Math.min(1, FLOOR / (MASTER * bank.volume))));
+};
+test("nothing carries far: ambient sounds fade within 32 m, loud ones within their tier", () => {
+  const tiers: Partial<Record<Sound, number>> = {
+    helicopter: 48,
+    plane: 48,
+    horn: 48,
+    pistol: 55,
+    smg: 55,
+    explosion: 75,
+  };
+  for (const [name, bank] of Object.entries(SOUND_BANKS)) {
+    if (!isSound(name) || !bank.range) continue;
+    const reach = audibleDistance(name);
+    assert.ok(
+      reach <= (tiers[name] ?? 32),
+      `${name} is still audible at ${reach.toFixed(0)} m, limit ${tiers[name] ?? 32} m`,
+    );
+    assert.ok(bank.range <= 85, `${name} range ${bank.range} m`);
+  }
+});
+
+function mockedAudio() {
+  const started: string[] = [],
+    parameter = { setTargetAtTime() {}, value: 0 };
+  const audio = new GameAudio();
+  Object.assign(audio, {
+    context: { currentTime: 0, state: "running" },
+    master: {},
+    voice: (sound: string) => ({
+      sound,
+      rate: 1,
+      variation: 1,
+      cutoff: 16000,
+      filter: { frequency: parameter },
+      gain: { gain: parameter },
+      pan: { pan: parameter },
+      source: {
+        buffer: { duration: 1 },
+        start() {
+          started.push(sound);
+        },
+        stop() {},
+        playbackRate: parameter,
+      },
+    }),
+  });
+  return { audio, started };
+}
+const listener = (): Entity => ({ ...player(), id: "me" });
+const at = (x: number, extra: Partial<WorldEvent> = {}): WorldEvent => ({
+  kind: "hit",
+  x,
+  y: 0,
+  z: 0,
+  ...extra,
+});
+
+test("one-shot sounds play only inside their range and never from another body when listener-only", () => {
+  const near = mockedAudio();
+  near.audio.event(at(20, { sound: "pistol" }), listener());
+  assert.deepEqual(near.started, ["pistol"], "a shot 20 m away is heard");
+  const events: [string, WorldEvent[]][] = [
+    ["pistol", [at(SOUND_BANKS.pistol.range, { sound: "pistol" })]],
+    ["horn", [at(SOUND_BANKS.horn.range, { sound: "horn" })]],
+    ["impact", [at(SOUND_BANKS.impact.range, { sound: "impact" })]],
+    ["punch", [at(SOUND_BANKS.punch.range, { sound: "punch" })]],
+    ["explosion", [at(SOUND_BANKS.explosion.range, { kind: "explosion" })]],
+    ["explosion far", [at(500, { kind: "explosion" })]],
+  ];
+  for (const [name, list] of events) {
+    const quiet = mockedAudio();
+    for (const event of list) quiet.audio.event(event, listener());
+    assert.deepEqual(quiet.started, [], `${name} at or beyond its range stays silent`);
+  }
+  // Interface and inventory cues have no range; they must not carry from a remote source.
+  const cue = (audio: GameAudio, sound: Sound, x: number) =>
+    (
+      audio as unknown as {
+        spatial(
+          sound: Sound,
+          source: { x: number; y: number; z: number },
+          l: Entity,
+        ): void;
+      }
+    ).spatial(sound, { x, y: 0, z: 0 }, listener());
+  for (const sound of [
+    "pickup",
+    "drop",
+    "equip",
+    "equipGun",
+    "death",
+    "respawn",
+  ] as const) {
+    assert.equal(SOUND_BANKS[sound].range, 0, `${sound} is a listener-only cue`);
+    const remote = mockedAudio();
+    cue(remote.audio, sound, 40);
+    assert.deepEqual(remote.started, [], `${sound} from another body is silent`);
+    const own = mockedAudio();
+    cue(own.audio, sound, 0);
+    assert.deepEqual(own.started, [sound], `${sound} for the listener still plays`);
+  }
+});
+
+test("a vehicle is mixed only inside the loop hearing range", () => {
+  const car = (x: number): Entity => ({
+    ...player(),
+    id: "car",
+    kind: "car",
+    ai: true,
+    x,
+    vz: 6,
+  });
+  const quiet = mockedAudio();
+  quiet.audio.update([car(SOUND_BANKS.engineSedan.range + 4)], listener(), 1);
+  assert.deepEqual(quiet.started, [], "a car just out of range makes no sound");
+  const far = mockedAudio();
+  far.audio.update([car(70)], listener(), 1);
+  assert.deepEqual(far.started, [], "a car 70 m away makes no sound");
+  const close = mockedAudio();
+  close.audio.update([car(15)], listener(), 1);
+  assert.ok(close.started.length > 0, "a car 15 m away is heard");
+  assert.ok(LOOP_HEARING_RANGE <= 60, "no loop is mixed beyond 60 m");
 });

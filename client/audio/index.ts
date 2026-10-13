@@ -2,12 +2,15 @@ import type { WorldEvent, Entity, City } from "../../shared/world.ts";
 import type { DebrisState } from "../../shared/destruction.ts";
 import {
   SOUND_BANKS,
+  LOOP_HEARING_RANGE,
   SoundPicker,
   transitionSounds,
   engineSound,
   type Sound,
 } from "./banks.ts";
 import { propulsionRunning } from "../../shared/propulsion.ts";
+/** A listener-only cue plays only for a source this close to the listener, i.e. the listener. */
+const LISTENER_CUE_DISTANCE = 3;
 import {
   vehicleAudioState,
   vehicleLayers,
@@ -240,7 +243,8 @@ export class GameAudio {
       source.y - listener.y,
       source.z - listener.z,
     );
-    if (range && distance >= range) return;
+    // Out of range is silent. A listener-only cue (range 0) never carries from another body.
+    if (range ? distance >= range : distance > LISTENER_CUE_DISTANCE) return;
     this.play(
       sound,
       range ? (1 - distance / range) ** 2 : 1,
@@ -396,7 +400,8 @@ export class GameAudio {
               e.kind !== "pedestrian" &&
               !e.wreck &&
               (engineSound(e) || e.skidding || e.burning !== undefined) &&
-              Math.hypot(e.x - listener.x, e.y - listener.y, e.z - listener.z) < 80,
+              Math.hypot(e.x - listener.x, e.y - listener.y, e.z - listener.z) <
+                LOOP_HEARING_RANGE,
           )
           .sort(
             (a, b) =>
