@@ -21,6 +21,7 @@ export class Prediction {
   private smoothedAt = 0;
   private lastReconcile = 0;
   private lastInput: InputFrame | undefined;
+  private displayed: { x: number; y: number; z: number } | undefined;
   private nearby: Entity[] = [];
   private shadows: Entity[] = [];
   private contacts = new Set<string>();
@@ -36,6 +37,7 @@ export class Prediction {
     this.ownership = "";
     this.offset = { x: 0, z: 0, y: 0, angle: 0 };
     this.lastInput = undefined;
+    this.displayed = undefined;
     this.nearby = [];
     this.shadows = [];
     this.contacts.clear();
@@ -130,7 +132,10 @@ export class Prediction {
         this.offset.z += dz;
         this.offset.y += dy;
         this.offset.angle = wrap(this.offset.angle + wrap(previous.angle - next.angle));
-      } else this.offset = { x: 0, z: 0, y: 0, angle: 0 };
+      } else {
+        this.offset = { x: 0, z: 0, y: 0, angle: 0 };
+        this.displayed = undefined;
+      }
     }
   }
   private decayOffset(now: number) {
@@ -150,9 +155,24 @@ export class Prediction {
     const angleDecay = Math.exp(
       -seconds * (6 + 12 * Math.min(1, Math.abs(this.offset.angle))),
     );
+    const speed = this.body ? Math.hypot(this.body.vx, this.body.vy, this.body.vz) : 0;
+    const ahead =
+      this.body && speed > 0.1
+        ? (this.offset.x * this.body.vx +
+            this.offset.y * this.body.vy +
+            this.offset.z * this.body.vz) /
+          speed
+        : 0;
+    // Let authority catch a leading visual pose without reversing its travel.
+    const retained = Math.max(0, ahead * (1 - decay) - speed * seconds * 0.5);
     this.offset.x *= decay;
     this.offset.z *= decay;
     this.offset.y *= decay;
+    if (this.body && retained > 0) {
+      this.offset.x += (this.body.vx / speed) * retained;
+      this.offset.y += (this.body.vy / speed) * retained;
+      this.offset.z += (this.body.vz / speed) * retained;
+    }
     this.offset.angle *= angleDecay;
     if (Math.hypot(this.offset.x, this.offset.z, this.offset.y) < 0.001)
       this.offset.x = this.offset.z = this.offset.y = 0;
@@ -167,6 +187,27 @@ export class Prediction {
     pose.z += this.offset.z;
     pose.y += this.offset.y;
     pose.angle = wrap(pose.angle + this.offset.angle);
+    const speed = Math.hypot(pose.vx, pose.vy, pose.vz);
+    const leading =
+      this.offset.x * pose.vx + this.offset.y * pose.vy + this.offset.z * pose.vz;
+    if (this.displayed && speed > 0.1 && leading > 0) {
+      const rewind =
+        ((this.displayed.x - pose.x) * pose.vx +
+          (this.displayed.y - pose.y) * pose.vy +
+          (this.displayed.z - pose.z) * pose.vz) /
+        speed;
+      if (rewind > 0) {
+        const dx = (pose.vx / speed) * rewind,
+          dy = (pose.vy / speed) * rewind,
+          dz = (pose.vz / speed) * rewind;
+        this.offset.x += dx;
+        this.offset.y += dy;
+        this.offset.z += dz;
+        pose.x += dx;
+        pose.y += dy;
+        pose.z += dz;
+      }
+    }
     if (!this.worldReady(pose)) return undefined;
     // A visual correction must not pull the controlled body through an obstacle.
     if (
@@ -174,6 +215,7 @@ export class Prediction {
       Math.abs(this.offset.angle) > 0.001
     )
       constrainRenderPose(pose, this.city, neighbours);
+    this.displayed = { x: pose.x, y: pose.y, z: pose.z };
     return { body: pose, neighbours, contacts };
   }
   private extrapolate(body: Entity, now: number) {

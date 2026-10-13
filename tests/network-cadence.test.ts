@@ -14,8 +14,12 @@ import { idle } from "../shared/world.ts";
 for (const [kind, distance] of (["player", "car", "helicopter"] as const).flatMap(
   (kind) => [8, 80].map((distance) => [kind, distance] as const),
 ))
-  for (const wakeup of [33, 50, 80]) {
-    test(`bidirectional jitter preserves ${kind} movement with ${wakeup} ms client wakeups and a neighbour at ${distance} m`, async (t) => {
+  for (const [wakeup, stall] of [33, 50, 80].flatMap((wakeup) =>
+    (kind === "car" && distance === 80 && wakeup === 33 ? [0, 250] : [0]).map(
+      (stall) => [wakeup, stall] as const,
+    ),
+  )) {
+    test(`bidirectional jitter preserves ${kind} movement with ${wakeup} ms client wakeups and a neighbour at ${distance} m, server pause ${stall} ms`, async (t) => {
       const city = generateCity();
       city.props = [];
       city.buildings = [];
@@ -96,6 +100,7 @@ for (const [kind, distance] of (["player", "car", "helicopter"] as const).flatMa
         };
         const clock = new InputClock();
         let tick = 0;
+        let skipped = 0;
         let previous = 0;
         let backward = 0;
         let maxError = 0;
@@ -129,7 +134,8 @@ for (const [kind, distance] of (["player", "car", "helicopter"] as const).flatMa
             send(outgoing.shift()!.data);
             await delivered;
           }
-          if (now + 1e-6 >= (tick * 1000) / 30) {
+          if (now === 1500) skipped += stall;
+          if (now + 1e-6 >= (tick * 1000) / 30 + skipped) {
             sim.inputs.set(remote.id, { ...idle(), up: now < 3000 });
             sessions.tick();
             sim.tick(1 / 30);
@@ -171,14 +177,18 @@ for (const [kind, distance] of (["player", "car", "helicopter"] as const).flatMa
           displayedAtStop > 10,
           `display progresses while held: ${displayedAtStop}`,
         );
-        assert.ok(backward < 0.15, `no visible backward corrections: ${backward}`);
-        assert.equal(
-          lastCruiseCorrections - (cruiseCorrections ?? 0),
-          0,
-          "steady travel must not repeatedly correct by more than 30 cm",
-        );
         assert.ok(
-          maxError < (kind === "player" ? 1.5 : 9),
+          backward < (stall ? 0.01 : 0.15),
+          `no visible backward corrections: ${backward}`,
+        );
+        if (!stall)
+          assert.equal(
+            lastCruiseCorrections - (cruiseCorrections ?? 0),
+            0,
+            "steady travel must not repeatedly correct by more than 30 cm",
+          );
+        assert.ok(
+          maxError < (kind === "player" ? 1.5 : 9 + stall * 0.04),
           `prediction remains near authority: ${maxError}`,
         );
         assert.ok(

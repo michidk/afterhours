@@ -30,7 +30,16 @@ This remains inside the 220 m snapshot interest and 252 m streamed collision-map
 requirement. Missing collision chunks still suspend prediction. Server authority
 and damage rules are unchanged.
 
-Server input remains one command per fixed tick. A two-frame FIFO absorbs normal batching. On overflow it drops the oldest command, retaining the newest stop or turn. Previously the eight-frame queue rejected new commands when full, retaining up to 267 ms of old control at the target tick rate, and longer when the server was overloaded. An acknowledgement identifies the applied command; older discarded commands also leave client history. Overflow therefore permits a correction. It does not grant extra physics steps or claim to have simulated discarded commands. Duplicate or out-of-order sequence numbers remain rejected. A 250 ms input silence still releases held controls.
+Server input remains one command per fixed tick. A three-command FIFO absorbs normal batching. On overflow it drops the oldest command, retaining the newest stop or turn. Previously the eight-frame queue rejected new commands when full, retaining up to 267 ms of old control at the target tick rate, and longer when the server was overloaded. An acknowledgement identifies the applied command; older discarded commands also leave client history. Overflow therefore permits a correction. It does not grant extra physics steps or claim to have simulated discarded commands. Duplicate or out-of-order sequence numbers remain rejected. A 250 ms input silence still releases held controls.
+
+When a server pause leaves the displayed vehicle ahead of its reconciled position,
+visual correction along its current velocity removes at most half its travel speed.
+Between input ticks, the display also retains enough offset to prevent that easing
+from moving backward. Sideways and stationary errors continue to settle normally;
+collision constraints still apply after smoothing, and large corrections reset the
+visual history. This changes presentation only: authority and replay apply immediately.
+A deterministic 250 ms server pause checks recovery, continued travel and eventual
+stop convergence, alongside the ordinary callback-jitter cases.
 
 ## Collision pair order
 
