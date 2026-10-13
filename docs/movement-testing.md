@@ -32,7 +32,7 @@ Server `/health` reports the same distinction as `tickP95Ms`/`tickMaxMs`
 (wall time) and `tickCpuP95Ms`/`tickCpuMaxMs` (main-thread CPU time), including
 snapshot serialization and delivery work. Both use the latest 600 ticks.
 
-The [2026-10-13 diagnostic](simulation-timing.json) ran fifteen simulated minutes
+The 2026-10-13 diagnostic ran fifteen simulated minutes
 under Node 24 on a busy shared 12-core host. Unprofiled window p95s ranged from
 18.5–32.0 ms of main-thread CPU and 29.8–74.6 ms of wall time. This identifies
 time outside execution as a material contributor; it does not establish stable
@@ -77,19 +77,19 @@ For an isolated game server and containerized Chromium:
 bun run test:browser:docker
 ```
 
-This builds the existing Dockerfile, starts pinned headless Chromium with a loopback-only random CDP port, discovers the bridge gateway, and tears down its containers and image tag on exit. The game's test HTTP listener uses port 4175 so the browser container can reach it. This run is headless and does not appear in the shared T3 tab. No external skill helper is required. Use Docker on the shared VibePod host to keep the simulation out of the development shell's CPU-throttled cgroup.
+This builds the existing Dockerfile, starts pinned headless Chromium with a loopback-only random CDP port, discovers the bridge gateway, and tears down its containers and image tag on exit. The game's test HTTP listener uses port 4175 so the browser container can reach it. This run is headless and does not appear in the shared T3 tab. No external skill helper is required. Use Docker on a shared host to keep the simulation out of the development shell's CPU-throttled cgroup.
 
 `tests/runtime.test.ts` uses a controlled clock to reproduce slow server ticks. It requires the runtime to yield to socket events after a 40 ms tick, while permitting at most four catch-up ticks when they are cheap. Snapshot delivery targets 15 Hz in wall time, publishes only completed states, and skips missed deadlines instead of sending catch-up bursts. With 80 ms physics ticks, each completed state is delivered without waiting for a second tick. `tests/input-timing.test.ts` checks actual socket input batching and acknowledgements with manually stepped authority. `tests/prediction.test.ts` covers delayed snapshots, collision agreement, bounded speculation and acknowledgement recovery without relying on machine speed.
 
 ## Managed preview runtime
 
-`scripts/preview-docker.sh <full-commit-hash> <container-name>` builds a missing image from `git archive`, then starts that exact revision on the managed `PORT`. Set `PUBLIC_ORIGIN` to the registered HTTPS origin; `ALLOW_DEBUG=1` explicitly enables test inspection. Keep running it through `vibepod-preview run`, with the existing preview name and port. The command rebuilds after an environment restart clears Docker images, and reuses the image on ordinary restarts. It never builds uncommitted work from the shared checkout.
+`scripts/preview-docker.sh <full-commit-hash> <container-name>` builds a missing image from `git archive`, then starts that exact revision on the managed `PORT`. Set `PUBLIC_ORIGIN` to the registered HTTPS origin; `ALLOW_DEBUG=1` explicitly enables test inspection. The command rebuilds after an environment restart clears Docker images, and reuses the image on ordinary restarts. It never builds uncommitted work from the shared checkout.
 
 ## Aim and traffic verification, 2026-10-12
 
 The independent-aim build passed both browser scenarios before merging the newer traffic-population and ramp commits. On the combined revision, all 185 unit/integration tests, formatting, boundaries, types and the production build passed. Both headless scenarios then failed the unchanged real-time walking-speed assertion: approximately 2.20 and 2.59 m/s, below the 3 m/s minimum. Startup's harness wait now covers the application's separate download/render deadlines; gameplay assertions remain unchanged.
 
-[Recorded evidence](aim-traffic-test.json) includes input timestamps, authoritative/displayed positions, server health and a separate five-sample CPU diagnostic. The server profile concentrated work in spatial queries and simulation steps. The shared host had a load average above 30 with an eight-core container quota, but CPU work also approached or exceeded the 33.33 ms tick budget in the isolated simulation samples. These results do not establish how much each contributor costs, and do not certify performance of the expanded population on hardware or WAN clients. The failing browser speed gate remains an open capacity issue.
+The recorded evidence includes input timestamps, authoritative/displayed positions, server health and a separate five-sample CPU diagnostic. The server profile concentrated work in spatial queries and simulation steps. The shared host had a load average above 30 with an eight-core container quota, but CPU work also approached or exceeded the 33.33 ms tick budget in the isolated simulation samples. These results do not establish how much each contributor costs, and do not certify performance of the expanded population on hardware or WAN clients. The failing browser speed gate remains an open capacity issue.
 
 After integrating citizen routines, particle effects and terrain, revision `835042e` passed all 206 tests in an isolated Docker build-stage image and built successfully. The final headless browser rerun still failed the walking-speed gate. Public HTTP and managed-preview diagnostics passed; the shared T3 browser loaded the character menu but blocked WSS with `ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS`. These limitations remain explicit rather than being counted as a successful end-to-end check.
 
@@ -191,7 +191,7 @@ infrastructure commit `63bd138e`. The deployment workflow completed successfully
 the live Deployment has one available replica and the public health endpoint is
 healthy. This supersedes the deferred-promotion status in the historical runs above.
 
-A two-client WebSocket smoke check through `https://afterhours.k8s.lohr.dev/`
+A two-client WebSocket smoke check through the public production URL
 held walking for three seconds and moved authority 12.378 m. The final diagnostic
 reported 30 inputs/s, 40.7 ms RTT, four pending inputs and zero snapshot resyncs.
 Server tick p95 was 42.6 ms, above the 33.3 ms simulation budget. This short check

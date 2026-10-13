@@ -71,13 +71,13 @@ Escape restores player follow and closes panels. Both debug cameras suppress gam
 
 Wheel zoom has no fixed distance or lens-zoom caps in either debug mode. The elevated view adjusts clipping and fog with distance, allowing close inspection and a view of the whole city. Fly mode changes lens magnification continuously within a valid perspective projection. Returning to player follow restores normal lens/clipping settings.
 
-The [zoom browser check](camera-zoom-test.json) verified free-camera distances of approximately 1061 m and 2.63 m, fly-camera fields of view beyond both former caps, unchanged player position, and restored follow settings. [Whole-city view](screenshots/debug-zoom-out.png).
+The zoom browser check verified free-camera distances of approximately 1061 m and 2.63 m, fly-camera fields of view beyond both former caps, unchanged player position, and restored follow settings. [Whole-city view](screenshots/debug-zoom-out.png).
 
 ## Day/night appearance and evidence
 
 The sky has a moving sun/moon, a blue daytime gradient, peach dawn, rose dusk, and sparse night stars. Sun/moon lighting and shadow direction follow time. Cool ambient light keeps midnight streets readable, while occupied windows, storefronts, and street lamps become warm. Four reusable nearby point lights illuminate the scene; shared window materials and lamp pools keep the lighting budget bounded. Noon intensity preserves roof and road detail.
 
-The script checks fixed times, pause, a complete accelerated cycle, and clock wrap: [authoritative report](day-night-test.json). The browser records a complete rendered cycle: [browser report](day-night-browser-test.json). Comparable captures use the same elevated camera at dawn 06:30, noon 12:00, dusk 18:30, and midnight 00:00; a second fixed fly-camera view checks the sky. Poses and lighting parameters are in [visual evidence](day-night-visuals.json).
+The script checks fixed times, pause, a complete accelerated cycle, and clock wrap: [authoritative report](day-night-test.json). The browser records a complete rendered cycle. Comparable captures use the same elevated camera at dawn 06:30, noon 12:00, dusk 18:30, and midnight 00:00; a second fixed fly-camera view checks the sky.
 
 | Time     | Street view                       | Sky view                              |
 | -------- | --------------------------------- | ------------------------------------- |
@@ -86,4 +86,4 @@ The script checks fixed times, pause, a complete accelerated cycle, and clock wr
 | Dusk     | [18:30](screenshots/dusk.png)     | [18:30](screenshots/sky-dusk.png)     |
 | Midnight | [00:00](screenshots/midnight.png) | [00:00](screenshots/sky-midnight.png) |
 
-The camera browser scenario verified movement/zoom/look in both modes, unchanged player position, idle authoritative inputs, and restored walking after Escape: [camera report](camera-test.json). Regression tests cover camera coordinate accessors, unrestricted zoom and reversible lens changes, pitch bounds, lighting continuity and midnight wrap, debug command validation, authoritative execution, and disabled production access. Browser captures use SwiftShader and establish visual/functionality evidence only; they do not establish hardware performance.
+The camera browser scenario verified movement/zoom/look in both modes, unchanged player position, idle authoritative inputs, and restored walking after Escape. Regression tests cover camera coordinate accessors, unrestricted zoom and reversible lens changes, pitch bounds, lighting continuity and midnight wrap, debug command validation, authoritative execution, and disabled production access. Browser captures use SwiftShader and establish visual/functionality evidence only; they do not establish hardware performance.

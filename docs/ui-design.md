@@ -4,9 +4,8 @@ The entry menu uses the same dark teal, amber, condensed headings and block char
 
 References inspected:
 
-- [GTA V combat HUD](https://upload.wikimedia.org/wikipedia/en/5/5c/Grand_Theft_Auto_V_combat.jpg): corner information and an unobstructed center.
 - [Red Dead Redemption 2 interface gallery](https://interfaceingame.com/games/red-dead-redemption-2/): strong menu hierarchy and restrained gameplay overlays.
-- [NativeUI](https://github.com/Guad/NativeUI): compact rows, selected states and footer controls. This is a community Rockstar-style menu library, not an official GTA screenshot.
+- [NativeUI](https://github.com/Guad/NativeUI): compact rows, selected states and footer controls.
 
 The HUD retains its minimap, chat, player list, location and palette. Permanent hints now point to Map and Controls; walking no longer displays a vehicle speed of zero. Debug help appears only when enabled by the server.
 

@@ -1,6 +1,6 @@
 # Sound inventory
 
-The library contains 149 edited CC0 clips across 53 sound banks. Every bank has at least two takes. Sources, author credits, and reproduction instructions are in [audio credits](../public/audio/CREDITS.md). `/audio.html` provides complete vehicle demos and individual sample auditioning through the gameplay engine.
+The library contains 149 edited CC0 clips across 53 sound banks. Every bank has at least two takes. Sources, author credits, and reproduction instructions are in [audio credits](../public/audio/CREDITS.md).
 
 ## Shipped sounds
 
@@ -105,6 +105,5 @@ Field-recorded loops are edited excerpts, not multi-layer studio engine recordin
 
 The browser check decodes the real assets, plays the same engine, exercises loop lifecycle and mute, and checks playback diagnostics. A live game session confirmed pickup, authoritative pistol shots, reload, and N muting and resuming vehicle loops. Headless browser rendering can prove that audio produces a valid signal; it cannot replace listening on real speakers or headphones.
 
-The integrated gameplay suite passes all 153 tests, formatting, types, boundaries, and the production build in [CI](https://github.com/michidk/afterhours/actions/runs/38181999709). Before the horn additions, the user confirmed real-device listening on 2026-10-11: "I listened; no adjustments needed." No recording or mix changes were requested. This acceptance is separate from the automated signal checks and does not certify every audio device. [Headless browser evidence](audio-browser-check.json) records the earlier decoding and mixer checks.
-
+The integrated gameplay suite passes all 153 tests, formatting, types, boundaries, and the production build in [CI](https://github.com/michidk/afterhours/actions/runs/38181999709). Before the horn additions, the user confirmed real-device listening on 2026-10-11: "I listened; no adjustments needed." No recording or mix changes were requested. This acceptance is separate from the automated signal checks and does not certify every audio device.
 The two traffic-horn recordings were also decoded and played through the sound-library UI in the shared T3 browser on 2026-10-12, with no console errors. Their real-speaker mix has not been reviewed.

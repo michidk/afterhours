@@ -39,9 +39,9 @@ Both debug cameras moved and zoomed independently while the player remained at (
 
 ## Hardware client observations (further profiling waived)
 
-The server uses CPU only. The **client** needs a GPU. A user-supplied RTX 4070 / Chrome 152 / 1588x1271 sample measured ~165 FPS and rolling p95 35.2 ms; [record](client-hardware-profile.json). It confirms hardware rendering but misses the 33.3 ms target. The rolling 600-frame view is only a short window at high refresh rates.
+The server uses CPU only. The **client** needs a GPU. A user-supplied RTX 4070 / Chrome 152 / 1588x1271 sample measured ~165 FPS and rolling p95 35.2 ms. It confirms hardware rendering but misses the 33.3 ms target. The rolling 600-frame view is only a short window at high refresh rates.
 
-The optimized full-minute [retest](client-hardware-retest.json) returned p95 9.4 ms, update p95 0.6 ms, render p95 8 ms, and UI p95 0.9 ms. It also returned `valid:false` with a 15.94-second maximum frame interval. With nonzero samples, that profiler version marks a run invalid only after a tab-hidden visibility event; therefore this result is encouraging but does not satisfy the uninterrupted hardware acceptance check. Its reported 96.49 FPS used summed frame intervals; the corrected profiler divides samples by the full wall-clock duration and reports `invalidReasons` plus `hiddenSeconds`.
+The optimized full-minute retest returned p95 9.4 ms, update p95 0.6 ms, render p95 8 ms, and UI p95 0.9 ms. It also returned `valid:false` with a 15.94-second maximum frame interval. With nonzero samples, that profiler version marks a run invalid only after a tab-hidden visibility event; therefore this result is encouraging but does not satisfy the uninterrupted hardware acceptance check. Its reported 96.49 FPS used summed frame intervals; the corrected profiler divides samples by the full wall-clock duration and reports `invalidReasons` plus `hiddenSeconds`.
 
 The user waived further hardware profiling as an acceptance requirement. Preserve both reports as observations, without treating the invalid retest as a verified performance pass. The optional `window.afterhours.profile(60)` diagnostic remains available and reports elapsed-time FPS, p95/max frame times, per-stage timings, renderer, viewport, pixel ratio, and tab visibility.
 
