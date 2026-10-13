@@ -95,19 +95,28 @@ export function characterAltitude(
     e.parachute = undefined;
   }
 }
+/** The fastest a body can plausibly move: its current speed, or its top speed if higher. */
+export const speedLimit = (body: Entity) =>
+  Math.max(
+    Math.hypot(body.vx, body.vz),
+    vehicle(body)
+      ? body.model
+        ? VEHICLES[body.model].speed
+        : 52
+      : body.jetpack?.active
+        ? JETPACK.speed
+        : TUNING.sprint * PHYSIQUES[body.character?.physique ?? "regular"].speed,
+  );
+/**
+ * How far apart two bodies can be and still touch within the prediction horizon, given
+ * their speed limits. Clients predict contacts inside it, and the server simulates every
+ * body inside it at full rate, so a contact a client predicts is one the server resolves
+ * with the same fidelity.
+ */
+export const contactRange = (speedA: number, speedB: number) =>
+  12 + (speedA + speedB) * (TUNING.predictionSeconds + TUNING.tick);
 /** Private, finite-mass neighbours. Never apply speculative impulses to snapshots. */
 export function predictionWorld(e: Entity, nearby: Entity[]) {
-  const speedLimit = (body: Entity) =>
-    Math.max(
-      Math.hypot(body.vx, body.vz),
-      vehicle(body)
-        ? body.model
-          ? VEHICLES[body.model].speed
-          : 52
-        : body.jetpack?.active
-          ? JETPACK.speed
-          : TUNING.sprint * PHYSIQUES[body.character?.physique ?? "regular"].speed,
-    );
   const speed = speedLimit(e);
   return nearby
     .filter(
@@ -116,8 +125,7 @@ export function predictionWorld(e: Entity, nearby: Entity[]) {
         !b.vehicle &&
         (vehicle(b) || b.health > 0) &&
         // Cover closing motion without simulating distant pedestrians as racing cars.
-        Math.hypot(b.x - e.x, b.z - e.z) <
-          12 + (speed + speedLimit(b)) * (TUNING.predictionSeconds + TUNING.tick),
+        Math.hypot(b.x - e.x, b.z - e.z) < contactRange(speed, speedLimit(b)),
     )
     .map((b) => structuredClone(b));
 }

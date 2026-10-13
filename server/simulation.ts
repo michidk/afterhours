@@ -36,7 +36,12 @@ import {
 import { CityAI } from "./ai.ts";
 import { TrafficManager } from "./traffic.ts";
 import { flyHelicopter, landingSite } from "../shared/physics/index.ts";
-import { characterForces, characterAltitude } from "../shared/physics/index.ts";
+import {
+  characterForces,
+  characterAltitude,
+  contactRange,
+  speedLimit,
+} from "../shared/physics/index.ts";
 import {
   VEHICLES,
   WEAPONS,
@@ -75,6 +80,12 @@ export class Simulation {
   city: City;
   entities = new Map<string, Entity>();
   inputs = new Map<string, Input>();
+  /** AI bodies no human can reach within the prediction horizon take one 30 Hz step per tick. */
+  lod = true;
+  private tickCount = 0;
+  private plans = new WeakMap<Entity, { intent: Intent; at: number; phase: number }>();
+  /** Minimum distance in metres that always keeps full-rate physics around a human. */
+  lodFloor = 60;
   /** Per-tick command bursts from sessions: two commands repay a dropped tick, [] skips the body. */
   commands = new Map<string, Input[]>();
   ai: CityAI;
@@ -628,14 +639,28 @@ export class Simulation {
     // Choose AI controls at 30 Hz; keep contact integration at 120 Hz.
     const intents = new Map<Entity, Intent>();
     const drives = new Map<Entity, Drive>();
+    // Traffic and pedestrians nobody can see take one 30 Hz step in the first substep.
+    const far = this.distantAi();
+    const near =
+      far.size > 0 ? [...this.entities.values()].filter((e) => !far.has(e)) : undefined;
     for (let i = 0; i < steps; i++) {
       if (i % 4 === 0) {
         intents.clear();
         drives.clear();
       }
-      this.step(h, Math.min(4, steps - i) * h, intents, drives, i, steps);
+      this.step(
+        h,
+        Math.min(4, steps - i) * h,
+        intents,
+        drives,
+        i,
+        steps,
+        far,
+        i === 0 ? undefined : near,
+      );
     }
     this.commands.clear();
+    this.tickCount++;
     this.traffic.update(this);
     // Publish current positions, including contact corrections and replenished traffic.
     this.spatial.clear();
@@ -646,27 +671,101 @@ export class Simulation {
     this.combat.record(this);
     if (this.events.length > 512) this.events.splice(0, this.events.length - 512);
   }
+  /**
+   * AI cars, boats and pedestrians too far from every human to touch what that human
+   * controls within the prediction horizon (`contactRange`, which grows with speed and is
+   * at least `lodFloor` metres). They are simulated at 30 Hz instead of 120 Hz: nothing a
+   * player does can reach them within the horizon, and snapshots only carry 15 Hz poses
+   * anyway. That is where nearly all of the server's per-tick cost went. Every body a
+   * client might predict a contact with keeps the full rate, as does anything that is not
+   * AI, so player-driven and pushed vehicles are never distant.
+   */
+  private distantAi() {
+    const far = new Set<Entity>();
+    if (!this.lod) return far;
+    const humans: { x: number; z: number; speed: number }[] = [];
+    for (const e of this.entities.values())
+      if (e.kind === "player" && !e.ai) {
+        const body = (e.vehicle && this.entities.get(e.vehicle)) || e;
+        humans.push({ x: body.x, z: body.z, speed: speedLimit(body) });
+      }
+    for (const e of this.entities.values()) {
+      if (!e.ai || e.driver || e.vehicle || e.wreck) continue;
+      const own = speedLimit(e);
+      let reach = false;
+      for (const h of humans) {
+        const range = Math.max(this.lodFloor, contactRange(h.speed, own));
+        if ((e.x - h.x) ** 2 + (e.z - h.z) ** 2 < range * range) {
+          reach = true;
+          break;
+        }
+      }
+      if (!reach) far.add(e);
+    }
+    return far;
+  }
+  /**
+   * A pedestrian nobody can reach re-plans every fourth tick, staggered by id so the work
+   * spreads evenly, and keeps walking toward its last target in between. It re-plans with the
+   * time since its previous plan, so its stuck and wait timers still measure real elapsed time.
+   */
+  private pedestrianIntent(e: Entity, decisionDt: number, distant: boolean): Intent {
+    const cached = this.plans.get(e);
+    if (distant && cached) {
+      if ((this.tickCount + cached.phase) % 4 !== 0) {
+        // Repeating an attack every tick would be a different behaviour; only movement repeats.
+        return { x: cached.intent.x, z: cached.intent.z, sprint: cached.intent.sprint };
+      }
+    }
+    const elapsed =
+      distant && cached ? Math.min(0.5, this.time - cached.at) : decisionDt;
+    const intent = this.ai.pedestrian(
+      e,
+      this.spatial.query(e.x, e.z, 30),
+      Math.max(elapsed, decisionDt),
+      this.time,
+      this.entities,
+    );
+    let phase = cached?.phase;
+    if (phase === undefined) {
+      phase = 0;
+      for (let i = 0; i < e.id.length; i++)
+        phase = (phase * 31 + e.id.charCodeAt(i)) % 4;
+    }
+    this.plans.set(e, { intent, at: this.time, phase });
+    return intent;
+  }
   private step(
-    dt: number,
+    stepDt: number,
     decisionDt: number,
     intents: Map<Entity, Intent>,
     drives: Map<Entity, Drive>,
     substep: number,
     substeps: number,
+    far: Set<Entity>,
+    near?: Entity[],
   ) {
-    this.time += dt;
+    this.time += stepDt;
     this.grenades.step(
       this.city,
       this.time,
-      dt,
+      stepDt,
       (x, y, z, radius, damage) => this.blast(x, y, z, radius, damage),
       this.entities.values(),
     );
-    this.day = (this.day + dt * this.dayRate) % 24;
-    const list = [...this.entities.values()];
-    this.spatial.clear();
-    for (const e of list) if (!e.vehicle) this.spatial.insert(e, e.x, e.z, 6);
+    this.day = (this.day + stepDt * this.dayRate) % 24;
+    // After the first substep only bodies that are not distant take part.
+    const list = near
+      ? near.filter((e) => this.entities.get(e.id) === e)
+      : [...this.entities.values()];
+    // Only the AI decisions read the index, and they run on the first of each four substeps.
+    if (substep % 4 === 0) {
+      this.spatial.clear();
+      for (const e of list) if (!e.vehicle) this.spatial.insert(e, e.x, e.z, 6);
+    }
     for (const e of list) {
+      // A distant body is integrated once per tick, so it covers the whole tick at once.
+      const dt = far.has(e) ? stepDt * substeps : stepDt;
       e.cooldown = Math.max(0, (e.cooldown || 0) - dt);
       if (e.kind === "player") this.inventory.tick(e, this.time);
       if (e.wreck) {
@@ -707,14 +806,7 @@ export class Simulation {
         if (!vehicle(e)) {
           if (!e.down) {
             const aiDirection = e.ai
-              ? (intents.get(e) ??
-                this.ai.pedestrian(
-                  e,
-                  this.spatial.query(e.x, e.z, 30),
-                  decisionDt,
-                  this.time,
-                  this.entities,
-                ))
+              ? (intents.get(e) ?? this.pedestrianIntent(e, decisionDt, far.has(e)))
               : undefined;
             if (aiDirection) intents.set(e, aiDirection);
             characterForces(
@@ -825,8 +917,11 @@ export class Simulation {
       Entity,
       Pick<Entity, "x" | "y" | "z" | "angle" | "vx" | "vz" | "angularVelocity">
     >();
+    // Distant bodies cannot be reached by anyone, so one contact pass settles them.
+    const fine = near ?? (far.size > 0 ? list.filter((e) => !far.has(e)) : list);
     for (let pass = 0; pass < 3; pass++) {
-      for (const e of list) {
+      const bodies = pass === 0 ? list : fine;
+      for (const e of bodies) {
         if (e.vehicle || !this.entities.has(e.id)) continue;
         const pose = {
           x: e.x,
@@ -894,7 +989,7 @@ export class Simulation {
         const impact = resolveWorldBounds(e, this.city);
         if (vehicle(e) && pass === 0) this.damage(e, crashDamage(impact));
       }
-      for (const [a, b] of collisionPairs(list)) {
+      for (const [a, b] of collisionPairs(bodies)) {
         if (
           !this.entities.has(a.id) ||
           !this.entities.has(b.id) ||

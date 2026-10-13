@@ -6,6 +6,8 @@ import type { Entity } from "../shared/world.ts";
 
 test("AI decisions share a server tick without slowing physics or losing elapsed time", (t) => {
   const sim = new Simulation(generateCity());
+  // This pins the full-rate path; distant bodies are covered by server-lod.test.ts.
+  sim.lod = false;
   sim.entities.clear();
   sim.city.props = [];
   sim.city.buildings = [];
