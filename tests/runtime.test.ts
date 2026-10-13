@@ -117,3 +117,48 @@ test("catch-up broadcasts only the latest completed state once", (t) => {
     runtime.stop();
   }
 });
+
+test("health separates tick CPU from wall time and includes snapshot work", (t) => {
+  const sim = new Simulation(generateCity());
+  const sessions = new Sessions(
+    createServer(),
+    sim,
+    false,
+    new CityStore(sim.city).manifest,
+  );
+  const runtime = new Runtime(sim, sessions);
+  let clock = 0,
+    cpu = 0;
+  t.mock.method(performance, "now", () => clock);
+  t.mock.method(process, "threadCpuUsage", (previous?: NodeJS.CpuUsage) => ({
+    user: cpu - (previous?.user ?? 0),
+    system: 0,
+  }));
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  t.mock.method(sessions, "tick", () => {
+    clock += 3;
+    cpu += 2000;
+  });
+  t.mock.method(sim, "tick", () => {
+    clock += 80;
+    cpu += 12000;
+  });
+  t.mock.method(sessions, "broadcast", () => {
+    clock += 12;
+    cpu += 3000;
+  });
+  try {
+    assert.equal(runtime.metrics().tickCpuP95Ms, 0);
+    runtime.start();
+    clock = 40;
+    t.mock.timers.tick(5);
+    const health = runtime.metrics();
+    assert.equal(health.ticks, 1);
+    assert.equal(health.tickP95Ms, 95);
+    assert.equal(health.tickMaxMs, 95);
+    assert.equal(health.tickCpuP95Ms, 17);
+    assert.equal(health.tickCpuMaxMs, 17);
+  } finally {
+    runtime.stop();
+  }
+});

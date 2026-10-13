@@ -1,0 +1,421 @@
+{
+  "revision": "43a436d96ee89beb19778105ea613514f86706c8",
+  "date": "2026-10-13",
+  "method": "Saved city plus one stationary player, accelerated 30 Hz simulation, Node 24.21.0 container. Non-minified bundled source enables profiler line attribution. No sockets or rendering. Last 30 simulated seconds profiled; do not use that window for timing comparisons. Shared 12-core host was busy (load average about 32 at start). One diagnostic run, not a before/after or real-time acceptance benchmark.",
+  "environment": {
+    "measurement": "accelerated simulation only; excludes sockets and rendering",
+    "node": "v24.21.0",
+    "arch": "x64",
+    "availableParallelism": 12,
+    "seconds": 900,
+    "ticks": 27000,
+    "tickSeconds": 0.03333333333333333
+  },
+  "windows": [
+    {
+      "simulatedSeconds": 59.999999999997236,
+      "elapsedSeconds": 32.38737502,
+      "ticks": 1800,
+      "profiled": false,
+      "wallMs": {
+        "mean": 17.95778843388892,
+        "p50": 12.539515000000392,
+        "p95": 43.26393400000234,
+        "max": 942.8623550000011
+      },
+      "mainThreadCpuMs": {
+        "mean": 12.267636111111118,
+        "p50": 10.994,
+        "p95": 18.534,
+        "max": 509.433
+      },
+      "entities": 236,
+      "memoryMB": 609,
+      "traffic": {
+        "jamCount": 0,
+        "jammedCars": 0,
+        "honks": 8,
+        "respawned": 0,
+        "pendingRespawns": 0
+      }
+    },
+    {
+      "simulatedSeconds": 120.00000000004157,
+      "elapsedSeconds": 64.65679078000001,
+      "ticks": 1800,
+      "profiled": false,
+      "wallMs": {
+        "mean": 17.89978368888876,
+        "p50": 13.23517599999468,
+        "p95": 40.24864499999967,
+        "max": 209.90714899999875
+      },
+      "mainThreadCpuMs": {
+        "mean": 12.981632777777795,
+        "p50": 12.019,
+        "p95": 19.245,
+        "max": 81.258
+      },
+      "entities": 239,
+      "memoryMB": 625,
+      "traffic": {
+        "jamCount": 0,
+        "jammedCars": 0,
+        "honks": 18,
+        "respawned": 0,
+        "pendingRespawns": 0
+      }
+    },
+    {
+      "simulatedSeconds": 180.00000000000063,
+      "elapsedSeconds": 104.54859037800001,
+      "ticks": 1800,
+      "profiled": false,
+      "wallMs": {
+        "mean": 22.127366015555534,
+        "p50": 16.255627000005916,
+        "p95": 48.294324000002234,
+        "max": 261.0661630000104
+      },
+      "mainThreadCpuMs": {
+        "mean": 14.099865555555562,
+        "p50": 13.539,
+        "p95": 20.544,
+        "max": 59.237
+      },
+      "entities": 242,
+      "memoryMB": 619,
+      "traffic": {
+        "jamCount": 1,
+        "jammedCars": 2,
+        "honks": 51,
+        "respawned": 0,
+        "pendingRespawns": 0
+      }
+    },
+    {
+      "simulatedSeconds": 239.99999999994606,
+      "elapsedSeconds": 140.562033856,
+      "ticks": 1800,
+      "profiled": false,
+      "wallMs": {
+        "mean": 19.969750055555405,
+        "p50": 15.701076999990619,
+        "p95": 41.89190899999812,
+        "max": 223.59825899999123
+      },
+      "mainThreadCpuMs": {
+        "mean": 14.184849444444446,
+        "p50": 13.459,
+        "p95": 20.355,
+        "max": 72.239
+      },
+      "entities": 243,
+      "memoryMB": 600,
+      "traffic": {
+        "jamCount": 2,
+        "jammedCars": 7,
+        "honks": 122,
+        "respawned": 0,
+        "pendingRespawns": 0
+      }
+    },
+    {
+      "simulatedSeconds": 299.9999999998915,
+      "elapsedSeconds": 173.637366351,
+      "ticks": 1800,
+      "profiled": false,
+      "wallMs": {
+        "mean": 18.340781289444422,
+        "p50": 15.214819000015268,
+        "p95": 36.065548999991734,
+        "max": 153.22867300000507
+      },
+      "mainThreadCpuMs": {
+        "mean": 14.476037222222198,
+        "p50": 13.833,
+        "p95": 20.887,
+        "max": 57.163
+      },
+      "entities": 247,
+      "memoryMB": 601,
+      "traffic": {
+        "jamCount": 1,
+        "jammedCars": 6,
+        "honks": 241,
+        "respawned": 0,
+        "pendingRespawns": 0
+      }
+    },
+    {
+      "simulatedSeconds": 359.9999999998369,
+      "elapsedSeconds": 208.602864536,
+      "ticks": 1800,
+      "profiled": false,
+      "wallMs": {
+        "mean": 19.392701093888594,
+        "p50": 16.480796999996528,
+        "p95": 36.51673500001198,
+        "max": 291.7759439999936
+      },
+      "mainThreadCpuMs": {
+        "mean": 15.981304444444472,
+        "p50": 15.353,
+        "p95": 22.21,
+        "max": 69.429
+      },
+      "entities": 252,
+      "memoryMB": 600,
+      "traffic": {
+        "jamCount": 0,
+        "jammedCars": 0,
+        "honks": 314,
+        "respawned": 0,
+        "pendingRespawns": 0
+      }
+    },
+    {
+      "simulatedSeconds": 419.99999999978235,
+      "elapsedSeconds": 244.691320404,
+      "ticks": 1800,
+      "profiled": false,
+      "wallMs": {
+        "mean": 20.02309672888881,
+        "p50": 17.773354000004474,
+        "p95": 33.002671999973245,
+        "max": 214.45736000000034
+      },
+      "mainThreadCpuMs": {
+        "mean": 17.55322722222222,
+        "p50": 16.845,
+        "p95": 24.377,
+        "max": 110.805
+      },
+      "entities": 255,
+      "memoryMB": 600,
+      "traffic": {
+        "jamCount": 0,
+        "jammedCars": 0,
+        "honks": 422,
+        "respawned": 0,
+        "pendingRespawns": 0
+      }
+    },
+    {
+      "simulatedSeconds": 479.9999999997278,
+      "elapsedSeconds": 279.060093367,
+      "ticks": 1800,
+      "profiled": false,
+      "wallMs": {
+        "mean": 19.06644752777767,
+        "p50": 17.446683000016492,
+        "p95": 29.80492000002414,
+        "max": 138.8160050000297
+      },
+      "mainThreadCpuMs": {
+        "mean": 17.06762222222223,
+        "p50": 16.497,
+        "p95": 22.711,
+        "max": 64.171
+      },
+      "entities": 257,
+      "memoryMB": 605,
+      "traffic": {
+        "jamCount": 1,
+        "jammedCars": 3,
+        "honks": 499,
+        "respawned": 0,
+        "pendingRespawns": 0
+      }
+    },
+    {
+      "simulatedSeconds": 539.9999999996733,
+      "elapsedSeconds": 313.459253139,
+      "ticks": 1800,
+      "profiled": false,
+      "wallMs": {
+        "mean": 19.085228352222572,
+        "p50": 17.16467600001488,
+        "p95": 31.04343699995661,
+        "max": 153.99541699996917
+      },
+      "mainThreadCpuMs": {
+        "mean": 16.79825444444446,
+        "p50": 15.997,
+        "p95": 22.774,
+        "max": 64.919
+      },
+      "entities": 259,
+      "memoryMB": 605,
+      "traffic": {
+        "jamCount": 2,
+        "jammedCars": 9,
+        "honks": 605,
+        "respawned": 0,
+        "pendingRespawns": 0
+      }
+    },
+    {
+      "simulatedSeconds": 599.9999999996187,
+      "elapsedSeconds": 356.35469115599994,
+      "ticks": 1800,
+      "profiled": false,
+      "wallMs": {
+        "mean": 23.799227728334373,
+        "p50": 19.617144000018016,
+        "p95": 48.18996899999911,
+        "max": 170.45762999996077
+      },
+      "mainThreadCpuMs": {
+        "mean": 18.635030555555556,
+        "p50": 17.894,
+        "p95": 25.804,
+        "max": 80.495
+      },
+      "entities": 261,
+      "memoryMB": 607,
+      "traffic": {
+        "jamCount": 3,
+        "jammedCars": 8,
+        "honks": 735,
+        "respawned": 1,
+        "pendingRespawns": 1
+      }
+    },
+    {
+      "simulatedSeconds": 659.9999999995641,
+      "elapsedSeconds": 393.22451235899996,
+      "ticks": 1800,
+      "profiled": false,
+      "wallMs": {
+        "mean": 20.455003585555467,
+        "p50": 18.31877600000007,
+        "p95": 32.90801499999361,
+        "max": 136.9780970000429
+      },
+      "mainThreadCpuMs": {
+        "mean": 18.08434666666669,
+        "p50": 17.444,
+        "p95": 24.784,
+        "max": 54.722
+      },
+      "entities": 263,
+      "memoryMB": 607,
+      "traffic": {
+        "jamCount": 2,
+        "jammedCars": 4,
+        "honks": 841,
+        "respawned": 4,
+        "pendingRespawns": 0
+      }
+    },
+    {
+      "simulatedSeconds": 719.9999999995096,
+      "elapsedSeconds": 430.16651527,
+      "ticks": 1800,
+      "profiled": false,
+      "wallMs": {
+        "mean": 20.49825456944443,
+        "p50": 19.054111999983434,
+        "p95": 30.93668699997943,
+        "max": 133.41477099998156
+      },
+      "mainThreadCpuMs": {
+        "mean": 18.993172222222213,
+        "p50": 18.231,
+        "p95": 25.907,
+        "max": 84.079
+      },
+      "entities": 263,
+      "memoryMB": 607,
+      "traffic": {
+        "jamCount": 0,
+        "jammedCars": 0,
+        "honks": 941,
+        "respawned": 4,
+        "pendingRespawns": 0
+      }
+    },
+    {
+      "simulatedSeconds": 779.999999999455,
+      "elapsedSeconds": 486.28681372399996,
+      "ticks": 1800,
+      "profiled": false,
+      "wallMs": {
+        "mean": 31.142335681111692,
+        "p50": 24.259277000033762,
+        "p95": 62.33782200003043,
+        "max": 299.9712690000306
+      },
+      "mainThreadCpuMs": {
+        "mean": 21.321963333333276,
+        "p50": 20.57,
+        "p95": 30.067,
+        "max": 73.038
+      },
+      "entities": 265,
+      "memoryMB": 607,
+      "traffic": {
+        "jamCount": 1,
+        "jammedCars": 2,
+        "honks": 1060,
+        "respawned": 5,
+        "pendingRespawns": 0
+      }
+    },
+    {
+      "simulatedSeconds": 839.9999999994004,
+      "elapsedSeconds": 559.7787123390001,
+      "ticks": 1800,
+      "profiled": false,
+      "wallMs": {
+        "mean": 40.786690579999835,
+        "p50": 38.99537000001874,
+        "p95": 74.59449799999129,
+        "max": 249.5923859999748
+      },
+      "mainThreadCpuMs": {
+        "mean": 23.696572777777778,
+        "p50": 23.212,
+        "p95": 32.041,
+        "max": 64.706
+      },
+      "entities": 266,
+      "memoryMB": 607,
+      "traffic": {
+        "jamCount": 0,
+        "jammedCars": 0,
+        "honks": 1179,
+        "respawned": 5,
+        "pendingRespawns": 0
+      }
+    },
+    {
+      "simulatedSeconds": 899.9999999993458,
+      "elapsedSeconds": 636.0999765880001,
+      "ticks": 1800,
+      "profiled": true,
+      "wallMs": {
+        "mean": 42.06369711722383,
+        "p50": 38.85787299997173,
+        "p95": 79.2507859999314,
+        "max": 305.14957400003914
+      },
+      "mainThreadCpuMs": {
+        "mean": 24.114048888888913,
+        "p50": 23.748,
+        "p95": 31.859,
+        "max": 67.798
+      },
+      "entities": 267,
+      "memoryMB": 609,
+      "traffic": {
+        "jamCount": 1,
+        "jammedCars": 2,
+        "honks": 1320,
+        "respawned": 9,
+        "pendingRespawns": 0
+      }
+    }
+  ]
+}

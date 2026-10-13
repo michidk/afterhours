@@ -11,6 +11,24 @@ production stalls. It deliberately fails if CPU starvation slows
 simulated time; it does not wait longer to make slow movement pass. Run it without
 other local builds when comparing results. CI runs it after the build.
 
+`bun run bench:simulation --seconds 900` runs fifteen simulated minutes of the
+saved city as fast as possible, reporting wall time and main-thread CPU time per
+tick in one-minute windows. A large gap between them indicates time outside main-thread
+execution, including scheduling delays; it must not be presented as physics CPU
+cost. This diagnostic excludes sockets and rendering and does not replace the
+real-time movement gates. `--profile /tmp/afterhours.cpuprofile` profiles the final
+thirty simulated seconds; windows containing profiler overhead are marked.
+Server `/health` reports the same distinction as `tickP95Ms`/`tickMaxMs`
+(wall time) and `tickCpuP95Ms`/`tickCpuMaxMs` (main-thread CPU time), including
+snapshot serialization and delivery work. Both use the latest 600 ticks.
+
+The [2026-10-13 diagnostic](simulation-timing.json) ran fifteen simulated minutes
+under Node 24 on a busy shared 12-core host. Unprofiled window p95s ranged from
+18.5–32.0 ms of main-thread CPU and 29.8–74.6 ms of wall time. This identifies
+time outside execution as a material contributor; it does not establish stable
+server capacity or browser frame rates. The full-city real-time gates remain
+the acceptance checks.
+
 This check has no WebGL and complements, rather than replaces, the rendered browser
 gate below. The deterministic socket regression also tests a neighbour at both
 8 and 80 metres: ordinary nearby players must stay on buffered interpolation.
