@@ -1,16 +1,20 @@
-import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
-import type { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
 import type { WorldEvent, City } from "../../shared/world.ts";
+import { terrainHeight } from "../../shared/terrain.ts";
 import {
   paintTrail,
   trailTiles,
   TRAIL_TEXTURE_SIZE as SIZE,
   TRAIL_TILE_WIDTH as WIDTH,
   TRAIL_TILE_LIMIT,
+  TRAIL_LIFT,
+  TRAIL_AIRFIELD_LIFT,
+  trailTileGeometry,
   type TrailMark,
 } from "./trail-data.ts";
 
@@ -90,11 +94,6 @@ export class SkidTrails {
           false,
         );
         texture.hasAlpha = true;
-        const mesh = MeshBuilder.CreateGround(
-          `tyre trails ${key}`,
-          { width: WIDTH, height: WIDTH },
-          this.scene,
-        );
         const airport = this.city?.airport,
           airfield =
             airport &&
@@ -102,18 +101,29 @@ export class SkidTrails {
             (col + 1) * WIDTH > airport.x - airport.w / 2 &&
             row * WIDTH < airport.z + airport.d / 2 &&
             (row + 1) * WIDTH > airport.z - airport.d / 2;
-        // Clear both road paint and the slightly higher airfield runway markings.
-        mesh.position.set(
-          (col + 0.5) * WIDTH,
-          airfield ? 0.165 : 0.105,
-          (row + 0.5) * WIDTH,
+        const geometry = trailTileGeometry(
+          col,
+          row,
+          (x, z) => terrainHeight(x, z, this.city),
+          airfield ? TRAIL_AIRFIELD_LIFT : TRAIL_LIFT,
         );
+        const mesh = new Mesh(`tyre trails ${key}`, this.scene),
+          data = new VertexData(),
+          normals: number[] = [];
+        VertexData.ComputeNormals(geometry.positions, geometry.indices, normals);
+        data.positions = geometry.positions;
+        data.indices = geometry.indices;
+        data.uvs = geometry.uvs;
+        data.normals = normals;
+        data.applyToMesh(mesh);
+        mesh.position.set((col + 0.5) * WIDTH, 0, (row + 0.5) * WIDTH);
         mesh.isPickable = false;
         mesh.freezeWorldMatrix();
         const material = new StandardMaterial(`rubber ${key}`, this.scene);
         material.diffuseTexture = texture;
         material.useAlphaFromDiffuseTexture = true;
         material.disableLighting = true;
+        material.backFaceCulling = false;
         material.emissiveColor = Color3.White();
         material.specularColor = Color3.Black();
         mesh.material = material;

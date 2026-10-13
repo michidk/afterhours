@@ -1,6 +1,12 @@
+import { TERRAIN_STEP } from "../../shared/terrain.ts";
+
 export const TRAIL_TILE_WIDTH = 64;
 export const TRAIL_TEXTURE_SIZE = 1024;
 export const TRAIL_TILE_LIMIT = 16;
+/** Above generated asphalt (0.10) and its lane paint (0.12), below curbs and sidewalks. */
+export const TRAIL_LIFT = 0.14;
+/** Clears the slightly higher airfield runway markings. */
+export const TRAIL_AIRFIELD_LIFT = 0.2;
 export type TrailMark = {
   x: number;
   z: number;
@@ -65,4 +71,43 @@ export function paintTrail(
     ctx.stroke();
   }
   ctx.restore();
+}
+
+/**
+ * One tile as a grid on the terrain's own vertices and diagonal, so rubber follows hills
+ * exactly where the cars drive instead of sinking under a flat plane. Positions are
+ * relative to the tile centre in x and z; y is absolute. Tile edges fall on terrain
+ * vertices because both the tile width and the terrain origin are multiples of the step.
+ */
+export function trailTileGeometry(
+  col: number,
+  row: number,
+  height: (x: number, z: number) => number,
+  lift: number,
+) {
+  const cells = TRAIL_TILE_WIDTH / TERRAIN_STEP,
+    side = cells + 1,
+    positions: number[] = [],
+    uvs: number[] = [],
+    indices: number[] = [];
+  for (let j = 0; j < side; j++)
+    for (let i = 0; i < side; i++) {
+      const x = i * TERRAIN_STEP,
+        z = j * TERRAIN_STEP;
+      positions.push(
+        x - TRAIL_TILE_WIDTH / 2,
+        height(col * TRAIL_TILE_WIDTH + x, row * TRAIL_TILE_WIDTH + z) + lift,
+        z - TRAIL_TILE_WIDTH / 2,
+      );
+      // The painted canvas has +z at its top, matching a ground plane's uv layout.
+      uvs.push(x / TRAIL_TILE_WIDTH, z / TRAIL_TILE_WIDTH);
+    }
+  for (let j = 0; j < cells; j++)
+    for (let i = 0; i < cells; i++) {
+      const a = j * side + i;
+      // Same split as shared/terrain.ts: the diagonal joins (x + 1, z) and (x, z + 1).
+      // Wound so Babylon's computed normals face up, with the diagonal unchanged.
+      indices.push(a, a + 1, a + side, a + 1, a + side + 1, a + side);
+    }
+  return { positions, uvs, indices };
 }

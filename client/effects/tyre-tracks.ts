@@ -1,14 +1,17 @@
 import type { Entity, WorldEvent } from "../../shared/world.ts";
 import { CAR_WHEEL_MOUNTS, displayedWheelPoint } from "../models/car-wheels.ts";
+import { TRAIL_LIFT } from "./trail-data.ts";
 
 type Anchor = { x: number; z: number; slipping: boolean };
 /** Cosmetic tracks follow displayed tyres, including prediction, rather than packet arrival. */
 export class TyreTracks {
   private anchors = new Map<string, Anchor[]>();
+  /** Terrain height under a point; cars on hills or the raised downtown still leave marks. */
+  constructor(private ground: (x: number, z: number) => number = () => 0) {}
   sample(entities: Entity[], emit: (mark: WorldEvent) => void) {
     const present = new Set<string>();
     for (const e of entities) {
-      if (e.kind !== "car" || e.wreck || e.y > 0.08) continue;
+      if (e.kind !== "car" || e.wreck || e.y - this.ground(e.x, e.z) > 0.08) continue;
       present.add(e.id);
       const previous = this.anchors.get(e.id),
         next: Anchor[] = [];
@@ -24,7 +27,7 @@ export class TyreTracks {
             kind: "skid",
             x: point.x,
             z: point.z,
-            y: 0.105,
+            y: this.ground(point.x, point.z) + TRAIL_LIFT,
             angle: e.angle,
             length: 0.15,
           });
@@ -33,7 +36,7 @@ export class TyreTracks {
             kind: "skid",
             x: (a.x + point.x) / 2,
             z: (a.z + point.z) / 2,
-            y: 0.105,
+            y: this.ground(point.x, point.z) + TRAIL_LIFT,
             angle: Math.atan2(point.x - a.x, point.z - a.z),
             length: distance + 0.06,
           });

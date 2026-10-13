@@ -88,3 +88,26 @@ test("rubber follows the scaled, rotated tyres of each car model", () => {
     assert.ok(Math.abs(marks[1].z - (30 - width / 2)) < 1e-8);
   }
 });
+test("cars on raised ground leave marks; only height above the ground counts as airborne", () => {
+  // The downtown plateau sits 26 m up, so an absolute altitude test hid every skid there.
+  const hill = (x: number) => 26 + x * 0.1,
+    marks: WorldEvent[] = [],
+    tracks = new TyreTracks((x) => hill(x)),
+    e = { ...car(), x: 10, y: hill(10) };
+  tracks.sample([e], (mark) => marks.push(mark));
+  assert.equal(marks.length, 2, "tyres on a plateau or slope draw rubber");
+  assert.ok(
+    marks.every((m) => m.y! > hill(m.x) && m.y! < hill(m.x) + 0.3),
+    "marks sit just above the terrain under each tyre",
+  );
+  e.y = hill(10) + 2;
+  tracks.sample([e], (mark) => marks.push(mark));
+  assert.equal(marks.length, 2, "a car 2 m above the ground is airborne");
+  e.y = hill(10);
+  e.x = 40;
+  e.z = 40;
+  e.y = hill(40);
+  tracks.sample([e], (mark) => marks.push(mark));
+  assert.equal(marks.length, 4, "landing starts fresh marks rather than a bridge");
+  assert.ok(marks.slice(2).every((m) => m.length! < 1));
+});

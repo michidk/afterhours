@@ -43,6 +43,7 @@ import { idle, type Input } from "../shared/world.ts";
 import { rampHeight, carGrounded } from "../shared/physics/ramps.ts";
 import { rampMesh } from "./models/ramp.ts";
 import { TyreTracks } from "./effects/tyre-tracks.ts";
+import { terrainHeight } from "../shared/terrain.ts";
 import { CAR_WHEEL_MOUNTS } from "./models/car-wheels.ts";
 import type { GeometryOptions } from "./world/render.ts";
 import { destructibles } from "../shared/destruction.ts";
@@ -82,7 +83,7 @@ export class CityScene {
   debugCamera = new DebugCamera();
   destruction: DestructionRenderer;
   effects: Effects;
-  private tyreTracks = new TyreTracks();
+  private tyreTracks = new TyreTracks((x, z) => terrainHeight(x, z, this.city));
   /** Wall-clock start of recent hit flinches and melee swings, keyed by entity. */
   private flinches = new Map<string, { at: number; angle: number }>();
   private swings = new Map<string, number>();
