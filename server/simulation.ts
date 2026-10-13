@@ -684,7 +684,7 @@ export class Simulation {
         e.vz *= Math.exp(-5 * dt);
         if (!e.down && e.health <= 0) this.respawn(e);
       }
-      const previous = { ...e };
+      const previous = { x: e.x, y: e.y, z: e.z, vy: e.vy, vz: e.vz };
       const input = this.inputs.get(e.driver || e.id) || idle();
       if (!vehicle(e)) {
         if (!e.down) {

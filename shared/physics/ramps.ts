@@ -12,12 +12,17 @@ export function rampHeight(x: number, z: number, city: City) {
       height = Math.max(height, (z - r.z + RAMP.length / 2) * rampSlope);
   return height;
 }
-export function carGrounded(e: Entity, city: City) {
+export function carGrounded(e: Pick<Entity, "x" | "y" | "z" | "vy">, city: City) {
   const floor = rampHeight(e.x, e.z, city);
   return Math.abs(e.y - floor) < 0.03 && (floor > 0 || e.vy <= 0);
 }
 /** Follow the slope from its toe; retain slope velocity when leaving its lip. */
-export function carAltitude(e: Entity, previous: Entity, city: City, dt: number) {
+export function carAltitude(
+  e: Entity,
+  previous: Pick<Entity, "x" | "y" | "z" | "vy" | "vz">,
+  city: City,
+  dt: number,
+) {
   const floor = rampHeight(e.x, e.z, city),
     oldFloor = rampHeight(previous.x, previous.z, city),
     supported = carGrounded(previous, city),

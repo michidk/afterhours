@@ -135,7 +135,7 @@ export function predictStep(
   const bodies = [e, ...shadows];
   for (let i = 0; i < count; i++) {
     if (e.down || e.wreck) return;
-    const previous = { ...e };
+    const previous = { x: e.x, y: e.y, z: e.z, vy: e.vy, vz: e.vz };
     if (!vehicle(e)) characterForces(e, input, h, undefined, city);
     else if (e.kind === "car") {
       carForces(
@@ -178,7 +178,7 @@ export function predictStep(
     if (vehicle(e)) e.angle = wrap(e.angle + (e.angularVelocity || 0) * h);
     // Remote controls are unknown: coast private neighbours between corrections.
     for (const b of shadows) {
-      const previous = { ...b };
+      const previous = { x: b.x, y: b.y, z: b.z, vy: b.vy, vz: b.vz };
       if (b.kind === "car" && !b.driver && !b.ai)
         carForces(b, { throttle: 0, steer: 0, brake: false }, h, carGrounded(b, city));
       if (watercraft(b.kind) && !b.driver && !b.ai)
