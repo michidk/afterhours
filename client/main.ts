@@ -190,6 +190,7 @@ $("#join").addEventListener("submit", (event) => {
     characterMenu.selection.character,
   );
   network.worldReady = (point) => cityStream.ready(point);
+  network.clock = inputClock;
   network.connect();
 });
 window.addEventListener("keydown", (event) => {

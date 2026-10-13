@@ -7,6 +7,7 @@ import { InputClock } from "../client/input/clock.ts";
 import { loadCity } from "../server/city-loader.ts";
 import { CityStore } from "../server/city-stream.ts";
 import { idle, spawnOrigin } from "../shared/world.ts";
+import { TUNING } from "../shared/catalog.ts";
 
 const city = await loadCity();
 const mapId = new CityStore(city).manifest.mapId;
@@ -120,6 +121,8 @@ for (const delay of [0, 150, 360]) {
     let driving = false;
     for (const [i, client] of clients.entries()) {
       const clock = new InputClock();
+      // Like the browser, phase-lock the schedule to the reported server buffer.
+      client.clock = clock;
       intervals.push(
         setInterval(
           () =>
@@ -243,8 +246,8 @@ for (const delay of [0, 150, 360]) {
       assert.ok(Math.abs(final.remote - player.z) < 0.05, "remote stop converges");
       assert.ok(
         Math.max(...samples.map((s) => s.pending)) <=
-          Math.ceil(((delay + 70) * 30) / 1000) + 4,
-        "replay stays bounded by transit time",
+          Math.ceil(((delay + 70) * 30) / 1000) + 4 + TUNING.inputBuffer,
+        "replay stays bounded by transit time and the buffered spares",
       );
       assert.ok(
         clients.every((client) => client.resyncs === 0),

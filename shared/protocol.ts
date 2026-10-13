@@ -142,6 +142,11 @@ export interface Snapshot {
   dayRate?: number;
   ack: number;
   ackTimestamp?: number;
+  /**
+   * Commands still buffered for this client after the tick, minus slots the server ran
+   * on held controls ahead of their commands; drives the input clock lead.
+   */
+  queued?: number;
   entities: EntityPatch[];
   removed: string[];
   events: WorldEvent[];

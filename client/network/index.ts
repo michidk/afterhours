@@ -12,6 +12,7 @@ import type { Entity, Input, City } from "../../shared/world.ts";
 import { decodeSnapshot, applyPatch } from "../../shared/codec.ts";
 import { Prediction, interpolate } from "./prediction.ts";
 import { SnapshotTimeline } from "./timeline.ts";
+import type { InputClock } from "../input/clock.ts";
 import { emptyCity } from "../../shared/city-stream.ts";
 import { setBrokenProps } from "../../shared/destruction.ts";
 import type { DebugCommand, DebugResult, DebugState } from "../../shared/debug.ts";
@@ -37,6 +38,10 @@ export class GameNetwork {
   jitter = 0;
   ack = -1;
   ackTimestamp: number | undefined;
+  /** Commands the server still had buffered after its last tick. */
+  queued: number | undefined;
+  /** When attached, snapshot buffer reports phase-lock the 30 Hz command schedule. */
+  clock: InputClock | undefined;
   snapshotInterval = 0;
   resyncs = 0;
   private welcomed = false;
@@ -74,6 +79,7 @@ export class GameNetwork {
     this.jitter = this.latency = this.received = this.snapshotInterval = 0;
     this.ack = -1;
     this.ackTimestamp = undefined;
+    this.queued = undefined;
     this.inputTimes = [];
     this.snapshotTimes = [];
     this.resyncs = 0;
@@ -160,6 +166,8 @@ export class GameNetwork {
         this.snapshotTimes = this.snapshotTimes.filter((at) => at >= now - 1000);
         this.ack = snapshot.ack;
         this.ackTimestamp = snapshot.ackTimestamp;
+        this.queued = snapshot.queued;
+        this.clock?.feedback(snapshot.queued);
         const entities = [...this.entities.values()];
         this.timeline.push(snapshot.time, entities, this.received);
         this.authorityPending = true;
@@ -230,7 +238,9 @@ export class GameNetwork {
     this.send({ type: "input", seq: frame.seq, timestamp, ...frame.input });
     // Send controls first, then consume the latest authority before predicting.
     this.reconcile(performance.now());
-    this.prediction.input(frame, [...this.entities.values()]);
+    // A slot the server already simulated on held controls is acknowledged before its
+    // command exists here; stepping it again would run that tick twice.
+    if (frame.seq > this.ack) this.prediction.input(frame, [...this.entities.values()]);
     this.inputTimes.push(timestamp);
     this.inputTimes = this.inputTimes.filter((at) => at >= timestamp - 1000);
   }
@@ -251,6 +261,7 @@ export class GameNetwork {
           ? undefined
           : Math.max(0, now - this.ackTimestamp),
       pending: p?.pending.filter((frame) => frame.seq > this.ack).length ?? 0,
+      queued: this.queued,
       prediction: p?.status ?? "waiting for authority",
       correction: p?.lastCorrection.distance ?? 0,
       angle: ((p?.lastCorrection.angle ?? 0) * 180) / Math.PI,

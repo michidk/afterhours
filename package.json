@@ -9,6 +9,8 @@
     "start": "node --import tsx server/index.ts --production",
     "test": "tsx --test --test-concurrency=1 tests/*.test.ts",
     "test:network": "tsx scripts/network-realtime-test.ts",
+    "probe:drive": "tsx scripts/drive-probe.ts",
+    "bot:drive": "tsx scripts/drive-client.ts",
     "test:browser": "playwright test",
     "test:browser:docker": "bash scripts/test-browser-docker.sh",
     "city:generate": "tsx scripts/generate-city.ts",

@@ -24,7 +24,7 @@ bun run start   # serve the built client and WebSocket endpoint
 
 `start` runs in production mode with debug tools disabled. `ALLOW_DEBUG=1` explicitly enables them for everyone on that server, and development always enables them, so never expose dev mode publicly. See [debugging](docs/debugging.md).
 
-Network and movement checks: `bun run test:network` (real WebSockets with delay and jitter) and `bun run test:browser` (held-key movement in Chromium). See [movement testing](docs/movement-testing.md).
+Network and movement checks: `bun run test:network` (real WebSockets with delay and jitter), `bun run test:browser` (held-key movement in Chromium), and `bun run probe:drive -- --profile spiky` (deterministic jittered-link driving replay, profiles `none|lan|mild|moderate|spiky|wan`). `bun run bot:drive -- --url http://localhost:5173 --delay 60 --jitter 40 --spike 150` joins a running debug-enabled server as a second player with the real prediction stack, drives a car at full speed through an injected delay on its own socket only, and prints per-second networking stats plus the server health counters. See [movement testing](docs/movement-testing.md).
 
 ## Controls
 
@@ -93,7 +93,7 @@ This runs one non-root Node process behind Caddy with HTTPS, WebSockets, health 
 - Graphics are procedural low-poly. There are no interiors, touch controls, accounts, moderation, saves or missions.
 - The urban plateau is level and building collision is rectangular. The generator does not yet place ramps or paved surfaces.
 - Vehicles use a planar solver with separate altitude, not full suspension or aerodynamics.
-- The server keeps up to three input commands per player and discards the oldest on larger bursts, so a new stop reaches the simulation within about 100 ms plus network transit. Stalls longer than 250 ms release controls and correct.
+- The server buffers two spare input commands per player, kept there by the browser's input clock; a tick with nothing buffered repeats the last movement controls and acknowledges that slot in advance, so the late command is never stepped twice and the driver sees a correction only if it changed controls at exactly that moment. Other players see no stutter. Stalls longer than 250 ms release controls and correct.
 - Sixteen moving clients have been tested locally, never over a real WAN. Server tick time under load has exceeded the 33 ms budget in some measurements; see [operations](docs/operations.md).
 - Automated browser tests use software rendering (SwiftShader), so their frame times are not hardware evidence. CI therefore skips the 250 ms frame-freeze check that local runs enforce.
 - The wire protocol is versioned, so clients must refresh after a deployment.

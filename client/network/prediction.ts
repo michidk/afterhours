@@ -251,10 +251,13 @@ export class Prediction {
     const neighbours = structuredClone(this.shadows);
     const contacts = new Set(this.contacts);
     // Fill the gap between 30 Hz inputs at display refresh rate. This copy never
-    // changes the replay state or decides gameplay outcomes.
+    // changes the replay state or decides gameplay outcomes. The rendered pose sits
+    // one tick ahead of the last command's timestamp; allowing a second tick keeps
+    // it continuous when a late wakeup produces that command up to a tick late,
+    // instead of holding the pose and then lurching when the command arrives.
     if (this.lastInput && !this.suspended) {
       const partial = Math.min(
-        TUNING.tick,
+        TUNING.tick * 2,
         Math.max(0, (now - this.lastInput.timestamp) / 1000),
       );
       if (partial > 0)

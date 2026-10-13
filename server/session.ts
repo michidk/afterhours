@@ -10,7 +10,7 @@ import {
   type PlayerRoster,
   type PlayerSummary,
 } from "../shared/protocol.ts";
-import { idle, type Entity } from "../shared/world.ts";
+import { idle, type Entity, type Input } from "../shared/world.ts";
 import { TUNING, isWeaponKind, type VehicleModel } from "../shared/catalog.ts";
 import { Simulation } from "./simulation.ts";
 import { executeDebug } from "./debug.ts";
@@ -19,6 +19,16 @@ interface Client {
   id?: string;
   token: string;
   queue: InputFrame[];
+  /** Ticks the runtime dropped after a stall; each permits one extra command in a tick. */
+  credit: number;
+  /** Ticks simulated on held controls and acknowledged in advance, awaiting their commands. */
+  speculative: number;
+  /** Consecutive ticks that ran on held controls; a long run means the client's clock lags. */
+  aheadTicks: number;
+  /** Last applied controls; repeated when a command is late. */
+  held: Input;
+  /** Commands buffered after the last tick minus slots owed, reported so the client keeps spares. */
+  queued: number;
   ack: number;
   ackTimestamp?: number;
   lastSeq: number;
@@ -33,12 +43,37 @@ interface Client {
   rosterKey?: string;
   destructionKey?: string;
 }
+/** Movement controls only; aim, attack and shot timing never change a predicted step. */
+function sameControls(a: Input, b: Input) {
+  return (
+    a.up === b.up &&
+    a.down === b.down &&
+    a.left === b.left &&
+    a.right === b.right &&
+    (a.moveX ?? undefined) === (b.moveX ?? undefined) &&
+    (a.moveY ?? undefined) === (b.moveY ?? undefined) &&
+    a.brake === b.brake &&
+    !!a.sprint === !!b.sprint &&
+    a.ascend === b.ascend &&
+    a.descend === b.descend
+  );
+}
 export class Sessions {
   clients = new Map<WebSocket, Client>();
   detached = new Map<string, { id: string; expires: number }>();
   bytes = 0;
   rejected = 0;
   frames = 0;
+  /** Ticks where a joined client had no command buffered and ran on held controls. */
+  speculated = 0;
+  /** Late commands whose movement controls differed from the held ones; the client corrects. */
+  mispredicted = 0;
+  /** Ticks skipped to end a sustained run of held slots for a client that never caught up. */
+  frozen = 0;
+  /** Ticks that applied two commands to repay a tick the runtime dropped. */
+  caughtUp = 0;
+  /** Commands shed because a client's FIFO overflowed. */
+  dropped = 0;
   debug: boolean;
   wss: WebSocketServer;
   constructor(
@@ -82,6 +117,11 @@ export class Sessions {
       const c: Client = {
         token: randomUUID(),
         queue: [],
+        credit: 0,
+        speculative: 0,
+        aheadTicks: 0,
+        held: idle(),
+        queued: 0,
         ack: -1,
         lastSeq: -1,
         last: Date.now(),
@@ -188,8 +228,11 @@ export class Sessions {
       c.lastInput = now;
       const { type, seq, timestamp, ...input } = m;
       c.queue.push({ seq, timestamp, input });
-      // An 80 ms client wakeup batches three ticks; retain them without slowing authority.
-      if (c.queue.length > 3) c.queue.shift();
+      // A 250 ms browser catch-up burst fits; beyond that the oldest command is shed.
+      if (c.queue.length > TUNING.inputQueue) {
+        c.queue.shift();
+        this.dropped++;
+      }
       return;
     }
     if (m.type === "resync") {
@@ -309,18 +352,88 @@ export class Sessions {
         continue;
       }
       if (!c.id) continue;
-      const frame = c.queue.shift();
-      if (frame) {
-        c.ack = frame.seq;
-        c.ackTimestamp = frame.timestamp;
+      const p = this.sim.entities.get(c.id);
+      // Commands for slots already simulated on held controls were acknowledged in
+      // advance: consume them without a second step. Only their actions still run.
+      while (c.speculative > 0 && c.queue.length) {
+        const frame = c.queue.shift()!;
+        c.speculative--;
+        // The slot was acknowledged when it ran, so filling it never lowers the ack;
+        // a sequence gap left by shedding moves the slots still owed up past it.
+        c.ack = Math.max(c.ack, frame.seq + c.speculative);
+        c.ackTimestamp = frame.timestamp + c.speculative * TUNING.tick * 1000;
+        if (!sameControls(c.held, frame.input)) this.mispredicted++;
+        c.held = frame.input;
         this.sim.inputs.set(c.id, frame.input);
-      } else if (now - c.lastInput > 250) this.sim.inputs.set(c.id, idle());
+        if (frame.input.attack && p) this.sim.attack(p);
+      }
+      // One command per tick, plus one more only to repay a tick the runtime dropped,
+      // so a burst can never accelerate authority beyond the commands the client sent.
+      const frames = c.queue.splice(0, c.queue.length > 1 && c.credit > 0 ? 2 : 1);
+      const applied = frames.at(-1);
+      if (applied) {
+        c.ack = applied.seq;
+        c.ackTimestamp = applied.timestamp;
+        c.held = applied.input;
+        this.sim.inputs.set(c.id, applied.input);
+        this.sim.commands.set(
+          c.id,
+          frames.map((frame) => frame.input),
+        );
+        if (frames.length > 1) {
+          c.credit--;
+          this.caughtUp++;
+        }
+        c.aheadTicks = 0;
+      } else if (now - c.lastInput > 250) {
+        // Silence releases controls. Outstanding speculative slots stay owed, so commands
+        // delayed this long still fill them instead of being stepped a second time.
+        this.sim.inputs.set(c.id, idle());
+        this.sim.commands.delete(c.id);
+        c.held = idle();
+        c.credit = 0;
+        c.aheadTicks = 0;
+      } else if (c.aheadTicks >= 30) {
+        // A client whose clock never catches up would keep every tick on held controls,
+        // turning each control change into a correction. Skip one tick so its commands
+        // arrive ahead of the slots again; the browser's clock normally fixes this first.
+        this.sim.commands.set(c.id, []);
+        c.aheadTicks = 0;
+        this.frozen++;
+      } else if (c.speculative < TUNING.inputQueue) {
+        // The command for this tick is late. Repeat the movement controls, acknowledge
+        // the slot in advance and let the command fill it on arrival: the body keeps
+        // moving for everyone, and the driver predicted this tick with the same
+        // controls unless it changed them at exactly this moment.
+        this.sim.inputs.set(c.id, { ...c.held, attack: false });
+        this.sim.commands.delete(c.id);
+        c.speculative++;
+        c.aheadTicks++;
+        c.ack++;
+        c.ackTimestamp = (c.ackTimestamp ?? 0) + TUNING.tick * 1000;
+        this.speculated++;
+      } else {
+        this.sim.commands.set(c.id, []);
+      }
+      // Net buffer: negative while the server runs ahead on held controls, so the
+      // client's clock can tell a dry buffer from one it still has to catch up with.
+      c.queued = c.queue.length - c.speculative;
     }
     for (const [token, d] of this.detached)
       if (d.expires < now) {
         this.sim.leave(d.id);
         this.detached.delete(token);
       }
+  }
+  /**
+   * The runtime dropped simulation time after a stall. Clients kept sending for
+   * those ticks, so let each repay the backlog two commands per tick instead of
+   * carrying it as permanent input latency or shedding it as corrections.
+   */
+  skipped(ticks: number) {
+    if (ticks <= 0) return;
+    for (const c of this.clients.values())
+      if (c.id) c.credit = Math.min(TUNING.inputQueue, c.credit + ticks);
   }
   broadcast() {
     const events = this.sim.drainEvents();
@@ -408,6 +521,7 @@ export class Sessions {
         dayRate: this.sim.dayRate,
         ack: c.ack,
         ackTimestamp: c.ackTimestamp,
+        queued: c.queued,
         entities,
         removed: [...c.known.keys()].filter((id) => !known.has(id)),
         events: events.filter(

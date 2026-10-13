@@ -9,6 +9,7 @@ import { Sessions } from "../server/session.ts";
 import { CityStore } from "../server/city-stream.ts";
 import { generateCity } from "../scripts/city-generator.ts";
 import { idle } from "../shared/world.ts";
+import { TUNING } from "../shared/catalog.ts";
 
 // Real sockets, codecs and physics; virtual scheduling isolates transport from CPU load.
 for (const [kind, distance] of (["player", "car", "helicopter"] as const).flatMap(
@@ -99,6 +100,8 @@ for (const [kind, distance] of (["player", "car", "helicopter"] as const).flatMa
           if (event.data instanceof ArrayBuffer) arrived?.();
         };
         const clock = new InputClock();
+        // The browser phase-locks its schedule to the reported server buffer.
+        network.clock = clock;
         let tick = 0;
         let skipped = 0;
         let previous = 0;
@@ -208,7 +211,16 @@ for (const [kind, distance] of (["player", "car", "helicopter"] as const).flatMa
         assert.ok(Math.abs(controlled.vz) < 0.05, "release stops the controlled body");
         if (kind === "player") assert.equal(player.aim, Math.PI / 2);
         assert.equal(sessions.rejected, 0);
-        assert.ok(network.prediction!.pending.length < 8);
+        // Transit both ways, the spare commands the clock keeps buffered, the tick in
+        // flight, and the commands one wakeup can batch.
+        assert.ok(
+          network.prediction!.pending.length <=
+            Math.ceil(((60 + 70) * 30) / 1000) +
+              TUNING.inputBuffer +
+              1 +
+              Math.ceil((wakeup * 30) / 1000),
+          `replay stays bounded by transit, buffer and batching: ${network.prediction!.pending.length}`,
+        );
       } finally {
         network.close();
         sessions.close();

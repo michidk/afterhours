@@ -13,6 +13,14 @@ export function updateNetworkStats(element: HTMLElement, network: GameNetwork) {
     ["Sent / applied input", `${s.seq} / ${s.ack}`],
     ["Applied input age", ms(s.ackAge)],
     ["Pending replay", `${s.pending} inputs`],
+    [
+      "Server input buffer",
+      s.queued === undefined
+        ? "—"
+        : s.queued < 0
+          ? `${-s.queued} ticks ahead on held controls`
+          : `${s.queued} commands`,
+    ],
     ["Prediction", s.prediction],
     ["Last correction", `${s.correction.toFixed(3)} m / ${s.angle.toFixed(1)}°`],
     ["Visual offset", `${s.offset.toFixed(3)} m`],

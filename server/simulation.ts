@@ -71,6 +71,8 @@ export class Simulation {
   city: City;
   entities = new Map<string, Entity>();
   inputs = new Map<string, Input>();
+  /** Per-tick command bursts from sessions: two commands repay a dropped tick, [] skips the body. */
+  commands = new Map<string, Input[]>();
   ai: CityAI;
   traffic = new TrafficManager();
   time = 0;
@@ -627,8 +629,9 @@ export class Simulation {
         intents.clear();
         drives.clear();
       }
-      this.step(h, Math.min(4, steps - i) * h, intents, drives);
+      this.step(h, Math.min(4, steps - i) * h, intents, drives, i, steps);
     }
+    this.commands.clear();
     this.traffic.update(this);
     // Publish current positions, including contact corrections and replenished traffic.
     this.spatial.clear();
@@ -644,6 +647,8 @@ export class Simulation {
     decisionDt: number,
     intents: Map<Entity, Intent>,
     drives: Map<Entity, Drive>,
+    substep: number,
+    substeps: number,
   ) {
     this.time += dt;
     this.grenades.step(
@@ -684,121 +689,132 @@ export class Simulation {
         e.vz *= Math.exp(-5 * dt);
         if (!e.down && e.health <= 0) this.respawn(e);
       }
-      const previous = { x: e.x, y: e.y, z: e.z, vy: e.vy, vz: e.vz };
-      const input = this.inputs.get(e.driver || e.id) || idle();
-      if (!vehicle(e)) {
-        if (!e.down) {
-          const aiDirection = e.ai
-            ? (intents.get(e) ??
-              this.ai.pedestrian(
-                e,
-                this.spatial.query(e.x, e.z, 30),
-                decisionDt,
-                this.time,
-                this.entities,
-              ))
-            : undefined;
-          if (aiDirection) intents.set(e, aiDirection);
-          characterForces(
-            e,
-            input,
-            dt,
-            aiDirection
-              ? {
-                  x: aiDirection.x,
-                  z: aiDirection.z,
-                  speed: aiDirection.sprint
-                    ? 5
-                    : this.ai.citizens.state(e).personality === "restless"
-                      ? 2.8
-                      : 2.2,
-                }
-              : undefined,
-            this.city,
-          );
-          if (aiDirection?.attack !== undefined) {
-            e.angle = aiDirection.attack;
-            this.attack(e);
-          } else if (input.attack) this.attack(e);
+      const controller = e.driver || e.id,
+        burst = this.commands.get(controller);
+      // Sessions may freeze a body for this tick or repay a frozen tick with a second
+      // command; each command keeps its full share of contact substeps, in order.
+      const inputs = burst
+        ? burst.map(
+            (_, j) => burst[Math.floor((substep * burst.length + j) / substeps)],
+          )
+        : [this.inputs.get(controller) || idle()];
+      for (const input of inputs) {
+        const previous = { x: e.x, y: e.y, z: e.z, vy: e.vy, vz: e.vz };
+        if (!vehicle(e)) {
+          if (!e.down) {
+            const aiDirection = e.ai
+              ? (intents.get(e) ??
+                this.ai.pedestrian(
+                  e,
+                  this.spatial.query(e.x, e.z, 30),
+                  decisionDt,
+                  this.time,
+                  this.entities,
+                ))
+              : undefined;
+            if (aiDirection) intents.set(e, aiDirection);
+            characterForces(
+              e,
+              input,
+              dt,
+              aiDirection
+                ? {
+                    x: aiDirection.x,
+                    z: aiDirection.z,
+                    speed: aiDirection.sprint
+                      ? 5
+                      : this.ai.citizens.state(e).personality === "restless"
+                        ? 2.8
+                        : 2.2,
+                  }
+                : undefined,
+              this.city,
+            );
+            if (aiDirection?.attack !== undefined) {
+              e.angle = aiDirection.attack;
+              this.attack(e);
+            } else if (input.attack) this.attack(e);
+          }
+        } else if (e.kind === "car") {
+          if (e.ai) this.exitCitizen(e);
+          if (e.wreck || e.health <= 0) e.lightsOn = false;
+          else if (e.ai) e.lightsOn = this.day >= 18 || this.day < 6;
+          const drive = e.wreck
+            ? { throttle: 0, steer: 0, brake: true }
+            : e.ai
+              ? (drives.get(e) ??
+                this.ai.car(e, this.spatial.query(e.x, e.z, 24), this.time, decisionDt))
+              : {
+                  throttle: inputY(input),
+                  steer: inputX(input),
+                  brake: input.brake,
+                };
+          if (e.ai) drives.set(e, drive);
+          carForces(e, drive, dt, carGrounded(e, this.city));
+        } else if (watercraft(e.kind)) {
+          const drive =
+            e.ai && !e.wreck
+              ? (drives.get(e) ??
+                this.ai.watercraft(e, this.spatial.query(e.x, e.z, 30)))
+              : {
+                  throttle: inputY(input),
+                  steer: inputX(input),
+                  brake: input.brake || !!e.wreck,
+                };
+          if (e.ai) drives.set(e, drive);
+          watercraftForces(e, drive, dt);
+        } else if (
+          !e.driver &&
+          (e.y > groundLevel(e.x, e.z, this.city) + 0.2 || e.flight === "falling")
+        ) {
+          const impact = fallAircraft(e, this.city, dt);
+          if (impact > 3) {
+            this.damage(e, (impact - 3) ** 2 * TUNING.wallDamage);
+            this.events.push({
+              kind: "hit",
+              x: e.x,
+              z: e.z,
+              y: e.y + 0.5,
+              sound: "impact",
+            });
+          }
+        } else if (e.kind === "helicopter" && !e.wreck) {
+          if (e.driver && e.burning !== undefined && e.flight !== "landing")
+            this.requestLanding(e);
+          const wasLanding = e.flight === "landing";
+          flyHelicopter(e, input, this.city, list, dt);
+          if (wasLanding && e.flight === "grounded" && e.driver) {
+            const p = this.entities.get(e.driver);
+            if (p) this.exit(p, e);
+          }
+        } else if (e.kind === "plane") flyPlane(e, input, dt, this.city);
+        const speed = Math.hypot(e.vx, e.vz),
+          limit = e.model ? VEHICLES[e.model].speed : 52;
+        if (vehicle(e) && speed > limit) {
+          e.vx *= limit / speed;
+          e.vz *= limit / speed;
         }
-      } else if (e.kind === "car") {
-        if (e.ai) this.exitCitizen(e);
-        if (e.wreck || e.health <= 0) e.lightsOn = false;
-        else if (e.ai) e.lightsOn = this.day >= 18 || this.day < 6;
-        const drive = e.wreck
-          ? { throttle: 0, steer: 0, brake: true }
-          : e.ai
-            ? (drives.get(e) ??
-              this.ai.car(e, this.spatial.query(e.x, e.z, 24), this.time, decisionDt))
-            : {
-                throttle: inputY(input),
-                steer: inputX(input),
-                brake: input.brake,
-              };
-        if (e.ai) drives.set(e, drive);
-        carForces(e, drive, dt, carGrounded(e, this.city));
-      } else if (watercraft(e.kind)) {
-        const drive =
-          e.ai && !e.wreck
-            ? (drives.get(e) ?? this.ai.watercraft(e, this.spatial.query(e.x, e.z, 30)))
-            : {
-                throttle: inputY(input),
-                steer: inputX(input),
-                brake: input.brake || !!e.wreck,
-              };
-        if (e.ai) drives.set(e, drive);
-        watercraftForces(e, drive, dt);
-      } else if (
-        !e.driver &&
-        (e.y > groundLevel(e.x, e.z, this.city) + 0.2 || e.flight === "falling")
-      ) {
-        const impact = fallAircraft(e, this.city, dt);
-        if (impact > 3) {
-          this.damage(e, (impact - 3) ** 2 * TUNING.wallDamage);
+        e.x += e.vx * dt;
+        e.z += e.vz * dt;
+        if (
+          (e.kind === "plane" || e.kind === "helicopter") &&
+          isWater(e.x, e.z, this.city) &&
+          e.y <= WATER_LEVEL + 0.02 &&
+          e.health > 0
+        ) {
+          this.damage(e, e.maxHealth || 100);
           this.events.push({
             kind: "hit",
-            x: e.x,
-            z: e.z,
-            y: e.y + 0.5,
             sound: "impact",
+            x: e.x,
+            y: WATER_LEVEL,
+            z: e.z,
           });
         }
-      } else if (e.kind === "helicopter" && !e.wreck) {
-        if (e.driver && e.burning !== undefined && e.flight !== "landing")
-          this.requestLanding(e);
-        const wasLanding = e.flight === "landing";
-        flyHelicopter(e, input, this.city, list, dt);
-        if (wasLanding && e.flight === "grounded" && e.driver) {
-          const p = this.entities.get(e.driver);
-          if (p) this.exit(p, e);
-        }
-      } else if (e.kind === "plane") flyPlane(e, input, dt, this.city);
-      const speed = Math.hypot(e.vx, e.vz),
-        limit = e.model ? VEHICLES[e.model].speed : 52;
-      if (vehicle(e) && speed > limit) {
-        e.vx *= limit / speed;
-        e.vz *= limit / speed;
+        if (e.kind === "car") carAltitude(e, previous, this.city, dt);
+        if (!vehicle(e)) characterAltitude(e, this.city, dt, input);
+        if (vehicle(e)) e.angle = wrap(e.angle + (e.angularVelocity || 0) * dt);
       }
-      e.x += e.vx * dt;
-      e.z += e.vz * dt;
-      if (
-        (e.kind === "plane" || e.kind === "helicopter") &&
-        isWater(e.x, e.z, this.city) &&
-        e.y <= WATER_LEVEL + 0.02 &&
-        e.health > 0
-      ) {
-        this.damage(e, e.maxHealth || 100);
-        this.events.push({
-          kind: "hit",
-          sound: "impact",
-          x: e.x,
-          y: WATER_LEVEL,
-          z: e.z,
-        });
-      }
-      if (e.kind === "car") carAltitude(e, previous, this.city, dt);
-      if (!vehicle(e)) characterAltitude(e, this.city, dt, input);
-      if (vehicle(e)) e.angle = wrap(e.angle + (e.angularVelocity || 0) * dt);
     }
     // Recheck static contacts only when the prior pass or another body changed this body.
     const checked = new Map<

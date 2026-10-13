@@ -21,6 +21,28 @@ stop checks still run in CI. The 250 ms limit stays the acceptance check on a
 local or hardware-backed run, and the open full-city frame-pacing failures
 recorded below remain unresolved.
 
+`bun run probe:drive` is the deterministic complement: `scripts/drive-probe.ts`
+runs a `GameNetwork` driver and in-process `Sessions`/`Simulation` over real sockets
+with virtual clocks, injecting ordered delay, jitter and spikes (`--profile`), a server
+clock error (`--server-slow`) and browser wakeup period (`--wakeup`). It reports the
+server's held slots, mispredictions, catch-ups and drops, the queue depth, the client's
+corrections, per-frame rendered steps during cruise at the car's speed limit, and the
+same steps as seen by an observer client on a clean link, so a one-tick lurch, stall or
+remote stutter is visible as a number rather than a feeling. `tests/input-cadence.test.ts`
+asserts zero corrections, drops, mispredictions, lurches and stalls for both driver and
+observer on spiky and WAN links and with a fast or slow server clock, and that the
+regulated input clock settles the buffer near its target. `tests/input-timing.test.ts`
+checks the queue policy itself over a real socket: bounded bursts, held slots filled
+without a second step, mispredictions counted, runtime credit, stale sequences, the
+reported buffer depth and the 250 ms silence release.
+
+`bun run bot:drive` is the live second client. It joins any running server with the
+browser's own networking stack, spawns a car on a debug-enabled server, drives at full
+speed, and prints per-second networking stats and a final summary including `/health`.
+Delay, jitter and spikes apply to its socket only, so it can run beside a real browser
+session to compare what each player sees, or against the production URL with
+`--model none` to walk.
+
 `bun run bench:simulation --seconds 900` runs fifteen simulated minutes of the
 saved city as fast as possible, reporting wall time and main-thread CPU time per
 tick in one-minute windows. A large gap between them indicates time outside main-thread

@@ -3,6 +3,14 @@ export const TUNING = {
   tick: 1 / 30,
   snapshot: 1 / 15,
   predictionSeconds: 1,
+  /** Server input FIFO depth: a 250 ms browser catch-up burst must fit without shedding. */
+  inputQueue: 8,
+  /**
+   * Spare commands the client keeps buffered at the server. The driver never feels
+   * this depth (its own body is predicted); it only delays what others see of the
+   * body by a tick each, while a packet later than that runs its tick on held controls.
+   */
+  inputBuffer: 2,
   walk: 4.5,
   sprint: 8,
   acceleration: 42,
