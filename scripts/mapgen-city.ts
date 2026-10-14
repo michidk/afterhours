@@ -56,6 +56,49 @@ export function cityFromMap(map: GeneratedMap): City {
   const heights = Array.from(f.data, (h) =>
     round(Math.max(-80, Math.min(240, h + shift))),
   );
+  // The game has no bridge decks to stand on: vehicles and people follow the
+  // terrain. Each bridge therefore gets an embankment, flat at deck height under
+  // its road and sidewalks and falling away at 1:2, so it carries traffic where
+  // the deck is drawn instead of dropping it into the water below.
+  for (const e of map.roads.edges) {
+    if (!e.bridge) continue;
+    const core = e.width / 2 + SIDEWALK + 1,
+      reach = core + 24;
+    let x0 = Infinity,
+      x1 = -Infinity,
+      z0 = Infinity,
+      z1 = -Infinity;
+    for (const p of e.points) {
+      x0 = Math.min(x0, p.x);
+      x1 = Math.max(x1, p.x);
+      z0 = Math.min(z0, p.z);
+      z1 = Math.max(z1, p.z);
+    }
+    for (
+      let gz = Math.max(0, Math.floor((z0 - reach + LIMIT) / TERRAIN_STEP));
+      gz <= Math.min(TERRAIN_SIDE - 1, Math.ceil((z1 + reach + LIMIT) / TERRAIN_STEP));
+      gz++
+    )
+      for (
+        let gx = Math.max(0, Math.floor((x0 - reach + LIMIT) / TERRAIN_STEP));
+        gx <=
+        Math.min(TERRAIN_SIDE - 1, Math.ceil((x1 + reach + LIMIT) / TERRAIN_STEP));
+        gx++
+      ) {
+        const q = { x: gx * TERRAIN_STEP - LIMIT, z: gz * TERRAIN_STEP - LIMIT };
+        let d = Infinity;
+        for (let i = 1; i < e.points.length; i++)
+          d = Math.min(
+            d,
+            dist(q, closestOnSegment(q, e.points[i - 1], e.points[i]).point),
+          );
+        if (d > reach) continue;
+        const deck = edgeHeightAt(e, q) + shift - 0.05,
+          target = round(deck - Math.max(0, d - core) * 0.5),
+          i = gz * TERRAIN_SIDE + gx;
+        if (target > heights[i]) heights[i] = target;
+      }
+  }
 
   // Roads: polylines simplified and cut into segments short enough for lanes.
   const roads: Road[] = [];
@@ -90,6 +133,8 @@ export function cityFromMap(map: GeneratedMap): City {
         bz,
         width: Math.max(6, Math.min(24, e.width)),
         kind: KIND[e.kind],
+        phaseA: map.geometry.phases[e.id][0],
+        phaseB: map.geometry.phases[e.id][1],
         ...(junction.has(e.a) &&
         along[i - 1] <= stopA &&
         (stopA < along[i] || i === pts.length - 1)

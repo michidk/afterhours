@@ -32,6 +32,7 @@ export interface Lake {
   outline: Point[];
   level: number;
 }
+export type Phase = "x" | "z";
 export type RoadKind = "highway" | "avenue" | "street" | "lane";
 export interface RoadNode extends Point {
   id: number;
@@ -70,6 +71,12 @@ export interface RoadGeometry {
   sidewalks: { polygon: Point[]; edge?: number; node?: number }[];
   /** Distance cut from the start and end of every edge by its junctions. */
   trims: [number, number][];
+  /**
+   * Signal phase of each edge's arm at its start and end junction (undefined at
+   * other nodes). The straightest pair of opposite arms shares one phase, so
+   * crossing traffic is never green together.
+   */
+  phases: [Phase | undefined, Phase | undefined][];
   /** Painted markings on the asphalt, each a simple polygon. */
   markings: { polygon: Point[]; color: "white" | "yellow"; edge: number }[];
   /**

@@ -34,6 +34,8 @@ export const citySchema = z.object({
           stopA: z.number().min(0).max(80).optional(),
           stopB: z.number().min(0).max(80).optional(),
           noCrate: z.boolean().optional(),
+          phaseA: z.enum(["x", "z"]).optional(),
+          phaseB: z.enum(["x", "z"]).optional(),
         })
         .refine(
           (r) => Math.hypot(r.bx - r.ax, r.bz - r.az) >= 0.05,

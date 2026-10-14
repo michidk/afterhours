@@ -20,6 +20,12 @@ export interface Road {
   /** Distance from end A/B to the junction's stop line, where its signal stands. */
   stopA?: number;
   stopB?: number;
+  /**
+   * Signal phase for traffic on this segment at the junction toward end A/B, set by
+   * the generator; otherwise the segment's dominant axis is used.
+   */
+  phaseA?: "x" | "z";
+  phaseB?: "x" | "z";
   /** Set by the generator where this segment's weapon crate spot is unusable. */
   noCrate?: boolean;
 }

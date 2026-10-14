@@ -74,9 +74,9 @@ export function destructibles(
     if (length < 15 && road.stopA === undefined && road.stopB === undefined) continue;
     const nx = dz / length,
       nz = -dx / length;
-    for (const [end, controlled, stop] of [
-      [-1, road.signalA, road.stopA],
-      [1, road.signalB, road.stopB],
+    for (const [end, controlled, stop, phase] of [
+      [-1, road.signalA, road.stopA, road.phaseA],
+      [1, road.signalB, road.stopB, road.phaseB],
     ] as const) {
       if (!controlled) continue;
       // Generated cities give the stop line's distance, so the pole stands on the
@@ -91,7 +91,7 @@ export function destructibles(
           4.8,
           0.4,
           0.4,
-          Math.abs(dx) > Math.abs(dz) ? "x" : "z",
+          phase ?? (Math.abs(dx) > Math.abs(dz) ? "x" : "z"),
         ),
       );
     }

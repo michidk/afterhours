@@ -17,6 +17,7 @@ import {
 import { smoothstep } from "./random.ts";
 import type {
   Bridge,
+  Phase,
   HeightField,
   Point,
   RoadEdge,
@@ -255,6 +256,22 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
       })
       .sort((p, q) => p.ang - q.ang),
   );
+  const phases = graph.edges.map(
+    () => [undefined, undefined] as [Phase | undefined, Phase | undefined],
+  );
+  for (const arms of armsAt) {
+    if (arms.length < 3) continue;
+    let pair = [arms[0], arms[1]],
+      straightest = Infinity;
+    for (const a of arms)
+      for (const b of arms)
+        if (a !== b && dot(a.dir, b.dir) < straightest) {
+          straightest = dot(a.dir, b.dir);
+          pair = [a, b];
+        }
+    for (const a of arms)
+      phases[a.e.id][a.atStart ? 0 : 1] = pair.includes(a) ? "z" : "x";
+  }
   // Share each band between its two ends in proportion to what they would cut.
   const need = (arms: Arm[], arm: Arm) => {
     if (arms.length === 1) {
@@ -549,15 +566,13 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
       [e.a, 1],
       [e.b, sorted.length - 2],
     ] as const)
-      if (crossing(node)) {
+      if (crossing(node))
         // Pedestrians wait for the signal that stops traffic along this band.
-        const d = sub(pointAt(pts, sorted[i] + 0.5), pointAt(pts, sorted[i] - 0.5));
         walkways.links.push({
           a: lefts[i],
           b: rights[i],
-          crossing: Math.abs(d.x) >= Math.abs(d.z) ? "x" : "z",
+          crossing: phases[e.id][node === e.a && i === 1 ? 0 : 1],
         });
-      }
   }
   for (const { from, to, via } of turns) {
     const a = walkEnds.get(endKey(from)),
@@ -576,7 +591,7 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
         (p, q) => Math.atan2(p.z - c.z, p.x - c.x) - Math.atan2(q.z - c.z, q.x - c.x),
       );
     }
-  return { junctions, bands, sidewalks, markings, walkways, trims: trim };
+  return { junctions, bands, sidewalks, markings, walkways, trims: trim, phases };
 }
 
 /**

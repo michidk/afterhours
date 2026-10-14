@@ -104,7 +104,9 @@ export class Navigation {
       throw Error("Invalid street edge");
     const dx = b.x - a.x,
       dz = b.z - a.z,
-      length = Math.hypot(dx, dz);
+      length = Math.hypot(dx, dz),
+      road = this.links.get(`${from}:${to}`)!,
+      phase = road.bx === b.x && road.bz === b.z ? road.phaseB : road.phaseA;
     return {
       x: a.x + dx * fraction + (dz / length) * 3.5,
       z: a.z + dz * fraction - (dx / length) * 3.5,
@@ -113,7 +115,11 @@ export class Navigation {
             junction: {
               x: b.x,
               z: b.z,
-              axis: Math.abs(dx) > Math.abs(dz) ? ("x" as const) : ("z" as const),
+              // Generated junctions carry a phase per arm; otherwise the dominant
+              // axis of travel picks it.
+              axis:
+                phase ??
+                (Math.abs(dx) > Math.abs(dz) ? ("x" as const) : ("z" as const)),
             },
           }
         : {}),
