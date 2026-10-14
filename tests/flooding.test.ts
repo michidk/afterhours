@@ -16,9 +16,8 @@ function shoreline(sim: Simulation) {
     for (let x = 0; x < 1700; x += 2) {
       const depth = waterDepth(x, z, sim.city);
       if (depth < -0.5) land = x;
-      else if (land !== undefined && depth > 3 && x - land < 40)
+      else if (land !== undefined && depth > 2 && x - land < 40)
         return { x: land - 6, z };
-      else if (depth > 0) land = undefined;
     }
   }
   throw Error("no shoreline found");

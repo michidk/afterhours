@@ -17,9 +17,11 @@ import {
   pointInPolygon,
   rotatedRect,
   selfIntersects,
+  signedArea,
 } from "../mapgen/geom.ts";
 import { SIDEWALK, simplifyPolyline } from "../mapgen/roadgeometry.ts";
 import { sample } from "../mapgen/field.ts";
+import { maskOutlines } from "../mapgen/hydrology.ts";
 import { packSurfaceChunks } from "../shared/city-pack.ts";
 import { destructibles } from "../shared/destruction.ts";
 import { edgeHeightAt, sinkUnderStreets } from "../mapgen/streetfit.ts";
@@ -352,6 +354,13 @@ export function cityFromMap(map: GeneratedMap): City {
   const inside = (p: Point, pad: number) =>
     Math.abs(p.x - airport.x) < airport.w / 2 + pad &&
     Math.abs(p.z - airport.z) < airport.d / 2 + pad;
+  // Trees never stand in a river channel.
+  const inRiver = (q: Point) =>
+    map.rivers.some((river) =>
+      river.points.some(
+        (r, i) => Math.abs(r.x - q.x) < 20 && dist(r, q) < river.widths[i] / 2 + 1.5,
+      ),
+    );
   for (const t of map.trees) {
     const x = round(t.x),
       z = round(t.z),
@@ -359,6 +368,7 @@ export function cityFromMap(map: GeneratedMap): City {
     if (
       seen.has(key) ||
       inside(t, 6) ||
+      inRiver(t) ||
       Math.abs(x) > LIMIT - 2 ||
       Math.abs(z) > LIMIT - 2
     )
@@ -552,13 +562,82 @@ export function cityFromMap(map: GeneratedMap): City {
     landmarks.push({ x: tallest.x, z: tallest.z, name: "THE SPIRE", kind: "tower" });
   // Inland water on the final terrain. Rivers are cut where they enter a lake or
   // pass over a bridge embankment, which raised the ground above their bed.
-  const water: NonNullable<City["water"]> = {
-    lakes: map.lakes.map((lake) => ({
-      level: round(lake.level + shift),
-      outline: lake.outline.flatMap((q) => [round(q.x), round(q.z)]),
-    })),
-    rivers: [],
-  };
+  const water: NonNullable<City["water"]> = { lakes: [], rivers: [] };
+  // The generator fills each lake basin flat at its spill height, so the water
+  // stands at that height (the lowest rim, a river's outlet channel counting as a
+  // weir) and the flat basin is dug into a bed that deepens away from the shore.
+  const channel = new Uint8Array(f.w * f.h);
+  for (const river of map.rivers)
+    river.points.forEach((q, i) => {
+      const reach = Math.ceil((river.widths[i] / 2 + 8) / f.cell),
+        cx = Math.round((q.x + f.size / 2) / f.cell),
+        cz = Math.round((q.z + f.size / 2) / f.cell);
+      for (let dz = -reach; dz <= reach; dz++)
+        for (let dx = -reach; dx <= reach; dx++)
+          if (cx + dx >= 0 && cz + dz >= 0 && cx + dx < f.w && cz + dz < f.h)
+            channel[(cz + dz) * f.w + cx + dx] = 1;
+    });
+  const neighbours = (i: number) =>
+    [i - 1, i + 1, i - f.w, i + f.w].filter(
+      (n) => n >= 0 && n < f.w * f.h && Math.abs((n % f.w) - (i % f.w)) <= 1,
+    );
+  for (const lake of map.lakes) {
+    const basin = new Uint8Array(f.w * f.h);
+    for (let z = 0; z < f.h; z++)
+      for (let x = 0; x < f.w; x++)
+        if (
+          pointInPolygon(
+            { x: x * f.cell - f.size / 2, z: z * f.cell - f.size / 2 },
+            lake.outline,
+          )
+        )
+          basin[z * f.w + x] = 1;
+    let spill = Infinity;
+    for (let i = 0; i < basin.length; i++)
+      if (basin[i])
+        for (const n of neighbours(i))
+          if (!basin[n] && !channel[n]) spill = Math.min(spill, heights[n]);
+    if (!Number.isFinite(spill)) continue;
+    const level = round(spill - 0.1),
+      mask = new Uint8Array(f.w * f.h);
+    for (let i = 0; i < basin.length; i++)
+      if (basin[i] && heights[i] < spill + 0.3) mask[i] = 1;
+    // Where the basin meets lower ground (the outlet), its edge cell becomes a low
+    // dam so the water never overhangs the drop.
+    for (let pass = 0; pass < 3; pass++) {
+      const dams: number[] = [];
+      for (let i = 0; i < mask.length; i++)
+        if (mask[i] && neighbours(i).some((n) => !mask[n] && heights[n] < level))
+          dams.push(i);
+      if (!dams.length) break;
+      for (const i of dams) {
+        mask[i] = 0;
+        heights[i] = round(Math.max(heights[i], level + 0.2));
+      }
+    }
+    // Rings inward from the shore: 0.6 m deep at the edge, 3 m from the third ring.
+    let ring = mask.reduce<number[]>((list, v, i) => {
+      if (v && neighbours(i).some((n) => !mask[n])) list.push(i);
+      return list;
+    }, []);
+    const seen = new Uint8Array(f.w * f.h);
+    for (let depth = 0.6; ring.length; depth = Math.min(3, depth + 0.8)) {
+      const next: number[] = [];
+      for (const i of ring) {
+        if (seen[i]) continue;
+        seen[i] = 1;
+        heights[i] = round(Math.min(heights[i], level - depth));
+        for (const n of neighbours(i)) if (mask[n] && !seen[n]) next.push(n);
+      }
+      ring = next;
+    }
+    for (const outline of maskOutlines(f, mask))
+      if (signedArea(outline) > 0)
+        water.lakes.push({
+          level,
+          outline: outline.flatMap((q) => [round(q.x), round(q.z)]),
+        });
+  }
   const final = { terrain: { heights } };
   for (const river of map.rivers) {
     let run: number[] = [];
@@ -566,6 +645,9 @@ export function cityFromMap(map: GeneratedMap): City {
       if (run.length >= 8) water.rivers.push({ points: run });
       run = [];
     };
+    // The surface never rises downstream, and the ribbon narrows where a bank
+    // falls away below it (a waterfall's side) so it never hangs in the air.
+    let surface = Infinity;
     river.points.forEach((q, i) => {
       const ground = terrainHeight(q.x, q.z, final);
       if (
@@ -575,9 +657,35 @@ export function cityFromMap(map: GeneratedMap): City {
         Math.abs(q.z) > LIMIT - 1
       ) {
         flush();
+        surface = Infinity;
         return;
       }
-      run.push(round(q.x), round(q.z), round(ground + 0.4), round(river.widths[i]));
+      surface = Math.min(surface, ground + 0.4);
+      const a = river.points[Math.max(0, i - 1)],
+        b = river.points[Math.min(river.points.length - 1, i + 1)],
+        length = dist(a, b) || 1,
+        nx = -(b.z - a.z) / length,
+        nz = (b.x - a.x) / length;
+      let half = river.widths[i] / 2;
+      const hangs = (h: number) =>
+        [-1, 1].some(
+          (side) =>
+            surface - terrainHeight(q.x + nx * h * side, q.z + nz * h * side, final) >
+            0.8,
+        );
+      while (half > 0.75 && hangs(half)) half -= 0.5;
+      // Streets and sidewalks cross a stream on a culvert: the ribbon stops there.
+      const paved = [-1, 0, 1].some((side) => {
+        const e = { x: q.x + nx * half * side, z: q.z + nz * half * side };
+        return onAsphalt(e) || walkRings.some((w) => pointInPolygon(e, w));
+      });
+      if (paved || hangs(half)) {
+        flush();
+        return;
+      }
+      // A steep drop is a waterfall: end the ribbon instead of tilting it off a cliff.
+      if (run.length && run[run.length - 2] - surface > 1.5) flush();
+      run.push(round(q.x), round(q.z), round(surface), round(half * 2));
     });
     flush();
   }
@@ -678,11 +786,43 @@ function placeAirport(
     size = 220,
     half = size / 2;
   let best: { x: number; z: number; score: number } | undefined;
+  // Lakes (with their shore) and river channels are wet too, so the pad never
+  // sits in one. Marked once on the height grid.
+  const wetCells = new Uint8Array(f.w * f.h);
+  const cellOf = (q: Point) =>
+    Math.round((q.z + f.size / 2) / f.cell) * f.w +
+    Math.round((q.x + f.size / 2) / f.cell);
+  for (let z = 0; z < f.h; z++)
+    for (let x = 0; x < f.w; x++) {
+      const q = { x: x * f.cell - f.size / 2, z: z * f.cell - f.size / 2 };
+      if (map.lakes.some((lake) => pointInPolygon(q, lake.outline))) {
+        for (let dz = -3; dz <= 3; dz++)
+          for (let dx = -3; dx <= 3; dx++) {
+            const nx = x + dx,
+              nz = z + dz;
+            if (nx >= 0 && nz >= 0 && nx < f.w && nz < f.h) wetCells[nz * f.w + nx] = 1;
+          }
+      }
+    }
+  for (const river of map.rivers)
+    river.points.forEach((r, i) => {
+      const reach = Math.ceil((river.widths[i] / 2 + 4) / f.cell);
+      const c = cellOf(r),
+        cx = c % f.w,
+        cz = (c - cx) / f.w;
+      for (let dz = -reach; dz <= reach; dz++)
+        for (let dx = -reach; dx <= reach; dx++) {
+          const nx = cx + dx,
+            nz = cz + dz;
+          if (nx >= 0 && nz >= 0 && nx < f.w && nz < f.h) wetCells[nz * f.w + nx] = 1;
+        }
+    });
   // Relax distance and flatness until some site is free of roads and buildings.
   for (const [far, rough] of [
     [700, 14],
     [450, 24],
     [250, 40],
+    [150, 70],
   ]) {
     for (let z = -LIMIT + half + 40; z <= LIMIT - half - 40; z += 32)
       for (let x = -LIMIT + half + 40; x <= LIMIT - half - 40; x += 32) {
@@ -704,6 +844,9 @@ function placeAirport(
             sum += h;
             count++;
           }
+        for (let dz = -half; dz <= half && !wet; dz += 8)
+          for (let dx = -half; dx <= half && !wet; dx += 8)
+            wet = wetCells[cellOf({ x: x + dx, z: z + dz })] === 1;
         if (wet || max - min > rough) continue;
         // The pad itself must stay clear of every road segment.
         const clear = half + 8;
@@ -729,7 +872,8 @@ function placeAirport(
       }
     if (best) break;
   }
-  const site = best ?? { x: map.centre.x + 900, z: map.centre.z, score: 0 };
+  if (!best) throw Error("No dry, clear site for the airport");
+  const site = best;
   // Stamp the pad flat into the shipped terrain with a feathered margin that leaves
   // the road corridors alone beyond the first grid ring, which carries the pad edge.
   const level = sample(f, site.x, site.z) + shift,
