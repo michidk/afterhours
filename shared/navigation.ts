@@ -3,7 +3,8 @@ export interface Waypoint {
   x: number;
   z: number;
   crossing?: "x" | "z";
-  junction?: { x: number; z: number; axis: "x" | "z" };
+  /** Approaching a signalled junction; `stop` is the stop line's distance from it. */
+  junction?: { x: number; z: number; axis: "x" | "z"; stop?: number };
 }
 export interface Junction {
   id: number;
@@ -106,7 +107,9 @@ export class Navigation {
       dz = b.z - a.z,
       length = Math.hypot(dx, dz),
       road = this.links.get(`${from}:${to}`)!,
-      phase = road.bx === b.x && road.bz === b.z ? road.phaseB : road.phaseA;
+      towardB = road.bx === b.x && road.bz === b.z,
+      phase = towardB ? road.phaseB : road.phaseA,
+      stop = towardB ? road.approachB : road.approachA;
     return {
       x: a.x + dx * fraction + (dz / length) * 3.5,
       z: a.z + dz * fraction - (dx / length) * 3.5,
@@ -120,6 +123,7 @@ export class Navigation {
               axis:
                 phase ??
                 (Math.abs(dx) > Math.abs(dz) ? ("x" as const) : ("z" as const)),
+              ...(stop !== undefined ? { stop } : {}),
             },
           }
         : {}),
@@ -127,6 +131,26 @@ export class Navigation {
   }
   roadPath(start: number, goal: number) {
     return path(this.roads, start, goal, (n) => n.edges);
+  }
+  /**
+   * Lane targets along a node path. Generated junctions record their stop line,
+   * which can lie farther out than the waypoint before the junction; that
+   * approach is flagged too, so a car sees the signal in time to brake for it.
+   */
+  lanePath(ids: number[]): Waypoint[] {
+    const out: Waypoint[] = [];
+    for (let i = 1; i < ids.length; i++) {
+      const end = this.lanePoint(ids[i - 1], ids[i]),
+        stop = end.junction?.stop,
+        node = this.roads[ids[i]];
+      if (stop !== undefined)
+        for (let k = out.length - 1; k >= 0 && !out[k].junction; k--) {
+          if (Math.hypot(out[k].x - node.x, out[k].z - node.z) > stop + 20) break;
+          out[k] = { ...out[k], junction: end.junction };
+        }
+      out.push(end);
+    }
+    return out;
   }
   sidewalkPath(start: number, goal: number): Waypoint[] {
     let links = sidewalkLinks.get(this);

@@ -1,6 +1,7 @@
 import { LIMIT, type Entity, type City, type Kind } from "./world.ts";
 import { contact, entityBox, shape } from "./physics/collision.ts";
-import { terrainHeight } from "./terrain.ts";
+import { TERRAIN_SIDE, TERRAIN_STEP, terrainHeight } from "./terrain.ts";
+import { pointInPolygon } from "./polygon.ts";
 import { clamp } from "./physics/vehicle.ts";
 
 export const WORLD_LIMIT = LIMIT + 256;
@@ -9,10 +10,71 @@ export type WatercraftKind = Extract<Kind, "boat" | "jetski" | "speedboat">;
 export function watercraft(kind: Kind): kind is WatercraftKind {
   return kind === "boat" || kind === "jetski" || kind === "speedboat";
 }
-export const isWater = (x: number, z: number, city?: Pick<City, "terrain">) =>
-  terrainHeight(x, z, city) < WATER_LEVEL;
-export const groundLevel = (x: number, z: number, city?: Pick<City, "terrain">) =>
-  Math.max(WATER_LEVEL, terrainHeight(x, z, city));
+type WaterCity = Pick<City, "terrain" | "water">;
+/** Lake surface per terrain grid point (NaN outside lakes), built once per map. */
+const lakeGrids = new WeakMap<NonNullable<City["water"]>, Float32Array>();
+function lakeGrid(water: NonNullable<City["water"]>) {
+  let grid = lakeGrids.get(water);
+  if (grid) return grid;
+  grid = new Float32Array(TERRAIN_SIDE * TERRAIN_SIDE).fill(NaN);
+  for (const lake of water.lakes) {
+    const ring: { x: number; z: number }[] = [];
+    let x0 = Infinity,
+      x1 = -Infinity,
+      z0 = Infinity,
+      z1 = -Infinity;
+    for (let i = 0; i < lake.outline.length; i += 2) {
+      const p = { x: lake.outline[i], z: lake.outline[i + 1] };
+      ring.push(p);
+      x0 = Math.min(x0, p.x);
+      x1 = Math.max(x1, p.x);
+      z0 = Math.min(z0, p.z);
+      z1 = Math.max(z1, p.z);
+    }
+    for (
+      let gz = Math.ceil((z0 + LIMIT) / TERRAIN_STEP);
+      gz * TERRAIN_STEP - LIMIT <= z1;
+      gz++
+    )
+      for (
+        let gx = Math.ceil((x0 + LIMIT) / TERRAIN_STEP);
+        gx * TERRAIN_STEP - LIMIT <= x1;
+        gx++
+      )
+        if (
+          gx >= 0 &&
+          gz >= 0 &&
+          gx < TERRAIN_SIDE &&
+          gz < TERRAIN_SIDE &&
+          pointInPolygon(
+            { x: gx * TERRAIN_STEP - LIMIT, z: gz * TERRAIN_STEP - LIMIT },
+            ring,
+          )
+        )
+          grid[gz * TERRAIN_SIDE + gx] = lake.level;
+  }
+  lakeGrids.set(water, grid);
+  return grid;
+}
+/** Water surface height here: a lake's level inside it, otherwise the sea's. */
+export function waterLevel(x: number, z: number, city?: WaterCity) {
+  // Lakes sit in terrain basins; without the terrain there is only the sea.
+  if (
+    !city?.terrain ||
+    !city.water?.lakes.length ||
+    Math.abs(x) > LIMIT ||
+    Math.abs(z) > LIMIT
+  )
+    return WATER_LEVEL;
+  const gx = Math.round((x + LIMIT) / TERRAIN_STEP),
+    gz = Math.round((z + LIMIT) / TERRAIN_STEP),
+    level = lakeGrid(city.water)[gz * TERRAIN_SIDE + gx];
+  return Number.isNaN(level) ? WATER_LEVEL : level;
+}
+export const isWater = (x: number, z: number, city?: WaterCity) =>
+  terrainHeight(x, z, city) < waterLevel(x, z, city);
+export const groundLevel = (x: number, z: number, city?: WaterCity) =>
+  Math.max(waterLevel(x, z, city), terrainHeight(x, z, city));
 
 /** Full rotated hull against the island; a centre-only check strands long boats. */
 export function resolveWorldBounds(e: Entity, city?: City) {

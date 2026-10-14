@@ -52,6 +52,7 @@ import {
 import {
   groundLevel,
   isWater,
+  waterLevel,
   WATER_LEVEL,
   WORLD_LIMIT,
   watercraft,
@@ -931,7 +932,7 @@ export class Simulation {
         if (
           (e.kind === "plane" || e.kind === "helicopter") &&
           isWater(e.x, e.z, this.city) &&
-          e.y <= WATER_LEVEL + 0.02 &&
+          e.y <= waterLevel(e.x, e.z, this.city) + 0.02 &&
           e.health > 0
         ) {
           this.damage(e, e.maxHealth || 100);
@@ -939,7 +940,7 @@ export class Simulation {
             kind: "hit",
             sound: "impact",
             x: e.x,
-            y: WATER_LEVEL,
+            y: waterLevel(e.x, e.z, this.city),
             z: e.z,
           });
         }

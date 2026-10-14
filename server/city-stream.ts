@@ -41,6 +41,7 @@ export class CityStore {
   private atlasBody: Body;
   private bodies = new Map<string, Body>();
   private terrainBody?: Body;
+  private waterBody?: Body;
   private baseGeometry?: Body;
   constructor(city: City) {
     this.manifest = {
@@ -53,6 +54,7 @@ export class CityStore {
       centre: city.centre,
       hasTerrain: city.terrain ? true : undefined,
       surface: city.surface ? true : undefined,
+      hasWater: city.water ? true : undefined,
     };
     // Heights travel as little-endian int16 centimetres, not as JSON numbers.
     if (city.terrain)
@@ -60,6 +62,8 @@ export class CityStore {
         packHeights(city.terrain.heights),
         "application/octet-stream",
       );
+    if (city.water)
+      this.waterBody = new Body(JSON.stringify(city.water), "application/json");
     this.atlas = {
       mapId: this.manifest.mapId,
       roads: city.roads.map(({ ax, az, bx, bz, width }) => ({ ax, az, bx, bz, width })),
@@ -139,11 +143,14 @@ export class CityStore {
       else this.baseGeometry.send(req, res);
       return true;
     }
-    const named = /^\/city\/(terrain|atlas)\/([0-9a-f]{64})$/.exec(path);
+    const named = /^\/city\/(terrain|atlas|water)\/([0-9a-f]{64})$/.exec(path);
     if (named) {
       if (named[2] !== this.manifest.mapId)
         res.writeHead(409).end("Map changed; reload the city");
       else if (named[1] === "atlas") this.atlasBody.send(req, res);
+      else if (named[1] === "water")
+        if (this.waterBody) this.waterBody.send(req, res);
+        else res.writeHead(404).end("No water");
       else if (this.terrainBody) this.terrainBody.send(req, res);
       else res.writeHead(404).end("No terrain");
       return true;

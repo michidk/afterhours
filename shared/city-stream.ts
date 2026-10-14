@@ -28,6 +28,8 @@ export const mapManifestSchema = z.object({
   hasTerrain: z.boolean().optional(),
   /** Set when chunks carry packed street polygons instead of road boxes. */
   surface: z.boolean().optional(),
+  /** Set when /city/water/<mapId> serves the lakes and rivers. */
+  hasWater: z.boolean().optional(),
 });
 export type MapManifest = z.infer<typeof mapManifestSchema>;
 /** A navigation drawing, separate from streamed collision/render geometry. */
@@ -66,14 +68,19 @@ export const cityChunkSchema = z.object({
   surface: packedSurfaceSchema.optional(),
 });
 export type CityChunk = z.infer<typeof cityChunkSchema>;
-/** The manifest plus the height grid fetched from /city/terrain/<mapId>. */
-export type ClientMap = MapManifest & { terrain?: City["terrain"] };
+/** The manifest plus the height grid and water fetched alongside it. */
+export type ClientMap = MapManifest & {
+  terrain?: City["terrain"];
+  water?: City["water"];
+};
+export const cityWaterSchema = citySchema.shape.water.unwrap();
 export function emptyCity(
-  map: Pick<ClientMap, "seed" | "airport" | "terrain" | "centre">,
+  map: Pick<ClientMap, "seed" | "airport" | "terrain" | "centre" | "water">,
 ): City {
   return {
     seed: map.seed,
     terrain: map.terrain,
+    water: map.water,
     centre: map.centre,
     airport: map.airport,
     roads: [],

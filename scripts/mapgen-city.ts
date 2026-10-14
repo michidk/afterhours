@@ -135,6 +135,12 @@ export function cityFromMap(map: GeneratedMap): City {
         kind: KIND[e.kind],
         phaseA: map.geometry.phases[e.id][0],
         phaseB: map.geometry.phases[e.id][1],
+        approachA:
+          i === 1 && junction.has(e.a) ? round(trims[e.id][0] + 4.4) : undefined,
+        approachB:
+          i === pts.length - 1 && junction.has(e.b)
+            ? round(trims[e.id][1] + 4.4)
+            : undefined,
         ...(junction.has(e.a) &&
         along[i - 1] <= stopA &&
         (stopA < along[i] || i === pts.length - 1)
@@ -544,12 +550,45 @@ export function cityFromMap(map: GeneratedMap): City {
   ];
   if (tallest)
     landmarks.push({ x: tallest.x, z: tallest.z, name: "THE SPIRE", kind: "tower" });
+  // Inland water on the final terrain. Rivers are cut where they enter a lake or
+  // pass over a bridge embankment, which raised the ground above their bed.
+  const water: NonNullable<City["water"]> = {
+    lakes: map.lakes.map((lake) => ({
+      level: round(lake.level + shift),
+      outline: lake.outline.flatMap((q) => [round(q.x), round(q.z)]),
+    })),
+    rivers: [],
+  };
+  const final = { terrain: { heights } };
+  for (const river of map.rivers) {
+    let run: number[] = [];
+    const flush = () => {
+      if (run.length >= 8) water.rivers.push({ points: run });
+      run = [];
+    };
+    river.points.forEach((q, i) => {
+      const ground = terrainHeight(q.x, q.z, final);
+      if (
+        map.lakes.some((lake) => pointInPolygon(q, lake.outline)) ||
+        ground > sample(map.shaped, q.x, q.z) + shift + 0.8 ||
+        Math.abs(q.x) > LIMIT - 1 ||
+        Math.abs(q.z) > LIMIT - 1
+      ) {
+        flush();
+        return;
+      }
+      run.push(round(q.x), round(q.z), round(ground + 0.4), round(river.widths[i]));
+    });
+    flush();
+  }
+
   return {
     seed: map.options.seed,
     terrain: { heights },
     centre,
     surface: packSurfaceChunks({ asphalt, sidewalks, markings }),
     walkways,
+    water,
     roads,
     buildings,
     props,

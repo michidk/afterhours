@@ -6,6 +6,7 @@ import { idle, inputX, inputY, type City, type Entity, type Input } from "../wor
 import {
   groundLevel,
   isWater,
+  waterLevel,
   WATER_LEVEL,
   watercraft,
   resolveWorldBounds,
@@ -41,7 +42,7 @@ export function characterForces(
         ? 6
         : e.jetpack?.active && e.jetpack.fuel > 0 && e.y > 0.2 && !e.vehicle && !e.down
           ? JETPACK.speed
-          : isWater(e.x, e.z, city) && e.y <= WATER_LEVEL + 0.1
+          : isWater(e.x, e.z, city) && e.y <= waterLevel(e.x, e.z, city) + 0.1
             ? 2.8
             : input.sprint || input.brake
               ? TUNING.sprint * PHYSIQUES[e.character?.physique ?? "regular"].speed

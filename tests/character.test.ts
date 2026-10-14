@@ -65,7 +65,9 @@ test("builds have distinct authoritative speed and health, predict identically a
     sim.entities.clear();
     const character = { ...DEFAULT_CHARACTER, physique };
     const player = sim.join("Resident", "#e8b63f", character);
-    player.x = player.z = 0;
+    // The spawn sidewalk is dry land; the origin may lie in a lake.
+    player.x = city.centre!.x;
+    player.z = city.centre!.z;
     assert.equal(player.health, health);
     assert.equal(player.maxHealth, health);
     const predicted = structuredClone(player);
@@ -170,7 +172,10 @@ test("walking yaw and mouse aim stay independent in authority and prediction", a
   const sim = new Simulation(city);
   sim.entities.clear();
   const player = sim.join("Strafe", "#fff");
-  player.x = player.z = 0;
+  // The spawn sidewalk is dry land; the origin may lie in a lake.
+  const start = city.centre!;
+  player.x = start.x;
+  player.z = start.z;
   const predicted = structuredClone(player);
   try {
     for (const aim of [Math.PI / 2, Math.PI, undefined]) {
@@ -184,10 +189,10 @@ test("walking yaw and mouse aim stay independent in authority and prediction", a
         assert.ok(Math.abs(player.angle) < 1e-8);
         assert.ok(Math.abs(predicted.angle) < 1e-8);
         assert.ok(Math.abs(player.z - predicted.z) < 1e-8);
-        assert.ok(Math.abs(player.x) < 1e-8);
+        assert.ok(Math.abs(player.x - start.x) < 1e-8);
       }
     }
-    assert.ok(player.z > 12);
+    assert.ok(player.z > start.z + 12);
   } finally {
     sim.destruction.dispose();
   }

@@ -8,7 +8,13 @@ import {
   type Vec3,
 } from "../shared/destruction.ts";
 import { LIMIT, type City, type Entity } from "../shared/world.ts";
-import { WATER_LEVEL, WORLD_LIMIT, groundLevel, isWater } from "../shared/water.ts";
+import {
+  WATER_LEVEL,
+  WORLD_LIMIT,
+  groundLevel,
+  isWater,
+  waterLevel,
+} from "../shared/water.ts";
 import { TUNING } from "../shared/catalog.ts";
 import { SpatialGrid } from "../shared/spatial.ts";
 import { staticGeometry } from "../shared/physics/static.ts";
@@ -184,7 +190,7 @@ export class Destruction {
     state.position.z += state.velocity.z * dt;
     state.position.y += state.velocity.y * dt;
     let floor = isWater(state.position.x, state.position.z, this.city)
-      ? WATER_LEVEL
+      ? waterLevel(state.position.x, state.position.z, this.city)
       : groundLevel(state.position.x, state.position.z, this.city) + 0.3;
     for (const b of staticGeometry(this.city).query(
       state.position.x,

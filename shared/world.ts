@@ -26,6 +26,9 @@ export interface Road {
    */
   phaseA?: "x" | "z";
   phaseB?: "x" | "z";
+  /** On a segment touching a junction at end A/B: that junction's stop-line distance. */
+  approachA?: number;
+  approachB?: number;
   /** Set by the generator where this segment's weapon crate spot is unusable. */
   noCrate?: boolean;
 }
@@ -189,6 +192,15 @@ export interface City {
     kind: "plaza" | "parking" | "service" | "court" | "quay";
   }[];
   ramps: { x: number; z: number }[];
+  /**
+   * Inland water of a generated city. Lakes are flat x, z outline pairs at a
+   * surface `level`; rivers are flat x, z, surface y, width quadruples and are
+   * drawn only. The sea is everywhere else below WATER_LEVEL.
+   */
+  water?: {
+    lakes: { level: number; outline: number[] }[];
+    rivers: { points: number[] }[];
+  };
   /**
    * Pedestrian network of a generated city: flat x, z pairs along the middle of the
    * sidewalks, and flat link triples `a, b, crossing` where crossing is 0 along a

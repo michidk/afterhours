@@ -15,6 +15,8 @@ interface Route {
   progress: number;
   last: Point;
   destination: number;
+  /** Car routes: the node before `destination`, so the next leg can curve there. */
+  previous?: number;
   trip: number;
   crossing: boolean;
   routine?: {
@@ -116,10 +118,31 @@ export class CityAI {
       progress: 0,
       last: { x: e.x, z: e.z },
       destination: to,
+      previous: from,
       trip,
       crossing: false,
       waitingAtSignal: false,
     });
+    this.extendCar(this.routes.get(e.id)!);
+  }
+  /**
+   * Plan a car's next leg while it still drives toward the last point of this one,
+   * so a junction where the legs meet keeps its signal approach and stop line.
+   */
+  private extendCar(route: Route) {
+    if (route.previous === undefined) return;
+    let goal = ((route.trip + 1) * 17 + 3) % this.navigation.roads.length;
+    if (goal === route.destination) goal = (goal + 1) % this.navigation.roads.length;
+    const ids = this.navigation.roadPath(route.destination, goal);
+    if (ids.length < 2) return;
+    route.points = [
+      ...route.points.slice(route.index, route.points.length - 1),
+      ...this.navigation.lanePath([route.previous, ...ids]),
+    ];
+    route.index = 0;
+    route.previous = ids[ids.length - 2];
+    route.destination = goal;
+    route.trip++;
   }
   assign(e: Entity, index: number, relocate = true) {
     const node = (index * 17) % this.navigation.roads.length;
@@ -207,6 +230,8 @@ export class CityAI {
     if (Math.hypot(target.x - e.x, target.z - e.z) < (e.kind === "car" ? 4 : 0.9)) {
       route.index++;
       route.crossing = false;
+      if (e.kind === "car" && route.index === route.points.length - 1)
+        this.extendCar(route);
       if (route.index >= route.points.length) {
         route.trip++;
         if (e.kind === "car") {
@@ -214,9 +239,8 @@ export class CityAI {
           if (goal === route.destination)
             goal = (goal + 1) % this.navigation.roads.length;
           const ids = this.navigation.roadPath(route.destination, goal);
-          route.points = ids
-            .slice(1)
-            .map((id, i) => this.navigation.lanePoint(ids[i], id));
+          route.points = this.navigation.lanePath(ids);
+          route.previous = ids[ids.length - 2];
           route.destination = goal;
         } else if (route.routine) {
           route.routine.waiting = true;
@@ -258,12 +282,14 @@ export class CityAI {
             (junction.z - e.z) * Math.sin(e.angle),
         )
       : Infinity;
-    const remaining = ahead - 10;
+    // Stop at the junction's own stop line where known; legacy maps use 10 m.
+    const line = junction?.stop ?? 10,
+      remaining = ahead - line;
     const stop =
       !!junction &&
       side < 12 &&
-      ahead > 9 &&
-      ahead < 24 &&
+      ahead > line - 1 &&
+      ahead < line + 14 &&
       signal(time, junction.axis) !== "green";
     const personality = this.citizens.state(e).personality;
     const cruise =

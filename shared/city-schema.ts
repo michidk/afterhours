@@ -35,6 +35,8 @@ export const citySchema = z.object({
           stopB: z.number().min(0).max(80).optional(),
           noCrate: z.boolean().optional(),
           phaseA: z.enum(["x", "z"]).optional(),
+          approachA: z.number().min(0).max(80).optional(),
+          approachB: z.number().min(0).max(80).optional(),
           phaseB: z.enum(["x", "z"]).optional(),
         })
         .refine(
@@ -85,6 +87,24 @@ export const citySchema = z.object({
     .max(2000)
     .optional(),
   ramps: z.array(z.object(point)).max(100),
+  water: z
+    .object({
+      lakes: z
+        .array(
+          z.object({
+            level: z.number().finite().min(-80).max(240),
+            outline: z
+              .array(z.number().finite().min(-LIMIT).max(LIMIT))
+              .min(6)
+              .max(20000),
+          }),
+        )
+        .max(100),
+      rivers: z
+        .array(z.object({ points: z.array(z.number().finite()).min(8).max(40000) }))
+        .max(200),
+    })
+    .optional(),
   walkways: z
     .object({
       points: z.array(coordinate).max(200000),

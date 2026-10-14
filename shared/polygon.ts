@@ -58,3 +58,16 @@ export function earClip(poly: Point2[]): [number, number, number][] {
   for (let i = 1; i < idx.length - 1; i++) tris.push([idx[0], idx[i], idx[i + 1]]);
   return tris;
 }
+/** Even-odd test of a point against a simple polygon (any winding). */
+export function pointInPolygon(p: Point2, poly: Point2[]) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++)
+    if (
+      poly[i].z > p.z !== poly[j].z > p.z &&
+      p.x <
+        ((poly[j].x - poly[i].x) * (p.z - poly[i].z)) / (poly[j].z - poly[i].z) +
+          poly[i].x
+    )
+      inside = !inside;
+  return inside;
+}

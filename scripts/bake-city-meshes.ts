@@ -125,10 +125,13 @@ function build(
   return result;
 }
 try {
-  const base = build(emptyCity({ ...store.manifest, terrain: city.terrain }), {
-    roads: false,
-    airport: false,
-  });
+  const base = build(
+    emptyCity({ ...store.manifest, terrain: city.terrain, water: city.water }),
+    {
+      roads: false,
+      airport: false,
+    },
+  );
   const airport = build(emptyCity(store.manifest), {
     base: false,
     roads: false,

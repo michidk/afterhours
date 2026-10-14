@@ -20,7 +20,11 @@ import { FrameProfiler } from "./performance/index.ts";
 import { AgentInterface } from "./debug/index.ts";
 import { CityStream, SCENERY_RADIUS } from "./world/stream.ts";
 import { CityRenderer } from "./world/render.ts";
-import { mapManifestSchema, type ClientMap } from "../shared/city-stream.ts";
+import {
+  cityWaterSchema,
+  mapManifestSchema,
+  type ClientMap,
+} from "../shared/city-stream.ts";
 import { unpackHeights } from "../shared/city-pack.ts";
 import { TERRAIN_SIDE } from "../shared/terrain.ts";
 import type { CameraMode } from "./camera/debug.ts";
@@ -29,6 +33,7 @@ import {
   WORLD_LIMIT,
   groundLevel,
   isWater,
+  waterLevel,
   watercraft,
   WATER_LEVEL,
 } from "../shared/water.ts";
@@ -440,6 +445,14 @@ async function boot() {
         throw Error("Terrain download is incomplete");
       world.terrain = { heights };
     }
+    if (world.hasWater) {
+      const water = await fetch(`/city/water/${world.mapId}`, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!water.ok) throw Error("Water download failed");
+      world.water = cityWaterSchema.parse(await water.json());
+    }
     let cityRenderer: CityRenderer | undefined;
     cityStream = new CityStream(world, (chunks) => cityRenderer?.sync(chunks));
     const base = world.geometryVersion
@@ -600,7 +613,8 @@ async function boot() {
           ? "KM/H"
           : p.parachute
             ? "PARACHUTE"
-            : isWater(p.x, p.z, scene.city) && p.y <= WATER_LEVEL + 0.1
+            : isWater(p.x, p.z, scene.city) &&
+                p.y <= waterLevel(p.x, p.z, scene.city) + 0.1
               ? "SWIMMING"
               : "ON FOOT";
         $("#weapon").textContent = p.down

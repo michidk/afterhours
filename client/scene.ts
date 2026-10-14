@@ -1,5 +1,5 @@
 import { SceneryCulling } from "./world/culling.ts";
-import { buildTerrain } from "./world/terrain.ts";
+import { buildInlandWater, buildTerrain } from "./world/terrain.ts";
 import { buildHeadlightCones, CarLights } from "./models/car-lights.ts";
 import { buildCharacter, poseCharacter } from "./models/character.ts";
 import { buildRoad } from "./models/road.ts";
@@ -272,6 +272,7 @@ export class CityScene {
       city.terrain ? groundLevel(x, z, city) : 0;
     if (options.base !== false) {
       if (city.terrain) buildTerrain(this, city.terrain);
+      if (city.water) buildInlandWater(this, city.water);
       else this.box("island", 0, -0.65, 0, LIMIT * 2, 1, LIMIT * 2, "#a9b29a");
     }
     for (const surface of city.surfaces || []) {
