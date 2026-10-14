@@ -343,6 +343,10 @@ export class Simulation {
       v.landingZ = site.z;
     }
   }
+  /** Street lighting hours, when cars drive with headlights on. */
+  night() {
+    return this.day >= 18 || this.day < 6;
+  }
   private releaseSeat(p: Entity, v: Entity) {
     const wasDriver = v.driver === p.id;
     v.seats = vehicleSeats(v).map((id) => (id === p.id ? null : id));
@@ -508,6 +512,8 @@ export class Simulation {
       if (seat === 0) {
         v.driver = id;
         v.ai = false;
+        // Taking the wheel starts the engine; headlights come on after dark.
+        if (v.kind === "car") v.lightsOn = this.night();
         this.ai.routes.delete(v.id);
         this.ai.waterRoutes.delete(v.id);
         if (v.kind === "helicopter") {
@@ -869,7 +875,7 @@ export class Simulation {
         } else if (e.kind === "car") {
           if (e.ai) this.exitCitizen(e);
           if (e.wreck || e.health <= 0) e.lightsOn = false;
-          else if (e.ai) e.lightsOn = this.day >= 18 || this.day < 6;
+          else if (e.ai) e.lightsOn = this.night();
           const drive = e.wreck
             ? { throttle: 0, steer: 0, brake: true }
             : e.ai

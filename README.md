@@ -40,7 +40,7 @@ Network and movement checks: `bun run test:network` (real WebSockets with delay 
 | G / R              | Drop active jetpack or equipped weapon / reload                                                                              |
 | E / Q              | Same as Space / Shift: aircraft climb / descend; enabled jetpack thrust / descent                                            |
 | B                  | Enable or disable equipped jetpack                                                                                           |
-| L                  | Toggle car headlights and taillights from the driver seat                                                                    |
+| L                  | Toggle car headlights and taillights from the driver seat; they switch on by themselves when you take the wheel after dark   |
 | Enter / H / Escape | Chat / help / close panels                                                                                                   |
 | M / N / F1         | Island map / mute sound / development menu (debug-enabled servers) with tools, clock, camera and network stats               |
 

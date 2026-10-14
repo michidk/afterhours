@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { Simulation } from "../server/simulation.ts";
 import { generateCity } from "../scripts/city-generator.ts";
 import { messageSchema } from "../shared/protocol.ts";
+import { propulsionRunning } from "../shared/propulsion.ts";
 import { encodeSnapshot, decodeSnapshot, applyPatch } from "../shared/codec.ts";
 import { VERSION } from "../shared/version.ts";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine";
@@ -33,8 +34,10 @@ test("only a living car driver toggles lights and parked lights retain their sta
   assert.equal(car.driver, driver.id);
   assert.equal(passenger.vehicle, car.id);
   assert.deepEqual(messageSchema.parse({ type: "lights" }), { type: "lights" });
+  const before = car.lightsOn;
   sim.toggleLights(passenger.id);
-  assert.equal(car.lightsOn, undefined);
+  assert.equal(car.lightsOn, before);
+  car.lightsOn = false;
   sim.toggleLights(driver.id);
   assert.equal(car.lightsOn, true);
   sim.day = 12;
@@ -87,6 +90,31 @@ test("AI lights follow dusk and dawn, and theft preserves manual control", () =>
   sim.toggleLights(driver.id);
   sim.tick(1 / 30);
   assert.equal(car.lightsOn, false);
+});
+
+test("taking the wheel starts the engine and switches headlights on after dark", () => {
+  for (const [hour, expected] of [
+    [12, false],
+    [21, true],
+    [3, true],
+  ] as const) {
+    const city = generateCity();
+    city.buildings = [];
+    city.props = [];
+    city.pickups = [];
+    const sim = new Simulation(city);
+    sim.entities.clear();
+    sim.day = hour;
+    sim.dayRate = 0;
+    const car = sim.spawn("car", 0, 0);
+    assert.equal(propulsionRunning(car), false, "a parked car is off");
+    const driver = sim.join("Driver", "#ffffff");
+    driver.x = driver.z = 0;
+    sim.interact(driver.id);
+    assert.equal(car.driver, driver.id);
+    assert.equal(propulsionRunning(car), true, "the engine starts");
+    assert.equal(car.lightsOn, expected, String(hour));
+  }
 });
 
 test("light on and off updates survive binary snapshot deltas", () => {
