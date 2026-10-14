@@ -164,3 +164,70 @@ so subsequent broadcasts retry persistent state. A full city can replace an
 existing active session by token without admitting another player. Pending
 connections have their own bound and must join within five seconds, even if they
 send pings.
+
+## Bounded client traffic and adaptive interpolation
+
+The client allows at most 4 KiB of queued WebSocket traffic, including the next
+message. It also reconnects when a queue observed by sends remains nonempty for
+250 ms, matching the server's eight-command buffer (about 267 ms at 30 Hz).
+A five-second response deadline starts with the connection attempt and is renewed
+by welcome, snapshot or pong messages. Recovery immediately clears provisional
+prediction and pending debug requests; an unsent command is never predicted.
+Callbacks from a superseded socket cannot affect its replacement. The restored
+session starts a fresh sequence history. Browser WebSocket close cannot retract
+bytes already handed to the transport; session takeover clears the server's old
+command queue.
+
+Remote traffic retains a continuous playback clock and a 100 ms extrapolation
+limit. The interpolation delay starts at 100 ms and grows to at most 250 ms using
+the 95th percentile of excess delivery gaps in the last 30 snapshots, adjusted
+for a slower simulation clock. Delay falls by at most 5 ms per second when delivery
+stabilizes. The render clock slows to accumulate the extra buffer instead of
+rewinding. First-time spikes and outages beyond this bound can still exhaust it.
+`GameNetwork.stats().interpolationDelay` reports the current target in milliseconds.
+The regressions cover recurring 256 ms delivery gaps at 52 m/s, continuous motion,
+steady and slower simulation clocks, bounded outage behavior, and reset.
+
+## Pileup prediction profile
+
+CPU profiles in Node and Chromium identified collision-pair construction and
+sorting as the largest cost in a dense prediction pileup. The sweep now groups
+candidate neighbours by numeric ID rank and sorts each group. It retains the
+same broad-phase bounds, every eligible pair, and the exact ID order of the
+solver. No substeps, contact passes or reachable neighbours were removed.
+
+[Recorded runs](prediction-profile.json) compare commit `38f9bce` with this change:
+40 sport cars against a wall, six commands awaiting acknowledgement (about
+200 ms plus input/snapshot phase), 30 Hz inputs,
+60 Hz render calls, 60 warmup frames and 120 measured frames per run. Five
+alternating standalone Chromium runs reduced median total prediction CPU time
+from 2.97 s (range 2.85–3.84 s) to 1.75 s (range 1.47–2.28 s), about 41%.
+Contact counts, pending command counts and motion checksums matched exactly.
+The separate CPU profile attributed its largest share to pair construction and
+sorting; contact geometry and garbage collection remain substantial costs.
+
+The shared host had 12 logical CPUs and a load average of 23 at the start, with
+unrelated builds active. This is a full prediction-path comparison, including
+reconciliation, inputs and render extrapolation; it excludes Babylon rendering,
+network transport, and real players' changing inputs. It does not establish
+production FPS or smooth WAN behavior. The unbundled development modules were
+identical on both sides except for pair generation. Node measurements had
+wider overlapping ranges under contention and are not used for a speedup claim.
+
+A separate headless Chromium check at 1280×900 used a real server WebSocket,
+spawned 16 sport cars, entered a vehicle and delayed incoming messages by 200 ms.
+Over six seconds it processed 144 inputs and 276 render calls, stayed connected
+and predicting, and ended with four pending inputs, no resyncs and no outgoing
+buffer. Prediction/render p95 was 33.6 ms on this loaded host, so the live path
+still exceeded a 60 FPS frame budget. No browser exceptions or HTTP failures
+occurred in the successful check. Earlier attempts hit a debug action rate limit
+and an HMR reload; the public preview WebSocket also rejected authentication.
+This check ran headless through the direct managed listener, without GPU gameplay.
+
+Run `bun run bench:prediction` for five local prediction-path samples, or append
+`--cpu-profile` to write a DevTools-readable profile to
+`test-results/prediction.cpuprofile`. The browser workload can be imported from
+`/scripts/prediction-workload.ts` on the development server; the lightweight
+`/scripts/prediction-profile.html` page avoids including GPU rendering in CPU
+measurements. Both are development tooling and are absent from the production
+client bundle.

@@ -1,0 +1,280 @@
+{
+  "results": [
+    {
+      "side": "baseline",
+      "frames": 120,
+      "cars": 40,
+      "contacts": 4680,
+      "checksum": 3945.5099449968316,
+      "pending": 8,
+      "medianMs": 7.5,
+      "p95Ms": 89.90000000596046,
+      "totalMs": 2973.700000077486,
+      "stages": {
+        "reconcile": 1973.0999999642372,
+        "input": 424.90000009536743,
+        "render": 574.8000000715256
+      }
+    },
+    {
+      "side": "candidate",
+      "frames": 120,
+      "cars": 40,
+      "contacts": 4680,
+      "checksum": 3945.5099449968316,
+      "pending": 8,
+      "medianMs": 4.5,
+      "p95Ms": 47.80000001192093,
+      "totalMs": 1660.5,
+      "stages": {
+        "reconcile": 1093.0999999642372,
+        "input": 241.20000004768372,
+        "render": 325.5000000298023
+      }
+    },
+    {
+      "side": "baseline",
+      "frames": 120,
+      "cars": 40,
+      "contacts": 4680,
+      "checksum": 3945.5099449968316,
+      "pending": 8,
+      "medianMs": 7.899999976158142,
+      "p95Ms": 91.30000001192093,
+      "totalMs": 3006.5999999940395,
+      "stages": {
+        "reconcile": 2028.0000000298023,
+        "input": 435.79999989271164,
+        "render": 542.2000001072884
+      }
+    },
+    {
+      "side": "candidate",
+      "frames": 120,
+      "cars": 40,
+      "contacts": 4680,
+      "checksum": 3945.5099449968316,
+      "pending": 8,
+      "medianMs": 5.0999999940395355,
+      "p95Ms": 51.20000001788139,
+      "totalMs": 1751.300000011921,
+      "stages": {
+        "reconcile": 1117.1000000834465,
+        "input": 272.7000000476837,
+        "render": 359.8999999463558
+      }
+    },
+    {
+      "side": "baseline",
+      "frames": 120,
+      "cars": 40,
+      "contacts": 4680,
+      "checksum": 3945.5099449968316,
+      "pending": 8,
+      "medianMs": 7.899999976158142,
+      "p95Ms": 83.59999999403954,
+      "totalMs": 2852.4999999403954,
+      "stages": {
+        "reconcile": 1885.2000000476837,
+        "input": 433.90000009536743,
+        "render": 532.5999998152256
+      }
+    },
+    {
+      "side": "candidate",
+      "frames": 120,
+      "cars": 40,
+      "contacts": 4680,
+      "checksum": 3945.5099449968316,
+      "pending": 8,
+      "medianMs": 5.399999976158142,
+      "p95Ms": 59.29999998211861,
+      "totalMs": 2044.4000000059605,
+      "stages": {
+        "reconcile": 1343.0999999046326,
+        "input": 304.8000001311302,
+        "render": 395.59999999403954
+      }
+    },
+    {
+      "side": "baseline",
+      "frames": 120,
+      "cars": 40,
+      "contacts": 4680,
+      "checksum": 3945.5099449968316,
+      "pending": 8,
+      "medianMs": 8.199999988079071,
+      "p95Ms": 89.69999998807907,
+      "totalMs": 2903.400000035763,
+      "stages": {
+        "reconcile": 1881.0000000298023,
+        "input": 474.9000000655651,
+        "render": 544.9999998807907
+      }
+    },
+    {
+      "side": "candidate",
+      "frames": 120,
+      "cars": 40,
+      "contacts": 4680,
+      "checksum": 3945.5099449968316,
+      "pending": 8,
+      "medianMs": 3.7000000178813934,
+      "p95Ms": 44.599999994039536,
+      "totalMs": 1473.9000000059605,
+      "stages": {
+        "reconcile": 984.5999998748302,
+        "input": 212.40000012516975,
+        "render": 276.2000000178814
+      }
+    },
+    {
+      "side": "baseline",
+      "frames": 120,
+      "cars": 40,
+      "contacts": 4680,
+      "checksum": 3945.5099449968316,
+      "pending": 8,
+      "medianMs": 11.400000005960464,
+      "p95Ms": 119.5,
+      "totalMs": 3835.0000000298023,
+      "stages": {
+        "reconcile": 2554.399999976158,
+        "input": 538.9999999403954,
+        "render": 737.3000001013279
+      }
+    },
+    {
+      "side": "candidate",
+      "frames": 120,
+      "cars": 40,
+      "contacts": 4680,
+      "checksum": 3945.5099449968316,
+      "pending": 8,
+      "medianMs": 6.5,
+      "p95Ms": 72.80000001192093,
+      "totalMs": 2283.2999999523163,
+      "stages": {
+        "reconcile": 1532,
+        "input": 314.7999999821186,
+        "render": 435.39999997615814
+      }
+    }
+  ],
+  "logs": ["console.debug [vite] connecting...", "console.debug [vite] connected."],
+  "browser": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.8078.12 Safari/537.36",
+  "date": "2026-10-14",
+  "baselineCommit": "38f9bce561950d82c338ec5c1eda16e9ad8c704f",
+  "method": "40 sport cars at 52/10 m/s against a wall; held remote braking; six-command acknowledgement backlog (about 200 ms plus input/snapshot phase); 30 Hz input and 60 Hz render; 60 warmup frames then 120 measured frames per run; full reconcile/input/render path. Five alternating runs per side. Standalone Chromium page at 1280x900; no Babylon renderer or real sockets in timed workload.",
+  "load": "12 logical CPUs, load average 23 at start; unrelated Rust builds and preview processes active.",
+  "summary": {
+    "baseline": {
+      "medianTotalMs": 2973.700000077486,
+      "minTotalMs": 2852.4999999403954,
+      "maxTotalMs": 3835.0000000298023
+    },
+    "candidate": {
+      "medianTotalMs": 1751.300000011921,
+      "minTotalMs": 1473.9000000059605,
+      "maxTotalMs": 2283.2999999523163
+    }
+  },
+  "profileTopSelfMs": [
+    {
+      "function": "collisionPairs",
+      "file": "collision-baseline.ts",
+      "ms": 1557.569
+    },
+    {
+      "function": "(garbage collector)",
+      "file": "",
+      "ms": 760.126
+    },
+    {
+      "function": "axes",
+      "file": "collision-baseline.ts",
+      "ms": 667.832
+    },
+    {
+      "function": "resolveMovementContacts",
+      "file": "movement-baseline.ts",
+      "ms": 454.708
+    },
+    {
+      "function": "",
+      "file": "collision-baseline.ts",
+      "ms": 388.85
+    },
+    {
+      "function": "(program)",
+      "file": "",
+      "ms": 329.342
+    },
+    {
+      "function": "contact",
+      "file": "collision-baseline.ts",
+      "ms": 298.198
+    },
+    {
+      "function": "byId",
+      "file": "collision-baseline.ts",
+      "ms": 297.224
+    },
+    {
+      "function": "entityBox",
+      "file": "collision-baseline.ts",
+      "ms": 292.962
+    },
+    {
+      "function": "extent",
+      "file": "collision-baseline.ts",
+      "ms": 249.699
+    },
+    {
+      "function": "resolveStaticContacts",
+      "file": "movement-baseline.ts",
+      "ms": 149.222
+    },
+    {
+      "function": "shape",
+      "file": "collision-baseline.ts",
+      "ms": 146.377
+    }
+  ],
+  "errors": 0,
+  "outputsEqual": true,
+  "liveSocketCheck": {
+    "result": {
+      "inputs": 144,
+      "renders": 276,
+      "stats": {
+        "connected": true,
+        "rtt": 376.5,
+        "jitter": 108.10850677727797,
+        "snapshotAge": 89.5,
+        "snapshotInterval": 60.19999998807907,
+        "interpolationDelay": 209.32713638142653,
+        "snapshotsPerSecond": 12,
+        "inputsPerSecond": 26,
+        "seq": 143,
+        "ack": 139,
+        "ackAge": 185.13333331545073,
+        "pending": 4,
+        "queued": -5,
+        "prediction": "predicting",
+        "correction": 0.26281981073212746,
+        "angle": 0.2576430598101296,
+        "offset": 0.20221118429508286,
+        "corrections": 10,
+        "buffered": 0,
+        "resyncs": 0,
+        "serverTime": 787.366666666115
+      },
+      "renderMedianMs": 6.700000017881393,
+      "renderP95Ms": 33.60000002384186,
+      "statuses": ["connecting", "connected"],
+      "vehicle": "e41"
+    },
+    "logs": ["console.debug [vite] connecting...", "console.debug [vite] connected."]
+  }
+}

@@ -29,7 +29,8 @@
     "bench:load": "tsx scripts/load-test.ts",
     "test:deployment": "tsx scripts/deployment-test.ts",
     "debug": "tsx scripts/debug.ts",
-    "test:traffic": "tsx scripts/traffic-scenario.ts"
+    "test:traffic": "tsx scripts/traffic-scenario.ts",
+    "bench:prediction": "tsx scripts/prediction-profile.ts"
   },
   "dependencies": {
     "@babylonjs/core": "^8.0.0",

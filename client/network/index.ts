@@ -46,6 +46,8 @@ export class GameNetwork {
   resyncs = 0;
   private welcomed = false;
   private authorityPending = false;
+  private lastResponse = 0;
+  private bufferedSince: number | undefined;
   private heartbeat: ReturnType<typeof setInterval> | undefined;
   private inputTimes: number[] = [];
   private snapshotTimes: number[] = [];
@@ -77,6 +79,10 @@ export class GameNetwork {
   ) {}
   worldReady = (_point: { x: number; z: number }) => true;
   connect() {
+    this.closed = true;
+    if (this.socket) this.disconnect(this.socket);
+    clearTimeout(this.retry);
+    clearInterval(this.heartbeat);
     this.closed = false;
     this.welcomed = false;
     this.rtt = undefined;
@@ -91,8 +97,16 @@ export class GameNetwork {
     this.socket = new WebSocket(
       `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`,
     );
-    this.socket.binaryType = "arraybuffer";
-    this.socket.onopen = () =>
+    const socket = this.socket;
+    this.lastResponse = performance.now();
+    this.bufferedSince = undefined;
+    this.heartbeat = setInterval(() => {
+      if (performance.now() - this.lastResponse >= 5000) this.disconnect(socket);
+      else if (this.welcomed) this.send({ type: "ping" });
+    }, 1000);
+    socket.binaryType = "arraybuffer";
+    this.socket.onopen = () => {
+      if (this.socket !== socket) return;
       this.send({
         type: "join",
         version: VERSION,
@@ -101,7 +115,9 @@ export class GameNetwork {
         character: this.character,
         token: this.token || undefined,
       });
+    };
     this.socket.onmessage = (event) => {
+      if (this.socket !== socket) return;
       let m;
       try {
         m =
@@ -111,6 +127,8 @@ export class GameNetwork {
       } catch {
         return;
       }
+      if (["welcome", "state", "pong"].includes(m.type))
+        this.lastResponse = performance.now();
       if (m.type === "versionMismatch") {
         this.hooks.status("version mismatch; refresh the game");
         this.close();
@@ -135,10 +153,7 @@ export class GameNetwork {
           return;
         }
         this.welcomed = true;
-        clearInterval(this.heartbeat);
-        const ping = () => this.send({ type: "ping", timestamp: performance.now() });
-        ping();
-        this.heartbeat = setInterval(ping, 1000);
+        if (!this.send({ type: "ping" })) return;
         this.playerId = m.id;
         this.token = m.token;
         this.prediction = new Prediction(this.city ?? emptyCity(m.map), (point) =>
@@ -200,25 +215,51 @@ export class GameNetwork {
         this.latency = rtt / 2;
       }
     };
-    this.socket.onclose = () => {
-      this.welcomed = false;
-      clearInterval(this.heartbeat);
-      for (const request of this.debugRequests.values()) {
-        clearTimeout(request.timer);
-        request.reject(Error("Connection closed"));
-      }
-      this.debugRequests.clear();
-      this.authorityPending = false;
-      this.prediction?.reset();
-      if (this.closed) return;
-      this.hooks.status("reconnecting");
-      this.retry = setTimeout(() => this.connect(), 1500);
+    socket.onclose = () => this.disconnect(socket);
+    socket.onerror = () => {
+      if (this.socket === socket) this.hooks.status("connection error");
     };
-    this.socket.onerror = () => this.hooks.status("connection error");
+  }
+  private disconnect(socket: WebSocket) {
+    if (this.socket !== socket) return;
+    this.socket = undefined;
+    socket.close();
+    this.welcomed = false;
+    clearInterval(this.heartbeat);
+    for (const request of this.debugRequests.values()) {
+      clearTimeout(request.timer);
+      request.reject(Error("Connection closed"));
+    }
+    this.debugRequests.clear();
+    this.authorityPending = false;
+    this.prediction?.reset();
+    if (this.closed) return;
+    this.hooks.status("reconnecting");
+    this.retry = setTimeout(() => this.connect(), 1500);
   }
   send(data: object) {
-    if (this.socket?.readyState === WebSocket.OPEN)
-      this.socket.send(JSON.stringify({ timestamp: performance.now(), ...data }));
+    const socket = this.socket;
+    if (socket?.readyState !== WebSocket.OPEN) return false;
+    const now = performance.now();
+    this.bufferedSince = socket.bufferedAmount
+      ? (this.bufferedSince ?? now)
+      : undefined;
+    const message = JSON.stringify({ timestamp: now, ...data });
+    // A few commands may queue briefly; never retain seconds of stale throttle.
+    if (
+      socket.bufferedAmount + new TextEncoder().encode(message).byteLength > 4096 ||
+      (this.bufferedSince !== undefined && now - this.bufferedSince >= 250)
+    ) {
+      this.disconnect(socket);
+      return false;
+    }
+    try {
+      socket.send(message);
+      return true;
+    } catch {
+      this.disconnect(socket);
+      return false;
+    }
   }
   private reconcile(now: number) {
     if (!this.authorityPending) return;
@@ -245,7 +286,8 @@ export class GameNetwork {
         ),
       },
     };
-    this.send({ type: "input", seq: frame.seq, timestamp, ...frame.input });
+    if (!this.send({ type: "input", seq: frame.seq, timestamp, ...frame.input }))
+      return;
     // Send controls first, then consume the latest authority before predicting.
     this.reconcile(performance.now());
     // A slot the server already simulated on held controls is acknowledged before its
@@ -262,6 +304,7 @@ export class GameNetwork {
       jitter: this.jitter,
       snapshotAge: this.received ? Math.max(0, now - this.received) : undefined,
       snapshotInterval: this.snapshotInterval,
+      interpolationDelay: this.timeline.delay * 1000,
       snapshotsPerSecond: this.snapshotTimes.filter((at) => at >= now - 1000).length,
       inputsPerSecond: this.inputTimes.filter((at) => at >= now - 1000).length,
       seq: this.seq - 1,
@@ -410,6 +453,6 @@ export class GameNetwork {
     this.welcomed = false;
     clearInterval(this.heartbeat);
     clearTimeout(this.retry);
-    this.socket?.close();
+    if (this.socket) this.disconnect(this.socket);
   }
 }

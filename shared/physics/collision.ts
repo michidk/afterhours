@@ -166,19 +166,28 @@ export function insideBuilding(b: Building, x: number, z: number, pad = 0) {
 
 /** Stable pair order for authority and replay, with 6 m of contact-correction margin. */
 export function collisionPairs(entities: Entity[]): [Entity, Entity][] {
-  const byId = (a: Entity, b: Entity) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-  const sorted = entities
+  const bodies = entities
     .filter((e) => !e.vehicle && (vehicle(e) || e.health > 0))
-    .sort((a, b) => a.x - b.x || byId(a, b));
-  const pairs: [Entity, Entity][] = [];
-  for (let i = 0; i < sorted.length; i++) {
-    const a = sorted[i];
-    for (let j = i + 1; j < sorted.length; j++) {
-      const b = sorted[j];
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const sweep = bodies
+    .map((_, i) => i)
+    .sort((a, b) => bodies[a].x - bodies[b].x || a - b);
+  const neighbours: number[][] = bodies.map(() => []);
+  for (let i = 0; i < sweep.length; i++) {
+    const ai = sweep[i],
+      a = bodies[ai];
+    for (let j = i + 1; j < sweep.length; j++) {
+      const bi = sweep[j],
+        b = bodies[bi];
       if (b.x - a.x > 16) break;
       if (Math.abs(a.z - b.z) > 16 || Math.abs(a.y - b.y) > 1.8) continue;
-      pairs.push(byId(a, b) < 0 ? [a, b] : [b, a]);
+      neighbours[Math.min(ai, bi)].push(Math.max(ai, bi));
     }
   }
-  return pairs.sort((a, b) => byId(a[0], b[0]) || byId(a[1], b[1]));
+  // Numeric ranks retain the exact ID solve order without sorting every pair globally.
+  const pairs: [Entity, Entity][] = [];
+  for (let a = 0; a < bodies.length; a++)
+    for (const b of neighbours[a].sort((a, b) => a - b))
+      pairs.push([bodies[a], bodies[b]]);
+  return pairs;
 }

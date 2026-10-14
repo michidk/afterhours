@@ -5,13 +5,39 @@ import { interpolate } from "./prediction.ts";
 export class SnapshotTimeline {
   private history: { time: number; received: number; entities: Map<string, Entity> }[] =
     [];
+  delay = 0.1;
   private clock: number | undefined;
   private lastFrame: number | undefined;
   reset() {
     this.history = [];
+    this.delay = 0.1;
     this.clock = this.lastFrame = undefined;
   }
   push(time: number, entities: Entity[], received: number) {
+    const previous = this.history.at(-1);
+    if (previous && time < previous.time) return;
+    if (previous && time > previous.time) {
+      const elapsed = Math.max(0, (received - previous.received) / 1000);
+      const window = received - this.history[0].received;
+      const playback =
+        window >= 500
+          ? Math.max(0.1, Math.min(1, ((time - this.history[0].time) * 1000) / window))
+          : 1;
+      const gaps = this.history
+        .slice(1)
+        .map((entry, i) =>
+          Math.max(
+            0,
+            (entry.received - this.history[i].received) / 1000 -
+              (entry.time - this.history[i].time) / playback,
+          ),
+        );
+      gaps.push(Math.max(0, elapsed - (time - previous.time) / playback));
+      gaps.sort((a, b) => a - b);
+      const target = Math.min(0.25, 0.1 + (gaps[Math.floor(gaps.length * 0.95)] ?? 0));
+      this.delay =
+        target > this.delay ? target : Math.max(target, this.delay - elapsed * 0.005);
+    }
     this.history.push({
       time,
       received,
@@ -29,14 +55,15 @@ export class SnapshotTimeline {
         elapsed >= 500
           ? Math.max(0.1, Math.min(1, ((latest.time - oldest.time) * 1000) / elapsed))
           : 1;
-    const desired = latest.time + ((now - latest.received) / 1000) * playback - 0.1;
+    const desired =
+      latest.time + ((now - latest.received) / 1000) * playback - this.delay;
     const dt = Math.max(0, (now - (this.lastFrame ?? now)) / 1000);
     this.lastFrame = now;
     if (this.clock === undefined) this.clock = desired;
     else if (dt > 0.25) this.clock = Math.max(this.clock, desired);
     else {
       const error = desired - this.clock;
-      const rate = playback * (1 + Math.max(-0.1, Math.min(0.1, error * 2)));
+      const rate = playback * (1 + Math.max(-0.5, Math.min(0.1, error * 4)));
       this.clock += dt * rate;
     }
     this.clock = Math.min(this.clock, latest.time + 0.1);

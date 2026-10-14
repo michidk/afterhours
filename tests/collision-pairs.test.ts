@@ -52,3 +52,23 @@ test("a contacting pileup resolves identically regardless of snapshot entity ord
     "cars remain outside the wall",
   );
 });
+
+test("dense sweep groups retain every eligible pair in ID order", () => {
+  const bodies = [car("d", 16), car("c", 0), car("b", -16), car("a", 0)];
+  bodies[0].z = 16;
+  bodies[1].y = 1.8;
+  const expected = [
+    ["a", "b"],
+    ["a", "c"],
+    ["a", "d"],
+    ["b", "c"],
+    ["c", "d"],
+  ];
+  for (let rotation = 0; rotation < bodies.length; rotation++) {
+    assert.deepEqual(
+      collisionPairs(bodies).map(([a, b]) => [a.id, b.id]),
+      expected,
+    );
+    bodies.push(bodies.shift()!);
+  }
+});
