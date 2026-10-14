@@ -35,6 +35,7 @@ export const LINK_PROFILES: Record<string, LinkProfile> = {
   moderate: { base: 40, spread: 40, spike: 0, p: 0 },
   spiky: { base: 40, spread: 20, spike: 120, p: 0.03 },
   wan: { base: 80, spread: 30, spike: 150, p: 0.02 },
+  distant: { base: 150, spread: 75, spike: 200, p: 0.03 },
 };
 export interface ProbeOptions {
   profile?: keyof typeof LINK_PROFILES | LinkProfile;
@@ -211,9 +212,16 @@ export async function probeDriving(options: ProbeOptions = {}) {
     const trace: object[] = [];
     let lastCorrectionCount = 0;
     let maxOffset = 0;
+    let maxPending = 0;
+    let suspendedFrames = 0;
     const limit = VEHICLES[model].speed;
     for (now = 0; now <= seconds * 1000; now++) {
       if (now > 0) mock.timers.tick(1);
+      if (now % wakeup === 0) {
+        maxPending = Math.max(maxPending, driver.prediction?.pending.length ?? 0);
+        if (driver.prediction?.status === "waiting for acknowledgements")
+          suspendedFrames++;
+      }
       if (now % wakeup === 0)
         clock.advance(now, (timestamp) =>
           driver.input({ ...idle(), up: true }, timestamp),
@@ -335,6 +343,8 @@ export async function probeDriving(options: ProbeOptions = {}) {
         queueDepthMax,
       },
       client: {
+        maxPending,
+        suspendedFrames,
         corrections: driver.prediction!.corrections,
         correctionsOver1m: corrections.filter((c) => c > 1).length,
         maxCorrection: +Math.max(0, ...corrections).toFixed(3),

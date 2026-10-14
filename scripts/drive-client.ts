@@ -9,11 +9,19 @@ import { setTimeout as pause } from "node:timers/promises";
 import { GameNetwork } from "../client/network/index.ts";
 import { InputClock } from "../client/input/clock.ts";
 import { OrderedDelay } from "./ordered-delay.ts";
-import { loadCity } from "../server/city-loader.ts";
-import { CityStore } from "../server/city-stream.ts";
-import { idle, type Input } from "../shared/world.ts";
+import { appendFileSync } from "node:fs";
+import { CityStream } from "../client/world/stream.ts";
+import {
+  mapManifestSchema,
+  cityWaterSchema,
+  type ClientMap,
+} from "../shared/city-stream.ts";
+import { unpackHeights } from "../shared/city-pack.ts";
+import { TERRAIN_SIDE } from "../shared/terrain.ts";
+import { idle, spawnOrigin, type Input } from "../shared/world.ts";
 import { VEHICLES } from "../shared/catalog.ts";
-import { CAR } from "../shared/physics/vehicle.ts";
+import { CAR, clamp, wrap } from "../shared/physics/vehicle.ts";
+import { groundLevel, isWater } from "../shared/water.ts";
 
 const arg = (name: string, fallback: string) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -29,14 +37,75 @@ const spike = Number(arg("spike", "0"));
 const spikeRate = Number(arg("spike-rate", "0.03"));
 const pattern = arg("pattern", "loop");
 const regulate = arg("regulate", "1") === "1";
+const targetSpeed = Number(arg("speed", "20"));
+if (
+  ![seconds, targetSpeed].every((value) => Number.isFinite(value) && value > 0) ||
+  ![delay, jitter, spike].every((value) => Number.isFinite(value) && value >= 0) ||
+  !Number.isFinite(spikeRate) ||
+  spikeRate < 0 ||
+  spikeRate > 1
+)
+  throw Error(
+    "Durations and speed must be positive; link delays nonnegative; spike-rate in [0, 1]",
+  );
 if (
   model !== "none" &&
   (!(model in VEHICLES) || VEHICLES[model as keyof typeof VEHICLES].kind !== "car")
 )
   throw Error(`--model must be a car model or "none", got ${model}`);
 
-const city = await loadCity();
-const mapId = new CityStore(city).manifest.mapId;
+const output = arg("output", "");
+const request = async (path: string) => {
+  const response = await fetch(new URL(path, url), {
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!response.ok) throw Error(`${path}: HTTP ${response.status}`);
+  return response;
+};
+const map: ClientMap = mapManifestSchema.parse(await (await request("/city")).json());
+if (map.hasTerrain) {
+  const heights = unpackHeights(
+    new Uint8Array(await (await request(`/city/terrain/${map.mapId}`)).arrayBuffer()),
+  );
+  if (heights.length !== TERRAIN_SIDE ** 2) throw Error("Incomplete terrain");
+  map.terrain = { heights };
+}
+if (map.hasWater)
+  map.water = cityWaterSchema.parse(
+    await (await request(`/city/water/${map.mapId}`)).json(),
+  );
+const stream = new CityStream(
+  map,
+  () => {},
+  (path, options) => fetch(new URL(String(path), url), options),
+);
+const city = stream.city;
+const radius = Number(arg("radius", "50"));
+if (!Number.isFinite(radius) || radius <= 0) throw Error("--radius must be positive");
+const airport = city.airport;
+const airportFloor = groundLevel(airport.x, airport.z, city);
+const airportReady = [-1, 0, 1].every((x) =>
+  [-1, 0, 1].every(
+    (z) =>
+      !isWater(airport.x + x * (radius + 10), airport.z + z * (radius + 10), city) &&
+      Math.abs(
+        groundLevel(
+          airport.x + x * (radius + 10),
+          airport.z + z * (radius + 10),
+          city,
+        ) - airportFloor,
+      ) < 0.1,
+  ),
+);
+const origin = airportReady
+  ? { x: airport.x - radius, z: airport.z }
+  : spawnOrigin(city);
+const center = {
+  x: Number(arg("x", String(origin.x))),
+  z: Number(arg("z", String(origin.z))),
+};
+await stream.prepare(center);
+const mapId = map.mapId;
 Object.defineProperty(globalThis, "location", {
   configurable: true,
   value: { protocol: url.protocol, host: url.host },
@@ -61,8 +130,9 @@ const network = new GameNetwork(
   },
   name,
   "#e07a5f",
-  structuredClone(city),
+  city,
 );
+network.worldReady = (point) => stream.ready(point);
 const clock = new InputClock();
 if (regulate) network.clock = clock;
 network.connect();
@@ -111,12 +181,11 @@ const debug: typeof network.debug = async (command) => {
   await pause(150);
   return network.debug(command);
 };
-const radius = Math.max(50, Math.min(city.airport.w, city.airport.d) / 2 - 45);
 let bodyId = network.playerId;
 if (model !== "none") {
   if (!debugAllowed)
     throw Error("Spawning a car needs a debug-enabled server (dev, or ALLOW_DEBUG=1)");
-  await debug({ kind: "teleport", x: city.airport.x - radius, z: city.airport.z });
+  await debug({ kind: "teleport", x: center.x, z: center.z });
   const before = new Set((await debug({ kind: "state" })).entities.map((e) => e.id));
   const spawned = await debug({ kind: "spawn", model: model as "sport" });
   const car = spawned.entities.find((e) => e.model === model && !before.has(e.id));
@@ -133,6 +202,7 @@ if (model !== "none") {
 await pause(300);
 network.prediction!.corrections = 0;
 const limit = model === "none" ? 8 : VEHICLES[model as keyof typeof VEHICLES].speed;
+maxInputLag = 0;
 const started = performance.now();
 // Proportional steering (as a gamepad would send) around the airfield centre keeps a
 // full-speed car alive for minutes; keyboard full lock at 52 m/s spins it into scenery.
@@ -140,7 +210,25 @@ const circle = Math.min(1, Math.atan(2.7 / radius) / CAR.steer);
 const steer = (t: number): Partial<Input> => {
   if (pattern === "straight") return {};
   if (pattern === "zigzag") return { moveX: t % 6 >= 3 ? -circle : circle, moveY: 1 };
-  return { moveX: circle, moveY: 1 };
+  const body = network.prediction?.body;
+  if (!body) return {};
+  const speed = Math.hypot(body.vx, body.vz);
+  const turnCenter = { x: center.x + radius, z: center.z };
+  const angle = Math.atan2(body.x - turnCenter.x, body.z - turnCenter.z);
+  const lookahead = Math.max(6, speed * 0.5) / radius;
+  const target = {
+    x: turnCenter.x + Math.sin(angle + lookahead) * radius,
+    z: turnCenter.z + Math.cos(angle + lookahead) * radius,
+  };
+  const heading = Math.atan2(target.x - body.x, target.z - body.z);
+  return {
+    moveX: clamp(
+      wrap(heading - body.angle) * 1.5 - (body.angularVelocity ?? 0) * 0.3,
+      -1,
+      1,
+    ),
+    moveY: clamp((targetSpeed - speed) * 0.3, -0.5, 1),
+  };
 };
 const summary = {
   frames: 0,
@@ -156,10 +244,47 @@ const summary = {
 };
 let previousPose: { x: number; z: number; at: number } | undefined;
 let lastCorrections = 0;
+let lastSample = 0;
+let lastFrame = performance.now();
+let maxFrameGapMs = 0;
 const sampler = setInterval(() => {
   const now = performance.now();
-  const pose = network.renderEntities(now).find((e) => e.id === bodyId);
+  maxFrameGapMs = Math.max(maxFrameGapMs, now - lastFrame);
+  lastFrame = now;
+  const controlled = network.prediction?.body;
+  if (controlled) stream.setView(controlled, controlled);
+  const rendered = network.renderEntities(now);
+  const pose = rendered.find((e) => e.id === bodyId);
   const p = network.prediction;
+  if (now - lastSample >= 100) {
+    lastSample = now;
+    const s = network.stats(now);
+    const body = network.entities.get(bodyId);
+    if (output)
+      appendFileSync(
+        output,
+        JSON.stringify({
+          type: "sample",
+          at: Date.now(),
+          elapsed: (performance.now() - started) / 1000,
+          stats: s,
+          body: body && {
+            id: body.id,
+            x: body.x,
+            y: body.y,
+            z: body.z,
+            speed: Math.hypot(body.vx, body.vz),
+          },
+          mapReady: body ? stream.ready(body) : false,
+          maxInputLagMs: maxInputLag,
+          maxFrameGapMs,
+          pose: pose && { x: pose.x, y: pose.y, z: pose.z },
+          remoteCars: rendered
+            .filter((e) => e.kind === "car" && e.driver && e.id !== bodyId)
+            .map((e) => ({ id: e.id, x: e.x, y: e.y, z: e.z })),
+        }) + "\n",
+      );
+  }
   if (!pose || !p) return;
   const speed = Math.hypot(pose.vx, pose.vz);
   summary.topSpeed = Math.max(summary.topSpeed, speed);
@@ -204,20 +329,30 @@ const reporter = setInterval(() => {
     ].join(" "),
   );
 }, 1000);
+let finished = false;
 const finish = async () => {
+  if (finished) return;
+  finished = true;
   clearInterval(pump);
   clearInterval(sampler);
   clearInterval(reporter);
   control = idle();
   let health: unknown;
   try {
-    health = await (await fetch(new URL("/health", url))).json();
+    health = await (
+      await fetch(new URL("/health", url), { signal: AbortSignal.timeout(4000) })
+    ).json();
   } catch (error) {
     health = String(error);
   }
   outgoing.clear();
   incoming.clear();
   network.close();
+  if (output)
+    appendFileSync(
+      output,
+      JSON.stringify({ type: "summary", at: Date.now(), summary, health }) + "\n",
+    );
   console.log(
     JSON.stringify(
       {
