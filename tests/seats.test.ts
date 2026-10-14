@@ -245,3 +245,18 @@ test("binary snapshots preserve vacant seats and removal of player seat zero", (
   assert.equal(entities.get(p.id)?.seat, undefined);
   assert.equal(entities.get(p.id)?.vehicle, undefined);
 });
+
+test("a replacement car driver makes AI passengers leave and keeps human passengers", () => {
+  const { simulation: s, vehicle: v, board } = setup();
+  const driver = board("Original driver");
+  const aiPassenger = board("AI passenger");
+  aiPassenger.ai = true;
+  const humanPassenger = board("Human passenger");
+  s.interact(driver.id);
+  const replacement = board("Replacement driver");
+  assert.equal(v.driver, replacement.id);
+  assert.equal(aiPassenger.vehicle, undefined);
+  assert.equal(aiPassenger.seat, undefined);
+  assert.equal(humanPassenger.vehicle, v.id);
+  assert.deepEqual(v.seats, [replacement.id, null, humanPassenger.id, null]);
+});

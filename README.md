@@ -48,7 +48,7 @@ Standard gamepads use the left stick to move and steer, LT/RT to reverse/acceler
 
 ## What is in the city
 
-- **Vehicles:** cars, helicopters, planes, boats and jet skis with shared multi-seat rides, plus jetpacks and parachutes.
+- **Vehicles:** cars, helicopters, planes, boats and jet skis with shared multi-seat rides, plus jetpacks and parachutes. Taking the driver seat of a car makes its AI driver and AI passengers get out; human passengers stay aboard.
 - **Combat:** fists, bats, knives, pistols, SMGs, machine guns, flamethrowers and grenades, with server-owned inventory, ammunition and lag-compensated hits.
 - **Population:** 160 AI traffic cars and 300 pedestrians with personalities, routes, signals and reactions to crime and crashes. Pedestrians follow the generated sidewalks and cross only at crosswalks when the crossed traffic has a red light; fleeing, fighting or dodging citizens may leave the sidewalk. See [traffic](docs/traffic.md).
 - **Crashes:** cars take damage from the speed of an impact: a bump below 15 km/h is free, a 70 km/h wall costs about a third of a sedan's health, a 100 km/h wall leaves it running, and only harder hits set it alight, followed by an explosion six seconds later. The explosion throws everyone aboard clear alive with 25 damage; aircraft crews keep their height and open a parachute. Fast, sliding or handbraked turns leave rubber on streets, hills and the airfield. Tuning lives in `TUNING.crashSafeSpeed` and `TUNING.crashDamage`.

@@ -265,7 +265,7 @@ test("rare ambient impulses produce both short runs and NPC fights, with a coold
   assert.ok(fights > 0 && fights < 40, `fights: ${fights}`);
 });
 
-test("a chase routes around buildings and stealing a stopped car cancels its AI exit", () => {
+test("a chase routes around buildings and stealing a stopped car puts its former driver on foot", () => {
   const { sim, person, car, walk, advance } = setup();
   const pursuer = person(-9, 0, "aggressive");
   const target = sim.join("Target", "#fff");
@@ -294,5 +294,30 @@ test("a chase routes around buildings and stealing a stopped car cancels its AI 
   assert.equal(v.driver, player.id);
   assert.equal(player.vehicle, v.id);
   assert.equal(v.ai, false);
-  assert.equal(sim.entities.size, 2);
+  assert.equal(sim.entities.size, 3);
+  const formerDriver = [...sim.entities.values()].find((e) => e.kind === "pedestrian");
+  assert.ok(formerDriver);
+  assert.equal(formerDriver.ai, true);
+  assert.equal(formerDriver.vehicle, undefined);
+});
+
+test("taking an AI car puts its driver on foot only once", () => {
+  const { sim, car } = setup();
+  const v = car("calm");
+  const player = sim.join("Driver", "#fff");
+  player.x = v.x;
+  player.z = v.z;
+  sim.interact(player.id);
+  assert.equal(v.driver, player.id);
+  const pedestrians = () =>
+    [...sim.entities.values()].filter((e) => e.kind === "pedestrian");
+  assert.equal(pedestrians().length, 1);
+  assert.equal(pedestrians()[0].vehicle, undefined);
+  assert.ok(Math.hypot(pedestrians()[0].x - v.x, pedestrians()[0].z - v.z) >= 3);
+  sim.interact(player.id);
+  player.x = v.x;
+  player.z = v.z;
+  sim.interact(player.id);
+  assert.equal(v.driver, player.id);
+  assert.equal(pedestrians().length, 1);
 });

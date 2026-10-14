@@ -421,15 +421,19 @@ export class Simulation {
     )
       return;
     reaction.retryAt = this.time + 0.5;
+    this.disembarkCitizen(car);
+  }
+  private disembarkCitizen(car: Entity) {
     const person = this.spawn("pedestrian", car.x, car.z, car.color);
     if (!this.exit(person, car)) {
       this.entities.delete(person.id);
-      return;
+      return false;
     }
     this.ai.assign(person, this.serial, false);
     this.ai.citizens.transferDriver(car, person, this.time);
     car.ai = false;
     this.ai.routes.delete(car.id);
+    return true;
   }
   toggleLights(id: string) {
     const p = this.entities.get(id);
@@ -483,6 +487,13 @@ export class Simulation {
     if (v) {
       const seat = availableSeat(v);
       if (seat < 0) return;
+      if (seat === 0 && v.kind === "car") {
+        if (v.ai && !this.disembarkCitizen(v)) return;
+        for (const occupantId of vehicleSeats(v)) {
+          const occupant = occupantId && this.entities.get(occupantId);
+          if (occupant && occupant.ai && !this.exit(occupant, v)) return;
+        }
+      }
       p.vehicle = v.id;
       if (p.jetpack) p.jetpack.active = false;
       p.seat = seat;
