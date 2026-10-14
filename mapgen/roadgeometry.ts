@@ -852,6 +852,29 @@ export function solveProfiles(
       }
     n.y = sum / count;
   }
+  // Junction plateaus hold their node height, so a road between two nodes can only
+  // climb over the stretch between its plateaus. Pull node heights together until
+  // every road can meet its grade limit there; otherwise its profile would step.
+  const free = graph.edges.map((e) => {
+    const length = polylineLength(e.points),
+      [t0, t1] = trims[e.id];
+    return Math.max(1, length - Math.min(length, t0 + t1));
+  });
+  for (let pass = 0; pass < 200; pass++) {
+    let worst = 0;
+    for (const e of graph.edges) {
+      if (e.bridge || e.a === e.b) continue;
+      const a = graph.nodes[e.a],
+        b = graph.nodes[e.b],
+        excess = Math.abs(a.y - b.y) - maxGrade(e.kind) * 0.95 * free[e.id];
+      if (excess <= 0) continue;
+      worst = Math.max(worst, excess);
+      const step = (Math.sign(a.y - b.y) * excess) / 2;
+      a.y -= step;
+      b.y += step;
+    }
+    if (worst < 0.01) break;
+  }
   for (const e of graph.edges) {
     const length = polylineLength(e.points);
     let [t0, t1] = trims[e.id];
