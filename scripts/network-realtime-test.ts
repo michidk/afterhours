@@ -262,13 +262,13 @@ for (const delay of [0, 150, 360]) {
       driving = model === "sedan";
       await observer.debug({
         kind: "teleport",
-        x: city.airport.x + 50,
-        z: city.airport.z,
+        x: origin.x + 25,
+        z: origin.z - 25,
       });
       await walker.debug({
         kind: "teleport",
-        x: city.airport.x + 32,
-        z: city.airport.z,
+        x: origin.x,
+        z: origin.z,
       });
       await pause(150);
       const before = new Set(
@@ -279,7 +279,7 @@ for (const delay of [0, 150, 360]) {
       const vehicle = spawned.entities.find(
         (e) => e.model === model && !before.has(e.id),
       );
-      assert.ok(vehicle, `spawn ${model} in the airfield`);
+      assert.ok(vehicle, `spawn ${model} in the saved spawn clearing`);
       await pause(150);
       await walker.debug({ kind: "teleport", x: vehicle.x + 3, z: vehicle.z });
       walker.send({ type: "interact" });

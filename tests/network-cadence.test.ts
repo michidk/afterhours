@@ -52,6 +52,7 @@ for (const [kind, distance] of (["player", "car", "helicopter"] as const).flatMa
       const epoch = Date.now();
       t.mock.method(performance, "now", () => now);
       t.mock.method(Date, "now", () => epoch + now);
+      t.mock.timers.enable({ apis: ["setInterval"] });
       try {
         network.connect();
         await welcome;
@@ -113,6 +114,7 @@ for (const [kind, distance] of (["player", "car", "helicopter"] as const).flatMa
         let remoteAtStop = 0;
         let movedAt = 1000;
         let freeze = 0;
+        let freezeStats: ReturnType<GameNetwork["stats"]> | undefined;
         let cruiseCorrections: number | undefined;
         let lastCruiseCorrections = 0;
         for (
@@ -120,6 +122,7 @@ for (const [kind, distance] of (["player", "car", "helicopter"] as const).flatMa
           now <= (kind === "player" ? 4500 : kind === "car" ? 20000 : 8000);
           now++
         ) {
+          if (now > 0) t.mock.timers.tick(1);
           if (now % wakeup === 0)
             clock.advance(now, (timestamp) =>
               network.input(
@@ -162,7 +165,10 @@ for (const [kind, distance] of (["player", "car", "helicopter"] as const).flatMa
             if (now >= 1000 && now < 2800) {
               cruiseCorrections ??= network.prediction!.corrections;
               lastCruiseCorrections = network.prediction!.corrections;
-              freeze = Math.max(freeze, now - movedAt);
+              if (now - movedAt > freeze) {
+                freeze = now - movedAt;
+                freezeStats = network.stats(now);
+              }
               if (pose.z - previous > 0.001) movedAt = now;
             }
             backward = Math.max(backward, previous - pose.z);
@@ -198,7 +204,10 @@ for (const [kind, distance] of (["player", "car", "helicopter"] as const).flatMa
           Math.abs(previous - controlled.z) < 0.03,
           `stop converges to authority: error=${Math.abs(previous - controlled.z)} velocity=${controlled.vz}`,
         );
-        assert.ok(freeze <= 100, `no frozen local pose between snapshots: ${freeze}`);
+        assert.ok(
+          freeze <= 100,
+          `no frozen local pose between snapshots: ${freeze} ${JSON.stringify(freezeStats)}`,
+        );
         assert.ok(
           remoteAtStop > 10,
           `remote interpolation progresses: ${remoteAtStop}`,

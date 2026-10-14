@@ -144,11 +144,12 @@ export class Prediction {
     const seconds = Math.max(0, (now - this.smoothedAt) / 1000);
     this.smoothedAt = now;
     const distance = Math.hypot(this.offset.x, this.offset.z, this.offset.y);
+    const speed = this.body ? Math.hypot(this.body.vx, this.body.vy, this.body.vz) : 0;
+    const presentationSpeed = this.lastInput
+      ? (speed * TUNING.tick * 1000) / this.lastInput.interval
+      : speed;
     // Smooth only presentation: small errors settle gently, large errors catch up faster.
-    const correctionSpeed = Math.max(
-      18,
-      this.body ? Math.hypot(this.body.vx, this.body.vy, this.body.vz) * 2 : 0,
-    );
+    const correctionSpeed = Math.max(18, presentationSpeed * 2);
     const decay = Math.max(
       Math.exp(-seconds * (6 + 12 * Math.min(1, distance))),
       distance ? 1 - (correctionSpeed * seconds) / distance : 0,
@@ -156,7 +157,6 @@ export class Prediction {
     const angleDecay = Math.exp(
       -seconds * (6 + 12 * Math.min(1, Math.abs(this.offset.angle))),
     );
-    const speed = this.body ? Math.hypot(this.body.vx, this.body.vy, this.body.vz) : 0;
     const ahead =
       this.body && speed > 0.1
         ? (this.offset.x * this.body.vx +
@@ -165,7 +165,10 @@ export class Prediction {
           speed
         : 0;
     // Let authority catch a leading visual pose without reversing its travel.
-    const retained = Math.max(0, ahead * (1 - decay) - speed * seconds * 0.5);
+    const retained = Math.max(
+      0,
+      ahead * (1 - decay) - presentationSpeed * seconds * 0.5,
+    );
     this.offset.x *= decay;
     this.offset.z *= decay;
     this.offset.y *= decay;

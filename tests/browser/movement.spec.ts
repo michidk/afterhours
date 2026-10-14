@@ -2,6 +2,7 @@ import { test as base, expect } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
 import type { MapManifest } from "../../shared/city-stream.ts";
 import type { AgentInterface } from "../../client/debug/index.ts";
+import { spawnOrigin } from "../../shared/world.ts";
 
 interface MovementSample {
   kind: "render" | "input";
@@ -476,10 +477,10 @@ for (const model of ["sedan", "scout"] as const) {
     );
     const manifest: MapManifest = await (await request.get("/city")).json();
     const vehicleId = await page.evaluate(
-      async ({ model, airport }) => {
+      async ({ model, origin }) => {
         const d = window.afterhoursDebug!;
         d.scene.engine.setHardwareScalingLevel(2);
-        await d.teleport(airport.x + 32, airport.z);
+        await d.teleport(origin.x, origin.z);
         const before = new Set((await d.state()).entities.map((e) => e.id));
         const state = await d.spawn(model);
         const vehicle = state.entities.find(
@@ -489,7 +490,7 @@ for (const model of ["sedan", "scout"] as const) {
         await d.teleport(vehicle.x + 3, vehicle.z);
         return vehicle.id;
       },
-      { model, airport: manifest.airport },
+      { model, origin: spawnOrigin(manifest) },
     );
     await page.keyboard.press("f");
     await page.waitForFunction((id) => {
