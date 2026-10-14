@@ -21,6 +21,7 @@ export class Prediction {
   private smoothedAt = 0;
   private lastReconcile = 0;
   private lastInput: InputFrame | undefined;
+  private inputInterval = TUNING.tick * 1000;
   private displayed: Pick<Entity, "x" | "y" | "z" | "angle"> | undefined;
   private authoritative: Entity | undefined;
   private presentationMode: "predicted" | "authoritative" | undefined;
@@ -40,6 +41,7 @@ export class Prediction {
     this.ownership = "";
     this.offset = { x: 0, z: 0, y: 0, angle: 0 };
     this.lastInput = undefined;
+    this.inputInterval = TUNING.tick * 1000;
     this.displayed = undefined;
     this.authoritative = undefined;
     this.presentationMode = undefined;
@@ -252,13 +254,15 @@ export class Prediction {
     const contacts = new Set(this.contacts);
     // Fill the gap between 30 Hz inputs at display refresh rate. This copy never
     // changes the replay state or decides gameplay outcomes. The rendered pose sits
-    // one tick ahead of the last command's timestamp; allowing a second tick keeps
+    // one tick ahead of the last command's timestamp. Scale wall time by the
+    // paced input interval when the server is slow; allowing a second tick keeps
     // it continuous when a late wakeup produces that command up to a tick late,
     // instead of holding the pose and then lurching when the command arrives.
     if (this.lastInput && !this.suspended) {
       const partial = Math.min(
         TUNING.tick * 2,
-        Math.max(0, (now - this.lastInput.timestamp) / 1000),
+        Math.max(0, (now - this.lastInput.timestamp) / this.inputInterval) *
+          TUNING.tick,
       );
       if (partial > 0)
         predictStep(
@@ -285,6 +289,14 @@ export class Prediction {
     if (this.pending.length > MAX_PENDING_INPUTS)
       this.discardedThrough = this.pending.shift()!.seq;
     if (this.suspended || this.pending.length > MAX_PREDICTION_STEPS) return;
+    if (this.lastInput && frame.timestamp > this.lastInput.timestamp)
+      this.inputInterval +=
+        (Math.max(
+          TUNING.tick * 500,
+          Math.min(TUNING.tick * 2000, frame.timestamp - this.lastInput.timestamp),
+        ) -
+          this.inputInterval) *
+        0.2;
     this.lastInput = frame;
     if (this.body)
       predictStep(

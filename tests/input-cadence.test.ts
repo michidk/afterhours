@@ -55,3 +55,24 @@ test("the regulated input clock keeps spare commands buffered at the server", as
   );
   assert.equal(regulated.server.speculated, 0, "no held slots on a calm link");
 });
+
+for (const serverSlow of [8, 16])
+  test(`driving follows a slow server without shedding inputs or resetting at ${serverSlow} ms extra per tick`, async () => {
+    const report = await probeDriving({
+      profile: "lan",
+      serverSlow,
+      seconds: 15,
+    });
+    const detail = JSON.stringify(report);
+    assert.equal(report.server.dropped, 0, detail);
+    assert.equal(report.client.corrections, 0, detail);
+    assert.ok(report.cruise.frames > 200, detail);
+    assert.equal(report.cruise.backward, 0, detail);
+    assert.equal(report.cruise.surges, 0, detail);
+    assert.equal(report.cruise.dips, 0, detail);
+    const expected =
+      report.cruise.expectedStep *
+      ((TUNING.tick * 1000) / (TUNING.tick * 1000 + serverSlow));
+    assert.ok(Math.abs(report.cruise.maxStep - expected) < 0.02, detail);
+    assert.ok(Math.abs(report.cruise.minStep - expected) < 0.02, detail);
+  });

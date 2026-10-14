@@ -1,3 +1,53 @@
+import type { GameNetwork } from "../network/index.ts";
+
+type NetworkSample = ReturnType<GameNetwork["stats"]>;
+
+export async function profileNetwork<T>(
+  capture: () => Promise<T>,
+  read: () => NetworkSample | undefined,
+) {
+  const samples: NetworkSample[] = [];
+  const sample = () => {
+    const stats = read();
+    if (stats) samples.push(stats);
+  };
+  sample();
+  const timer = setInterval(sample, 100);
+  try {
+    const result = await capture();
+    sample();
+    const first = samples[0],
+      last = samples.at(-1);
+    const range = (values: (number | undefined)[]) => {
+      const present = values.filter((value) => value !== undefined);
+      return present.length
+        ? { p95: p95(present), max: Math.max(...present) }
+        : undefined;
+    };
+    return {
+      ...result,
+      network: {
+        samples: samples.length,
+        rttMs: range(samples.map((s) => s.rtt)),
+        snapshotAgeMs: range(samples.map((s) => s.snapshotAge)),
+        snapshotIntervalMs: range(samples.map((s) => s.snapshotInterval)),
+        ackAgeMs: range(samples.map((s) => s.ackAge)),
+        pendingInputs: range(samples.map((s) => s.pending)),
+        serverQueue: range(samples.map((s) => s.queued)),
+        visualOffsetMetres: range(samples.map((s) => s.offset)),
+        corrections: first && last ? last.corrections - first.corrections : 0,
+        resyncs: first && last ? last.resyncs - first.resyncs : 0,
+        serverElapsedSeconds:
+          first && last ? last.serverTime - first.serverTime : undefined,
+        predictionStates: [...new Set(samples.map((s) => s.prediction))],
+        disconnectedSamples: samples.filter((s) => !s.connected).length,
+      },
+    };
+  } finally {
+    clearInterval(timer);
+  }
+}
+
 type Frame = { interval: number; update: number; render: number; ui: number };
 function p95(values: number[]) {
   const sorted = [...values].sort((a, b) => a - b);

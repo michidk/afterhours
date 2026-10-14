@@ -16,7 +16,7 @@ import { prepareFirstFrame } from "./startup.ts";
 import { meshGroupSchema } from "../shared/city-mesh.ts";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { CityScene } from "./scene";
-import { FrameProfiler } from "./performance/index.ts";
+import { FrameProfiler, profileNetwork } from "./performance/index.ts";
 import { AgentInterface } from "./debug/index.ts";
 import { CityStream, SCENERY_RADIUS } from "./world/stream.ts";
 import { CityRenderer } from "./world/render.ts";
@@ -504,6 +504,7 @@ async function boot() {
           pending: network?.prediction?.pending.length,
           corrections: network?.prediction?.corrections,
           latency: network?.latency,
+          networking: network?.stats(),
           skids: scene.effects.skidMarks.length,
           particles: scene.effects.effects.length,
           gpu: scene.engine.getGlInfo(),
@@ -519,7 +520,10 @@ async function boot() {
           profile: async (seconds = 60) => {
             if (!joined) throw Error("Join the city before profiling");
             const viewport = [innerWidth, innerHeight];
-            const result = await profiler!.profile(seconds);
+            const result = await profileNetwork(
+              () => profiler!.profile(seconds),
+              () => network?.stats(),
+            );
             return {
               ...result,
               gpu: scene.engine.getGlInfo(),
