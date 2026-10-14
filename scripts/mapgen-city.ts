@@ -183,6 +183,27 @@ export function cityFromMap(map: GeneratedMap): City {
         });
   }
 
+  // Pieces from different profiles (a junction's flat plateau, a street's slope,
+  // the two legs of a hairpin) meet at shared vertices with slightly different
+  // heights; weld street and sidewalk vertices within half a metre to their mean so the
+  // surfaces meet without steps.
+  const welded = new Map<string, { sum: number; n: number }>();
+  const weldKey = (flat: number[], i: number) =>
+    `${Math.round(flat[i] * 2)},${Math.round(flat[i + 2] * 2)}`;
+  for (const flat of [...asphalt, ...sidewalks])
+    for (let i = 0; i < flat.length; i += 3) {
+      const entry = welded.get(weldKey(flat, i));
+      if (entry) {
+        entry.sum += flat[i + 1];
+        entry.n++;
+      } else welded.set(weldKey(flat, i), { sum: flat[i + 1], n: 1 });
+    }
+  for (const flat of [...asphalt, ...sidewalks])
+    for (let i = 0; i < flat.length; i += 3) {
+      const { sum, n } = welded.get(weldKey(flat, i))!;
+      if (n > 1) flat[i + 1] = round(sum / n);
+    }
+
   // Buildings: oriented boxes with pad and roof altitudes. A box fitted around an
   // irregular lot can reach past the sidewalk; such boxes are fitted back.
   const buildings: Building[] = [];
@@ -314,46 +335,138 @@ export function cityFromMap(map: GeneratedMap): City {
     props.push({ x, z, h: round(l.h), kind: "lamp" });
   }
 
-  const parks: City["parks"] = map.parks.map((p) => {
-    let minX = Infinity,
-      maxX = -Infinity,
-      minZ = Infinity,
-      maxZ = -Infinity;
-    for (const q of p.polygon) {
-      minX = Math.min(minX, q.x);
-      maxX = Math.max(maxX, q.x);
-      minZ = Math.min(minZ, q.z);
-      maxZ = Math.max(maxZ, q.z);
+  // Street surface lookups for placing parks, crates, signals and spawns.
+  const asphaltRings = asphalt.map((flat) => {
+    const ring: Point[] = [];
+    let x0 = Infinity,
+      x1 = -Infinity,
+      z0 = Infinity,
+      z1 = -Infinity;
+    for (let i = 0; i < flat.length; i += 3) {
+      ring.push({ x: flat[i], z: flat[i + 2] });
+      x0 = Math.min(x0, flat[i]);
+      x1 = Math.max(x1, flat[i]);
+      z0 = Math.min(z0, flat[i + 2]);
+      z1 = Math.max(z1, flat[i + 2]);
     }
-    return {
-      x: round((minX + maxX) / 2),
-      z: round((minZ + maxZ) / 2),
-      w: round(Math.min(256, Math.max(6, (maxX - minX) * 0.8))),
-      d: round(Math.min(256, Math.max(6, (maxZ - minZ) * 0.8))),
-      kind: p.kind === "woodland" ? "woodland" : "garden",
-    };
+    return { ring, x0, x1, z0, z1 };
   });
+  const onAsphalt = (p: Point) =>
+    asphaltRings.some(
+      (a) =>
+        p.x >= a.x0 &&
+        p.x <= a.x1 &&
+        p.z >= a.z0 &&
+        p.z <= a.z1 &&
+        pointInPolygon(p, a.ring),
+    );
+  const groundAt = (p: Point) => terrainHeight(p.x, p.z, { terrain: { heights } });
 
+  // Parks are drawn as one flat axis-aligned slab with paths, so each gets the
+  // largest box that fits inside its block, stays off the street and sits on
+  // ground within a metre of its centre. Gardens too small for their benches
+  // become woodland; parks with no such spot are dropped.
+  const parks: City["parks"] = [];
+  for (const park of map.parks) {
+    let best: { c: Point; clear: number } | undefined;
+    let x0 = Infinity,
+      x1 = -Infinity,
+      z0 = Infinity,
+      z1 = -Infinity;
+    for (const q of park.polygon) {
+      x0 = Math.min(x0, q.x);
+      x1 = Math.max(x1, q.x);
+      z0 = Math.min(z0, q.z);
+      z1 = Math.max(z1, q.z);
+    }
+    for (let x = x0; x <= x1; x += 4)
+      for (let z = z0; z <= z1; z += 4) {
+        const c = { x, z };
+        if (!pointInPolygon(c, park.polygon)) continue;
+        let clear = Infinity;
+        for (let i = 0; i < park.polygon.length; i++)
+          clear = Math.min(
+            clear,
+            dist(
+              c,
+              closestOnSegment(
+                c,
+                park.polygon[i],
+                park.polygon[(i + 1) % park.polygon.length],
+              ).point,
+            ),
+          );
+        if (!best || clear > best.clear) best = { c, clear };
+      }
+    if (!best) continue;
+    const c = best.c,
+      level = groundAt(c);
+    const fits = (hw: number, hd: number) => {
+      for (let dx = -hw; dx <= hw + 1e-6; dx += Math.max(1, hw / 6))
+        for (let dz = -hd; dz <= hd + 1e-6; dz += Math.max(1, hd / 6)) {
+          const q = { x: c.x + dx, z: c.z + dz };
+          if (
+            !pointInPolygon(q, park.polygon) ||
+            onAsphalt(q) ||
+            groundAt(q) < WATER_LEVEL + 0.3 ||
+            Math.abs(groundAt(q) - level) > 1
+          )
+            return false;
+        }
+      return true;
+    };
+    let hw = 3,
+      hd = 3;
+    for (let grown = true; grown && hw < 128 && hd < 128;) {
+      grown = false;
+      if (fits(hw + 1, hd)) ((hw += 1), (grown = true));
+      if (fits(hw, hd + 1)) ((hd += 1), (grown = true));
+    }
+    if (!fits(hw, hd) || hw < 4 || hd < 4) continue;
+    const garden = park.kind !== "woodland" && hw >= 5.5 && hd >= 10.5;
+    parks.push({
+      x: round(c.x),
+      z: round(c.z),
+      w: round(hw * 2),
+      d: round(hd * 2),
+      kind: garden ? "garden" : "woodland",
+    });
+  }
+
+  // Players spawn around the centre, so it is moved onto the nearest sidewalk
+  // walkway rather than into the downtown junction's traffic.
+  const spawn = g.walkways.points
+    .filter((p) => !onAsphalt(p))
+    .reduce((best, p) => (dist(p, map.centre) < dist(best, map.centre) ? p : best));
+  const centre = { x: round(spawn.x), z: round(spawn.z) };
   // Weapon pickups on the sidewalk walkways nearest downtown, spread apart.
-  const centre = { x: round(map.centre.x), z: round(map.centre.z) };
   const pickups: City["pickups"] = [];
-  const spots = [...g.walkways.points].sort(
-    (a, b) => dist(a, centre) - dist(b, centre),
-  );
+  const spots = [...g.walkways.points]
+    .filter((p) => !onAsphalt(p))
+    .sort((a, b) => dist(a, centre) - dist(b, centre));
   for (const weapon of ["pistol", "bat", "pistol"] as const) {
     const spot = spots.find((p) => pickups.every((q) => dist(p, q) > 15));
     if (!spot) break;
     pickups.push({ x: round(spot.x), z: round(spot.z), weapon });
   }
-  // Weapon crates are derived from segments at runtime; veto spots that land on
-  // asphalt (junction mouths, neighbouring streets) or inside a building.
-  const onAsphalt = (p: Point) =>
-    asphalt.some((flat) => {
-      const ring: Point[] = [];
-      for (let i = 0; i < flat.length; i += 3)
-        ring.push({ x: flat[i], z: flat[i + 2] });
-      return pointInPolygon(p, ring);
-    });
+  // Weapon crates and signal poles are derived from segments at runtime; veto
+  // spots that land on asphalt (junction mouths, neighbouring streets) or, for
+  // crates, inside a building.
+  // A pole can stand nearer the far end when its stop line lies far from the
+  // junction, so each end is tested on its own.
+  for (const road of roads)
+    for (const end of ["A", "B"] as const) {
+      if (!road[`signal${end}`]) continue;
+      const alone: Road = { ...road, signalA: undefined, signalB: undefined };
+      alone[`signal${end}`] = true;
+      const pole = destructibles({ props: [], parks: [], roads: [alone] }).find(
+        (p) => p.kind === "signal",
+      );
+      if (pole && onAsphalt(pole)) {
+        delete road[`signal${end}`];
+        delete road[`stop${end}`];
+      }
+    }
   for (const road of roads)
     for (const crate of destructibles({ props: [], parks: [], roads: [road] }))
       if (
