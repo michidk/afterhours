@@ -94,7 +94,7 @@ This runs one non-root Node process behind Caddy with HTTPS, WebSockets, health 
 ## Current limits
 
 - Graphics are procedural low-poly. There are no interiors, touch controls, accounts, moderation, saves or missions.
-- The urban plateau is level and building collision is rectangular. The generator does not yet place ramps or paved surfaces.
+- Cars use shared tire forces, slope gravity and ballistic vertical motion. Terrain contact cannot pull them down cliffs; crests preserve launch momentum. Vehicle pitch, roll, suspension and stacking are not simulated. Building collision remains rectangular. The generator does not yet place ramps or paved surfaces.
 - Vehicles use a planar solver with separate altitude, not full suspension or aerodynamics.
 - The server buffers two spare input commands per player, kept there by the browser's input clock; a tick with nothing buffered repeats the last movement controls and acknowledges that slot in advance, so the late command is never stepped twice and the driver sees a correction only if it changed controls at exactly that moment. The input clock reduces its send rate as the server queue deepens, and prediction uses the exact interval scheduled for each command. Pacing adapts to sustained slowdown and drops its slow-rate estimate when the server buffer drains. An overloaded server can still slow gameplay; stalls longer than 250 ms release controls and correct.
 - AI traffic and pedestrians that no player can reach within the prediction horizon are simulated at 30 Hz instead of 120 Hz, and distant pedestrians re-plan every fourth tick; everything within reach keeps full-rate physics. A debug camera moved far from every player can show them. See [networking](docs/networking.md).

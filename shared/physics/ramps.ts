@@ -15,7 +15,7 @@ export function rampHeight(x: number, z: number, city: City) {
 }
 export function carGrounded(e: Pick<Entity, "x" | "y" | "z" | "vy">, city: City) {
   const floor = rampHeight(e.x, e.z, city);
-  return Math.abs(e.y - floor) < 0.03 && (floor > 0 || e.vy <= 0);
+  return Math.abs(e.y - floor) < 0.03;
 }
 /** Follow the slope from its toe; retain slope velocity when leaving its lip. */
 export function carAltitude(
@@ -42,8 +42,25 @@ export function carAltitude(
     groundLevel(e.x, e.z, city) === floor &&
     groundLevel(previous.x, previous.z, city) === oldFloor;
   if (supported && onTerrain) {
-    e.y = floor;
-    e.vy = 0;
+    const fallingVelocity = previous.vy - 18 * dt;
+    const fallingHeight = previous.y + fallingVelocity * dt;
+    // Ground can push a car up, but cannot pull it down over a crest.
+    if (floor >= fallingHeight) {
+      e.y = floor;
+      e.vy = (floor - oldFloor) / dt;
+      const dx =
+          (groundLevel(e.x + 0.05, e.z, city) - groundLevel(e.x - 0.05, e.z, city)) /
+          0.1,
+        dz =
+          (groundLevel(e.x, e.z + 0.05, city) - groundLevel(e.x, e.z - 0.05, city)) /
+          0.1;
+      const gravity = (18 * dt) / (1 + dx * dx + dz * dz);
+      e.vx -= gravity * dx;
+      e.vz -= gravity * dz;
+    } else {
+      e.vy = fallingVelocity;
+      e.y = fallingHeight;
+    }
     return;
   }
   if (
