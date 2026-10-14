@@ -228,6 +228,7 @@ test("capped prediction keeps the local player and nearby cars on the same timel
   const timeline: unknown = Reflect.get(network, "timeline");
   assert.ok(timeline instanceof SnapshotTimeline);
   timeline.push(0, [old, car], 0);
+  timeline.push(1, [p, moved], 1000);
   network.prediction = new Prediction(city);
   network.prediction.reconcile(p, [p, moved], -1);
   for (let seq = 0; seq < 32; seq++)

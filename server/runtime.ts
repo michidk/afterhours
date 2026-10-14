@@ -7,6 +7,7 @@ export class Runtime {
   private samples: { wallMs: number; cpuMs: number }[] = [];
   ticks = 0;
   late = 0;
+  catchUpTicks = 0;
   constructor(
     readonly sim: Simulation,
     readonly sessions: Sessions,
@@ -19,7 +20,12 @@ export class Runtime {
     let lastSnapshotTick = this.ticks;
     this.timer = setInterval(() => {
       const now = performance.now();
-      accumulator += Math.min(0.2, (now - last) / 1000);
+      accumulator += Math.max(0, (now - last) / 1000);
+      const maxBacklog = TUNING.inputQueue * TUNING.tick;
+      if (accumulator > maxBacklog) {
+        this.late++;
+        accumulator = maxBacklog;
+      }
       last = now;
       let catchup = 0;
       while (
@@ -37,6 +43,7 @@ export class Runtime {
         this.samples.push({ wallMs, cpuMs: (cpu.user + cpu.system) / 1000 });
         if (this.samples.length > 600) this.samples.shift();
         accumulator -= TUNING.tick;
+        if (catchup > 0) this.catchUpTicks++;
         catchup++;
       }
       if (this.ticks !== lastSnapshotTick && performance.now() >= nextSnapshot) {
@@ -54,13 +61,6 @@ export class Runtime {
         sample.wallMs += finished - start;
         sample.cpuMs += (cpu.user + cpu.system) / 1000;
       }
-      if (accumulator > 0.15) {
-        this.late++;
-        // Dropping accumulated time loses whole ticks that clients already sent
-        // commands for; grant catch-up credit rather than queueing or shedding them.
-        this.sessions.skipped(Math.floor((accumulator - 0.03) / TUNING.tick));
-        accumulator = 0.03;
-      }
     }, 5);
   }
   metrics() {
@@ -75,7 +75,7 @@ export class Runtime {
       inputSpeculated: this.sessions.speculated,
       inputMispredicted: this.sessions.mispredicted,
       inputFrozen: this.sessions.frozen,
-      inputCatchUps: this.sessions.caughtUp,
+      catchUpTicks: this.catchUpTicks,
       inputDrops: this.sessions.dropped,
       tickP95Ms: wall[Math.floor(wall.length * 0.95)] || 0,
       tickMaxMs: wall.at(-1) || 0,

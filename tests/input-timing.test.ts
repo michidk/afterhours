@@ -187,20 +187,14 @@ test("the server applies exactly the commands a client sent: bounded bursts, hel
     apply(up);
     agree("a burst grants one fixed tick, not twelve");
     tick();
-    assert.equal(session.ack, 26, "without credit a burst still grants one tick");
+    assert.equal(session.ack, 26, "a burst still grants one world tick");
     apply(up);
     agree("no further acceleration");
-    sessions.skipped(1);
     tick();
-    assert.equal(
-      session.ack,
-      28,
-      "a tick the runtime dropped is repaid with two commands",
-    );
-    assert.equal(sessions.caughtUp, 1);
-    assert.equal(session.credit, 0);
+    tick();
+    assert.equal(session.ack, 28, "catch-up uses two complete world ticks");
     apply(up, up);
-    agree("both catch-up commands apply with their full contact substeps");
+    agree("both world ticks apply all contact substeps");
     const received = new Promise<ReturnType<typeof decodeSnapshot>>((resolve) => {
       ws.on("message", (raw, binary) => {
         if (binary && Buffer.isBuffer(raw)) resolve(decodeSnapshot(raw));
@@ -234,7 +228,6 @@ test("the server applies exactly the commands a client sent: bounded bursts, hel
     tick();
     assert.equal(sessions.speculated, 6, "silence idles rather than speculates");
     assert.ok(p.vz < movingVz, "idle input decelerates the body");
-    assert.equal(session.credit, 0, "silence forfeits catch-up credit");
   } finally {
     ws.terminate();
     sessions.close();

@@ -1,4 +1,3 @@
-import { contact, entityBox } from "../../shared/physics/index.ts";
 import type { Character } from "../../shared/character.ts";
 import { VERSION } from "../../shared/version.ts";
 import type {
@@ -16,6 +15,7 @@ import type { InputClock } from "../input/clock.ts";
 import { emptyCity } from "../../shared/city-stream.ts";
 import { setBrokenProps } from "../../shared/destruction.ts";
 import type { DebugCommand, DebugResult, DebugState } from "../../shared/debug.ts";
+import { wrap } from "../../shared/physics/vehicle.ts";
 export interface NetworkHooks {
   welcome: (m: Welcome) => void;
   state: (m: Omit<Snapshot, "entities"> & { entities: Entity[] }) => void;
@@ -52,6 +52,10 @@ export class GameNetwork {
   token = "";
   private timeline = new SnapshotTimeline();
   private contactPresentation = new Map<string, number>();
+  private displayedRemotes = new Map<
+    string,
+    { pose: Entity; target: Entity; at: number; smoothing: boolean }
+  >();
   private contactOwner = "";
   private retry: ReturnType<typeof setTimeout> | undefined;
   private closed = false;
@@ -107,6 +111,11 @@ export class GameNetwork {
       } catch {
         return;
       }
+      if (m.type === "versionMismatch") {
+        this.hooks.status("version mismatch; refresh the game");
+        this.close();
+        return;
+      }
       if (m.type === "debugResult") {
         const result = m as DebugResult,
           pending = this.debugRequests.get(result.requestId);
@@ -141,6 +150,7 @@ export class GameNetwork {
         this.entities.clear();
         this.timeline.reset();
         this.contactPresentation.clear();
+        this.displayedRemotes.clear();
         this.contactOwner = "";
         this.hooks.welcome(m);
         this.hooks.status("connected");
@@ -288,6 +298,7 @@ export class GameNetwork {
   renderEntities(now = performance.now()) {
     this.reconcile(now);
     const result = this.timeline.sample(now);
+    const presented = new Set<string>();
     const currentPlayer = this.entities.get(this.playerId);
     if (currentPlayer) {
       const i = result.findIndex((e) => e.id === this.playerId);
@@ -306,6 +317,7 @@ export class GameNetwork {
     if (predicted) {
       if (this.contactOwner !== predicted.id) {
         this.contactPresentation.clear();
+        this.displayedRemotes.clear();
         this.contactOwner = predicted.id;
       }
       for (const [id, until] of this.contactPresentation)
@@ -320,16 +332,50 @@ export class GameNetwork {
           Math.hypot(remote.x - predicted.x, remote.z - predicted.z),
           Math.hypot(neighbour.x - predicted.x, neighbour.z - predicted.z),
         );
-        const interacting =
-          prediction?.contacts.has(neighbour.id) ||
-          (Math.abs(remote.y - predicted.y) < 1.8 &&
-            contact(entityBox(predicted), entityBox(remote)));
+        const interacting = prediction?.contacts.has(neighbour.id);
         // Let interpolation catch up gradually after a provisional impact.
         if (interacting) this.contactPresentation.set(neighbour.id, now + 500);
         const remaining = (this.contactPresentation.get(neighbour.id) ?? now) - now;
         const weight = Math.max(0, Math.min(1, (24 - distance) / 12, remaining / 500));
-        if (weight === 0) continue;
-        const pose = interpolate(remote, neighbour, weight);
+        const previous = this.displayedRemotes.get(neighbour.id);
+        if (weight === 0 && !previous?.smoothing) continue;
+        let pose = interpolate(remote, neighbour, weight);
+        let smoothing = weight > 0;
+        if (previous) {
+          const dt = Math.max(0, Math.min(0.1, (now - previous.at) / 1000));
+          const reference = previous.smoothing ? pose : remote;
+          const dx = reference.x - previous.target.x,
+            dy = reference.y - previous.target.y,
+            dz = reference.z - previous.target.z;
+          const distance = Math.hypot(dx, dy, dz);
+          const travel =
+            Math.max(
+              Math.hypot(previous.pose.vx, previous.pose.vy, previous.pose.vz),
+              Math.hypot(pose.vx, pose.vy, pose.vz),
+            ) * dt;
+          const fraction = distance ? Math.min(1, travel / distance) : 0;
+          const advanced = {
+            ...previous.pose,
+            x: previous.pose.x + dx * fraction,
+            y: previous.pose.y + dy * fraction,
+            z: previous.pose.z + dz * fraction,
+            angle: wrap(previous.pose.angle + (pose.angularVelocity || 0) * dt),
+          };
+          smoothing ||=
+            Math.hypot(advanced.x - pose.x, advanced.y - pose.y, advanced.z - pose.z) >
+              0.01 || Math.abs(wrap(advanced.angle - pose.angle)) > 0.001;
+          const target = pose;
+          pose = interpolate(advanced, target, 1 - Math.exp(-12 * dt));
+          this.displayedRemotes.set(neighbour.id, { pose, target, at: now, smoothing });
+        } else {
+          this.displayedRemotes.set(neighbour.id, {
+            pose,
+            target: pose,
+            at: now,
+            smoothing,
+          });
+        }
+        presented.add(neighbour.id);
         if (index >= 0) result[index] = pose;
         else result.push(pose);
       }
@@ -346,6 +392,17 @@ export class GameNetwork {
         p.angle = v.angle;
       }
     }
+    const visible = new Set(result.map((e) => e.id));
+    for (const id of this.displayedRemotes.keys())
+      if (!visible.has(id)) this.displayedRemotes.delete(id);
+    for (const e of result)
+      if (!presented.has(e.id))
+        this.displayedRemotes.set(e.id, {
+          pose: e,
+          target: e,
+          at: now,
+          smoothing: false,
+        });
     return result;
   }
   close() {

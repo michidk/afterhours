@@ -300,7 +300,6 @@ export async function probeDriving(options: ProbeOptions = {}) {
         frozen: sessions.frozen,
         /** Longest run of consecutive ticks the server stayed ahead on held controls. */
         maxAhead,
-        caughtUp: sessions.caughtUp,
         dropped: sessions.dropped,
         queueDepthMean: +(queueDepthSum / tick).toFixed(2),
         queueDepthMax,

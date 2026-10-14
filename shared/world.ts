@@ -1,5 +1,6 @@
 import type { PackedSurfaceChunks } from "./city-pack.ts";
 import type { Character } from "./character.ts";
+import type { Drive } from "./physics/vehicle.ts";
 import type { BuildingAssetId } from "./assets/buildings/index.ts";
 export const BLOCK = 64;
 import type { VehicleModel, WeaponItem, WeaponKind } from "./catalog.ts";
@@ -54,6 +55,8 @@ export interface Entity {
   down?: number;
   angularVelocity?: number;
   steering?: number;
+  /** Last driving forces applied by authority, held during remote prediction. */
+  drive?: Drive;
   rearGripLoss?: number;
   skidding?: boolean;
   wheelSkids?: boolean[];

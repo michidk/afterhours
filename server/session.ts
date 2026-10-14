@@ -19,8 +19,6 @@ interface Client {
   id?: string;
   token: string;
   queue: InputFrame[];
-  /** Ticks the runtime dropped after a stall; each permits one extra command in a tick. */
-  credit: number;
   /** Ticks simulated on held controls and acknowledged in advance, awaiting their commands. */
   speculative: number;
   /** Consecutive ticks that ran on held controls; a long run means the client's clock lags. */
@@ -32,6 +30,7 @@ interface Client {
   ack: number;
   ackTimestamp?: number;
   lastSeq: number;
+  connectedAt: number;
   last: number;
   lastInput: number;
   count: number;
@@ -70,8 +69,6 @@ export class Sessions {
   mispredicted = 0;
   /** Ticks skipped to end a sustained run of held slots for a client that never caught up. */
   frozen = 0;
-  /** Ticks that applied two commands to repay a tick the runtime dropped. */
-  caughtUp = 0;
   /** Commands shed because a client's FIFO overflowed. */
   dropped = 0;
   debug: boolean;
@@ -89,6 +86,10 @@ export class Sessions {
     const publicOrigin = publicUrl ? publicUrl.origin : undefined;
     this.wss = new WebSocketServer({ server, path: "/ws", maxPayload: 4096 });
     this.wss.on("connection", (ws, req) => {
+      ws.on("error", () => {
+        this.rejected++;
+        ws.terminate();
+      });
       let valid = true;
       try {
         // The local preview proxy overwrites forwarded host before rewriting Host.
@@ -110,20 +111,20 @@ export class Sessions {
         ws.close(1008, "Origin rejected");
         return;
       }
-      if (this.clients.size >= TUNING.maxPlayers) {
-        ws.close(1013, "City is full");
+      if ([...this.clients.values()].filter((c) => !c.id).length >= TUNING.maxPlayers) {
+        ws.close(1013, "Too many pending connections");
         return;
       }
       const c: Client = {
         token: randomUUID(),
         queue: [],
-        credit: 0,
         speculative: 0,
         aheadTicks: 0,
         held: idle(),
         queued: 0,
         ack: -1,
         lastSeq: -1,
+        connectedAt: Date.now(),
         last: Date.now(),
         lastInput: 0,
         count: 0,
@@ -144,7 +145,7 @@ export class Sessions {
     });
   }
   send(ws: WebSocket, data: object) {
-    if (ws.readyState !== WebSocket.OPEN || ws.bufferedAmount > 256_000) return;
+    if (ws.readyState !== WebSocket.OPEN || ws.bufferedAmount >= 256_000) return false;
     data = { time: this.sim.time, ...data };
     const payload =
       (data as Snapshot).type === "state"
@@ -153,8 +154,10 @@ export class Sessions {
     this.bytes +=
       typeof payload === "string" ? Buffer.byteLength(payload) : payload.byteLength;
     ws.send(payload);
+    return true;
   }
   private message(ws: WebSocket, c: Client, raw: string) {
+    if (ws.readyState !== WebSocket.OPEN) return;
     const now = Date.now();
     if (now - c.window > 1000) {
       c.count = 0;
@@ -166,7 +169,21 @@ export class Sessions {
     }
     let parsed;
     try {
-      parsed = messageSchema.safeParse(JSON.parse(raw));
+      const message: unknown = JSON.parse(raw);
+      if (
+        message &&
+        typeof message === "object" &&
+        "type" in message &&
+        message.type === "join" &&
+        "version" in message &&
+        message.version !== VERSION
+      ) {
+        this.rejected++;
+        this.send(ws, { type: "versionMismatch", version: VERSION });
+        ws.close(1002, "Version mismatch; refresh the game");
+        return;
+      }
+      parsed = messageSchema.safeParse(message);
     } catch {
       this.rejected++;
       return;
@@ -188,6 +205,13 @@ export class Sessions {
             ([peer, session]) => peer !== ws && session.token === m.token && session.id,
           )
         : undefined;
+      if (
+        !active &&
+        [...this.clients.values()].filter((c) => c.id).length >= TUNING.maxPlayers
+      ) {
+        ws.close(1013, "City is full");
+        return;
+      }
       if (active && active[1].id) {
         // A reconnect may beat the old socket's close event under load.
         c.id = active[1].id;
@@ -206,7 +230,7 @@ export class Sessions {
         const name = m.name.replace(/[<>\x00-\x1f]/g, "") || "Stranger";
         c.id = this.sim.join(name, m.color, m.character).id;
       }
-      this.send(ws, {
+      const welcomed = this.send(ws, {
         type: "welcome",
         version: VERSION,
         id: c.id,
@@ -214,6 +238,7 @@ export class Sessions {
         map: this.map,
         debug: this.debug,
       });
+      if (!welcomed) ws.close(1013, "Connection congested; retry joining");
       return;
     }
     if (!c.id) return;
@@ -347,6 +372,10 @@ export class Sessions {
   tick() {
     const now = Date.now();
     for (const [ws, c] of this.clients) {
+      if (!c.id && now - c.connectedAt > 5000) {
+        ws.terminate();
+        continue;
+      }
       if (now - c.last > 30000) {
         ws.close(1001, "Idle connection");
         continue;
@@ -367,37 +396,24 @@ export class Sessions {
         this.sim.inputs.set(c.id, frame.input);
         if (frame.input.attack && p) this.sim.attack(p);
       }
-      // One command per tick, plus one more only to repay a tick the runtime dropped,
-      // so a burst can never accelerate authority beyond the commands the client sent.
-      const frames = c.queue.splice(0, c.queue.length > 1 && c.credit > 0 ? 2 : 1);
-      const applied = frames.at(-1);
+      const applied = c.queue.shift();
       if (applied) {
         c.ack = applied.seq;
         c.ackTimestamp = applied.timestamp;
         c.held = applied.input;
         this.sim.inputs.set(c.id, applied.input);
-        this.sim.commands.set(
-          c.id,
-          frames.map((frame) => frame.input),
-        );
-        if (frames.length > 1) {
-          c.credit--;
-          this.caughtUp++;
-        }
         c.aheadTicks = 0;
       } else if (now - c.lastInput > 250) {
         // Silence releases controls. Outstanding speculative slots stay owed, so commands
         // delayed this long still fill them instead of being stepped a second time.
         this.sim.inputs.set(c.id, idle());
-        this.sim.commands.delete(c.id);
         c.held = idle();
-        c.credit = 0;
         c.aheadTicks = 0;
       } else if (c.aheadTicks >= 30) {
         // A client whose clock never catches up would keep every tick on held controls,
         // turning each control change into a correction. Skip one tick so its commands
         // arrive ahead of the slots again; the browser's clock normally fixes this first.
-        this.sim.commands.set(c.id, []);
+        this.sim.pausedInputs.add(c.id);
         c.aheadTicks = 0;
         this.frozen++;
       } else if (c.speculative < TUNING.inputQueue) {
@@ -406,14 +422,13 @@ export class Sessions {
         // moving for everyone, and the driver predicted this tick with the same
         // controls unless it changed them at exactly this moment.
         this.sim.inputs.set(c.id, { ...c.held, attack: false });
-        this.sim.commands.delete(c.id);
         c.speculative++;
         c.aheadTicks++;
         c.ack++;
         c.ackTimestamp = (c.ackTimestamp ?? 0) + TUNING.tick * 1000;
         this.speculated++;
       } else {
-        this.sim.commands.set(c.id, []);
+        this.sim.pausedInputs.add(c.id);
       }
       // Net buffer: negative while the server runs ahead on held controls, so the
       // client's clock can tell a dry buffer from one it still has to catch up with.
@@ -424,16 +439,6 @@ export class Sessions {
         this.sim.leave(d.id);
         this.detached.delete(token);
       }
-  }
-  /**
-   * The runtime dropped simulation time after a stall. Clients kept sending for
-   * those ticks, so let each repay the backlog two commands per tick instead of
-   * carrying it as permanent input latency or shedding it as corrections.
-   */
-  skipped(ticks: number) {
-    if (ticks <= 0) return;
-    for (const c of this.clients.values())
-      if (c.id) c.credit = Math.min(TUNING.inputQueue, c.credit + ticks);
   }
   broadcast() {
     const events = this.sim.drainEvents();
@@ -535,17 +540,16 @@ export class Sessions {
         grenades: this.sim.grenades.snapshot(center.x, center.z, TUNING.interestRadius),
       };
       if (ws.readyState === WebSocket.OPEN && ws.bufferedAmount < 256_000) {
-        if (c.rosterKey !== rosterKey) {
-          this.send(ws, roster);
+        if (c.rosterKey !== rosterKey && this.send(ws, roster)) {
           c.rosterKey = rosterKey;
         }
-        if (c.destructionKey !== destructionKey) {
-          this.send(ws, destruction);
+        if (c.destructionKey !== destructionKey && this.send(ws, destruction)) {
           c.destructionKey = destructionKey;
         }
-        this.send(ws, snapshot);
-        c.known = known;
-        c.frame = this.frames;
+        if (this.send(ws, snapshot)) {
+          c.known = known;
+          c.frame = this.frames;
+        }
       }
     }
   }

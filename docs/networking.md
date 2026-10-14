@@ -6,9 +6,9 @@ The server owns movement outcomes, damage, knockdown, seats and inventory. Clien
 
 The browser uses an elapsed-time accumulator for its 30 Hz input commands. Both timer wakeups and rendered frames pump the same clock, so overlapping callbacks cannot duplicate ticks. Short delays retain the fractional remainder and catch up with individually timestamped commands. A delay over 250 ms discards stale clock debt; hidden tabs reset the clock. The server still advances only one fixed physics tick at a time, regardless of packet bursts. Its per-client FIFO holds eight commands, enough for a full 250 ms catch-up burst; overflow sheds the oldest command.
 
-Each server tick applies exactly one queued command to the controlled body. If nothing is queued and the last command is younger than 250 ms, the tick runs on the last command's movement controls with actions stripped, and that slot is acknowledged in advance. The late command fills the slot on arrival without a second step; only its actions run. The body therefore keeps moving for everyone, and the driver predicted that tick with the same controls unless it changed them at exactly that moment, in which case the correction is one tick of control difference (centimetres) rather than a tick of travel. The client never predicts a slot the server has already acknowledged, so a browser stall cannot run those ticks twice either. A client whose clock never catches up would otherwise keep every tick on held controls, so after thirty consecutive held ticks the server skips one tick (no step, no acknowledgement) to let the commands arrive ahead of their slots again; `/health` counts these as `inputFrozen`. The browser's regulated clock normally ends such a run within half a second, before the fallback is reached. A tick the runtime drops after a stall grants one credit: a later tick with two queued commands applies both, each with its full share of 120 Hz contact substeps. Credit exists only for dropped ticks, so a burst can never advance authority beyond the commands sent. Silence beyond 250 ms releases controls; slots still owed are filled by the delayed commands whenever they arrive.
+Each server tick applies exactly one queued command to the controlled body. If nothing is queued and the last command is younger than 250 ms, the tick runs on the last command's movement controls with actions stripped, and that slot is acknowledged in advance. The late command fills the slot on arrival without a second step; only its actions run. The body therefore keeps moving for everyone, and the driver predicted that tick with the same controls unless it changed them at exactly that moment, in which case the correction is one tick of control difference (centimetres) rather than a tick of travel. The client never predicts a slot the server has already acknowledged, so a browser stall cannot run those ticks twice either. A client whose clock never catches up would otherwise keep every tick on held controls, so after thirty consecutive held ticks the server skips one tick (no step, no acknowledgement) to let the commands arrive ahead of their slots again; `/health` counts these as `inputFrozen`. The browser's regulated clock normally ends such a run within half a second, before the fallback is reached. The runtime retains up to eight ticks of stall debt and repays it with complete world ticks. Each vehicle advances once per tick with the same 120 Hz contact ordering as prediction. Catch-up yields after four ticks or one tick budget of work; pauses beyond the bounded backlog can still require a correction. Silence beyond 250 ms releases controls; slots still owed are filled by the delayed commands whenever they arrive.
 
-Every snapshot reports the net buffer after the tick: commands still queued minus slots already run on held controls, so it goes negative while the server is ahead of the client's commands. The browser input clock uses that to phase-lock its schedule: a negative buffer pulls the next command six milliseconds earlier, a buffer below `TUNING.inputBuffer` (two commands) two milliseconds earlier, and a buffer more than one deeper pushes it one millisecond later. The 30 Hz rate changes by at most a few percent and the rendered pose shifts by centimetres rather than a tick. Two spare commands ride out packets up to 67 ms late without any held slot; the driver never feels that depth because its own body is predicted, it only delays what other players see of the body. The runtime also grants catch-up credit for whole ticks it drops after a stall, so a server hitch drains as two commands per tick instead of becoming permanent input latency.
+Every snapshot reports the net buffer after the tick: commands still queued minus slots already run on held controls, so it goes negative while the server is ahead of the client's commands. The browser input clock uses that to phase-lock its schedule: a negative buffer pulls the next command six milliseconds earlier, a buffer below `TUNING.inputBuffer` (two commands) two milliseconds earlier, and a buffer more than one deeper pushes it one millisecond later. The 30 Hz rate changes by at most a few percent and the rendered pose shifts by centimetres rather than a tick. Two spare commands ride out packets up to 67 ms late without any held slot; the driver never feels that depth because its own body is predicted, it only delays what other players see of the body. Retained server stall debt drains through whole-world catch-up ticks, keeping interacting vehicles on the same simulation clock.
 
 The rendered pose may now extrapolate up to two ticks past the last command's timestamp instead of one. It still sits one tick ahead of that timestamp in the normal case; the second tick only covers a wakeup that produced the command late, where the old cap held the pose and then lurched by the late amount (about 1 m at 52 m/s for a 20 ms late wakeup). Replay state is unchanged.
 
@@ -21,8 +21,10 @@ Counting timer callbacks as ticks made prediction run slow whenever the browser 
 ## Fixes and bounds
 
 Remote entities normally stay on buffered interpolation, including nearby players.
-Only bodies involved in a local predicted contact use provisional collision poses;
-after contact ends they blend back over 500 ms. This preserves immediate impact
+Only bodies involved in a local predicted contact use provisional collision poses.
+Contact detection uses the predicted world, avoiding false contacts between the
+local current pose and a buffered remote pose. Entry and exit preserve the previous
+displayed pose; after contact ends the target blends back over 500 ms. This preserves immediate impact
 feedback without resetting every nearby player's pose on each snapshot. Riders
 follow their displayed vehicle. Snapshots replace provisional physics state.
 
@@ -40,7 +42,7 @@ This remains inside the 220 m snapshot interest and 252 m streamed collision-map
 requirement. Missing collision chunks still suspend prediction. Server authority
 and damage rules are unchanged.
 
-Server input remains one command per fixed tick, plus one more only to repay a frozen tick (see input scheduling above). The eight-command FIFO absorbs a full browser catch-up burst; on overflow it drops the oldest command, retaining the newest stop or turn. An acknowledgement identifies the newest applied command; older discarded commands also leave client history. Overflow therefore permits a correction. It does not grant extra physics steps or claim to have simulated discarded commands. Duplicate or out-of-order sequence numbers remain rejected. A 250 ms input silence still releases held controls. `/health` counts `inputSpeculated` (ticks run on held controls), `inputMispredicted` (held slots whose command changed controls), `inputCatchUps` and `inputDrops`; a growing drop count means a client is sending faster than the server ticks.
+Server input remains one command per fixed world tick, including catch-up ticks. The eight-command FIFO absorbs a full browser catch-up burst; on overflow it drops the oldest command, retaining the newest stop or turn. An acknowledgement identifies the newest applied command; older discarded commands also leave client history. Overflow therefore permits a correction. It does not grant extra physics steps or claim to have simulated discarded commands. Duplicate or out-of-order sequence numbers remain rejected. A 250 ms input silence still releases held controls. `/health` counts `inputSpeculated` (ticks run on held controls), `inputMispredicted` (held slots whose command changed controls), `catchUpTicks` (extra complete world ticks within a runtime callback) and `inputDrops`; a growing drop count means a client is sending faster than the server ticks.
 
 When a server pause leaves the displayed vehicle ahead of its reconciled position,
 visual correction along its current velocity removes at most half its travel speed.
@@ -55,7 +57,7 @@ stop convergence, alongside the ordinary callback-jitter cases.
 
 Authority and prediction use the same sweep broad phase. It sorts bodies along X, considers nearby candidates with a contact-correction margin, then orders pairs by stable entity IDs before resolving them. Reordering snapshot entities therefore cannot change pileup resolution. The server retains its spatial grid for AI and snapshot interest, but no longer rebuilds and queries it for every contact pass. Static contact checks are reused only while the body's pose and planar velocity are unchanged.
 
-Protocol 7 rejects older clients whose collision solver or map manifest differs. Physics remains at 120 Hz and authority at 30 Hz; the optimization does not lower collision frequency or give the client additional simulation time.
+Protocol 8 includes the last authoritative driving controls for cars and watercraft. Older clients receive an explicit refresh response before the socket closes. Physics remains at 120 Hz and authority at 30 Hz; the optimization does not lower collision frequency or give the client additional simulation time.
 
 ## Server tick cost (2026-10-13)
 
@@ -145,3 +147,20 @@ Alternating local saved-city runs showed lower typical cost in an initial protot
 ## Collision-map fallback presentation
 
 Missing collision coverage disables local physics and clears inputs that cannot be replayed safely. Rendering keeps the latest authoritative body and smooths the transition from the last displayed pose instead of replacing it with the raw snapshot. Returning to prediction preserves that displayed pose too. Forward-moving fallback poses do not rewind as authority catches up; stopped poses converge, and large authoritative teleports still reset presentation. Loaded collision constraints still apply to visual offsets. The regression covers map loss, recovery, input suppression, convergence and teleport resets through `GameNetwork.renderEntities`.
+
+## Remote driving and connection recovery
+
+Snapshots carry the last throttle, steering, handbrake and service-brake forces
+applied to cars and watercraft. Private prediction neighbours apply those controls
+with the shared solver and speed limits. This covers ongoing braking and turning,
+including impulses passed through a pileup. A new remote input or AI decision is
+unknown until the next snapshot; prediction still corrects to server authority.
+Contact presentation follows target movement and settles its visual offset, so
+stalled snapshots do not keep a vehicle advancing through cosmetic extrapolation.
+
+Oversized or malformed WebSocket frames close the offending connection. Congested
+sends leave snapshot bases, roster and destruction delivery markers unchanged,
+so subsequent broadcasts retry persistent state. A full city can replace an
+existing active session by token without admitting another player. Pending
+connections have their own bound and must join within five seconds, even if they
+send pings.

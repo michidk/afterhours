@@ -184,13 +184,20 @@ export function predictStep(
     if (e.kind === "car") carAltitude(e, previous, city, h);
     if (!vehicle(e)) characterAltitude(e, city, h, input);
     if (vehicle(e)) e.angle = wrap(e.angle + (e.angularVelocity || 0) * h);
-    // Remote controls are unknown: coast private neighbours between corrections.
+    // Hold the last authoritative drive; future changes still require a snapshot.
     for (const b of shadows) {
       const previous = { x: b.x, y: b.y, z: b.z, vy: b.vy, vz: b.vz };
-      if (b.kind === "car" && !b.driver && !b.ai)
-        carForces(b, { throttle: 0, steer: 0, brake: false }, h, carGrounded(b, city));
-      if (watercraft(b.kind) && !b.driver && !b.ai)
-        watercraftForces(b, { throttle: 0, steer: 0, brake: false }, h);
+      const drive =
+        b.drive ??
+        (!b.driver && !b.ai ? { throttle: 0, steer: 0, brake: false } : undefined);
+      if (b.kind === "car" && drive) carForces(b, drive, h, carGrounded(b, city));
+      if (watercraft(b.kind) && drive) watercraftForces(b, drive, h);
+      const speed = Math.hypot(b.vx, b.vz),
+        limit = b.model ? VEHICLES[b.model].speed : 52;
+      if (vehicle(b) && speed > limit) {
+        b.vx *= limit / speed;
+        b.vz *= limit / speed;
+      }
       b.x += b.vx * h;
       b.z += b.vz * h;
       if (vehicle(b)) b.angle = wrap(b.angle + (b.angularVelocity || 0) * h);

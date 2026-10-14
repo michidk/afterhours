@@ -86,8 +86,8 @@ export class Simulation {
   private plans = new WeakMap<Entity, { intent: Intent; at: number; phase: number }>();
   /** Minimum distance in metres that always keeps full-rate physics around a human. */
   lodFloor = 60;
-  /** Per-tick command bursts from sessions: two commands repay a dropped tick, [] skips the body. */
-  commands = new Map<string, Input[]>();
+  /** Controllers that skip locomotion for this tick to let late commands catch up. */
+  pausedInputs = new Set<string>();
   ai: CityAI;
   traffic = new TrafficManager();
   time = 0;
@@ -659,7 +659,7 @@ export class Simulation {
         i === 0 ? undefined : near,
       );
     }
-    this.commands.clear();
+    this.pausedInputs.clear();
     this.tickCount++;
     this.traffic.update(this);
     // Publish current positions, including contact corrections and replenished traffic.
@@ -792,16 +792,9 @@ export class Simulation {
         e.vz *= Math.exp(-5 * dt);
         if (!e.down && e.health <= 0) this.respawn(e);
       }
-      const controller = e.driver || e.id,
-        burst = this.commands.get(controller);
-      // Sessions may freeze a body for this tick or repay a frozen tick with a second
-      // command; each command keeps its full share of contact substeps, in order.
-      const inputs = burst
-        ? burst.map(
-            (_, j) => burst[Math.floor((substep * burst.length + j) / substeps)],
-          )
-        : [this.inputs.get(controller) || idle()];
-      for (const input of inputs) {
+      const controller = e.driver || e.id;
+      if (!this.pausedInputs.has(controller)) {
+        const input = this.inputs.get(controller) || idle();
         const previous = { x: e.x, y: e.y, z: e.z, vy: e.vy, vz: e.vz };
         if (!vehicle(e)) {
           if (!e.down) {
@@ -846,6 +839,7 @@ export class Simulation {
                   brake: input.brake,
                 };
           if (e.ai) drives.set(e, drive);
+          e.drive = { ...drive };
           carForces(e, drive, dt, carGrounded(e, this.city));
         } else if (watercraft(e.kind)) {
           const drive =
@@ -858,6 +852,7 @@ export class Simulation {
                   brake: input.brake || !!e.wreck,
                 };
           if (e.ai) drives.set(e, drive);
+          e.drive = { ...drive };
           watercraftForces(e, drive, dt);
         } else if (
           !e.driver &&
