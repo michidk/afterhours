@@ -373,6 +373,9 @@ export class Sessions {
     const now = Date.now();
     for (const [ws, c] of this.clients) {
       if (!c.id && now - c.connectedAt > 5000) {
+        // No player to detach, so forget it now rather than when the socket's close
+        // event arrives a moment later.
+        this.clients.delete(ws);
         ws.terminate();
         continue;
       }
