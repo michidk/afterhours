@@ -171,7 +171,7 @@ The client allows at most 4 KiB of queued WebSocket traffic, including the next
 message. It tracks each write's byte range and reconnects when the oldest
 remaining bytes have waited 250 ms, matching the server's eight-command buffer
 (about 267 ms at 30 Hz). New writes do not inherit the age of drained writes.
-After a gap over 250 ms between sends, queued writes get a fresh age window so
+After a gap over 100 ms between sends, queued writes get a fresh age window so
 the resumed browser can update its buffered-byte count.
 A five-second response deadline starts with the connection attempt and is renewed
 by welcome, snapshot or pong messages. If the browser misses heartbeat checks

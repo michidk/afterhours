@@ -252,7 +252,7 @@ export class GameNetwork {
     if (socket?.readyState !== WebSocket.OPEN) return false;
     const now = performance.now();
     // bufferedAmount can still include delivered bytes until the browser resumes.
-    if (now - this.lastSend > 250)
+    if (now - this.lastSend > 100)
       for (const write of this.outgoingWrites) write.at = now;
     this.lastSend = now;
     const drained = this.outgoingBytes - socket.bufferedAmount;

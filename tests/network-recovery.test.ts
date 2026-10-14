@@ -122,15 +122,18 @@ for (const reason of [
           t.mock.timers.tick(1000);
         }
       } else {
-        buffered = reason === "size" ? 4096 : 1;
+        buffered = reason === "size" ? 4096 : 1000;
         if (reason === "age") {
           assert.equal(
             network.send({ type: "ping" }),
             true,
             "short queues are allowed",
           );
-          clock += 249;
-          assert.equal(network.send({ type: "ping" }), true);
+          for (let i = 0; i < 3; i++) {
+            clock += 83;
+            buffered += 50;
+            assert.equal(network.send({ type: "ping" }), true);
+          }
           buffered = 0;
           assert.equal(
             network.send({ type: "ping" }),
@@ -140,8 +143,13 @@ for (const reason of [
           clock += 300;
           buffered = 0;
           assert.equal(network.send({ type: "ping" }), true);
-          buffered = 1;
-          clock += 250;
+          buffered = 1000;
+          for (let i = 0; i < 3; i++) {
+            clock += 83;
+            buffered += 50;
+            assert.equal(network.send({ type: "ping" }), true);
+          }
+          clock += 1;
         }
         const count = sends.mock.callCount();
         network.input({ ...idle(), up: true });
