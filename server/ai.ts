@@ -7,7 +7,7 @@ import { rayDistance, buildingBox } from "../shared/physics/collision.ts";
 import { Navigation, type Waypoint } from "../shared/navigation.ts";
 import { VEHICLES, DEFAULT_MODELS } from "../shared/catalog.ts";
 import { LIMIT } from "../shared/world.ts";
-import { watercraft, WATER_LEVEL } from "../shared/water.ts";
+import { isWater, watercraft, WATER_LEVEL } from "../shared/water.ts";
 type Point = Waypoint;
 interface Route {
   points: Point[];
@@ -396,7 +396,11 @@ export class CityAI {
     const x = intent.x / length,
       z = intent.z / length;
     const obstacles = staticGeometry(this.city).query(e.x, e.z, 5);
+    // Citizens on land treat the shoreline as a wall, so fleeing or dodging never
+    // runs them into the sea; one already in the water may head anywhere.
+    const ashore = !isWater(e.x, e.z, this.city);
     const clear = (dx: number, dz: number) =>
+      !(ashore && isWater(e.x + dx * 3, e.z + dz * 3, this.city)) &&
       obstacles.every(
         (b) =>
           e.y >= b.h + (b.obstacle ? 0 : 1.8) ||
