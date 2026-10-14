@@ -1,3 +1,4 @@
+import { SCENE_LIGHT_COUNT } from "../lighting/index.ts";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
@@ -42,6 +43,7 @@ class Batch {
     const material = new StandardMaterial(`${name} material`, host.scene);
     material.specularColor = new Color3(0.05, 0.05, 0.05);
     material.backFaceCulling = false;
+    material.maxSimultaneousLights = SCENE_LIGHT_COUNT;
     mesh.material = material;
     mesh.receiveShadows = true;
     mesh.freezeWorldMatrix();

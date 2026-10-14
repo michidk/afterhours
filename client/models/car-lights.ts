@@ -67,9 +67,8 @@ export class CarLights {
       light.diffuse = Color3.FromHexString("#fff1b8");
       light.specular = Color3.Black();
       light.range = 26;
-      light.intensity = 2;
+      light.intensity = 0;
       light.renderPriority = 1;
-      light.setEnabled(false);
       return light;
     });
   }
@@ -92,7 +91,8 @@ export class CarLights {
       .slice(0, 2);
     for (const [i, light] of this.lights.entries()) {
       const car = cars[Math.floor(i / 2)];
-      if (light.isEnabled() !== !!car) light.setEnabled(!!car);
+      // Keep the shader light set stable; unused beams emit no light.
+      light.intensity = car ? 2 : 0;
       if (!car) continue;
       const root = nodes.get(car.id)!;
       const matrix = root.computeWorldMatrix(true);

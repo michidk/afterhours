@@ -477,8 +477,11 @@ async function boot() {
     $("#app").removeAttribute("inert");
     document.querySelector("#boot")?.remove();
     characterMenu.ready();
-    const profiler = import.meta.env.DEV ? new FrameProfiler() : undefined;
-    if (import.meta.env.DEV)
+    const profileEnabled =
+      import.meta.env.DEV ||
+      new URLSearchParams(location.search).get("profile") === "1";
+    const profiler = profileEnabled ? new FrameProfiler() : undefined;
+    if (profileEnabled)
       Object.defineProperty(window, "afterhours", {
         configurable: true,
         get: () => ({
@@ -493,6 +496,7 @@ async function boot() {
           gpu: scene.engine.getGlInfo(),
           fps: scene.engine.getFps(),
           frameP95Ms: profiler!.stats.frameP95Ms,
+          frameMaxMs: profiler!.stats.frameMaxMs,
           frameStages: profiler!.stats.stagesP95Ms,
           trailUploads: scene.effects.trails.uploads,
           trailTiles: scene.effects.trails.residentTiles,

@@ -114,7 +114,7 @@ test("streamed fixtures hide, debris interpolates/fades, lights restore and mesh
     assert.ok(
       scene.lights
         .filter((light) => light.name.startsWith("nearby street lamp"))
-        .every((light) => !light.isEnabled()),
+        .every((light) => light.intensity === 0),
       "unloaded lamps leave no point lights behind",
     );
     assert.ok(scene.materials.length > 0, "palette survives chunk eviction");

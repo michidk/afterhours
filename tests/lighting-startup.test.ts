@@ -25,9 +25,11 @@ test("spawn lamp selection is ready before the first gameplay frame and stays st
     );
     assert.equal(
       lamps.filter((light) => light.isEnabled()).length,
-      1,
-      "startup enables the actual shader light set without advancing gameplay",
+      4,
+      "all street-lamp shader slots are prepared before gameplay",
     );
+    lighting.update(0, new Vector3(-261, 0, 660), 0.3);
+    assert.equal(lamps.filter((light) => light.intensity > 0).length, 1);
     const transitions = lamps.map((light) => t.mock.method(light, "setEnabled"));
     lighting.update(16.5, new Vector3(-261, 0, 660), 0.3);
     assert.ok(

@@ -12,6 +12,9 @@ import type { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { environmentAt } from "./environment.ts";
 import { particleTexture } from "../effects/particles.ts";
 
+// Two environment lights, four street lamps and four headlights.
+export const SCENE_LIGHT_COUNT = 10;
+
 const color = (values: number[]) => new Color3(values[0], values[1], values[2]);
 export class EnvironmentLighting {
   windows: StandardMaterial;
@@ -36,7 +39,7 @@ export class EnvironmentLighting {
     this.windows = new StandardMaterial("occupied windows", scene);
     this.windows.diffuseColor = Color3.FromHexString("#587c80");
     this.windows.specularColor = Color3.Black();
-    this.windows.maxSimultaneousLights = 6;
+    this.windows.maxSimultaneousLights = SCENE_LIGHT_COUNT;
     new CameraDither(this.windows);
     this.pool = new StandardMaterial("street light pools", scene);
     this.pool.disableLighting = true;
@@ -141,7 +144,8 @@ export class EnvironmentLighting {
     for (const sign of this.signs) sign.emissiveColor.setAll(0.13 + state.night * 0.48);
     this.selectionClock += dt;
     if (this.selectionClock >= 0.3) this.selectLamps(focus);
-    for (const light of this.localLights) light.intensity = state.lampIntensity;
+    for (const [i, light] of this.localLights.entries())
+      light.intensity = i < this.lamps.length ? state.lampIntensity : 0;
     this.sky.setColor3("zenith", color(state.zenith));
     this.sky.setColor3("horizon", fog);
     this.sky.setVector3("sunDirection", new Vector3(...state.sunDirection));
@@ -161,8 +165,7 @@ export class EnvironmentLighting {
     for (let i = 0; i < this.localLights.length; i++) {
       const position = nearest[i];
       if (position) this.localLights[i].position.copyFrom(position);
-      if (this.localLights[i].isEnabled() !== !!position)
-        this.localLights[i].setEnabled(!!position);
+      this.localLights[i].intensity = position ? this.state.lampIntensity : 0;
     }
   }
   get diagnostics() {

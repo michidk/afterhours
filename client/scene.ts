@@ -38,7 +38,7 @@ import { Plane } from "@babylonjs/core/Maths/math.plane";
 import "@babylonjs/core/Culling/ray";
 import { Effects } from "./effects/index.ts";
 import { DebugCamera } from "./camera/debug.ts";
-import { EnvironmentLighting } from "./lighting/index.ts";
+import { EnvironmentLighting, SCENE_LIGHT_COUNT } from "./lighting/index.ts";
 import { idle, type Input } from "../shared/world.ts";
 import { rampHeight, carGrounded } from "../shared/physics/ramps.ts";
 import { rampMesh } from "./models/ramp.ts";
@@ -173,7 +173,7 @@ export class CityScene {
     const m = new StandardMaterial(key, this.scene);
     m.diffuseColor = Color3.FromHexString(color);
     m.specularColor = new Color3(0.08, 0.08, 0.08);
-    m.maxSimultaneousLights = 6;
+    m.maxSimultaneousLights = SCENE_LIGHT_COUNT;
     if (glow) m.emissiveColor = m.diffuseColor.scale(0.8);
     this.materials.set(key, m);
     return m;
@@ -235,7 +235,7 @@ export class CityScene {
     m.diffuseTexture = texture;
     m.emissiveColor = new Color3(0.14, 0.14, 0.14);
     m.specularColor = Color3.Black();
-    m.maxSimultaneousLights = 6;
+    m.maxSimultaneousLights = SCENE_LIGHT_COUNT;
     this.lighting.signs.push(m);
     const mesh = MeshBuilder.CreatePlane(
       "shop sign",

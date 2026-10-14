@@ -266,8 +266,9 @@ export async function probeDriving(options: ProbeOptions = {}) {
         maxStep = Math.max(maxStep, step);
         minStep = Math.min(minStep, step);
         if (step < -0.005) backward++;
-        if (step > expected * 1.5) surges++;
-        if (step < expected * 0.5) dips++;
+        // Ignore floating-point noise exactly at a movement threshold.
+        if (step > expected * 1.5 + 1e-9) surges++;
+        if (step < expected * 0.5 - 1e-9) dips++;
       }
       return {
         frames: count,

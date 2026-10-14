@@ -89,7 +89,7 @@ docker compose up -d --build
 
 This runs one non-root Node process behind Caddy with HTTPS, WebSockets, health checks and restart policies. Local defaults are https://localhost:8443 and HTTP port 8080. For a public deployment set `DOMAIN=game.example.com`, `HTTP_PORT=80` and `HTTPS_PORT=443`, with DNS pointing at the host. Behind another reverse proxy, set `PUBLIC_ORIGIN` to the browser's origin; WebSocket origin checks trust `X-Forwarded-Host` only from loopback peers.
 
-`/health` reports tick timings, bytes, rejected messages, entity count and memory. Dynamic state (players, inventory, traffic damage, time) resets on restart, so run one replica per city. See [operations](docs/operations.md).
+`/health` reports tick timings, bytes, rejected messages, entity count and memory. Client frame profiling is opt-in with `?profile=1`; see [playtesting](docs/playtesting.md). Dynamic state (players, inventory, traffic damage, time) resets on restart, so run one replica per city. See [operations](docs/operations.md).
 
 ## Current limits
 

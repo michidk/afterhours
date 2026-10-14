@@ -115,7 +115,7 @@ test("light on and off updates survive binary snapshot deltas", () => {
   }
 });
 
-test("car beams follow scaled rotating cars, limit real lights, and disable on removal", (t) => {
+test("car beams follow scaled rotating cars, limit real lights, and emit no light on removal", (t) => {
   const engine = new NullEngine(),
     scene = new Scene(engine);
   try {
@@ -131,7 +131,7 @@ test("car beams follow scaled rotating cars, limit real lights, and disable on r
     car.lightsOn = true;
     lights.update([car], new Map([[car.id, root]]), Vector3.Zero());
     assert.equal(scene.lights.length, 4);
-    const enabled = scene.lights.filter((l) => l.isEnabled());
+    const enabled = scene.lights.filter((l) => l.intensity > 0);
     assert.equal(enabled.length, 2);
     const first = enabled[0];
     assert.ok("position" in first && first.position instanceof Vector3);
@@ -146,10 +146,15 @@ test("car beams follow scaled rotating cars, limit real lights, and disable on r
     );
     car.lightsOn = false;
     lights.update([car], new Map([[car.id, root]]), Vector3.Zero());
-    assert.equal(scene.lights.filter((l) => l.isEnabled()).length, 0);
+    assert.equal(scene.lights.filter((l) => l.intensity > 0).length, 0);
     car.lightsOn = true;
     lights.update([], new Map(), Vector3.Zero());
-    assert.equal(scene.lights.filter((l) => l.isEnabled()).length, 0);
+    assert.equal(scene.lights.filter((l) => l.intensity > 0).length, 0);
+    assert.equal(
+      scans.mock.callCount(),
+      0,
+      "light selection never rescans scene meshes",
+    );
     root.dispose();
     assert.equal(scene.meshes.length, 0);
   } finally {
