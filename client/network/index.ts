@@ -47,7 +47,9 @@ export class GameNetwork {
   private welcomed = false;
   private authorityPending = false;
   private lastResponse = 0;
-  private bufferedSince: number | undefined;
+  private outgoingBytes = 0;
+  private lastSend = 0;
+  private outgoingWrites: { end: number; at: number }[] = [];
   private heartbeat: ReturnType<typeof setInterval> | undefined;
   private inputTimes: number[] = [];
   private snapshotTimes: number[] = [];
@@ -99,7 +101,9 @@ export class GameNetwork {
     );
     const socket = this.socket;
     this.lastResponse = performance.now();
-    this.bufferedSince = undefined;
+    this.outgoingBytes = 0;
+    this.lastSend = this.lastResponse;
+    this.outgoingWrites = [];
     let checkedAt = this.lastResponse;
     this.heartbeat = setInterval(() => {
       if (this.socket !== socket) return;
@@ -247,20 +251,29 @@ export class GameNetwork {
     const socket = this.socket;
     if (socket?.readyState !== WebSocket.OPEN) return false;
     const now = performance.now();
-    this.bufferedSince = socket.bufferedAmount
-      ? (this.bufferedSince ?? now)
-      : undefined;
+    // bufferedAmount can still include delivered bytes until the browser resumes.
+    if (now - this.lastSend > 250)
+      for (const write of this.outgoingWrites) write.at = now;
+    this.lastSend = now;
+    const drained = this.outgoingBytes - socket.bufferedAmount;
+    this.outgoingWrites = this.outgoingWrites.filter((write) => write.end > drained);
+    if (socket.bufferedAmount && !this.outgoingWrites.length)
+      this.outgoingWrites.push({ end: this.outgoingBytes, at: now });
     const message = JSON.stringify({ timestamp: now, ...data });
+    const bytes = new TextEncoder().encode(message).byteLength;
+    const oldest = this.outgoingWrites[0]?.at;
     // A few commands may queue briefly; never retain seconds of stale throttle.
     if (
-      socket.bufferedAmount + new TextEncoder().encode(message).byteLength > 4096 ||
-      (this.bufferedSince !== undefined && now - this.bufferedSince >= 250)
+      socket.bufferedAmount + bytes > 4096 ||
+      (oldest !== undefined && now - oldest >= 250)
     ) {
       this.disconnect(socket);
       return false;
     }
     try {
       socket.send(message);
+      this.outgoingBytes += bytes;
+      this.outgoingWrites.push({ end: this.outgoingBytes, at: now });
       return true;
     } catch {
       this.disconnect(socket);

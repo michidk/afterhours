@@ -10,7 +10,14 @@ import { CityStore } from "../server/city-stream.ts";
 import { generateCity } from "../scripts/city-generator.ts";
 import { idle } from "../shared/world.ts";
 
-for (const reason of ["size", "age", "silent", "browser stall"] as const)
+for (const reason of [
+  "size",
+  "age",
+  "silent",
+  "browser stall",
+  "draining queue",
+  "paused queue",
+] as const)
   test(`client recovers from ${reason} without predicting unsent controls`, async (t) => {
     const sim = new Simulation(generateCity());
     const server = createServer();
@@ -57,6 +64,34 @@ for (const reason of ["size", "age", "silent", "browser stall"] as const)
       const sends = t.mock.method(socket, "send");
       let buffered = 0;
       Object.defineProperty(socket, "bufferedAmount", { get: () => buffered });
+      if (reason === "paused queue") {
+        buffered = 1;
+        assert.equal(network.send({ type: "ping" }), true);
+        clock += 6000;
+        assert.equal(
+          network.send({ type: "ping" }),
+          true,
+          "allow bufferedAmount to update after the browser resumes",
+        );
+        buffered = 0;
+        clock += 100;
+        assert.equal(network.send({ type: "ping" }), true);
+        assert.equal(network.socket, socket);
+        return;
+      }
+      if (reason === "draining queue") {
+        buffered = 1;
+        for (let i = 0; i < 10; i++) {
+          assert.equal(
+            network.send({ type: "ping" }),
+            true,
+            "the remaining byte belongs to the latest write, not an old backlog",
+          );
+          clock += 100;
+        }
+        assert.equal(network.socket, socket);
+        return;
+      }
       if (reason === "browser stall") {
         clock += 6000;
         t.mock.timers.tick(1000);
@@ -103,8 +138,9 @@ for (const reason of ["size", "age", "silent", "browser stall"] as const)
             "a drained queue clears its age",
           );
           clock += 300;
-          buffered = 1;
+          buffered = 0;
           assert.equal(network.send({ type: "ping" }), true);
+          buffered = 1;
           clock += 250;
         }
         const count = sends.mock.callCount();
