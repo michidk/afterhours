@@ -171,7 +171,9 @@ The client allows at most 4 KiB of queued WebSocket traffic, including the next
 message. It also reconnects when a queue observed by sends remains nonempty for
 250 ms, matching the server's eight-command buffer (about 267 ms at 30 Hz).
 A five-second response deadline starts with the connection attempt and is renewed
-by welcome, snapshot or pong messages. Recovery immediately clears provisional
+by welcome, snapshot or pong messages. If the browser misses heartbeat checks
+for over two seconds, it grants a fresh response window so queued replies can
+run after shader compilation or tab suspension. Recovery immediately clears provisional
 prediction and pending debug requests; an unsent command is never predicted.
 Callbacks from a superseded socket cannot affect its replacement. The restored
 session starts a fresh sequence history. Browser WebSocket close cannot retract

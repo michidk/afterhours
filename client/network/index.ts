@@ -100,8 +100,14 @@ export class GameNetwork {
     const socket = this.socket;
     this.lastResponse = performance.now();
     this.bufferedSince = undefined;
+    let checkedAt = this.lastResponse;
     this.heartbeat = setInterval(() => {
-      if (performance.now() - this.lastResponse >= 5000) this.disconnect(socket);
+      if (this.socket !== socket) return;
+      const now = performance.now();
+      // A paused event loop must process queued replies before judging the link.
+      if (now - checkedAt > 2000) this.lastResponse = now;
+      checkedAt = now;
+      if (now - this.lastResponse >= 5000) this.disconnect(socket);
       else if (this.welcomed) this.send({ type: "ping" });
     }, 1000);
     socket.binaryType = "arraybuffer";

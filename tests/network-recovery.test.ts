@@ -10,7 +10,7 @@ import { CityStore } from "../server/city-stream.ts";
 import { generateCity } from "../scripts/city-generator.ts";
 import { idle } from "../shared/world.ts";
 
-for (const reason of ["size", "age", "silent"] as const)
+for (const reason of ["size", "age", "silent", "browser stall"] as const)
   test(`client recovers from ${reason} without predicting unsent controls`, async (t) => {
     const sim = new Simulation(generateCity());
     const server = createServer();
@@ -57,12 +57,35 @@ for (const reason of ["size", "age", "silent"] as const)
       const sends = t.mock.method(socket, "send");
       let buffered = 0;
       Object.defineProperty(socket, "bufferedAmount", { get: () => buffered });
+      if (reason === "browser stall") {
+        clock += 6000;
+        t.mock.timers.tick(1000);
+        assert.equal(
+          network.socket,
+          socket,
+          "a stalled event loop must allow queued replies to run",
+        );
+        assert.equal(network.stats().connected, true);
+        oldMessage?.call(
+          socket,
+          new MessageEvent("message", {
+            data: JSON.stringify({ type: "pong", timestamp: clock }),
+          }),
+        );
+        clock += 1000;
+        t.mock.timers.tick(1000);
+        assert.equal(network.socket, socket);
+        assert.equal(statuses.at(-1), "connected");
+        return;
+      }
       if (reason === "silent") {
         peer.removeAllListeners("message");
         // Flush the first pong before measuring a silent peer's deadline.
         await new Promise((resolve) => setTimeout(resolve, 20));
-        clock += 5000;
-        t.mock.timers.tick(1000);
+        for (let second = 0; second < 5; second++) {
+          clock += 1000;
+          t.mock.timers.tick(1000);
+        }
       } else {
         buffered = reason === "size" ? 4096 : 1;
         if (reason === "age") {
@@ -165,11 +188,15 @@ test("an open socket that never welcomes the client reaches the response deadlin
     const connected = once(sockets, "connection");
     network.connect();
     await connected;
+    for (let second = 0; second < 4; second++) {
+      now += 1000;
+      t.mock.timers.tick(1000);
+    }
     now = 4999;
-    t.mock.timers.tick(1000);
+    t.mock.timers.tick(999);
     assert.ok(network.socket, "wait for the full response deadline");
     now = 5000;
-    t.mock.timers.tick(1000);
+    t.mock.timers.tick(1);
     assert.equal(network.socket, undefined);
     assert.equal(statuses.at(-1), "reconnecting");
   } finally {
