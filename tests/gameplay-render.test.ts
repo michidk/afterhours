@@ -5,7 +5,7 @@ import { Scene } from "@babylonjs/core/scene";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { CityScene } from "../client/scene.ts";
+import { CityScene, drawnBody } from "../client/scene.ts";
 import { WaterRenderer } from "../client/world/water.ts";
 import { VEHICLES, WEAPONS, isVehicleModel } from "../shared/catalog.ts";
 import type { Entity } from "../shared/world.ts";
@@ -149,4 +149,30 @@ test("all catalog models, weapons, supplies, grenades, parachutes and animated w
     scene.dispose();
     engine.dispose();
   }
+});
+
+test("burning and wrecked vehicles stay drawn while dead characters give way to corpses", () => {
+  const base = {
+    id: "e",
+    x: 0,
+    y: 0,
+    z: 0,
+    vx: 0,
+    vy: 0,
+    vz: 0,
+    angle: 0,
+    color: "#fff",
+  };
+  const car: Entity = { ...base, kind: "car", health: 0, burning: 4 };
+  assert.equal(drawnBody(car), true, "a car burning at zero health stays visible");
+  assert.equal(
+    drawnBody({ ...car, burning: undefined, wreck: 180 }),
+    true,
+    "the wreck",
+  );
+  assert.equal(drawnBody({ ...base, kind: "pedestrian", health: 0 }), false);
+  assert.equal(
+    drawnBody({ ...base, kind: "player", health: 100, vehicle: "c" }),
+    false,
+  );
 });

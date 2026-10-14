@@ -57,6 +57,19 @@ import { groundLevel, watercraft } from "../shared/water.ts";
 import type { GrenadeState } from "../shared/grenades.ts";
 import type { MeshGroup } from "../shared/city-mesh.ts";
 import { uploadMeshes } from "./world/mesh-buffers.ts";
+/**
+ * Whether an entity's own model is drawn. Seated riders are part of their vehicle
+ * and a dead character is drawn as corpse debris instead; a vehicle stays in view
+ * while it burns at zero health and after it explodes into a wreck.
+ */
+export function drawnBody(e: Entity) {
+  return (
+    !e.vehicle &&
+    (e.health > 0 ||
+      e.wreck !== undefined ||
+      (e.kind !== "player" && e.kind !== "pedestrian"))
+  );
+}
 export class CityScene {
   pickupNodes = new Map<string, TransformNode>();
   grenadeNodes = new Map<string, TransformNode>();
@@ -668,8 +681,7 @@ export class CityScene {
     for (const e of entities) {
       const n = this.nodes.get(e.id) || this.makeEntity(e);
       n.setEnabled(
-        !e.vehicle &&
-          (e.health > 0 || e.wreck !== undefined) &&
+        drawnBody(e) &&
           Math.hypot(e.x - this.target.x, e.z - this.target.z) <
             TUNING.entityRenderRadius,
       );
