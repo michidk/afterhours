@@ -104,9 +104,6 @@ export class CityScene {
       stencil: true,
       preserveDrawingBuffer: false,
     });
-    // Parallel shader compilation queries programs before they finish linking,
-    // which the browser reports as WebGL warnings during the first frames.
-    this.engine.getCaps().parallelShaderCompile = undefined;
     this.engine.setHardwareScalingLevel(Math.max(1, devicePixelRatio / 1.6));
     this.scene = new Scene(this.engine);
     this.culling = new SceneryCulling(this.scene);
