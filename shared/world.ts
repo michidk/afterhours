@@ -57,6 +57,8 @@ export interface Entity {
   character?: Character;
   driver?: string;
   lightsOn?: boolean;
+  /** A car swamped by water: seconds left before it explodes. Its engine is dead. */
+  flooded?: number;
   /** Vehicle occupant IDs; slot zero is the driver/pilot. Null means vacant. */
   seats?: (string | null)[];
   vehicle?: string;

@@ -83,7 +83,7 @@ export function resolveWorldBounds(e: Entity, city?: City) {
     city?.terrain &&
     Math.abs(e.x) < LIMIT &&
     Math.abs(e.z) < LIMIT &&
-    (watercraft(e.kind) || e.kind === "car")
+    watercraft(e.kind)
   ) {
     impact = resolveShore(e, city);
   }
@@ -121,7 +121,14 @@ export function resolveWorldBounds(e: Entity, city?: City) {
     e.z = clamp(e.z, -limit + rz, limit - rz);
     if (e.vz * e.z > 0) e.vz *= -0.15;
   }
-  if (!watercraft(e.kind)) e.y = Math.max(e.y, groundLevel(e.x, e.z, city));
+  // A flooded car sinks below the surface it would otherwise rest on.
+  if (!watercraft(e.kind))
+    e.y = Math.max(
+      e.y,
+      e.flooded !== undefined
+        ? terrainHeight(e.x, e.z, city)
+        : groundLevel(e.x, e.z, city),
+    );
   return impact;
 }
 

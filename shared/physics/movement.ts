@@ -17,6 +17,7 @@ import { flyPlane } from "./plane.ts";
 import { carForces, clamp, wrap } from "./vehicle.ts";
 import { flyHelicopter } from "./helicopter.ts";
 import { carAltitude, carGrounded, rampContacts } from "./ramps.ts";
+import { driftFlooded } from "./flooding.ts";
 import {
   entityBox,
   buildingBox,
@@ -147,16 +148,18 @@ export function predictStep(
     const previous = { x: e.x, y: e.y, z: e.z, vy: e.vy, vz: e.vz };
     if (!vehicle(e)) characterForces(e, input, h, undefined, city);
     else if (e.kind === "car") {
-      carForces(
-        e,
-        {
-          throttle: inputY(input),
-          steer: inputX(input),
-          brake: input.brake,
-        },
-        h,
-        carGrounded(e, city),
-      );
+      if (e.flooded !== undefined) driftFlooded(e, h);
+      else
+        carForces(
+          e,
+          {
+            throttle: inputY(input),
+            steer: inputX(input),
+            brake: input.brake,
+          },
+          h,
+          carGrounded(e, city),
+        );
     } else if (watercraft(e.kind))
       watercraftForces(
         e,
@@ -191,7 +194,8 @@ export function predictStep(
       const drive =
         b.drive ??
         (!b.driver && !b.ai ? { throttle: 0, steer: 0, brake: false } : undefined);
-      if (b.kind === "car" && drive) carForces(b, drive, h, carGrounded(b, city));
+      if (b.kind === "car" && b.flooded !== undefined) driftFlooded(b, h);
+      else if (b.kind === "car" && drive) carForces(b, drive, h, carGrounded(b, city));
       if (watercraft(b.kind) && drive) watercraftForces(b, drive, h);
       const speed = Math.hypot(b.vx, b.vz),
         limit = b.model ? VEHICLES[b.model].speed : 52;

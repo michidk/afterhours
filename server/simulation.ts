@@ -69,6 +69,7 @@ import { Combat } from "./combat.ts";
 import { safeSpawn } from "./lifecycle.ts";
 import { availableSeat, vehicleSeats } from "../shared/seats.ts";
 import { Destruction } from "./destruction.ts";
+import { FLOOD, driftFlooded, floods } from "../shared/physics/flooding.ts";
 import type { Vec3 } from "../shared/destruction.ts";
 import { Grenades } from "./grenades.ts";
 import type { PickupPayload } from "../shared/protocol.ts";
@@ -363,9 +364,10 @@ export class Simulation {
     else if (v.kind === "helicopter") v.flight = "grounded";
   }
   private exit(p: Entity, v: Entity) {
+    // Occupants of a sinking car swim out from its roof.
     const airborne =
       v.kind === "car"
-        ? !carGrounded(v, this.city)
+        ? !carGrounded(v, this.city) && v.flooded === undefined
         : v.y > groundLevel(v.x, v.z, this.city) + 0.2;
     if (airborne && v.kind !== "helicopter" && v.kind !== "plane") return false;
     const model = v.model && VEHICLES[v.model];
@@ -833,6 +835,10 @@ export class Simulation {
         e.burning -= dt;
         if (e.burning <= 0) this.explode(e);
       }
+      if (e.flooded !== undefined && e.wreck === undefined) {
+        e.flooded = Math.max(0, e.flooded - dt);
+        if (e.flooded <= 0) this.explode(e);
+      }
       if (e.vehicle) continue;
       if (e.down) {
         e.down = Math.max(0, e.down - dt);
@@ -874,7 +880,7 @@ export class Simulation {
           }
         } else if (e.kind === "car") {
           if (e.ai) this.exitCitizen(e);
-          if (e.wreck || e.health <= 0) e.lightsOn = false;
+          if (e.wreck || e.flooded !== undefined || e.health <= 0) e.lightsOn = false;
           else if (e.ai) e.lightsOn = this.night();
           const drive = e.wreck
             ? { throttle: 0, steer: 0, brake: true }
@@ -888,7 +894,8 @@ export class Simulation {
                 };
           if (e.ai) drives.set(e, drive);
           e.drive = { ...drive };
-          carForces(e, drive, dt, carGrounded(e, this.city));
+          if (e.flooded !== undefined) driftFlooded(e, dt);
+          else carForces(e, drive, dt, carGrounded(e, this.city));
         } else if (watercraft(e.kind)) {
           const drive =
             e.ai && !e.wreck
@@ -950,7 +957,13 @@ export class Simulation {
             z: e.z,
           });
         }
-        if (e.kind === "car") carAltitude(e, previous, this.city, dt);
+        if (e.kind === "car") {
+          carAltitude(e, previous, this.city, dt);
+          if (floods(e, this.city)) {
+            e.flooded = FLOOD.seconds;
+            e.lightsOn = false;
+          }
+        }
         if (!vehicle(e)) characterAltitude(e, this.city, dt, input);
         if (vehicle(e)) e.angle = wrap(e.angle + (e.angularVelocity || 0) * dt);
       }

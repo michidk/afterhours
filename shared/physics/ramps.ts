@@ -1,6 +1,7 @@
 import type { City, Entity } from "../world.ts";
 import { groundLevel } from "../water.ts";
 import { contact, entityBox, shape, type Contact } from "./collision.ts";
+import { sinkFlooded } from "./flooding.ts";
 
 /** City artifacts store positions; geometry is identical on authority and client. */
 export const RAMP = { width: 5, length: 7, height: 1.6 };
@@ -23,6 +24,10 @@ export function carAltitude(
   city: City,
   dt: number,
 ) {
+  if (e.flooded !== undefined) {
+    sinkFlooded(e, city, dt);
+    return;
+  }
   const floor = rampHeight(e.x, e.z, city),
     oldFloor = rampHeight(previous.x, previous.z, city),
     supported = carGrounded(previous, city),
