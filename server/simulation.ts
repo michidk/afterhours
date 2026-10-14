@@ -71,6 +71,10 @@ import { Destruction } from "./destruction.ts";
 import type { Vec3 } from "../shared/destruction.ts";
 import { Grenades } from "./grenades.ts";
 import type { PickupPayload } from "../shared/protocol.ts";
+/** Crates hand out every weapon but fists in turn, each fully loaded. */
+const CRATE_WEAPONS = (Object.keys(WEAPONS) as (keyof typeof WEAPONS)[]).filter(
+  (kind) => kind !== "fists",
+);
 import type { Intent } from "./citizens.ts";
 /** Damage a vehicle takes from an impact at this closing speed in m/s. */
 function crashDamage(speed: number) {
@@ -95,6 +99,7 @@ export class Simulation {
   dayRate = 1 / 75;
   events: WorldEvent[] = [];
   serial = 0;
+  private crates = 0;
   inventory = new Inventory();
   grenades = new Grenades();
   // Rebuilt every physics pass; caching misses only retains short-lived arrays.
@@ -105,7 +110,7 @@ export class Simulation {
     this.city = city;
     this.destruction = new Destruction(city);
     this.ai = new CityAI(navigationFor(city), city);
-    for (let i = 0; i < 84; i++) {
+    for (let i = 0; i < 160; i++) {
       const e = this.spawn(
         "car",
         0,
@@ -115,7 +120,7 @@ export class Simulation {
       );
       this.ai.assign(e, i);
     }
-    for (let i = 0; i < 130; i++) {
+    for (let i = 0; i < 300; i++) {
       const e = this.spawn("pedestrian", 0, 0);
       this.ai.assign(e, i + 9);
     }
@@ -539,7 +544,10 @@ export class Simulation {
       this.events.push({
         kind: "propBreak",
         sound:
-          p.kind === "palm" || p.kind === "tree" || p.kind === "bench"
+          p.kind === "palm" ||
+          p.kind === "tree" ||
+          p.kind === "bench" ||
+          p.kind === "crate"
             ? "impactWood"
             : "impact",
         x: p.x,
@@ -582,14 +590,25 @@ export class Simulation {
     e.ai = false;
     e.skidding = false;
     e.wheelSkids?.fill(false);
+    // Everyone aboard is thrown clear alive: through a normal exit where there is
+    // room, else beside the wreck. Aircraft crews keep their height and parachute.
     const excluded = new Set([e.id]);
-    for (const p of this.entities.values())
+    for (const p of [...this.entities.values()])
       if (p.vehicle === e.id) {
-        this.releaseSeat(p, e);
-        p.x = e.x;
-        p.z = e.z;
-        p.y = e.y;
-        this.damage(p, 150);
+        if (!this.exit(p, e)) {
+          this.releaseSeat(p, e);
+          p.x = e.x + Math.cos(e.angle) * (shape(e).w + 0.9);
+          p.z = e.z - Math.sin(e.angle) * (shape(e).w + 0.9);
+          p.y = e.y;
+          p.vx = clamp(e.vx, -6, 6);
+          p.vz = clamp(e.vz, -6, 6);
+          p.vy = Math.min(0, e.vy);
+          p.parachute =
+            (p.y > groundLevel(p.x, p.z, this.city) + 0.2 &&
+              (e.kind === "helicopter" || e.kind === "plane")) ||
+            undefined;
+        }
+        this.damage(p, TUNING.ejectDamage);
         excluded.add(p.id);
       }
     e.driver = undefined;
@@ -668,6 +687,17 @@ export class Simulation {
       if (!e.vehicle) this.spatial.insert(e, e.x, e.z, 6);
     this.inventory.cleanup(this.time);
     this.destruction.update(this.time, dt, [...this.entities.values()]);
+    // However a crate broke (fists, bullets, crashes or blasts), it drops a weapon.
+    for (const crate of this.destruction.opened.splice(0)) {
+      const kind = CRATE_WEAPONS[this.crates++ % CRATE_WEAPONS.length];
+      this.inventory.spawn(
+        crate.x,
+        crate.z,
+        this.inventory.item(kind),
+        this.time,
+        groundLevel(crate.x, crate.z, this.city),
+      );
+    }
     this.combat.record(this);
     if (this.events.length > 512) this.events.splice(0, this.events.length - 512);
   }

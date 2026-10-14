@@ -3,6 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Simulation } from "../server/simulation.ts";
 import { idle } from "../shared/world.ts";
+import { TUNING } from "../shared/catalog.ts";
 import {
   carForces,
   contact,
@@ -72,7 +73,7 @@ test("high-speed wall impact cannot tunnel and causes fire then explosion", () =
   assert.ok(car.wreck);
   assert.ok(s.drainEvents().some((e) => e.kind === "explosion"));
 });
-test("explosion releases occupants and damages nearby vehicles once", () => {
+test("explosion throws occupants out alive and damages nearby vehicles once", () => {
   const s = empty(),
     p = s.join("A", "#ffffff"),
     car = s.spawn("car", p.x, p.z),
@@ -81,7 +82,9 @@ test("explosion releases occupants and damages nearby vehicles once", () => {
   s.damage(car, 90);
   run(s, 6.05);
   assert.equal(p.vehicle, undefined);
-  assert.ok(p.down);
+  assert.ok(!p.down, "the occupant survives");
+  assert.equal(p.health, (p.maxHealth ?? 100) - TUNING.ejectDamage);
+  assert.ok(Math.hypot(p.x - car.x, p.z - car.z) > 1.5, "thrown clear of the wreck");
   assert.ok(other.health < 100);
   assert.equal(s.drainEvents().filter((e) => e.kind === "explosion").length, 1);
 });

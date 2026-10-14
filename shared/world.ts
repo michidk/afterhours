@@ -17,6 +17,11 @@ export interface Road {
   kind: "avenue" | "street" | "coast" | "service";
   signalA?: boolean;
   signalB?: boolean;
+  /** Distance from end A/B to the junction's stop line, where its signal stands. */
+  stopA?: number;
+  stopB?: number;
+  /** Set by the generator where this segment's weapon crate spot is unusable. */
+  noCrate?: boolean;
 }
 export type Kind =
   | "player"
@@ -144,6 +149,9 @@ export interface Building {
   color: string;
   style: number;
 }
+/** Asphalt is drawn this far above its profile height; sidewalk slabs stand higher. */
+export const STREET_LIFT = 0.1;
+export const KERB_HEIGHT = 0.15;
 /** Flat [x, y, z, ...] polygons with road-profile heights, shared by map and 3D. */
 export interface RoadSurface {
   asphalt: number[][];
@@ -175,6 +183,12 @@ export interface City {
     kind: "plaza" | "parking" | "service" | "court" | "quay";
   }[];
   ramps: { x: number; z: number }[];
+  /**
+   * Pedestrian network of a generated city: flat x, z pairs along the middle of the
+   * sidewalks, and flat link triples `a, b, crossing` where crossing is 0 along a
+   * sidewalk, or 1/2 across a crosswalk whose traffic runs along x/z. Server only.
+   */
+  walkways?: { points: number[]; links: number[] };
   pickups: { x: number; z: number; weapon: string }[];
   airport: { x: number; z: number; w: number; d: number };
   landmarks: {

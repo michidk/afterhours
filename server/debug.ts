@@ -65,7 +65,7 @@ export function executeDebug(sim: Simulation, player: Entity, command: DebugComm
     sim.inputs.set(player.id, idle());
   }
   if (command.kind === "spawn") {
-    if (sim.entities.size >= 300) throw Error("Entity limit reached");
+    if (sim.entities.size >= 600) throw Error("Entity limit reached");
     const model = VEHICLES[command.model];
     const clearance = Math.max(model.width, model.length / 2) + 1;
     let found = false;

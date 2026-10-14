@@ -144,8 +144,15 @@ export class CityAI {
       destination = corner;
       points = [{ x: a.x, z: a.z }];
       if (relocate) {
-        e.x = a.x;
-        e.z = a.z + (index % 3) * 1.3;
+        // Spread neighbours along the sidewalk instead of stepping onto the road.
+        const next =
+            this.navigation.sidewalks[a.edges.find((l) => !l.crossing)?.id ?? a.id],
+          dx = next.x - a.x,
+          dz = next.z - a.z,
+          length = Math.hypot(dx, dz) || 1,
+          step = Math.min(length / 2, (index % 3) * 1.3);
+        e.x = a.x + (dx / length) * step;
+        e.z = a.z + (dz / length) * step;
         e.angle = 0;
       }
     }

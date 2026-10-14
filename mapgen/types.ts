@@ -68,8 +68,19 @@ export interface RoadGeometry {
   }[];
   /** Raised sidewalk pieces: band strips (edge) and junction corners (node). */
   sidewalks: { polygon: Point[]; edge?: number; node?: number }[];
+  /** Distance cut from the start and end of every edge by its junctions. */
+  trims: [number, number][];
   /** Painted markings on the asphalt, each a simple polygon. */
   markings: { polygon: Point[]; color: "white" | "yellow"; edge: number }[];
+  /**
+   * Pedestrian network along the middle of every sidewalk. Links join neighbouring
+   * points; a crossing link spans a crosswalk and names the dominant axis of the
+   * traffic it crosses.
+   */
+  walkways: {
+    points: Point[];
+    links: { a: number; b: number; crossing?: "x" | "z" }[];
+  };
 }
 export type Zone =
   "core" | "commercial" | "residential" | "suburb" | "industrial" | "park" | "rural";

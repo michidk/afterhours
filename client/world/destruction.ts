@@ -192,6 +192,11 @@ export class DestructionRenderer {
       h.box("bench back", 0.5, 1.05, 0, 0.15, 0.7, 2.8, "#97785a");
       for (const z of [-0.9, 0.9])
         h.box("bench leg", 0, 0.4, z, 0.75, 0.6, 0.15, "#46534e");
+    } else if (p.kind === "crate") {
+      h.box("crate", 0, 0.45, 0, 0.9, 0.9, 0.9, "#a0703f", undefined, true);
+      for (const y of [0.18, 0.72])
+        h.box("crate band", 0, y, 0, 0.94, 0.1, 0.94, "#5b3d22");
+      h.box("crate mark", 0, 0.45, 0, 0.3, 0.3, 0.95, "#d8b04a");
     } else if (p.kind === "hydrant") {
       h.cylinder("hydrant body", 0, 0.5, 0, 0.8, 0.46, "#b94932");
       h.cylinder("hydrant cap", 0, 0.94, 0, 0.18, 0.58, "#e0aa4d");

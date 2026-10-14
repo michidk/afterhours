@@ -4,6 +4,7 @@ import { Simulation } from "../server/simulation.ts";
 import type { Personality } from "../server/citizens.ts";
 import { emptyCity } from "../shared/city-stream.ts";
 import type { Entity } from "../shared/world.ts";
+import { destructibles } from "../shared/destruction.ts";
 
 function setup() {
   const city = emptyCity({ seed: 713, airport: { x: 600, z: 600, w: 100, d: 100 } });
@@ -272,6 +273,10 @@ test("a chase routes around buildings and stealing a stopped car cancels its AI 
   target.z = 0;
   sim.damage(pursuer, 1, target);
   sim.city.buildings.push({ x: 0, z: 0, w: 6, d: 12, h: 8, color: "#fff", style: 0 });
+  // Only the building may deflect the chase, not the kerbside weapon crate.
+  for (const p of destructibles(sim.city))
+    if (p.kind === "crate")
+      sim.destruction.hit(p.id, 1000, sim.time, { x: 0, y: 0, z: 0 });
   assert.ok(Math.abs(walk(pursuer).z) > 0.9);
   advance(1);
   assert.ok(Math.abs(pursuer.z) > 1);

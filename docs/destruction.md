@@ -2,7 +2,7 @@
 
 The server owns a temporary destruction overlay. The saved city JSON is immutable: destruction never writes it, regenerates it, or changes its map identity. Restarting restores the intact city.
 
-Palms, trees, benches, streetlamps, signal poles, and hydrants have stable IDs derived from their kind and saved-map coordinates. Benches/signals/hydrants are deterministic fixtures derived from parks and road segments. Vehicle strikes, fists/weapons, and explosions damage fixtures; broken fixtures leave the standing collision grid and become debris.
+Palms, trees, benches, streetlamps, signal poles, hydrants, and weapon crates have stable IDs derived from their kind and saved-map coordinates. Benches/signals/hydrants/crates are deterministic fixtures derived from parks and road segments. A broken crate drops a weapon pickup at its position; crates hand out every weapon except fists in turn, each with a full magazine and full reserve. Vehicle strikes, fists/weapons, and explosions damage fixtures; broken fixtures leave the standing collision grid and become debris.
 
 Rapier 3D simulates debris with gravity, angular motion, CCD, friction, restitution, sleeping, and ground/building/fixture contacts. Nearby actors enter this debris world as kinematic collision proxies; driving retains the existing vehicle solver. Each fixture is one simplified rigid body, rather than a fracture simulation. Corpse bodies use capsules. The server limits active bodies to 128 and releases the physics world when empty. Sleeping corpses, or corpses after ten seconds, retire from physical simulation. Retired airborne corpses continue simplified gravity and drag until they settle on a roof, land, or water, then retain a lying visual pose until their full 180-second expiry. At capacity, a new corpse retires the oldest physical corpse or prop rather than discarding a death body. Retired bodies ignore walls, actors, and later impacts. Land support ends at the island boundary; lower offshore support keeps water corpses near the surface. Initial corpse altitude preserves rooftop deaths.
 
@@ -10,6 +10,7 @@ Rapier 3D simulates debris with gravity, angular motion, CCD, friction, restitut
 | ---------------- | ------------------------------------------- | -------------------------------------------------------------------------- |
 | Broken prop      | 30 seconds; fades over the final 3 seconds  | Returns to its original position/orientation once actors clear it          |
 | Broken hydrant   | Same prop timer                             | Water sprays from the original pipe until restoration                      |
+| Opened crate     | 90 seconds; fades over the final 3 seconds  | Returns closed and can be opened again; its dropped weapon is independent  |
 | Corpse           | 180 seconds; fades over the final 3 seconds | Player respawns after 3 seconds; NPC recovers after 30 seconds             |
 | Exploded vehicle | 180 seconds; fades over the final 3 seconds | Wreck is removed; AI replacement follows the existing clear-lane lifecycle |
 

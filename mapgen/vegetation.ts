@@ -30,6 +30,8 @@ export interface VegetationInputs {
   buildings: BuildingPlacement[];
   desirability: Float32Array;
   seed: number;
+  /** True where a point lies on asphalt (bands and junctions), with a margin. */
+  onStreet?: (p: Point) => boolean;
 }
 
 /** Parks are the blocks that zoning set aside: riverside when they touch water. */
@@ -73,6 +75,7 @@ export function placeVegetation(input: VegetationInputs): {
   lamps: Lamp[];
 } {
   const { field: f, hydro, graph, blocks, buildings, desirability, seed } = input;
+  const onStreet = input.onStreet ?? (() => false);
   const rng = derive(seed, "trees"),
     noise = new Noise(derive(seed, "forest"));
   const trees: Tree[] = [],
@@ -139,6 +142,7 @@ export function placeVegetation(input: VegetationInputs): {
     const radius = (4 + (1 - s) * 22) / density;
     if (placed.near(p.x, p.z, radius).some((t) => dist(t, p) < radius)) continue;
     if (footprints.near(p.x, p.z, 60).some((b) => insideRect(p, b, 3))) continue;
+    if (onStreet(p)) continue;
     const h = sample(f, p.x, p.z),
       water = hydro.waterDistance[i];
     const kind: Tree["kind"] =
@@ -165,11 +169,12 @@ export function placeVegetation(input: VegetationInputs): {
     trees.push(tree);
     placed.insert(tree);
   }
-  // Street trees and lamps along sidewalks, skipping junction approaches.
+  // Street trees and lamps along the kerb side of sidewalks, clear of the walkway,
+  // skipping junction approaches.
   for (const e of graph.edges) {
     if (e.bridge || e.kind === "highway") continue;
     const spacing = e.kind === "avenue" ? 30 : 40,
-      offset = e.width / 2 + 1.4;
+      offset = e.width / 2 + 0.5;
     let s = 0,
       nextLamp = 14,
       nextTree = 24,
@@ -185,12 +190,10 @@ export function placeVegetation(input: VegetationInputs): {
         t = norm(sub(b, a)),
         n = perp(t);
       while (nextLamp <= s + d && nextLamp < total - 12) {
-        const p = lerpPoint(a, b, (nextLamp - s) / d);
-        lamps.push({
-          x: p.x + n.x * offset * side,
-          z: p.z + n.z * offset * side,
-          h: 6,
-        });
+        const p = lerpPoint(a, b, (nextLamp - s) / d),
+          lamp = { x: p.x + n.x * offset * side, z: p.z + n.z * offset * side, h: 6 };
+        // Junction mouths and neighbouring roads can cover the kerb spot.
+        if (!onStreet(lamp)) lamps.push(lamp);
         side = -side;
         nextLamp += spacing;
       }
@@ -199,8 +202,8 @@ export function placeVegetation(input: VegetationInputs): {
           const p = lerpPoint(a, b, (nextTree - s) / d);
           for (const sd of [-1, 1]) {
             const q = {
-              x: p.x + n.x * (offset + 0.4) * sd,
-              z: p.z + n.z * (offset + 0.4) * sd,
+              x: p.x + n.x * offset * sd,
+              z: p.z + n.z * offset * sd,
             };
             const zone = zoneAt(q);
             if (zone === "industrial") continue;
@@ -209,6 +212,7 @@ export function placeVegetation(input: VegetationInputs): {
               continue;
             const kind: Tree["kind"] =
               hydro.coastDistance[cellOf(f, q)] < 120 ? "palm" : "oak";
+            if (onStreet(q)) continue;
             const tree: Tree = { x: q.x, z: q.z, h: kind === "palm" ? 8 : 7, kind };
             trees.push(tree);
             placed.insert(tree);

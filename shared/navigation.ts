@@ -16,12 +16,27 @@ export interface SidewalkNode extends Waypoint {
   edges: { id: number; crossing?: "x" | "z" }[];
 }
 
-/** Navigation is derived exclusively from the server's loaded street segments. */
+/**
+ * Navigation is derived exclusively from the server's loaded street segments and,
+ * for generated cities, the artifact's sidewalk walkways. Without walkways the
+ * sidewalk graph is approximated from the segments.
+ */
 export class Navigation {
   readonly roads: Junction[] = [];
   readonly sidewalks: SidewalkNode[] = [];
   private links = new Map<string, Road>();
-  constructor(segments: Road[]) {
+  constructor(segments: Road[], walkways?: City["walkways"]) {
+    if (walkways) {
+      const { points, links } = walkways;
+      for (let i = 0; i < points.length; i += 2)
+        this.sidewalks.push({ id: i / 2, x: points[i], z: points[i + 1], edges: [] });
+      for (let i = 0; i < links.length; i += 3) {
+        const crossing =
+          links[i + 2] === 1 ? "x" : links[i + 2] === 2 ? "z" : undefined;
+        this.sidewalks[links[i]].edges.push({ id: links[i + 1], crossing });
+        this.sidewalks[links[i + 1]].edges.push({ id: links[i], crossing });
+      }
+    }
     const ids = new Map<string, number>();
     const node = (x: number, z: number) => {
       const key = `${x},${z}`;
@@ -41,6 +56,7 @@ export class Navigation {
       this.roads[b].edges.push(a);
       this.links.set(`${a}:${b}`, road);
       this.links.set(`${b}:${a}`, road);
+      if (walkways) continue;
       const dx = road.bx - road.ax,
         dz = road.bz - road.az,
         length = Math.hypot(dx, dz),
@@ -169,7 +185,10 @@ const cache = new WeakMap<City, { roads: Road[]; navigation: Navigation }>();
 export function navigationFor(city: City) {
   let entry = cache.get(city);
   if (!entry || entry.roads !== city.roads) {
-    entry = { roads: city.roads, navigation: new Navigation(city.roads) };
+    entry = {
+      roads: city.roads,
+      navigation: new Navigation(city.roads, city.walkways),
+    };
     cache.set(city, entry);
   }
   return entry.navigation;

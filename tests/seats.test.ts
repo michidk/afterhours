@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Simulation } from "../server/simulation.ts";
 import { generateCity } from "../scripts/city-generator.ts";
-import { VEHICLES, type VehicleModel } from "../shared/catalog.ts";
+import { TUNING, VEHICLES, type VehicleModel } from "../shared/catalog.ts";
 import { availableSeat, occupiedSeats, seatCapacity } from "../shared/seats.ts";
 import { idle, type Entity } from "../shared/world.ts";
 import { Prediction } from "../client/network/prediction.ts";
@@ -154,7 +154,7 @@ test("pilot exit leaves passengers aboard a falling aircraft until they exit", (
   assert.equal(occupiedSeats(v), 0);
 });
 
-test("explosions eject and damage every occupant and clear the full seat manifest", () => {
+test("explosions throw every occupant out alive and clear the full seat manifest", () => {
   const { simulation: s, vehicle: v, board } = setup("utility");
   const occupants = Array.from({ length: seatCapacity(v) }, (_, i) => board(`P${i}`));
   v.burning = 0.001;
@@ -165,8 +165,8 @@ test("explosions eject and damage every occupant and clear the full seat manifes
   for (const p of occupants) {
     assert.equal(p.vehicle, undefined);
     assert.equal(p.seat, undefined);
-    assert.equal(p.health, 0);
-    assert.ok(p.down);
+    assert.equal(p.health, (p.maxHealth ?? 100) - TUNING.ejectDamage);
+    assert.ok(!p.down);
   }
 });
 

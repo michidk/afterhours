@@ -59,7 +59,8 @@ export function buildBuilding(
         );
     return;
   }
-  box("foundation", 0, 0.4, 0, w + 0.12, 0.8, d + 0.12, asset.trim);
+  // Reaches well below the pad so sloped or street-lowered ground never shows a gap.
+  box("foundation", 0, -1.85, 0, w + 0.12, 5.3, d + 0.12, asset.trim);
   // Flat roof detailing stays within the server's roof height (no invisible rooftop obstacles).
   box("roof deck", 0, height - 0.0125, 0, w - 0.5, 0.025, d - 0.5, "#89938b");
   for (const side of [-1, 1]) {

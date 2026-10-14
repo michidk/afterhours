@@ -16,7 +16,15 @@ import { insideBuilding } from "../shared/physics/collision.ts";
 import { shape, rayDistance } from "../shared/physics/collision.ts";
 
 await RAPIER.init();
-const health = { palm: 65, tree: 90, lamp: 45, bench: 40, signal: 50, hydrant: 45 };
+const health = {
+  palm: 65,
+  tree: 90,
+  lamp: 45,
+  bench: 40,
+  signal: 50,
+  hydrant: 45,
+  crate: 35,
+};
 const weight = {
   palm: 100,
   tree: 180,
@@ -24,6 +32,7 @@ const weight = {
   bench: 35,
   signal: 40,
   hydrant: 30,
+  crate: 20,
   corpse: 80,
 };
 type Body = { state: DebrisState; body: RAPIER.RigidBody };
@@ -42,6 +51,8 @@ export class Destruction {
   private fixed = new Map<string, RAPIER.Collider>();
   private proxies = new Map<string, RAPIER.RigidBody>();
   private serial = 0;
+  /** Weapon crates broken since the simulation last collected them. */
+  readonly opened: Destructible[] = [];
   constructor(readonly city: City) {
     this.fixtures = new Map(destructibles(city).map((p) => [p.id, p]));
     for (const p of this.fixtures.values())
@@ -208,9 +219,15 @@ export class Destruction {
     this.damageTaken.set(id, damage);
     if (
       damage < health[p.kind] ||
-      !this.spawn(p, time, velocity, TUNING.propDebrisSeconds)
+      !this.spawn(
+        p,
+        time,
+        velocity,
+        p.kind === "crate" ? TUNING.crateRespawnSeconds : TUNING.propDebrisSeconds,
+      )
     )
       return false;
+    if (p.kind === "crate") this.opened.push(p);
     this.broken.add(id);
     this.damageTaken.delete(id);
     const fixed = this.fixed.get(id);

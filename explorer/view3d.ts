@@ -12,15 +12,10 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
-import type { GeneratedMap, Point, RoadEdge } from "../mapgen/types.ts";
+import type { GeneratedMap, Point } from "../mapgen/types.ts";
 import { sample, cellSlope } from "../mapgen/field.ts";
-import {
-  closestOnSegment,
-  dist,
-  earClip,
-  rotatedRect,
-  signedArea,
-} from "../mapgen/geom.ts";
+import { edgeHeightAt, streetPolygons } from "../mapgen/streetfit.ts";
+import { earClip, pointInPolygon, rotatedRect, signedArea } from "../mapgen/geom.ts";
 
 /** Vertex-coloured triangle soup that flushes into one mesh. */
 class Batch {
@@ -98,21 +93,6 @@ const ASPHALT = rgb("#575c5d"),
   MARKING = rgb("#e0d9bd"),
   DECK = rgb("#6f6a63"),
   YELLOW = rgb("#d9b84a");
-
-/** Height of a road surface point from the nearest profile sample of its edge. */
-function edgeHeightAt(e: RoadEdge, p: Point) {
-  let best = Infinity,
-    y = e.heights[0] ?? 0;
-  for (let i = 1; i < e.points.length; i++) {
-    const { point, t } = closestOnSegment(p, e.points[i - 1], e.points[i]);
-    const d = dist(point, p);
-    if (d < best) {
-      best = d;
-      y = e.heights[i - 1] + (e.heights[i] - e.heights[i - 1]) * t;
-    }
-  }
-  return y;
-}
 
 /**
  * Game-like 3D preview of a generated map: the same terrain, road polygons,
@@ -240,8 +220,10 @@ export class View3D {
       }
     for (let z = 0; z < f.h - 1; z++)
       for (let x = 0; x < f.w - 1; x++) {
+        // Split along the same diagonal as the game terrain mesh.
         const i = z * f.w + x;
-        batch.quad(i, i + 1, i + f.w + 1, i + f.w);
+        batch.tri(i, i + 1, i + f.w);
+        batch.tri(i + 1, i + f.w + 1, i + f.w);
       }
     const mesh = batch.flush("terrain", this.scene, this.mat("terrain"));
     if (mesh) this.meshes.push(mesh);
@@ -265,8 +247,11 @@ export class View3D {
     for (const river of map.rivers)
       for (let i = 1; i < river.points.length; i++) {
         const a = river.points[i - 1],
-          b = river.points[i],
-          w = river.widths[i] / 2,
+          b = river.points[i];
+        // Where a river meets a lake the lake surface already shows the water.
+        const middle = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+        if (map.lakes.some((lake) => pointInPolygon(middle, lake.outline))) continue;
+        const w = river.widths[i] / 2,
           dx = b.x - a.x,
           dz = b.z - a.z,
           l = Math.hypot(dx, dz) || 1,
@@ -290,12 +275,6 @@ export class View3D {
       marks = new Batch(flip);
     const LIFT = 0.1,
       CURB = 0.15;
-    const heightOf = (p: Point, edge?: number, node?: number) =>
-      node !== undefined
-        ? map.roads.nodes[node].y
-        : edge !== undefined
-          ? edgeHeightAt(map.roads.edges[edge], p)
-          : sample(map.shaped, p.x, p.z);
     for (const band of map.geometry.bands) {
       const e = map.roads.edges[band.edge];
       const n = Math.min(band.left.length, band.right.length);
@@ -336,12 +315,18 @@ export class View3D {
       const y = map.roads.nodes[j.node].y + LIFT;
       asphalt.fan(j.polygon, y, ASPHALT);
     }
-    // Raised sidewalk slabs with a curb face all around.
-    for (const s of map.geometry.sidewalks) {
-      const tops = s.polygon.map((p) => heightOf(p, s.edge, s.node) + LIFT + CURB);
-      sidewalk.fan(s.polygon, tops, SIDEWALK);
-      const pts = signedArea(s.polygon) < 0 ? [...s.polygon].reverse() : s.polygon;
-      const h = signedArea(s.polygon) < 0 ? [...tops].reverse() : tops;
+    // Raised sidewalk slabs with a curb face all around, cut per centreline step
+    // like the street fit so no slab triangle spans a slope.
+    for (const flat of streetPolygons(map.roads, map.geometry).sidewalks) {
+      const polygon: Point[] = [],
+        tops: number[] = [];
+      for (let i = 0; i < flat.length; i += 3) {
+        polygon.push({ x: flat[i], z: flat[i + 2] });
+        tops.push(flat[i + 1] + LIFT + CURB);
+      }
+      sidewalk.fan(polygon, tops, SIDEWALK);
+      const pts = signedArea(polygon) < 0 ? [...polygon].reverse() : polygon;
+      const h = signedArea(polygon) < 0 ? [...tops].reverse() : tops;
       for (let i = 0; i < pts.length; i++) {
         const a = pts[i],
           b = pts[(i + 1) % pts.length],
@@ -352,8 +337,9 @@ export class View3D {
             SIDEWALK[1] * 0.8,
             SIDEWALK[2] * 0.8,
           ];
-        const a0 = sidewalk.vertex(a.x, ya - CURB - 0.3, a.z, c),
-          b0 = sidewalk.vertex(b.x, yb - CURB - 0.3, b.z, c),
+        // Deep curb faces skirt embankments, as in the game.
+        const a0 = sidewalk.vertex(a.x, ya - LIFT - CURB - 1.2, a.z, c),
+          b0 = sidewalk.vertex(b.x, yb - LIFT - CURB - 1.2, b.z, c),
           b1 = sidewalk.vertex(b.x, yb, b.z, c),
           a1 = sidewalk.vertex(a.x, ya, a.z, c);
         sidewalk.quad(a0, a1, b1, b0);

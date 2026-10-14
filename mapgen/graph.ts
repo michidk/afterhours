@@ -1,7 +1,10 @@
 import {
+  area,
   closestOnSegment,
   cross,
   dist,
+  insetPolygon,
+  polylineLength,
   segmentIntersection,
   signedArea,
   sub,
@@ -39,6 +42,10 @@ export interface SnapOptions {
   minAngle: number;
 }
 const DEFAULT_SNAP: SnapOptions = { snap: 14, minAngle: (34 * Math.PI) / 180 };
+const perimeter = (ring: Point[]) =>
+  ring.reduce((sum, p, i) => sum + dist(p, ring[(i + 1) % ring.length]), 0);
+/** Sidewalk width plus a one-metre verge beyond a road's kerb. */
+const KERB_CLEARANCE = 3.5;
 
 /**
  * Mutable planar road graph made of straight segments. Insertion applies the
@@ -284,119 +291,31 @@ export class GraphBuilder {
   length(e: GEdge) {
     return dist(this.nodes[e.a], this.nodes[e.b]);
   }
-  /** Collapse tiny edges, prune stubs, enforce degree and keep one component. */
+  /**
+   * Collapse tiny edges, drop shallow arms and sliver blocks, settle dead ends that
+   * stop beside another road, prune stubs, and keep one component. Each step can
+   * expose work for another, so the steps repeat until the graph is stable.
+   */
   cleanup(options: { minEdge: number; minStub: number; debug?: boolean }) {
-    const stats = { merged: 0, angle: 0, stubs: 0 };
-    for (let pass = 0; pass < 4; pass++) {
-      let changed = false;
-      for (const e of this.edges) {
-        if (!e.alive || e.bridge) continue;
-        // Junctions closer than their own width would overlap; merge them.
-        let widest = ROAD_WIDTH[e.kind];
-        for (const n of [e.a, e.b])
-          for (const id of this.nodes[n].edges)
-            widest = Math.max(widest, ROAD_WIDTH[this.edges[id].kind]);
-        const junctions = this.degree(e.a) >= 3 && this.degree(e.b) >= 3;
-        const threshold = junctions
-          ? Math.max(options.minEdge, widest * 1.3)
-          : options.minEdge;
-        if (this.length(e) >= threshold) continue;
-        // Merge b into a at the midpoint.
-        const a = this.nodes[e.a],
-          b = this.nodes[e.b];
-        this.removeEdge(e.id);
-        const keep = a.edges.size >= b.edges.size ? a : b,
-          drop = keep === a ? b : a;
-        for (const id of [...drop.edges]) {
-          const other = this.edges[id],
-            far = this.other(other, drop.id);
-          this.removeEdge(id);
-          if (far !== keep.id) this.addEdge(keep.id, far, other.kind, other.bridge);
-        }
-        drop.alive = false;
-        // Lane generation needs at most four arms; shed the least important extras.
-        while (keep.edges.size > 4) {
-          const extra = [...keep.edges]
-            .map((id) => this.edges[id])
-            .filter((x) => !x.bridge)
-            .sort(
-              (p, q) =>
-                ROAD_RANK[p.kind] - ROAD_RANK[q.kind] ||
-                this.length(p) - this.length(q),
-            )[0];
-          if (!extra) break;
-          this.removeEdge(extra.id);
-        }
-        changed = true;
-        stats.merged++;
-      }
-      if (!changed) break;
+    const stats = { merged: 0, angle: 0, slivers: 0, ends: 0, stubs: 0 };
+    const total = () => Object.values(stats).reduce((s, v) => s + v, 0);
+    for (let round = 0; round < 6; round++) {
+      const before = total();
+      this.mergeClose(options.minEdge, stats);
+      this.dropShallowArms(stats);
+      this.dropSlivers(stats);
+      this.settleDeadEnds(stats, true);
+      this.pruneStubs(options.minStub, stats);
+      if (total() === before) break;
     }
-    // Shallow angles between arms make junctions unbuildable: drop the lesser arm.
-    for (let pass = 0; pass < 4; pass++) {
-      let changed = false;
-      for (const n of this.nodes) {
-        if (!n.alive || n.edges.size < 2) continue;
-        const arms = [...n.edges]
-          .map((id) => {
-            const e = this.edges[id],
-              o = this.nodes[this.other(e, n.id)];
-            return { e, ang: Math.atan2(o.z - n.z, o.x - n.x) };
-          })
-          .sort((p, q) => p.ang - q.ang);
-        const limit = n.edges.size === 2 ? (50 * Math.PI) / 180 : (34 * Math.PI) / 180;
-        for (let i = 0; i < arms.length; i++) {
-          const a = arms[i],
-            b = arms[(i + 1) % arms.length];
-          if (a === b) continue;
-          let gap = b.ang - a.ang;
-          if (gap <= 0) gap += Math.PI * 2;
-          if (gap >= limit) continue;
-          const lesser =
-            ROAD_RANK[a.e.kind] !== ROAD_RANK[b.e.kind]
-              ? ROAD_RANK[a.e.kind] < ROAD_RANK[b.e.kind]
-                ? a
-                : b
-              : this.length(a.e) < this.length(b.e)
-                ? a
-                : b;
-          if (lesser.e.bridge) continue;
-          this.removeEdge(lesser.e.id);
-          stats.angle++;
-          changed = true;
-          break;
-        }
-      }
-      if (!changed) break;
-    }
-    // Prune short dead-end chains.
-    for (let pass = 0; pass < 6; pass++) {
-      let changed = false;
-      for (const n of this.nodes) {
-        if (!n.alive || n.edges.size !== 1) continue;
-        const chain: number[] = [],
-          nodes: number[] = [n.id];
-        let current = n.id,
-          length = 0,
-          guard = 0;
-        for (;;) {
-          const node = this.nodes[current];
-          const next = [...node.edges].find((id) => !chain.includes(id));
-          if (next === undefined || guard++ > 500) break;
-          chain.push(next);
-          length += this.length(this.edges[next]);
-          current = this.other(this.edges[next], current);
-          nodes.push(current);
-          if (this.nodes[current].edges.size !== 2) break;
-        }
-        if (length < options.minStub && chain.length) {
-          for (const id of chain) this.removeEdge(id);
-          stats.stubs += chain.length;
-          for (const id of nodes.slice(0, -1)) this.nodes[id].alive = false;
-          changed = true;
-        }
-      }
-      if (!changed) break;
+    // Joined dead ends can close new slivers; settle without joining so this ends.
+    for (let round = 0; round < 6; round++) {
+      const before = total();
+      this.mergeClose(options.minEdge, stats);
+      this.dropSlivers(stats);
+      this.settleDeadEnds(stats, false);
+      this.pruneStubs(options.minStub, stats);
+      if (total() === before) break;
     }
     for (const n of this.nodes) if (n.alive && n.edges.size === 0) n.alive = false;
     if (options.debug) console.error("cleanup", stats);
@@ -426,9 +345,268 @@ export class GraphBuilder {
     for (const n of this.nodes)
       if (n.alive && component[n.id] !== main) this.removeNode(n.id);
   }
+  /** Merge the two nodes of a removed connection into the better-connected one. */
+  private mergeNodes(p: number, q: number) {
+    const a = this.nodes[p],
+      b = this.nodes[q];
+    const keep = a.edges.size >= b.edges.size ? a : b,
+      drop = keep === a ? b : a;
+    for (const id of [...drop.edges]) {
+      const other = this.edges[id],
+        far = this.other(other, drop.id);
+      this.removeEdge(id);
+      if (far !== keep.id) this.addEdge(keep.id, far, other.kind, other.bridge);
+    }
+    drop.alive = false;
+    // Lane generation needs at most four arms; shed the least important extras.
+    while (keep.edges.size > 4) {
+      const extra = [...keep.edges]
+        .map((id) => this.edges[id])
+        .filter((x) => !x.bridge)
+        .sort(
+          (p, q) =>
+            ROAD_RANK[p.kind] - ROAD_RANK[q.kind] || this.length(p) - this.length(q),
+        )[0];
+      if (!extra) break;
+      this.removeEdge(extra.id);
+    }
+  }
+  private mergeClose(minEdge: number, stats: { merged: number }) {
+    for (let pass = 0; pass < 4; pass++) {
+      let changed = false;
+      for (const e of this.edges) {
+        if (!e.alive || e.bridge || this.length(e) >= minEdge) continue;
+        this.removeEdge(e.id);
+        this.mergeNodes(e.a, e.b);
+        changed = true;
+        stats.merged++;
+      }
+      // Junctions need room for both mouths and a crossing between them; closer
+      // ones would overlap, so merge them even across intermediate bends.
+      const graph = this.toRoadGraph(),
+        builder = new Int32Array(graph.nodes.length),
+        touched = new Set<number>();
+      graph.nodeMap.forEach((id, node) => {
+        if (id >= 0) builder[id] = node;
+      });
+      for (const e of graph.edges) {
+        const a = builder[e.a],
+          b = builder[e.b];
+        if (e.bridge || a === b || touched.has(a) || touched.has(b)) continue;
+        if (this.degree(a) < 3 || this.degree(b) < 3) continue;
+        let widest = 0;
+        for (const n of [a, b])
+          for (const id of this.nodes[n].edges)
+            widest = Math.max(widest, ROAD_WIDTH[this.edges[id].kind]);
+        if (polylineLength(e.points) >= widest * 1.5) continue;
+        for (const id of graph.segments[e.id]) this.removeEdge(id);
+        for (const id of graph.segments[e.id])
+          for (const n of [this.edges[id].a, this.edges[id].b])
+            if (n !== a && n !== b) this.nodes[n].alive = false;
+        this.mergeNodes(a, b);
+        touched.add(a).add(b);
+        changed = true;
+        stats.merged++;
+      }
+      if (!changed) break;
+    }
+  }
+  /** Shallow angles between arms make junctions unbuildable: drop the lesser arm. */
+  private dropShallowArms(stats: { angle: number }) {
+    for (let pass = 0; pass < 4; pass++) {
+      let changed = false;
+      for (const n of this.nodes) {
+        if (!n.alive || n.edges.size < 2) continue;
+        const arms = [...n.edges]
+          .map((id) => {
+            const e = this.edges[id],
+              o = this.nodes[this.other(e, n.id)];
+            return { e, ang: Math.atan2(o.z - n.z, o.x - n.x) };
+          })
+          .sort((p, q) => p.ang - q.ang);
+        const limit = ((n.edges.size === 2 ? 50 : 45) * Math.PI) / 180;
+        for (let i = 0; i < arms.length; i++) {
+          const a = arms[i],
+            b = arms[(i + 1) % arms.length];
+          if (a === b) continue;
+          let gap = b.ang - a.ang;
+          if (gap <= 0) gap += Math.PI * 2;
+          if (gap >= limit) continue;
+          const lesser =
+            ROAD_RANK[a.e.kind] !== ROAD_RANK[b.e.kind]
+              ? ROAD_RANK[a.e.kind] < ROAD_RANK[b.e.kind]
+                ? a
+                : b
+              : this.length(a.e) < this.length(b.e)
+                ? a
+                : b;
+          if (lesser.e.bridge) continue;
+          this.removeEdge(lesser.e.id);
+          stats.angle++;
+          changed = true;
+          break;
+        }
+      }
+      if (!changed) break;
+    }
+  }
+  /** Prune short dead-end chains. */
+  private pruneStubs(minStub: number, stats: { stubs: number }) {
+    for (let pass = 0; pass < 6; pass++) {
+      let changed = false;
+      for (const n of this.nodes) {
+        if (!n.alive || n.edges.size !== 1) continue;
+        const chain: number[] = [],
+          nodes: number[] = [n.id];
+        let current = n.id,
+          length = 0,
+          guard = 0;
+        for (;;) {
+          const node = this.nodes[current];
+          const next = [...node.edges].find((id) => !chain.includes(id));
+          if (next === undefined || guard++ > 500) break;
+          chain.push(next);
+          length += this.length(this.edges[next]);
+          current = this.other(this.edges[next], current);
+          nodes.push(current);
+          if (this.nodes[current].edges.size !== 2) break;
+        }
+        if (length < minStub && chain.length) {
+          for (const id of chain) this.removeEdge(id);
+          stats.stubs += chain.length;
+          for (const id of nodes.slice(0, -1)) this.nodes[id].alive = false;
+          changed = true;
+        }
+      }
+      if (!changed) break;
+    }
+  }
+  /**
+   * Blocks too small to hold a lot once the roads and sidewalks are inset are
+   * slivers between near-parallel roads or tiny triangles of crossing streets;
+   * drop the least important road between each one and its neighbour.
+   */
+  private dropSlivers(stats: { slivers: number }) {
+    const graph = this.toRoadGraph(),
+      removed = new Set<number>();
+    for (const face of planarFaces(graph)) {
+      if (area(face.ring) > 8000) continue;
+      if (face.edges.some((id) => graph.segments[id].some((s) => removed.has(s))))
+        continue;
+      let reach = 0;
+      for (const id of face.edges) reach = Math.max(reach, graph.edges[id].width / 2);
+      // The inset can fail on awkward but roomy outlines; then estimate the net area
+      // from the outline (exact for convex blocks with rounded corners).
+      const d = reach + KERB_CLEARANCE,
+        inset = insetPolygon(face.ring, d),
+        net = inset
+          ? area(inset)
+          : area(face.ring) - perimeter(face.ring) * d + Math.PI * d * d;
+      if (net >= 300) continue;
+      // An edge walked twice is a spur inside the face; removing it would split the graph.
+      const victim = face.edges
+        .filter((id) => face.edges.indexOf(id) === face.edges.lastIndexOf(id))
+        .map((id) => graph.edges[id])
+        .filter((e) => !e.bridge)
+        .sort(
+          (p, q) =>
+            ROAD_RANK[p.kind] - ROAD_RANK[q.kind] ||
+            polylineLength(q.points) - polylineLength(p.points),
+        )[0];
+      if (!victim) continue;
+      for (const id of graph.segments[victim.id]) {
+        this.removeEdge(id);
+        removed.add(id);
+      }
+      stats.slivers++;
+    }
+    // A ring road leaving and re-entering one junction encloses its own block.
+    for (const e of graph.edges) {
+      if (e.a !== e.b || e.bridge) continue;
+      if (graph.segments[e.id].some((id) => removed.has(id))) continue;
+      const d = e.width / 2 + KERB_CLEARANCE,
+        net = area(e.points) - polylineLength(e.points) * d + Math.PI * d * d;
+      if (net >= 300) continue;
+      for (const id of graph.segments[e.id]) {
+        this.removeEdge(id);
+        removed.add(id);
+      }
+      stats.slivers++;
+    }
+    for (const n of this.nodes) if (n.alive && n.edges.size === 0) n.alive = false;
+  }
+  /**
+   * A dead end needs room for its turning circle. One that stops beside another
+   * road is extended into it when that junction is valid, else cut back a segment
+   * at a time until it clears.
+   */
+  private settleDeadEnds(stats: { ends: number }, join: boolean) {
+    for (let pass = 0; pass < 40; pass++) {
+      let changed = false;
+      for (const n of this.nodes) {
+        if (!n.alive || n.edges.size !== 1) continue;
+        const e = this.edges[[...n.edges][0]];
+        if (e.bridge) continue;
+        const o = this.nodes[this.other(e, n.id)];
+        let nearest = Infinity;
+        for (const id of this.edgesNear(n.x, n.z, n.x, n.z, 40)) {
+          const f = this.edges[id];
+          if (f.a === n.id || f.b === n.id || f.a === o.id || f.b === o.id) continue;
+          const { point } = closestOnSegment(n, this.nodes[f.a], this.nodes[f.b]);
+          nearest = Math.min(nearest, dist(n, point) - ROAD_WIDTH[f.kind] / 2);
+        }
+        // Turning circle plus both sidewalks and a verge between them.
+        if (nearest >= ROAD_WIDTH[e.kind] / 2 + 4.5 + 2 * KERB_CLEARANCE) continue;
+        const dir = sub(n, o),
+          l = Math.hypot(dir.x, dir.z) || 1,
+          reach = nearest + ROAD_WIDTH.highway;
+        const joined =
+          join &&
+          this.insert(
+            n.id,
+            { x: n.x + (dir.x / l) * reach, z: n.z + (dir.z / l) * reach },
+            e.kind,
+            { snap: 10 },
+          );
+        changed = true;
+        stats.ends++;
+        if (joined && this.degree(joined.node) >= 2) continue;
+        if (joined) this.removeNode(joined.node);
+        this.removeEdge(e.id);
+        n.alive = false;
+      }
+      if (!changed) break;
+    }
+  }
+  /** Segments that pass over a river channel become bridges. */
+  bridgeRivers(rivers: { points: Point[]; widths: number[] }[]) {
+    for (const e of this.edges) {
+      if (!e.alive || e.bridge) continue;
+      const a = this.nodes[e.a],
+        b = this.nodes[e.b];
+      e.bridge = rivers.some((river) =>
+        river.points.some((p, i) => {
+          if (i === 0) return false;
+          const q = river.points[i - 1],
+            reach = Math.max(river.widths[i], river.widths[i - 1]) / 2 + 1;
+          return (
+            !!segmentIntersection(a, b, q, p) ||
+            dist(closestOnSegment(p, a, b).point, p) < reach ||
+            dist(closestOnSegment(a, q, p).point, a) < reach ||
+            dist(closestOnSegment(b, q, p).point, b) < reach
+          );
+        }),
+      );
+    }
+  }
   /** Merge degree-2 chains of equal kind into polyline edges with a compact id space. */
-  toRoadGraph(): RoadGraph & { nodeMap: Int32Array } {
-    const chains: { kind: RoadKind; bridge: boolean; nodes: number[] }[] = [];
+  toRoadGraph(): RoadGraph & { nodeMap: Int32Array; segments: number[][] } {
+    const chains: {
+      kind: RoadKind;
+      bridge: boolean;
+      nodes: number[];
+      segments: number[];
+    }[] = [];
     const used = new Uint8Array(this.edges.length);
     const continuous = (node: number) => {
       const n = this.nodes[node];
@@ -451,11 +629,13 @@ export class GraphBuilder {
         startEdge = prev;
         startNode = this.other(prev, startNode);
       }
-      const nodes = [startNode];
+      const nodes = [startNode],
+        segments: number[] = [];
       let current = startNode,
         edge = startEdge;
       for (;;) {
         used[edge.id] = 1;
+        segments.push(edge.id);
         current = this.other(edge, current);
         nodes.push(current);
         if (!continuous(current)) break;
@@ -465,7 +645,7 @@ export class GraphBuilder {
         if (used[next.id]) break;
         edge = next;
       }
-      chains.push({ kind: e.kind, bridge: e.bridge, nodes });
+      chains.push({ kind: e.kind, bridge: e.bridge, nodes, segments });
     }
     const nodeMap = new Int32Array(this.nodes.length).fill(-1),
       nodes: RoadGraph["nodes"] = [];
@@ -500,7 +680,7 @@ export class GraphBuilder {
       nodes[a].edges.push(edge.id);
       nodes[b].edges.push(edge.id);
     }
-    return { nodes, edges, nodeMap };
+    return { nodes, edges, nodeMap, segments: chains.map((c) => c.segments) };
   }
 }
 

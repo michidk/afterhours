@@ -31,6 +31,9 @@ export const citySchema = z.object({
           kind: z.enum(["avenue", "street", "coast", "service"]),
           signalA: z.boolean().optional(),
           signalB: z.boolean().optional(),
+          stopA: z.number().min(0).max(80).optional(),
+          stopB: z.number().min(0).max(80).optional(),
+          noCrate: z.boolean().optional(),
         })
         .refine(
           (r) => Math.hypot(r.bx - r.ax, r.bz - r.az) >= 0.05,
@@ -80,6 +83,19 @@ export const citySchema = z.object({
     .max(2000)
     .optional(),
   ramps: z.array(z.object(point)).max(100),
+  walkways: z
+    .object({
+      points: z.array(coordinate).max(200000),
+      links: z.array(z.number().int().min(0)).max(300000),
+    })
+    .refine(
+      (w) =>
+        w.points.length % 2 === 0 &&
+        w.links.length % 3 === 0 &&
+        w.links.every((v, i) => (i % 3 === 2 ? v <= 2 : v < w.points.length / 2)),
+      "walkway links must join existing points",
+    )
+    .optional(),
   pickups: z
     .array(z.object({ ...point, weapon: z.enum(["bat", "pistol", "smg"]) }))
     .max(100),

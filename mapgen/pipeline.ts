@@ -7,11 +7,14 @@ import { generateRoads } from "./roads.ts";
 import {
   bridgeDecks,
   buildRoadGeometry,
+  densifyCentrelines,
   smoothCentrelines,
   solveProfiles,
   stampRoads,
 } from "./roadgeometry.ts";
 import { chooseCentre, desirabilityField } from "./site.ts";
+import { sinkUnderStreets, streetPolygons, streetTest } from "./streetfit.ts";
+import { KERB_HEIGHT, STREET_LIFT } from "../shared/world.ts";
 import {
   dropletErosion,
   generateHeightmap,
@@ -71,8 +74,9 @@ export function generateMap(
   let roadCells: Float32Array | undefined;
   const geometry = stage("road geometry", () => {
     smoothCentrelines(roads);
-    solveProfiles(roads, field);
+    densifyCentrelines(roads);
     const geometry = buildRoadGeometry(roads);
+    solveProfiles(roads, field, geometry.trims);
     roadCells = stampRoads(shaped, roads, geometry);
     return geometry;
   });
@@ -85,6 +89,23 @@ export function generateMap(
     stampPads(shaped, placed, roadCells);
     return placed;
   });
+  // The coarse terrain grid must stay below every drawn street surface.
+  stage("street fit", () => {
+    const { asphalt, sidewalks } = streetPolygons(roads, geometry);
+    sinkUnderStreets(
+      {
+        heights: shaped.data,
+        side: shaped.w,
+        step: shaped.cell,
+        half: shaped.size / 2,
+      },
+      [
+        { polygons: asphalt, top: STREET_LIFT },
+        { polygons: sidewalks, top: STREET_LIFT + KERB_HEIGHT },
+      ],
+      buildings,
+    );
+  });
   const parks = makeParks(blocks, hydro, shaped);
   const { trees, lamps } = stage("vegetation", () =>
     placeVegetation({
@@ -95,6 +116,7 @@ export function generateMap(
       buildings,
       desirability,
       seed,
+      onStreet: streetTest(geometry),
     }),
   );
   return {

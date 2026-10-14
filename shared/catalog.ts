@@ -30,9 +30,13 @@ export const TUNING = {
   fireThreshold: 0.25,
   explosionRadius: 12,
   explosionDamage: 130,
+  /** Occupants are thrown out of an exploding vehicle alive, with this much damage. */
+  ejectDamage: 25,
   fireSeconds: 6,
   wreckSeconds: 180,
   propDebrisSeconds: 30,
+  /** A broken weapon crate is restored, ready to open again, after this long. */
+  crateRespawnSeconds: 90,
   corpseSeconds: 180,
   npcRecoverySeconds: 30,
   debrisFadeSeconds: 3,

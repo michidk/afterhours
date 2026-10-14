@@ -170,7 +170,7 @@ export function generateHydrology(
   const threshold = Math.max(40, landCells * 0.011);
   const rivers = traceRivers(f, dir, flux, lakeMask, threshold, seaLevel);
   lap("trace");
-  carveRivers(f, rivers, seaLevel, seed);
+  carveRivers(f, rivers, seaLevel, seed, lakeMask);
   lap("carve");
   fillDepressions(f, seaLevel);
   ({ dir, flux } = flowAccumulation(f, seaLevel));
@@ -316,8 +316,18 @@ function smoothPolyline(points: Point[], passes: number) {
   return out;
 }
 
-/** Lower a parabolic channel along each river and force the bed to descend. */
-function carveRivers(f: HeightField, rivers: River[], seaLevel: number, seed: number) {
+/**
+ * Lower a parabolic channel along each river and force the bed to descend. Lake
+ * basins are left alone: a channel cut through a lake would drain it in reality and
+ * leave its water surface hanging over a canyon.
+ */
+function carveRivers(
+  f: HeightField,
+  rivers: River[],
+  seaLevel: number,
+  seed: number,
+  lakes: Uint8Array,
+) {
   const { w, h, data } = f,
     noise = new Noise(derive(seed, "banks"));
   for (const river of rivers) {
@@ -344,6 +354,7 @@ function carveRivers(f: HeightField, rivers: River[], seaLevel: number, seed: nu
           if (x < 1 || z < 1 || x >= w - 1 || z >= h - 1) continue;
           const d = Math.hypot(dx * f.cell, dz * f.cell),
             i = z * w + x;
+          if (lakes[i]) continue;
           if (d <= halfWidth) {
             const t = d / halfWidth;
             data[i] = Math.min(data[i], bed + depth * t * t * 0.3);

@@ -5,7 +5,7 @@ import { Simulation } from "../server/simulation.ts";
 import { destructibles, setBrokenProps } from "../shared/destruction.ts";
 import { staticGeometry } from "../shared/physics/static.ts";
 import { emptyCity } from "../shared/city-stream.ts";
-import { TUNING } from "../shared/catalog.ts";
+import { TUNING, WEAPONS } from "../shared/catalog.ts";
 import http from "node:http";
 import { WebSocket } from "ws";
 import { Sessions } from "../server/session.ts";
@@ -467,6 +467,55 @@ test("fatal characters leave one timed body while players respawn and wrecks las
     assert.equal(sim.entities.has(car.id), true);
     for (let i = 0; i < 3 * 30; i++) sim.tick(1 / 30);
     assert.equal(sim.entities.has(car.id), false);
+  } finally {
+    sim.destruction.dispose();
+  }
+});
+
+test("punching a weapon crate open drops a loaded weapon and the crate returns", () => {
+  const city = fixture();
+  // A street whose midpoint selects a crate.
+  city.roads.push({
+    x: 0,
+    z: -42,
+    ax: -30,
+    az: -42,
+    bx: 30,
+    bz: -42,
+    width: 12,
+    kind: "street",
+  });
+  const sim = new Simulation(city);
+  sim.entities.clear();
+  try {
+    const crate = [...sim.destruction.fixtures.values()].find(
+      (p) => p.kind === "crate",
+    );
+    assert.ok(crate, "streets carry weapon crates");
+    const player = sim.join("Looter", "#ffffff");
+    player.x = crate.x;
+    player.z = crate.z - 1.2;
+    player.y = 0;
+    player.angle = 0;
+    const before = sim.inventory.pickups.size;
+    for (let i = 0; i < 2; i++) {
+      player.cooldown = 0;
+      sim.attack(player);
+    }
+    assert.equal(sim.destruction.broken.has(crate.id), true, "two punches open it");
+    sim.tick(1 / 30);
+    const drops = [...sim.inventory.pickups.values()].filter(
+      (p) => p.kind === "weapon" && Math.hypot(p.x - crate.x, p.z - crate.z) < 0.01,
+    );
+    assert.equal(sim.inventory.pickups.size, before + 1);
+    assert.equal(drops.length, 1);
+    const item = drops[0].kind === "weapon" ? drops[0].item : undefined;
+    assert.ok(item && item.kind !== "fists");
+    const spec = WEAPONS[item.kind];
+    assert.equal(item.ammo, spec.magazine, "a full magazine");
+    assert.equal(item.reserve, spec.reserve, "and full reserve ammunition");
+    for (let i = 0; i < (TUNING.crateRespawnSeconds + 2) * 30; i++) sim.tick(1 / 30);
+    assert.equal(sim.destruction.broken.has(crate.id), false, "the crate is back");
   } finally {
     sim.destruction.dispose();
   }

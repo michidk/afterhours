@@ -1,7 +1,8 @@
 import type { Character } from "./character.ts";
 import type { City } from "./world.ts";
 
-export type PropKind = "palm" | "tree" | "lamp" | "bench" | "signal" | "hydrant";
+export type PropKind =
+  "palm" | "tree" | "lamp" | "bench" | "signal" | "hydrant" | "crate";
 export interface Destructible {
   id: string;
   kind: PropKind;
@@ -69,16 +70,19 @@ export function destructibles(
     const dx = road.bx - road.ax,
       dz = road.bz - road.az,
       length = Math.hypot(dx, dz);
-    if (length < 15) continue;
+    // Short segments carry street furniture only where a stop line sits on them.
+    if (length < 15 && road.stopA === undefined && road.stopB === undefined) continue;
     const nx = dz / length,
       nz = -dx / length;
-    for (const [end, controlled] of [
-      [-1, road.signalA],
-      [1, road.signalB],
+    for (const [end, controlled, stop] of [
+      [-1, road.signalA, road.stopA],
+      [1, road.signalB, road.stopB],
     ] as const) {
       if (!controlled) continue;
-      const along = end * (length / 2 - 9),
-        lateral = end * (road.width / 2 + 2);
+      // Generated cities give the stop line's distance, so the pole stands on the
+      // kerb beside it rather than inside the junction.
+      const along = end * (length / 2 - (stop ?? 9)),
+        lateral = end * (road.width / 2 + 0.5);
       result.push(
         prop(
           "signal",
@@ -100,6 +104,28 @@ export function destructibles(
           road.z + nz * (road.width / 2 + 3),
           1,
           0.65,
+        ),
+      );
+    // Weapon crates on the kerb side of about one mid-street segment in three, opposite
+    // the hydrant. Breaking one open drops a loaded weapon; the crate comes back.
+    // Segments ending at a junction are skipped so no crate stands in its mouth;
+    // the test needs only the segment itself, so every chunk agrees on crates.
+    if (
+      length >= 20 &&
+      !road.signalA &&
+      !road.signalB &&
+      !road.noCrate &&
+      road.kind !== "coast" &&
+      road.kind !== "service" &&
+      Math.abs(Math.round(road.x * 7 + road.z * 13)) % 3 === 0
+    )
+      result.push(
+        prop(
+          "crate",
+          road.x - nx * (road.width / 2 + 1.3),
+          road.z - nz * (road.width / 2 + 1.3),
+          0.9,
+          0.9,
         ),
       );
   }

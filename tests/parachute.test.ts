@@ -163,3 +163,18 @@ test("disconnect retains a parachuting player for reconnect and releases the air
   assert.ok(p.y > 26 && p.y < 28);
   assert.ok(aircraft.z > 9);
 });
+
+for (const kind of ["helicopter", "plane"] as const)
+  test(`${kind} exploding in the air throws its pilot out under a parachute`, () => {
+    const { simulation: s, player: p } = setup();
+    const aircraft = s.spawn(kind, 0, 0);
+    s.interact(p.id);
+    aircraft.y = 60;
+    aircraft.burning = 0.001;
+    s.tick(1 / 120);
+    assert.ok(aircraft.wreck);
+    assert.equal(p.vehicle, undefined);
+    assert.ok(!p.down && p.health > 0, "the pilot survives");
+    assert.equal(p.parachute, true);
+    assert.ok(p.y > 50, "the pilot keeps the aircraft's height");
+  });

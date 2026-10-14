@@ -3,7 +3,7 @@ import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import type { CityScene } from "../scene.ts";
-import type { RoadSurface } from "../../shared/world.ts";
+import { KERB_HEIGHT, STREET_LIFT, type RoadSurface } from "../../shared/world.ts";
 import { earClip } from "../../shared/polygon.ts";
 
 /** Batched triangle soup with vertex colours; one mesh per surface layer. */
@@ -52,6 +52,8 @@ class Batch {
 /**
  * Streets of a generated city: asphalt bands and junction rings, raised sidewalk
  * slabs with curb faces, and painted markings, all carrying road-profile heights.
+ * Curb faces reach well below the slab so they also skirt embankments, where the
+ * coarse terrain grid falls away faster than the sidewalk edge.
  */
 export function buildSurface(host: Pick<CityScene, "scene">, surface: RoadSurface) {
   const asphalt = new Batch(),
@@ -62,8 +64,9 @@ export function buildSurface(host: Pick<CityScene, "scene">, surface: RoadSurfac
     WALK = Color3.FromHexString("#c9c2ac"),
     WHITE = Color3.FromHexString("#e8e4d6"),
     YELLOW = Color3.FromHexString("#d9b84a");
-  const LIFT = 0.1,
-    HEIGHT = 0.15;
+  const LIFT = STREET_LIFT,
+    HEIGHT = KERB_HEIGHT,
+    SKIRT = 1.2;
   for (const polygon of surface.asphalt) asphalt.polygon(polygon, LIFT, ASPHALT);
   for (const polygon of surface.sidewalks) {
     sidewalk.polygon(polygon, LIFT + HEIGHT, WALK);
@@ -72,13 +75,13 @@ export function buildSurface(host: Pick<CityScene, "scene">, surface: RoadSurfac
       const j = (i + 1) % n;
       const a0 = sidewalk.vertex(
           polygon[i * 3],
-          polygon[i * 3 + 1] - 0.3,
+          polygon[i * 3 + 1] - SKIRT,
           polygon[i * 3 + 2],
           CURB,
         ),
         b0 = sidewalk.vertex(
           polygon[j * 3],
-          polygon[j * 3 + 1] - 0.3,
+          polygon[j * 3 + 1] - SKIRT,
           polygon[j * 3 + 2],
           CURB,
         ),

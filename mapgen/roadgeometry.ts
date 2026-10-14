@@ -8,6 +8,10 @@ import {
   mul,
   norm,
   perp,
+  polylineLength,
+  segmentIntersection,
+  selfIntersects,
+  signedArea,
   sub,
 } from "./geom.ts";
 import { smoothstep } from "./random.ts";
@@ -59,7 +63,9 @@ export function simplifyPolyline(points: Point[], tolerance: number): Point[] {
 }
 function distanceToLine(p: Point, a: Point, b: Point) {
   const ab = sub(b, a),
-    l = Math.hypot(ab.x, ab.z) || 1;
+    l = Math.hypot(ab.x, ab.z);
+  // A ring road starts and ends at one node; measure from that node instead.
+  if (l < 1e-6) return dist(p, a);
   return Math.abs(ab.x * (p.z - a.z) - ab.z * (p.x - a.x)) / l;
 }
 /**
@@ -99,10 +105,54 @@ export function catmullRom(points: Point[], step: number): Point[] {
   out[out.length - 1] = points[points.length - 1];
   return out;
 }
+/**
+ * Replace sharp interior vertices with circular arcs of about `radius`, shrunk so
+ * each arc uses at most 45 % of its neighbouring segments. A spline alone keeps the
+ * kink because it passes through every control point.
+ */
+export function roundCorners(points: Point[], radius: number, minTurn = 0.4) {
+  if (points.length < 3) return points;
+  const out: Point[] = [points[0]];
+  for (let i = 1; i < points.length - 1; i++) {
+    const p = points[i],
+      before = sub(points[i - 1], p),
+      after = sub(points[i + 1], p),
+      turn =
+        Math.PI - Math.acos(Math.max(-1, Math.min(1, dot(norm(before), norm(after)))));
+    if (turn < minTurn) {
+      out.push(p);
+      continue;
+    }
+    const half = turn / 2,
+      tangent = Math.min(
+        radius * Math.tan(half),
+        0.45 * Math.hypot(before.x, before.z),
+        0.45 * Math.hypot(after.x, after.z),
+      ),
+      r = tangent / Math.tan(half),
+      a = add(p, mul(norm(before), tangent)),
+      b = add(p, mul(norm(after), tangent)),
+      centre = add(p, mul(norm(add(norm(before), norm(after))), r / Math.cos(half)));
+    const from = Math.atan2(a.z - centre.z, a.x - centre.x);
+    let to = Math.atan2(b.z - centre.z, b.x - centre.x);
+    while (to - from > Math.PI) to -= Math.PI * 2;
+    while (to - from < -Math.PI) to += Math.PI * 2;
+    const steps = Math.max(2, Math.ceil((Math.abs(to - from) * r) / 3));
+    for (let s = 0; s <= steps; s++) {
+      const angle = from + ((to - from) * s) / steps;
+      out.push({
+        x: centre.x + Math.cos(angle) * r,
+        z: centre.z + Math.sin(angle) * r,
+      });
+    }
+  }
+  out.push(points[points.length - 1]);
+  return out;
+}
 /** Simplify and spline every edge so curves are smooth and straight runs stay straight. */
 export function smoothCentrelines(graph: RoadGraph) {
   for (const e of graph.edges) {
-    const simplified = simplifyPolyline(e.points, 0.9);
+    const simplified = roundCorners(simplifyPolyline(e.points, 0.9), e.width * 2);
     e.points = e.bridge ? simplified : catmullRom(simplified, 4);
   }
 }
@@ -117,12 +167,21 @@ interface Arm {
   ang: number;
   cutL: number;
   cutR: number;
+  /** Longest cut this end may take so the band keeps room for its other end. */
+  limit: number;
 }
 interface Corner {
   /** From arm k's left edge line to arm k+1's right edge line, in ring order. */
   points: Point[];
   /** Fillet circle for sidewalk construction, if any. */
   arc?: { centre: Point; radius: number; from: number; to: number };
+}
+/** A walkway end at mid-sidewalk where a band meets a junction or dead end. */
+interface WalkEnd {
+  edge: number;
+  atStart: boolean;
+  /** The band's left side (positive perpendicular of the edge direction). */
+  left: boolean;
 }
 const arcPoints = (
   centre: Point,
@@ -137,12 +196,33 @@ const arcPoints = (
   });
 const signedAngle = (a: Point, b: Point) =>
   Math.atan2(a.x * b.z - a.z * b.x, a.x * b.x + a.z * b.z);
+/**
+ * Band length that holds a crosswalk and stop line at each end with lane markings
+ * between them; shorter links between close junctions get no crosswalks.
+ */
+const CROSSING_BAND = 16;
+/** Lane markings stop this far from a crossed band end, just past the stop line. */
+const MARKED_END = 5;
+/** Crosswalk centre measured from the band end; the zebra spans 1.0–3.6 m. */
+const CROSSING_AT = 2.3;
+/** Walkways run just outside the middle of the sidewalk, clear of kerbside lamps. */
+const WALK = SIDEWALK / 2 + 0.35;
+/** A gentle continuation with equal widths is left to the band mitres. */
+const continuation = (arms: Arm[]) =>
+  arms.length === 2 &&
+  arms[0].e.width === arms[1].e.width &&
+  Math.abs(signedAngle(arms[0].dir, mul(arms[1].dir, -1))) < (50 * Math.PI) / 180;
+const culDeSacRadius = (arm: Arm) =>
+  arm.hw + (arm.e.kind === "street" || arm.e.kind === "lane" ? 4.5 : 2);
 
 /**
  * Explicit junction polygons with curb fillets. Incident arms are sorted by
  * departing angle; for each adjacent pair the left edge line of one meets the
  * right edge line of the next at a corner, which is rounded with a fillet. Arms are
  * trimmed back to their farthest tangent point so bands and rings share edges.
+ * Fillets shrink when a short band would otherwise be eaten by both of its ends.
+ * Walkways along the middle of every sidewalk, linked around corners and across
+ * crosswalks, form the pedestrian network.
  */
 export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
   const junctions: RoadGeometry["junctions"] = [],
@@ -150,9 +230,9 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
     markings: RoadGeometry["markings"] = [];
   const trim = graph.edges.map(() => [0, 0] as [number, number]);
   const junctionNodes = new Set<number>();
-  const departing = (edgeId: number, node: number): Arm => {
-    const e = graph.edges[edgeId],
-      atStart = e.a === node;
+  const turns: { from: WalkEnd; to: WalkEnd; via: Point[] }[] = [];
+  const departing = (edgeId: number, atStart: boolean): Arm => {
+    const e = graph.edges[edgeId];
     const pts = atStart ? e.points : [...e.points].reverse();
     const dir = norm(sub(pts[Math.min(2, pts.length - 1)], pts[0]));
     return {
@@ -163,19 +243,59 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
       ang: Math.atan2(dir.z, dir.x),
       cutL: 0,
       cutR: 0,
+      limit: Infinity,
     };
   };
+  // A ring road lists its node twice: once leaving from its start, once from its end.
+  const armsAt = graph.nodes.map((n) =>
+    n.edges
+      .map((id, i) => {
+        const e = graph.edges[id];
+        return departing(id, e.a !== e.b ? e.a === n.id : n.edges.indexOf(id) === i);
+      })
+      .sort((p, q) => p.ang - q.ang),
+  );
+  // Share each band between its two ends in proportion to what they would cut.
+  const need = (arms: Arm[], arm: Arm) => {
+    if (arms.length === 1) {
+      const r = culDeSacRadius(arm);
+      return Math.sqrt(Math.max(0, r * r - arm.hw * arm.hw));
+    }
+    if (continuation(arms)) return 0;
+    const widest = Math.max(...arms.filter((o) => o !== arm).map((o) => o.hw));
+    return widest + CURB_RADIUS[arm.e.kind] + 0.3;
+  };
+  const ends = graph.edges.map(() => [] as Arm[]);
+  for (const arms of armsAt) for (const arm of arms) ends[arm.e.id].push(arm);
+  for (const e of graph.edges) {
+    const arms = ends[e.id].map((arm) => ({
+        arm,
+        need: need(armsAt[arm.atStart ? e.a : e.b], arm),
+      })),
+      length = polylineLength(e.points),
+      room = length - Math.min(CROSSING_BAND, length * 0.3),
+      total = arms.reduce((s, a) => s + a.need, 0);
+    if (total > room)
+      for (const { arm, need } of arms) arm.limit = (room * need) / total;
+  }
+  const bandSide = (arm: Arm, armLeft: boolean): WalkEnd => ({
+    edge: arm.e.id,
+    atStart: arm.atStart,
+    left: arm.atStart === armLeft,
+  });
   for (const n of graph.nodes) {
-    const arms = n.edges.map((id) => departing(id, n.id)).sort((p, q) => p.ang - q.ang);
+    const arms = armsAt[n.id];
     if (arms.length === 0) continue;
     if (arms.length === 1) {
-      culDeSac(n, arms[0], junctions, sidewalks, trim);
+      culDeSac(n, arms[0], junctions, sidewalks, trim, turns, bandSide);
       continue;
     }
-    if (arms.length === 2) {
-      const bend = Math.abs(signedAngle(arms[0].dir, mul(arms[1].dir, -1)));
-      // Gentle continuation with equal widths: the band mitres handle it.
-      if (arms[0].e.width === arms[1].e.width && bend < (50 * Math.PI) / 180) continue;
+    if (continuation(arms)) {
+      turns.push(
+        { from: bandSide(arms[0], true), to: bandSide(arms[1], false), via: [] },
+        { from: bandSide(arms[1], true), to: bandSide(arms[0], false), via: [] },
+      );
+      continue;
     }
     const count = arms.length,
       corners: Corner[] = [];
@@ -207,14 +327,21 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
         b.cutR = Math.max(b.cutR, tB);
         continue;
       }
-      const radius = Math.min(CURB_RADIUS[a.e.kind], CURB_RADIUS[b.e.kind]);
       const half = turn / 2;
-      let tangent = radius / Math.tan(half);
-      let r = radius;
-      if (tangent > 14) {
-        tangent = 14;
-        r = tangent * Math.tan(half);
+      const tangent = Math.min(
+        Math.min(CURB_RADIUS[a.e.kind], CURB_RADIUS[b.e.kind]) / Math.tan(half),
+        14,
+        a.limit - 0.3 - tA,
+        b.limit - 0.3 - tB,
+      );
+      a.cutL = Math.max(a.cutL, tA + Math.max(0, tangent));
+      b.cutR = Math.max(b.cutR, tB + Math.max(0, tangent));
+      if (tangent < 0.75) {
+        // No room for a fillet between close junctions: keep the sharp corner.
+        corners.push({ points: [hit] });
+        continue;
       }
+      const r = tangent * Math.tan(half);
       const bisector = norm(add(a.dir, b.dir));
       const centre = add(hit, mul(bisector, r / Math.sin(half)));
       const ta = add(hit, mul(a.dir, tangent)),
@@ -228,23 +355,43 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
         points: arcPoints(centre, r, from, to, steps),
         arc: { centre, radius: r, from, to },
       });
-      a.cutL = Math.max(a.cutL, tA + tangent);
-      b.cutR = Math.max(b.cutR, tB + tangent);
     }
     // Every arm needs enough room for the widest neighbour even without a corner.
     for (const a of arms) {
-      const widest = Math.max(...arms.filter((o) => o !== a).map((o) => o.hw));
-      a.cutL = Math.max(a.cutL, widest * 0.6);
-      a.cutR = Math.max(a.cutR, widest * 0.6);
+      const widest = Math.min(
+        a.limit,
+        0.6 * Math.max(...arms.filter((o) => o !== a).map((o) => o.hw)),
+      );
+      a.cutL = Math.max(a.cutL, widest);
+      a.cutR = Math.max(a.cutR, widest);
     }
+    // Mouths sit on the curved centreline, so each ring shares its band's ends.
+    // Corners are laid out along the arm's straight start direction; where the road
+    // curves, the mouth moves out until it clears both of its corners so the ring
+    // never folds back on itself.
+    const mouths = arms.map((a, k) => {
+      const pts = a.atStart ? a.e.points : [...a.e.points].reverse(),
+        length = polylineLength(pts),
+        near = [...corners[k].points, ...corners[(k + count - 1) % count].points];
+      const mouth = (cut: number) => {
+        const end = pointAt(pts, cut),
+          t = norm(sub(pointAt(pts, cut + 0.5), pointAt(pts, Math.max(0, cut - 0.5))));
+        return { cut, end, t, l: perp(t) };
+      };
+      let m = mouth(Math.max(a.cutL, a.cutR) + 0.3);
+      while (m.cut < length * 0.5 && near.some((q) => dot(sub(q, m.end), m.t) > -0.2))
+        m = mouth(m.cut + 0.25);
+      return {
+        cut: m.cut,
+        l: m.l,
+        endL: add(m.end, mul(m.l, a.hw)),
+        endR: add(m.end, mul(m.l, -a.hw)),
+      };
+    });
     const ring: Point[] = [];
     for (let k = 0; k < count; k++) {
       const a = arms[k],
-        cut = Math.max(a.cutL, a.cutR) + 0.3,
-        end = add(n, mul(a.dir, cut)),
-        l = perp(a.dir),
-        endR = add(end, mul(l, -a.hw)),
-        endL = add(end, mul(l, a.hw));
+        { cut, l, endL, endR } = mouths[k];
       ring.push(endR, endL, ...corners[k].points);
       const index = a.e.id;
       if (a.atStart) trim[index][0] = cut;
@@ -252,14 +399,13 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
       // Sidewalk pieces: strip from the band end back to the corner on the left side,
       // the corner itself, and the strip on the next arm's right side.
       const b = arms[(k + 1) % count],
-        cutB = Math.max(b.cutL, b.cutR) + 0.3,
-        endB = add(n, mul(b.dir, cutB)),
-        endRB = add(endB, mul(perp(b.dir), -b.hw)),
-        nA = l,
+        { endR: endRB, l: lB } = mouths[(k + 1) % count],
+        nA = perp(a.dir),
         nB = mul(perp(b.dir), -1);
       const corner = corners[k];
       const first = corner.points[0] ?? endRB,
         last = corner.points[corner.points.length - 1] ?? endL;
+      let via: Point[] = [];
       if (corner.points.length) {
         if (dist(endL, first) > 0.05)
           sidewalks.push({
@@ -267,7 +413,7 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
             polygon: [
               first,
               endL,
-              add(endL, mul(nA, SIDEWALK)),
+              add(endL, mul(l, SIDEWALK)),
               add(first, mul(nA, SIDEWALK)),
             ],
           });
@@ -277,26 +423,57 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
             polygon: [
               last,
               add(last, mul(nB, SIDEWALK)),
-              add(endRB, mul(nB, SIDEWALK)),
+              add(endRB, mul(lB, -SIDEWALK)),
               endRB,
             ],
           });
         if (corner.arc) {
+          // The fillet centre lies in the block, so the sidewalk runs inside the
+          // kerb arc. A fillet tighter than the sidewalk closes at the point where
+          // the two strips' outer edges meet.
           const { centre, radius, from, to } = corner.arc,
-            steps = corner.points.length - 1;
+            steps = corner.points.length - 1,
+            inner = (offset: number, n: number) =>
+              radius > offset + 0.05
+                ? arcPoints(centre, radius - offset, from, to, n)
+                : [
+                    lineIntersection(
+                      add(first, mul(nA, offset)),
+                      a.dir,
+                      add(last, mul(nB, offset)),
+                      b.dir,
+                    ) ?? centre,
+                  ];
+          sidewalks.push({
+            node: n.id,
+            polygon: [...corner.points, ...inner(SIDEWALK, steps).reverse()],
+          });
+          via = inner(
+            WALK,
+            Math.max(2, Math.ceil(Math.abs(to - from) / (Math.PI / 8))),
+          );
+        } else if (corner.points.length === 1) {
+          // Sharp corner: fill the notch between the two strips.
+          const [p] = corner.points,
+            bisector = norm(add(nA, nB)),
+            reach = 1 / Math.max(0.35, dot(bisector, nA));
           sidewalks.push({
             node: n.id,
             polygon: [
-              ...corner.points,
-              ...arcPoints(centre, radius + SIDEWALK, to, from, steps),
+              p,
+              add(p, mul(nB, SIDEWALK)),
+              add(p, mul(bisector, SIDEWALK * reach)),
+              add(p, mul(nA, SIDEWALK)),
             ],
           });
+          via = [add(p, mul(bisector, WALK * reach))];
         } else {
           const [p1, p2] = corner.points;
           sidewalks.push({
             node: n.id,
             polygon: [p1, p2, add(p2, mul(nB, SIDEWALK)), add(p1, mul(nA, SIDEWALK))],
           });
+          via = [add(p1, mul(nA, WALK)), add(p2, mul(nB, WALK))];
         }
       } else {
         // Continuous outer edge between the two arm ends.
@@ -304,17 +481,22 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
           node: n.id,
           polygon: [
             endL,
-            add(endL, mul(nA, SIDEWALK)),
-            add(endRB, mul(nB, SIDEWALK)),
+            add(endL, mul(l, SIDEWALK)),
+            add(endRB, mul(lB, -SIDEWALK)),
             endRB,
           ],
         });
       }
+      turns.push({ from: bandSide(a, true), to: bandSide(b, false), via });
     }
-    junctions.push({ node: n.id, polygon: ring });
+    junctions.push({ node: n.id, polygon: removeLoops(ring) });
     if (count >= 3) junctionNodes.add(n.id);
   }
   const bands: RoadGeometry["bands"] = [];
+  const walkways: RoadGeometry["walkways"] = { points: [], links: [] },
+    walkEnds = new Map<string, number>();
+  const endKey = (w: WalkEnd) => `${w.edge}:${+w.atStart}:${+w.left}`;
+  const walkPoint = (p: Point) => walkways.points.push(p) - 1;
   for (const e of graph.edges) {
     const pts = trimPolyline(e.points, trim[e.id][0], trim[e.id][1]);
     if (pts.length < 2) continue;
@@ -327,16 +509,105 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
       centre: pts,
     });
     const outer = offsetPolyline(pts, e.width / 2 + SIDEWALK);
-    if (!e.bridge) {
-      sidewalks.push({ edge: e.id, polygon: [...left, ...[...outer.left].reverse()] });
-      sidewalks.push({
-        edge: e.id,
-        polygon: [...outer.right, ...[...right].reverse()],
+    sidewalks.push({ edge: e.id, polygon: [...left, ...[...outer.left].reverse()] });
+    sidewalks.push({
+      edge: e.id,
+      polygon: [...outer.right, ...[...right].reverse()],
+    });
+    const length = polylineLength(pts),
+      crossing = (node: number) =>
+        junctionNodes.has(node) && !e.bridge && length >= CROSSING_BAND;
+    paintMarkings(e, pts, crossing, markings);
+    // Walkways: stations along the band, with crosswalk stations near crossed ends.
+    const stations = new Set<number>([0, length]);
+    const steps = Math.max(1, Math.ceil(length / 12));
+    for (let i = 1; i < steps; i++) stations.add((length * i) / steps);
+    if (crossing(e.a)) stations.add(CROSSING_AT);
+    if (crossing(e.b)) stations.add(length - CROSSING_AT);
+    const sorted = [...stations].sort((p, q) => p - q),
+      offset = e.width / 2 + WALK;
+    const side = (left: boolean) => {
+      const ids = sorted.map((s) => {
+        const p = pointAt(pts, s),
+          d = norm(
+            sub(
+              pointAt(pts, Math.min(length, s + 0.5)),
+              pointAt(pts, Math.max(0, s - 0.5)),
+            ),
+          );
+        return walkPoint(add(p, mul(perp(d), left ? offset : -offset)));
       });
-    }
-    paintMarkings(e, pts, graph, junctionNodes, markings);
+      for (let i = 1; i < ids.length; i++)
+        walkways.links.push({ a: ids[i - 1], b: ids[i] });
+      walkEnds.set(endKey({ edge: e.id, atStart: true, left }), ids[0]);
+      walkEnds.set(endKey({ edge: e.id, atStart: false, left }), ids[ids.length - 1]);
+      return ids;
+    };
+    const lefts = side(true),
+      rights = side(false);
+    for (const [node, i] of [
+      [e.a, 1],
+      [e.b, sorted.length - 2],
+    ] as const)
+      if (crossing(node)) {
+        // Pedestrians wait for the signal that stops traffic along this band.
+        const d = sub(pointAt(pts, sorted[i] + 0.5), pointAt(pts, sorted[i] - 0.5));
+        walkways.links.push({
+          a: lefts[i],
+          b: rights[i],
+          crossing: Math.abs(d.x) >= Math.abs(d.z) ? "x" : "z",
+        });
+      }
   }
-  return { junctions, bands, sidewalks, markings };
+  for (const { from, to, via } of turns) {
+    const a = walkEnds.get(endKey(from)),
+      b = walkEnds.get(endKey(to));
+    if (a === undefined || b === undefined) continue;
+    const ids = [a, ...via.map(walkPoint), b];
+    for (let i = 1; i < ids.length; i++)
+      walkways.links.push({ a: ids[i - 1], b: ids[i] });
+  }
+  // A short strip whose ends take different normals can twist into a bow-tie,
+  // which renders as a flipped triangle; order its corners around the middle.
+  for (const piece of sidewalks)
+    if (piece.polygon.length === 4 && selfIntersects(piece.polygon)) {
+      const c = mul(piece.polygon.reduce(add, { x: 0, z: 0 }), 0.25);
+      piece.polygon = [...piece.polygon].sort(
+        (p, q) => Math.atan2(p.z - c.z, p.x - c.x) - Math.atan2(q.z - c.z, q.x - c.x),
+      );
+    }
+  return { junctions, bands, sidewalks, markings, walkways, trims: trim };
+}
+
+/**
+ * Cut folds out of a ring that crosses itself: at each crossing the smaller of the
+ * two loops is replaced by the crossing point. Awkward junction geometry can fold a
+ * corner past a mouth, and a folded ring would render a flipped triangle.
+ */
+function removeLoops(ring: Point[]) {
+  let out = ring;
+  for (let guard = 0; guard < ring.length; guard++) {
+    const n = out.length;
+    let found: { i: number; k: number; at: Point } | undefined;
+    for (let i = 0; i < n && !found; i++)
+      for (let k = i + 2; k < n; k++) {
+        if (i === 0 && k === n - 1) continue;
+        const a = out[i],
+          b = out[(i + 1) % n],
+          hit = segmentIntersection(a, b, out[k], out[(k + 1) % n]);
+        if (hit) {
+          found = { i, k, at: lerpPoint(a, b, hit.t) };
+          break;
+        }
+      }
+    if (!found) return out;
+    const { i, k, at } = found;
+    const inner = [at, ...out.slice(i + 1, k + 1)],
+      outer = [...out.slice(0, i + 1), at, ...out.slice(k + 1)];
+    out = Math.abs(signedArea(inner)) > Math.abs(signedArea(outer)) ? inner : outer;
+    if (out.length < 3) return ring;
+  }
+  return out;
 }
 
 /** Turning circle at a dead end, sized by the road kind. */
@@ -346,8 +617,10 @@ function culDeSac(
   junctions: RoadGeometry["junctions"],
   sidewalks: RoadGeometry["sidewalks"],
   trim: [number, number][],
+  turns: { from: WalkEnd; to: WalkEnd; via: Point[] }[],
+  bandSide: (arm: Arm, armLeft: boolean) => WalkEnd,
 ) {
-  const radius = arm.hw + (arm.e.kind === "street" || arm.e.kind === "lane" ? 4.5 : 2);
+  const radius = culDeSacRadius(arm);
   const cut = Math.sqrt(Math.max(0, radius * radius - arm.hw * arm.hw));
   const end = add(n, mul(arm.dir, cut)),
     l = perp(arm.dir);
@@ -360,9 +633,26 @@ function culDeSac(
   const steps = Math.max(8, Math.ceil(((to - from) * radius) / 1.5));
   const arc = arcPoints(n, radius, from, to, steps);
   junctions.push({ node: n.id, polygon: [endR, endL, ...arc.slice(1, -1)] });
+  // The ring starts square to the street sidewalks at the mouth, then widens to
+  // the full circle.
+  const outerL = add(endL, mul(l, SIDEWALK)),
+    outerR = add(endR, mul(l, -SIDEWALK)),
+    outerFrom = Math.atan2(outerL.z - n.z, outerL.x - n.x);
+  let outerTo = Math.atan2(outerR.z - n.z, outerR.x - n.x);
+  while (outerTo <= outerFrom) outerTo += Math.PI * 2;
   sidewalks.push({
     node: n.id,
-    polygon: [...arc, ...arcPoints(n, radius + SIDEWALK, to, from, steps)],
+    polygon: [
+      ...arc,
+      outerR,
+      ...arcPoints(n, radius + SIDEWALK, outerTo, outerFrom, steps),
+      outerL,
+    ],
+  });
+  turns.push({
+    from: bandSide(arm, true),
+    to: bandSide(arm, false),
+    via: arcPoints(n, radius + WALK, from, to, 16),
   });
   if (arm.atStart) trim[arm.e.id][0] = cut;
   else trim[arm.e.id][1] = cut;
@@ -372,8 +662,7 @@ function culDeSac(
 function paintMarkings(
   e: RoadEdge,
   centre: Point[],
-  graph: RoadGraph,
-  junctionNodes: Set<number>,
+  crossing: (node: number) => boolean,
   out: RoadGeometry["markings"],
 ) {
   if (e.kind === "lane") return;
@@ -382,8 +671,16 @@ function paintMarkings(
   const hw = e.width / 2,
     lanes = LANES[e.kind],
     laneWidth = (e.width - 2) / lanes;
+  // Lane lines stop short of the stop lines and crosswalks instead of running
+  // through them.
+  const startCut = crossing(e.a) ? MARKED_END : 0.5,
+    endCut = crossing(e.b) ? MARKED_END : 0.5,
+    lined = length - startCut - endCut > 2,
+    lane = lined ? trimPolyline(centre, startCut, endCut) : centre,
+    laneLength = lined ? length - startCut - endCut : 0;
   const strip = (offset: number, width: number, color: "white" | "yellow") => {
-    const path = offsetLine(centre, offset),
+    if (!lined) return;
+    const path = offsetLine(lane, offset),
       { left, right } = offsetPolyline(path, width / 2);
     out.push({ edge: e.id, color, polygon: [...left, ...[...right].reverse()] });
   };
@@ -394,9 +691,9 @@ function paintMarkings(
     off: number,
     color: "white" | "yellow",
   ) => {
-    const path = offsetLine(centre, offset);
-    let s = 2;
-    while (s + on < length - 2) {
+    const path = offsetLine(lane, offset);
+    let s = 1;
+    while (s + on < laneLength - 1) {
       const a = pointAt(path, s),
         b = pointAt(path, s + on),
         d = norm(sub(b, a)),
@@ -417,14 +714,13 @@ function paintMarkings(
     strip(hw - 0.5, 0.12, "white");
     strip(-(hw - 0.5), 0.12, "white");
   } else dashes(0, 0.12, 3, 6, "white");
-  if (e.kind === "highway" || e.bridge || length < 16) return;
   // Crossings and stop lines at junction ends; incoming traffic keeps right, so the
   // stop line covers the left half of the band seen from the node.
   for (const [node, fromStart] of [
     [e.a, true],
     [e.b, false],
   ] as const) {
-    if (!junctionNodes.has(node)) continue;
+    if (!crossing(node)) continue;
     const path = fromStart ? centre : [...centre].reverse();
     const origin = path[0],
       dir = norm(sub(pointAt(path, 4), origin)),
@@ -449,7 +745,7 @@ function offsetLine(centre: Point[], offset: number) {
 
 /* ---------------------------------------------------------------- helpers */
 
-/** Left and right offset curves with mitre joins clamped to a bevel. */
+/** Left and right offset curves with mitre joins clamped to a bevel; never folding. */
 export function offsetPolyline(points: Point[], halfWidth: number) {
   const left: Point[] = [],
     right: Point[] = [];
@@ -465,6 +761,12 @@ export function offsetPolyline(points: Point[], halfWidth: number) {
     left.push(add(p, mul(n, halfWidth)));
     right.push(add(p, mul(n, -halfWidth)));
   }
+  // On the inside of a bend tighter than the offset, the edge would run backwards
+  // and fold the strip over itself; hold it at the last forward point instead.
+  for (const side of [left, right])
+    for (let i = 1; i < side.length; i++)
+      if (dot(sub(side[i], side[i - 1]), sub(points[i], points[i - 1])) <= 0)
+        side[i] = side[i - 1];
   return { left, right };
 }
 export function trimPolyline(points: Point[], startCut: number, endCut: number) {
@@ -496,11 +798,32 @@ export function pointAt(points: Point[], distance: number): Point {
 
 /* --------------------------------------------------------------- profiles */
 
+/** Densify every centreline to at most 8 m between points for profile sampling. */
+export function densifyCentrelines(graph: RoadGraph) {
+  for (const e of graph.edges) {
+    const dense: Point[] = [];
+    for (let i = 1; i < e.points.length; i++) {
+      const a = e.points[i - 1],
+        b = e.points[i],
+        steps = Math.max(1, Math.ceil(dist(a, b) / 8));
+      for (let s = 0; s < steps; s++) dense.push(lerpPoint(a, b, s / steps));
+    }
+    dense.push(e.points[e.points.length - 1]);
+    e.points = dense;
+  }
+}
+
 /**
  * Longitudinal profiles: node heights pinned to smoothed terrain, edge profiles low-pass
- * filtered and grade-limited from both ends, bridges straight between abutments.
+ * filtered and grade-limited from both ends, bridges straight between abutments. The
+ * stretch of each edge inside its junction (its trim) holds the node height, so flat
+ * junction polygons meet their bands without a step.
  */
-export function solveProfiles(graph: RoadGraph, f: HeightField) {
+export function solveProfiles(
+  graph: RoadGraph,
+  f: HeightField,
+  trims: [number, number][] = graph.edges.map(() => [0, 0]),
+) {
   const terrainAt = (p: Point) => Math.max(0.6, sample(f, p.x, p.z));
   const maxGrade = (kind: string) =>
     kind === "highway" ? 0.07 : kind === "avenue" ? 0.1 : 0.14;
@@ -515,25 +838,49 @@ export function solveProfiles(graph: RoadGraph, f: HeightField) {
     n.y = sum / count;
   }
   for (const e of graph.edges) {
-    const dense: Point[] = [];
-    for (let i = 1; i < e.points.length; i++) {
-      const a = e.points[i - 1],
-        b = e.points[i],
-        steps = Math.max(1, Math.ceil(dist(a, b) / 8));
-      for (let s = 0; s < steps; s++) dense.push(lerpPoint(a, b, s / steps));
+    const length = polylineLength(e.points);
+    let [t0, t1] = trims[e.id];
+    if (t0 + t1 > length) {
+      t0 = (length * t0) / (t0 + t1);
+      t1 = length - t0;
     }
-    dense.push(e.points[e.points.length - 1]);
-    e.points = dense;
-    const n = dense.length,
-      heights = dense.map(terrainAt);
+    // Put a point exactly on each junction mouth so the plateau ends there.
+    for (const s of [t0, length - t1]) {
+      if (s <= 0.05 || s >= length - 0.05) continue;
+      let run = 0;
+      for (let i = 1; i < e.points.length; i++) {
+        const d = dist(e.points[i - 1], e.points[i]);
+        if (run + d > s) {
+          if (s - run > 0.05 && run + d - s > 0.05)
+            e.points.splice(
+              i,
+              0,
+              lerpPoint(e.points[i - 1], e.points[i], (s - run) / d),
+            );
+          break;
+        }
+        run += d;
+      }
+    }
+    const pts = e.points,
+      n = pts.length,
+      along = [0];
+    for (let i = 1; i < n; i++) along.push(along[i - 1] + dist(pts[i - 1], pts[i]));
     const ya = graph.nodes[e.a].y,
       yb = graph.nodes[e.b].y;
-    if (e.bridge) {
+    const pin = (h: number[]) => {
       for (let i = 0; i < n; i++)
-        heights[i] = ya + ((yb - ya) * i) / Math.max(1, n - 1);
-      e.heights = heights;
+        if (along[i] <= t0 + 0.05) h[i] = ya;
+        else if (along[i] >= length - t1 - 0.05) h[i] = yb;
+    };
+    if (e.bridge) {
+      const span = Math.max(1e-6, length - t0 - t1);
+      e.heights = along.map(
+        (s) => ya + (yb - ya) * Math.min(1, Math.max(0, (s - t0) / span)),
+      );
       continue;
     }
+    const heights = pts.map(terrainAt);
     const smooth = heights.slice();
     for (let pass = 0; pass < 2; pass++)
       for (let i = 1; i < n - 1; i++)
@@ -544,25 +891,24 @@ export function solveProfiles(graph: RoadGraph, f: HeightField) {
             heights[i + 1] +
             heights[Math.min(n - 1, i + 2)]) /
           5;
-    smooth[0] = ya;
-    smooth[n - 1] = yb;
+    pin(smooth);
     const limit = maxGrade(e.kind);
     for (let pass = 0; pass < 6; pass++) {
       for (let i = 1; i < n; i++) {
-        const d = dist(dense[i - 1], dense[i]) || 1,
+        const d = along[i] - along[i - 1] || 1,
           delta = smooth[i] - smooth[i - 1];
         if (Math.abs(delta) > limit * d)
           smooth[i] = smooth[i - 1] + Math.sign(delta) * limit * d;
       }
+      pin(smooth);
       for (let i = n - 2; i >= 0; i--) {
-        const d = dist(dense[i], dense[i + 1]) || 1,
+        const d = along[i + 1] - along[i] || 1,
           delta = smooth[i] - smooth[i + 1];
         if (Math.abs(delta) > limit * d)
           smooth[i] = smooth[i + 1] + Math.sign(delta) * limit * d;
       }
+      pin(smooth);
     }
-    smooth[0] = ya;
-    smooth[n - 1] = yb;
     e.heights = smooth;
   }
 }
@@ -573,19 +919,35 @@ export function stampRoads(f: HeightField, graph: RoadGraph, geometry: RoadGeome
     original = Float32Array.from(f.data),
     acc = new Float32Array(w * h),
     weight = new Float32Array(w * h),
-    best = new Float32Array(w * h);
+    best = new Float32Array(w * h),
+    edge = new Float32Array(w * h).fill(Infinity);
   const shoulder = 1.5 + SIDEWALK * 0.5;
-  const contribute = (i: number, wgt: number, y: number) => {
-    if (wgt > best[i] + 1e-6) {
+  // Where flat corridors overlap, the road whose kerb is nearest sets the height;
+  // averaging neighbouring roads at different heights would suit neither.
+  const contribute = (i: number, wgt: number, y: number, kerb: number) => {
+    const flat = wgt >= 1 - 1e-6;
+    if (
+      wgt > best[i] + 1e-6 ||
+      (flat && best[i] >= 1 - 1e-6 && kerb < edge[i] - 0.25)
+    ) {
       best[i] = wgt;
+      edge[i] = kerb;
       acc[i] = wgt * y;
       weight[i] = wgt;
-    } else if (wgt >= best[i] - 1e-6) {
+    } else if (wgt >= best[i] - 1e-6 && (!flat || kerb < edge[i] + 0.25)) {
+      edge[i] = Math.min(edge[i], kerb);
       acc[i] += wgt * y;
       weight[i] += wgt;
     }
   };
-  const stampSegment = (a: Point, b: Point, ya: number, yb: number, hw: number) => {
+  const stampSegment = (
+    a: Point,
+    b: Point,
+    ya: number,
+    yb: number,
+    hw: number,
+    kerb = hw,
+  ) => {
     const reachMax = hw + shoulder + 16;
     const x0 = Math.max(
         0,
@@ -623,7 +985,7 @@ export function stampRoads(f: HeightField, graph: RoadGraph, geometry: RoadGeome
         const flat = hw + shoulder;
         if (d > flat + bank) continue;
         const wgt = d <= flat ? 1 : 1 - smoothstep(0, 1, (d - flat) / bank);
-        contribute(i, wgt, y);
+        contribute(i, wgt, y, d - kerb);
       }
   };
   for (const e of graph.edges) {
@@ -639,11 +1001,17 @@ export function stampRoads(f: HeightField, graph: RoadGraph, geometry: RoadGeome
   }
   for (const j of geometry.junctions) {
     const n = graph.nodes[j.node];
-    // A plateau as wide as the widest arm; the trimmed bands carry the profile
-    // outward so sloping arms are not flattened across the whole ring.
-    let r = 0;
-    for (const id of n.edges) r = Math.max(r, graph.edges[id].width / 2);
-    stampSegment(n, { x: n.x + 0.01, z: n.z }, n.y, n.y, r + 1);
+    // Profiles hold the node height across the whole ring, so the plateau covers
+    // it, corner sidewalks included. Beyond the nearest mouth the bands take over.
+    let r = 0,
+      mouth = Infinity;
+    for (const p of j.polygon) r = Math.max(r, dist(n, p));
+    for (const id of n.edges) {
+      const e = graph.edges[id];
+      if (e.a === n.id) mouth = Math.min(mouth, geometry.trims[id][0]);
+      if (e.b === n.id) mouth = Math.min(mouth, geometry.trims[id][1]);
+    }
+    stampSegment(n, { x: n.x + 0.01, z: n.z }, n.y, n.y, r, Math.min(r, mouth));
   }
   for (let i = 0; i < w * h; i++) {
     if (weight[i] <= 0) continue;

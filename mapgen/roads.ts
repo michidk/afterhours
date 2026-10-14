@@ -626,6 +626,7 @@ export function generateRoads(
     );
   progress?.("cleanup");
   graph.cleanup({ minEdge: 12, minStub: 45, debug: input.debug });
+  graph.bridgeRivers(hydro.rivers);
   if (input.debug)
     console.error("after cleanup", graph.edges.filter((e) => e.alive).length);
   const result = graph.toRoadGraph();
