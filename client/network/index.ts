@@ -311,7 +311,8 @@ export class GameNetwork {
     this.reconcile(performance.now());
     // A slot the server already simulated on held controls is acknowledged before its
     // command exists here; stepping it again would run that tick twice.
-    if (frame.seq > this.ack) this.prediction.input(frame, [...this.entities.values()]);
+    if (frame.seq > this.ack)
+      this.prediction.input(frame, [...this.entities.values()], this.clock?.interval);
     this.inputTimes.push(timestamp);
     this.inputTimes = this.inputTimes.filter((at) => at >= timestamp - 1000);
   }

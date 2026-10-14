@@ -10,8 +10,9 @@ import { TUNING } from "../../shared/catalog.ts";
 
 const MAX_PREDICTION_STEPS = Math.floor(TUNING.predictionSeconds / TUNING.tick);
 const MAX_PENDING_INPUTS = Math.ceil(2 / TUNING.tick);
+type PredictedInput = InputFrame & { interval: number };
 export class Prediction {
-  pending: InputFrame[] = [];
+  pending: PredictedInput[] = [];
   body: Entity | undefined;
   ownership = "";
   corrections = 0;
@@ -20,8 +21,7 @@ export class Prediction {
   lastRender = 0;
   private smoothedAt = 0;
   private lastReconcile = 0;
-  private lastInput: InputFrame | undefined;
-  private inputInterval = TUNING.tick * 1000;
+  private lastInput: PredictedInput | undefined;
   private displayed: Pick<Entity, "x" | "y" | "z" | "angle"> | undefined;
   private authoritative: Entity | undefined;
   private presentationMode: "predicted" | "authoritative" | undefined;
@@ -41,7 +41,6 @@ export class Prediction {
     this.ownership = "";
     this.offset = { x: 0, z: 0, y: 0, angle: 0 };
     this.lastInput = undefined;
-    this.inputInterval = TUNING.tick * 1000;
     this.displayed = undefined;
     this.authoritative = undefined;
     this.presentationMode = undefined;
@@ -261,7 +260,7 @@ export class Prediction {
     if (this.lastInput && !this.suspended) {
       const partial = Math.min(
         TUNING.tick * 2,
-        Math.max(0, (now - this.lastInput.timestamp) / this.inputInterval) *
+        Math.max(0, (now - this.lastInput.timestamp) / this.lastInput.interval) *
           TUNING.tick,
       );
       if (partial > 0)
@@ -277,7 +276,7 @@ export class Prediction {
     }
     return { body: pose, neighbours, contacts };
   }
-  input(frame: InputFrame, nearby: Entity[]) {
+  input(frame: InputFrame, nearby: Entity[], interval = TUNING.tick * 1000) {
     if (!this.body) return;
     if (this.missingMap || !this.worldReady(this.body)) {
       this.pending = [];
@@ -285,19 +284,12 @@ export class Prediction {
       return;
     }
     this.nearby = nearby;
-    this.pending.push(frame);
+    const predicted = { ...frame, interval };
+    this.pending.push(predicted);
     if (this.pending.length > MAX_PENDING_INPUTS)
       this.discardedThrough = this.pending.shift()!.seq;
     if (this.suspended || this.pending.length > MAX_PREDICTION_STEPS) return;
-    if (this.lastInput && frame.timestamp > this.lastInput.timestamp)
-      this.inputInterval +=
-        (Math.max(
-          TUNING.tick * 500,
-          Math.min(TUNING.tick * 2000, frame.timestamp - this.lastInput.timestamp),
-        ) -
-          this.inputInterval) *
-        0.2;
-    this.lastInput = frame;
+    this.lastInput = predicted;
     if (this.body)
       predictStep(
         this.body,

@@ -229,3 +229,5 @@ rendered distance. It captured six frames during the hold: callbacks took at mos
 took at most 58 ms; 92 inputs were sent. This narrows the unexplained pause to work
 or scheduling outside the measured frame callback, without proving which browser,
 GPU or host component caused it. Server tick p95 was 56.6 ms in that same run.
+
+The virtual driving regressions cover sustained server slowdown down to roughly 16 ticks/s, slowdown starting five seconds into a drive, and recovery to 30 ticks/s. Heartbeats use the same virtual clock as input and snapshots, and repeated seeded runs must match exactly. Prediction stores each command's scheduled interval locally; it does not estimate presentation timing from packet arrivals. These checks verify pacing and correction behaviour, not production server capacity.

@@ -3,16 +3,21 @@ import { TUNING } from "../../shared/catalog.ts";
 // Timer callbacks are wakeups, not simulation ticks.
 export class InputClock {
   private next: number | undefined;
-  private interval = TUNING.tick * 1000;
+  private period = TUNING.tick * 1000;
+  private rateAdjustment = 0;
+  get interval() {
+    return this.period;
+  }
   reset() {
     this.next = undefined;
-    this.interval = TUNING.tick * 1000;
+    this.period = TUNING.tick * 1000;
+    this.rateAdjustment = 0;
   }
   advance(now: number, send: (timestamp: number) => void) {
     if (this.next === undefined || now - this.next > 250) this.next = now;
     while (this.next <= now + 1e-6) {
       const timestamp = this.next;
-      this.next += this.interval;
+      this.next += this.period;
       send(timestamp);
     }
   }
@@ -24,12 +29,21 @@ export class InputClock {
    */
   feedback(queued: number | undefined) {
     if (queued === undefined || this.next === undefined) return;
-    this.interval =
-      TUNING.tick * 1000 +
-      Math.min(TUNING.tick * 1000, Math.max(0, queued - TUNING.inputBuffer) * 4);
-    // Negative means the server already ran slots on held controls ahead of our
-    // commands; pull the schedule in faster so control changes stop risking a miss.
-    if (queued < 0) this.next -= 6;
-    else if (queued < TUNING.inputBuffer) this.next -= 2;
+    const tick = TUNING.tick * 1000;
+    const error = queued - TUNING.inputBuffer;
+    // A draining buffer means the server recovered; discard its old slow rate.
+    this.rateAdjustment =
+      error < 0
+        ? 0
+        : Math.min(250 - tick, this.rateAdjustment + Math.max(0, error - 1) * 0.5);
+    this.period = Math.max(
+      tick * 0.7,
+      Math.min(
+        250,
+        tick +
+          this.rateAdjustment +
+          (queued < 0 ? -6 : error < 0 ? -2 : error * 4 + Math.max(0, error - 2) * 6),
+      ),
+    );
   }
 }

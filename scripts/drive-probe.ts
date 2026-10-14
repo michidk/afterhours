@@ -6,6 +6,8 @@
 // a regression fixture.
 import { createServer } from "node:http";
 import { once } from "node:events";
+import { setImmediate as yieldToIO } from "node:timers/promises";
+import { mock } from "node:test";
 import { pathToFileURL } from "node:url";
 import { GameNetwork } from "../client/network/index.ts";
 import { InputClock } from "../client/input/clock.ts";
@@ -43,6 +45,8 @@ export interface ProbeOptions {
   wakeup?: number;
   /** Milliseconds added to every server tick period: a slow or fast server clock. */
   serverSlow?: number;
+  /** Apply slowdown only during this interval, then return to the normal tick rate. */
+  serverSlowWindow?: { from: number; until: number };
   /** Attach the input clock to snapshot buffer reports. */
   regulate?: boolean;
   seed?: number;
@@ -93,6 +97,7 @@ export async function probeDriving(options: ProbeOptions = {}) {
   const epoch = Date.now();
   const realPerformanceNow = performance.now,
     realDateNow = Date.now;
+  mock.timers.enable({ apis: ["setInterval"] });
   performance.now = () => now;
   Date.now = () => epoch + now;
 
@@ -107,6 +112,7 @@ export async function probeDriving(options: ProbeOptions = {}) {
     );
     network.connect();
     await welcome;
+    while (network.rtt === undefined) await yieldToIO();
     return network;
   };
   const networks: GameNetwork[] = [];
@@ -133,6 +139,7 @@ export async function probeDriving(options: ProbeOptions = {}) {
       watcher.vz = car.vz;
     };
     const peers = [...sessions.clients.keys()];
+    let timerFirings = 0;
     const links: Link[] = networks.map((network, i) => {
       const socket = network.socket!;
       const entry: Link = {
@@ -144,11 +151,14 @@ export async function probeDriving(options: ProbeOptions = {}) {
         peer: peers[i],
       };
       const impaired = i === 0;
-      socket.send = (data) =>
+      socket.send = (data) => {
+        if (typeof data === "string" && JSON.parse(data).type === "ping")
+          timerFirings++;
         entry.outgoing.push({
           at: Math.max(entry.outgoing.at(-1)?.at ?? 0, now + (impaired ? delay() : 0)),
           data,
         });
+      };
       socket.onmessage = (event) => {
         entry.incoming.push({
           at: Math.max(entry.incoming.at(-1)?.at ?? 0, now + (impaired ? delay() : 0)),
@@ -177,21 +187,33 @@ export async function probeDriving(options: ProbeOptions = {}) {
         entry.receive.call(entry.socket, entry.incoming.shift()!.event);
     const clock = new InputClock();
     if (regulate) driver.clock = clock;
-    const tickMs = TUNING.tick * 1000 + serverSlow;
-    let tick = 0,
+    const window = options.serverSlowWindow;
+    const tickPeriod = (at: number) =>
+      TUNING.tick * 1000 +
+      (!window || (at >= window.from * 1000 && at < window.until * 1000)
+        ? serverSlow
+        : 0);
+    let nextTick = 0,
+      tick = 0,
       dryTicks = 0,
       queueDepthSum = 0,
       queueDepthMax = 0,
       ahead = 0,
       maxAhead = 0;
-    const frames: { at: number; z: number; speed: number; seen: number | undefined }[] =
-      [];
+    const frames: {
+      at: number;
+      z: number;
+      speed: number;
+      seen: number | undefined;
+      expected: number;
+    }[] = [];
     const corrections: number[] = [];
     const trace: object[] = [];
     let lastCorrectionCount = 0;
     let maxOffset = 0;
     const limit = VEHICLES[model].speed;
     for (now = 0; now <= seconds * 1000; now++) {
+      if (now > 0) mock.timers.tick(1);
       if (now % wakeup === 0)
         clock.advance(now, (timestamp) =>
           driver.input({ ...idle(), up: true }, timestamp),
@@ -202,7 +224,8 @@ export async function probeDriving(options: ProbeOptions = {}) {
           entry.send(entry.outgoing.shift()!.data);
           await delivered;
         }
-      if (now + 1e-6 >= tick * tickMs) {
+      if (now + 1e-6 >= nextTick) {
+        nextTick += tickPeriod(now);
         const depth = session.queue.length;
         queueDepthSum += depth;
         queueDepthMax = Math.max(queueDepthMax, depth);
@@ -224,6 +247,7 @@ export async function probeDriving(options: ProbeOptions = {}) {
         const seen = observer.renderEntities(now).find((e) => e.id === car.id);
         frames.push({
           at: now,
+          expected: limit * 0.016 * ((TUNING.tick * 1000) / tickPeriod(now)),
           z: pose.z,
           speed: Math.hypot(pose.vx, pose.vz),
           seen: seen?.z,
@@ -249,29 +273,33 @@ export async function probeDriving(options: ProbeOptions = {}) {
     // Cruise analysis starts half a second after the car first reaches its limit.
     const cruiseStart = frames.find((f) => f.speed >= limit * 0.98)?.at ?? Infinity;
     const cruise = frames.filter((f) => f.at >= cruiseStart + 500);
-    const expected = limit * 0.016;
-    const steps = (key: "z" | "seen") => {
+    const expected = limit * 0.016 * ((TUNING.tick * 1000) / tickPeriod(now));
+    const steps = (key: "z" | "seen", startAt = 0) => {
       let backward = 0,
         surges = 0,
         dips = 0,
         maxStep = 0,
         minStep = Infinity,
+        totalStep = 0,
         count = 0;
       for (let i = 1; i < cruise.length; i++) {
+        if (cruise[i - 1].at < startAt) continue;
         const a = cruise[i - 1][key],
           b = cruise[i][key];
         if (a === undefined || b === undefined) continue;
         const step = b - a;
+        totalStep += step;
         count++;
         maxStep = Math.max(maxStep, step);
         minStep = Math.min(minStep, step);
         if (step < -0.005) backward++;
         // Ignore floating-point noise exactly at a movement threshold.
-        if (step > expected * 1.5 + 1e-9) surges++;
-        if (step < expected * 0.5 - 1e-9) dips++;
+        if (step > cruise[i].expected * 1.5 + 1e-9) surges++;
+        if (step < cruise[i].expected * 0.5 - 1e-9) dips++;
       }
       return {
         frames: count,
+        meanStep: count ? totalStep / count : 0,
         maxStep: +maxStep.toFixed(3),
         minStep: +(minStep === Infinity ? 0 : minStep).toFixed(3),
         backward,
@@ -290,6 +318,7 @@ export async function probeDriving(options: ProbeOptions = {}) {
       wakeup,
       serverSlow,
       regulate,
+      timerFirings,
       ticks: tick,
       inputsSent: driver.seq,
       /** Commands the authority acknowledged; never more than the client sent. */
@@ -318,6 +347,7 @@ export async function probeDriving(options: ProbeOptions = {}) {
       },
       /** The observer's view of the car from a clean link: server-side stutter only. */
       remote,
+      recovered: window ? steps("z", window.until * 1000 + 3000) : undefined,
       finalAuthorityZ: +car.z.toFixed(1),
       /** One entry per correction: what the client and server believed at that moment. */
       trace,
@@ -329,6 +359,7 @@ export async function probeDriving(options: ProbeOptions = {}) {
     sim.destruction.dispose();
     performance.now = realPerformanceNow;
     Date.now = realDateNow;
+    mock.timers.reset();
     if (location) Object.defineProperty(globalThis, "location", location);
     else Reflect.deleteProperty(globalThis, "location");
   }

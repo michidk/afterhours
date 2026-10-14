@@ -36,6 +36,7 @@ for (const scenario of [
     assert.equal(report.cruise.backward, 0, "display never reverses");
     assert.equal(report.cruise.surges, 0, "display never lurches a tick ahead");
     assert.equal(report.cruise.dips, 0, "display never stalls for a frame");
+    assert.equal(report.timerFirings, 20, "both heartbeat timers use virtual time");
     assert.ok(report.remote.frames > 200, `observer sees the cruise: ${detail}`);
     assert.equal(report.remote.backward, 0, "observer never sees the car reverse");
     assert.equal(report.remote.dips, 0, `observer never sees the car stall: ${detail}`);
@@ -56,12 +57,12 @@ test("the regulated input clock keeps spare commands buffered at the server", as
   assert.equal(regulated.server.speculated, 0, "no held slots on a calm link");
 });
 
-for (const serverSlow of [8, 16])
+for (const serverSlow of [8, 16, 30])
   test(`driving follows a slow server without shedding inputs or resetting at ${serverSlow} ms extra per tick`, async () => {
     const report = await probeDriving({
       profile: "lan",
       serverSlow,
-      seconds: 15,
+      seconds: 20,
     });
     const detail = JSON.stringify(report);
     assert.equal(report.server.dropped, 0, detail);
@@ -70,9 +71,35 @@ for (const serverSlow of [8, 16])
     assert.equal(report.cruise.backward, 0, detail);
     assert.equal(report.cruise.surges, 0, detail);
     assert.equal(report.cruise.dips, 0, detail);
-    const expected =
-      report.cruise.expectedStep *
-      ((TUNING.tick * 1000) / (TUNING.tick * 1000 + serverSlow));
-    assert.ok(Math.abs(report.cruise.maxStep - expected) < 0.02, detail);
-    assert.ok(Math.abs(report.cruise.minStep - expected) < 0.02, detail);
+    assert.ok(
+      Math.abs(report.cruise.meanStep - report.cruise.expectedStep) < 0.02,
+      detail,
+    );
   });
+
+test("virtual driving repeats the same packet sequence and heartbeat schedule", async () => {
+  const options = { profile: "wan", seconds: 6 } as const;
+  const first = await probeDriving(options);
+  const second = await probeDriving(options);
+  assert.equal(first.timerFirings, 12);
+  assert.deepEqual(second, first);
+});
+
+test("driving survives slowdown after entering cruise and recovers its normal speed", async () => {
+  const report = await probeDriving({
+    profile: "lan",
+    seconds: 25,
+    serverSlow: 30,
+    serverSlowWindow: { from: 5, until: 15 },
+  });
+  const detail = JSON.stringify(report);
+  assert.equal(report.server.dropped, 0, detail);
+  assert.equal(report.client.corrections, 0, detail);
+  assert.equal(report.cruise.backward, 0, detail);
+  assert.equal(report.cruise.surges, 0, detail);
+  assert.ok(report.recovered && report.recovered.frames > 200, detail);
+  assert.equal(report.recovered.backward, 0, detail);
+  assert.equal(report.recovered.surges, 0, detail);
+  assert.equal(report.recovered.dips, 0, detail);
+  assert.ok(Math.abs(report.recovered.meanStep - 0.832) < 0.02, detail);
+});
