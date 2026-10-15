@@ -520,3 +520,31 @@ test("punching a weapon crate open drops a loaded weapon and the crate returns",
     sim.destruction.dispose();
   }
 });
+
+test("full debris capacity never prevents a new prop from breaking", () => {
+  const city = fixture();
+  city.parks = [];
+  city.roads = [];
+  city.props = Array.from({ length: 129 }, (_, i) => ({
+    x: 200 + i * 3,
+    z: 200,
+    h: 6,
+    kind: "tree" as const,
+  }));
+  const destruction = new Destruction(city);
+  try {
+    for (const prop of destruction.fixtures.values())
+      assert.equal(destruction.hit(prop.id, 100, 1, { x: 0, y: 2, z: 20 }), true);
+    assert.equal(destruction.active.size, 128);
+    assert.equal(destruction.retained.size, 1);
+    assert.equal(destruction.broken.size, 129);
+    assert.equal(destruction.snapshot({ x: 200, z: 200 }, 500).length, 129);
+    assert.equal(
+      staticGeometry(city).query(584, 200, 1).length,
+      0,
+      "the newest tree is no longer a solid obstacle",
+    );
+  } finally {
+    destruction.dispose();
+  }
+});

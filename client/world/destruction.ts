@@ -4,7 +4,11 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { ParticleSystem } from "@babylonjs/core/Particles/particleSystem";
 import { createParticles } from "../effects/particles.ts";
-import type { Destructible, DebrisState } from "../../shared/destruction.ts";
+import type {
+  Destructible,
+  DebrisState,
+  PredictedImpacts,
+} from "../../shared/destruction.ts";
 import { TUNING } from "../../shared/catalog.ts";
 import type { CityScene } from "../scene.ts";
 import { uploadMeshes } from "./mesh-buffers.ts";
@@ -23,6 +27,9 @@ export class DestructionRenderer {
   private broken = new Set<string>();
   private frames: Frame[] = [];
   private received = 0;
+  private impacts: PredictedImpacts = new Map();
+  private updated = 0;
+  private tilted = new Set<string>();
   private water = new Map<string, ParticleSystem[]>();
   constructor(private host: CityScene) {}
   syncStatic(fixtures: Destructible[]) {
@@ -46,7 +53,33 @@ export class DestructionRenderer {
     if (this.frames.length > 8) this.frames.shift();
     this.received = now;
   }
+  setPredictedImpacts(impacts: PredictedImpacts) {
+    this.impacts = impacts;
+  }
   update(now = performance.now()) {
+    const dt = Math.max(0, Math.min(0.1, (now - this.updated) / 1000));
+    this.updated = now;
+    // Bounded impact feedback, not a competing simulation of the debris trajectory.
+    for (const id of this.impacts.keys()) this.tilted.add(id);
+    for (const id of this.tilted) {
+      const model = this.staticNodes.get(id);
+      if (!model || this.broken.has(id)) {
+        this.tilted.delete(id);
+        if (model) model.root.rotation.x = model.root.rotation.z = 0;
+        continue;
+      }
+      const impact = this.impacts.get(id);
+      const speed = impact ? Math.hypot(impact.x, impact.z) : 0;
+      const blend = 1 - Math.exp(-24 * dt);
+      const x = impact && speed ? (impact.z / speed) * 0.3 : 0;
+      const z = impact && speed ? (-impact.x / speed) * 0.3 : 0;
+      model.root.rotation.x += (x - model.root.rotation.x) * blend;
+      model.root.rotation.z += (z - model.root.rotation.z) * blend;
+      if (!impact && Math.hypot(model.root.rotation.x, model.root.rotation.z) < 0.001) {
+        model.root.rotation.x = model.root.rotation.z = 0;
+        this.tilted.delete(id);
+      }
+    }
     const latest = this.frames.at(-1);
     if (!latest) return;
     const time = latest.time + Math.max(0, now - this.received) / 1000,
@@ -144,7 +177,7 @@ export class DestructionRenderer {
     if (saved) {
       const meshes = uploadMeshes(h, saved);
       for (const mesh of meshes) mesh.parent = root;
-      root.position.set(p.x, p.h / 2, p.z);
+      root.position.set(p.x, h.groundAt(p.x, p.z) + p.h / 2, p.z);
       root.rotation.y = p.kind !== "corpse" ? (p.angle ?? 0) : 0;
       const model: Model = { root, meshes, lit: false };
       const bulb = meshes.find(
@@ -275,7 +308,11 @@ export class DestructionRenderer {
   }
   private startWater(id: string, position: Vector3) {
     if (this.water.has(id) || this.water.size >= 16) return;
-    const origin = new Vector3(position.x, 0.25, position.z);
+    const origin = new Vector3(
+      position.x,
+      this.host.groundAt(position.x, position.z) + 0.25,
+      position.z,
+    );
     const water = createParticles(this.host.scene, "spray", 180, origin);
     water.emitRate = 140;
     const mist = createParticles(this.host.scene, "mist", 48, origin.clone());

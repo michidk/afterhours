@@ -1,3 +1,5 @@
+import { TERRAIN_SIDE } from "../shared/terrain.ts";
+import { destructionOverlay } from "../shared/destruction.ts";
 import { generateCity } from "../scripts/city-generator.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -825,4 +827,100 @@ test("collision-map loss and recovery preserve the displayed car without predict
     1000,
     "an authoritative teleport still resets presentation",
   );
+});
+
+for (const [speed, elevation] of [
+  [3, 0],
+  [30, 0],
+  [52, 0],
+  [52, 25],
+]) {
+  test(`tree impact at ${speed} m/s on ${elevation} m ground predicts motion privately and reconciles`, () => {
+    const city = generateCity();
+    city.terrain = { heights: Array(TERRAIN_SIDE ** 2).fill(elevation) };
+    city.props = [{ kind: "tree", x: 0, z: 5, h: 8 }];
+    city.buildings = [];
+    city.parks = [];
+    const sim = new Simulation(city);
+    sim.entities.clear();
+    try {
+      const player = sim.join("Driver", "#ffffff");
+      player.x = player.z = 0;
+      const car = sim.spawn("car", 0, 2, undefined, "sport");
+      sim.interact(player.id);
+      car.vz = speed;
+      const clientCity = structuredClone(city);
+      const snapshots = structuredClone([player, car]);
+      const prediction = new Prediction(clientCity);
+      prediction.reconcile(snapshots[0], snapshots, -1, 0);
+      let provisional = false;
+      for (let seq = 0; seq < 24; seq++) {
+        const now = (seq * 1000) / 30;
+        prediction.input({ seq, timestamp: now, input: idle() }, snapshots);
+        sim.tick(1 / 30);
+        const rendered = prediction.render(now)!;
+        provisional ||= rendered.impacts.size > 0;
+        assert.ok(
+          Math.hypot(prediction.body!.x - car.x, prediction.body!.z - car.z) < 0.001,
+          `tree collision disagrees at step ${seq}`,
+        );
+      }
+      assert.equal(provisional, speed > 3);
+      assert.equal(
+        destructionOverlay(clientCity).ids.size,
+        0,
+        "no authoritative overlay mutation",
+      );
+      const debris = sim.destruction.snapshot(car, 100)[0];
+      if (debris)
+        assert.ok(debris.position.y > elevation, "debris starts above its terrain");
+      assert.equal(sim.destruction.broken.size, speed > 3 ? 1 : 0);
+      assert.equal(
+        prediction.body!.health,
+        snapshots[1].health,
+        "damage waits for authority",
+      );
+      assert.deepEqual(clientCity, city, "prediction never changes the saved map");
+      prediction.reconcile(player, [player, car], 23, 800);
+      assert.equal(
+        prediction.render(800)!.impacts.size,
+        0,
+        "acknowledged speculation expires",
+      );
+      assert.deepEqual(prediction.body, car);
+    } finally {
+      sim.destruction.dispose();
+    }
+  });
+}
+
+test("live steering responds between commands without changing replay or authority", () => {
+  const sim = new Simulation(generateCity());
+  sim.entities.clear();
+  sim.city.props = [];
+  sim.city.buildings = [];
+  try {
+    const player = sim.join("Driver", "#ffffff");
+    player.x = player.z = 0;
+    const car = sim.spawn("car", 0, 0, undefined, "sport");
+    sim.interact(player.id);
+    car.vz = 52;
+    const prediction = new Prediction(sim.city);
+    prediction.reconcile(player, [player, car], -1, 0);
+    prediction.input({ seq: 0, timestamp: 0, input: idle() }, [player, car]);
+    const before = structuredClone(prediction.body);
+    const straight = prediction.render(16)!.body;
+    const turning = prediction.render(16, { ...idle(), right: true })!.body;
+    assert.ok(turning.steering! > 0);
+    assert.ok(
+      turning.angle > straight.angle,
+      "heading responds before the next 33 ms command",
+    );
+    assert.ok(turning.vx > straight.vx);
+    assert.deepEqual(prediction.body, before);
+    assert.equal(prediction.pending[0].input.right, false);
+    assert.equal(car.angle, 0);
+  } finally {
+    sim.destruction.dispose();
+  }
 });

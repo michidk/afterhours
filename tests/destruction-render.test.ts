@@ -1,3 +1,5 @@
+import { emptyCity } from "../shared/city-stream.ts";
+import { TERRAIN_SIDE } from "../shared/terrain.ts";
 import { SceneryCulling } from "../client/world/culling.ts";
 import { DEFAULT_CHARACTER } from "../shared/character.ts";
 import { test } from "node:test";
@@ -63,6 +65,20 @@ test("streamed fixtures hide, debris interpolates/fades, lights restore and mesh
     angularVelocity: { x: 0, y: 0, z: 0 },
   };
   try {
+    renderer.syncStatic([source]);
+    renderer.setPredictedImpacts(new Map([[source.id, { x: 0, y: 2, z: 30 }]]));
+    renderer.update(16);
+    const provisional = scene.getTransformNodeByName("fixture:" + source.id)!;
+    assert.ok(provisional.rotation.x > 0 && provisional.rotation.x <= 0.3);
+    assert.equal(
+      provisional.isEnabled(),
+      true,
+      "prediction cannot confirm destruction",
+    );
+    assert.equal(renderer.diagnostics.debris, 0, "no competing debris trajectory");
+    renderer.setPredictedImpacts(new Map());
+    for (let now = 32; now <= 400; now += 16) renderer.update(now);
+    assert.ok(Math.abs(provisional.rotation.x) < 0.001, "rejected impacts settle back");
     renderer.setBroken([source.id]);
     renderer.syncStatic([source]);
     assert.equal(host.lighting.lamps.length, 0, "late-loaded destroyed lamps stay off");
@@ -204,6 +220,16 @@ test("streamed fixtures hide, debris interpolates/fades, lights restore and mesh
     renderer.update(4000);
     assert.equal(scene.meshes.length, baseMeshes);
     assert.equal(scene.transformNodes.length, 0);
+    host.city = emptyCity({ seed: 1, airport: { x: 1000, z: 1000, w: 100, d: 100 } });
+    host.city.terrain = { heights: Array(TERRAIN_SIDE ** 2).fill(25) };
+    host.savedGeometry = true;
+    host.staticFixtures = new Map([[source.id, []]]);
+    renderer.syncStatic([source]);
+    assert.equal(
+      scene.getTransformNodeByName("fixture:" + source.id)!.position.y,
+      28,
+      "baked fixture transforms include the terrain below the three-metre half-height",
+    );
   } finally {
     renderer.dispose();
     scene.dispose();

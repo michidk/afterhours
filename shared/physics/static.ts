@@ -1,3 +1,4 @@
+import { groundLevel } from "../water.ts";
 import type { City, Building } from "../world.ts";
 import { SpatialGrid } from "../spatial.ts";
 import { destructibles, destructionOverlay, type PropKind } from "../destruction.ts";
@@ -37,7 +38,7 @@ function build(city: City, overlay: ReturnType<typeof destructionOverlay>): Entr
       z: p.z,
       w: p.w,
       d: p.d,
-      h: p.h,
+      h: groundLevel(p.x, p.z, city) + p.h,
       color: "#88775b",
       style: 0,
     };

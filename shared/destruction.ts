@@ -3,6 +3,19 @@ import type { City } from "./world.ts";
 
 export type PropKind =
   "palm" | "tree" | "lamp" | "bench" | "signal" | "hydrant" | "crate";
+export const PROP_HEALTH: Record<PropKind, number> = {
+  palm: 65,
+  tree: 90,
+  lamp: 45,
+  bench: 40,
+  signal: 50,
+  hydrant: 45,
+  crate: 35,
+};
+
+/** Provisional broken colliders and impact directions, private to one prediction. */
+export type PredictedImpacts = Map<string, Vec3>;
+
 export interface Destructible {
   id: string;
   kind: PropKind;

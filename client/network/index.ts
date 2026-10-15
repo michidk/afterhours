@@ -1,3 +1,4 @@
+import type { PredictedImpacts } from "../../shared/destruction.ts";
 import type { Character } from "../../shared/character.ts";
 import { VERSION } from "../../shared/version.ts";
 import type {
@@ -29,6 +30,7 @@ export class GameNetwork {
   entities = new Map<string, Entity>();
   prediction: Prediction | undefined;
   playerId = "";
+  predictedImpacts: PredictedImpacts = new Map();
   seq = 0;
   frame = 0;
   serverTime = 0;
@@ -358,7 +360,7 @@ export class GameNetwork {
       this.send({ type: "debugCommand", requestId, command });
     });
   }
-  renderEntities(now = performance.now()) {
+  renderEntities(now = performance.now(), input?: Input) {
     this.reconcile(now);
     const result = this.timeline.sample(now);
     const presented = new Set<string>();
@@ -368,7 +370,8 @@ export class GameNetwork {
       if (i >= 0) result[i] = { ...currentPlayer };
       else result.push({ ...currentPlayer });
     }
-    const prediction = this.prediction?.render(now);
+    const prediction = this.prediction?.render(now, input);
+    this.predictedImpacts = prediction?.impacts ?? new Map();
     const controlled = currentPlayer?.vehicle
       ? this.entities.get(currentPlayer.vehicle)
       : currentPlayer;

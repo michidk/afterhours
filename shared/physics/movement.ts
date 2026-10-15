@@ -1,3 +1,4 @@
+import { PROP_HEALTH, type PredictedImpacts } from "../destruction.ts";
 import { PHYSIQUES } from "../character.ts";
 import { staticGeometry } from "./static.ts";
 import { fallAircraft } from "./abandoned-aircraft.ts";
@@ -25,6 +26,7 @@ import {
   contact,
   collisionPairs,
   resolveContact,
+  pointVelocity,
   vehicle,
 } from "./collision.ts";
 export function characterForces(
@@ -139,6 +141,7 @@ export function predictStep(
   dt: number,
   shadows = predictionWorld(e, nearby),
   contacts?: Set<string>,
+  impacts: PredictedImpacts = new Map(),
 ) {
   const count = Math.ceil(dt / TUNING.physicsStep),
     h = dt / count;
@@ -209,7 +212,7 @@ export function predictStep(
       if (b.kind === "car") carAltitude(b, previous, city, h);
       else b.y = Math.max(groundLevel(b.x, b.z, city), b.y + b.vy * h);
     }
-    resolveMovementContacts(bodies, city, contacts);
+    resolveMovementContacts(bodies, city, contacts, impacts);
   }
 }
 
@@ -218,10 +221,11 @@ export function resolveMovementContacts(
   bodies: Entity[],
   city: City,
   contacts?: Set<string>,
+  impacts: PredictedImpacts = new Map(),
 ) {
   for (let pass = 0; pass < 3; pass++) {
     for (const body of bodies) {
-      resolveStaticContacts(body, city);
+      resolveStaticContacts(body, city, impacts, pass === 0);
     }
     for (const [a, b] of collisionPairs(bodies)) {
       if (Math.abs(a.x - b.x) > 10 || Math.abs(a.z - b.z) > 10) continue;
@@ -238,24 +242,47 @@ export function resolveMovementContacts(
   for (const body of bodies) resolveWorldBounds(body, city);
 }
 
-function resolveStaticContacts(body: Entity, city: City) {
+function resolveStaticContacts(
+  body: Entity,
+  city: City,
+  impacts: PredictedImpacts,
+  predictBreak = false,
+) {
   for (const b of staticGeometry(city).query(body.x, body.z, 6)) {
     if (
       body.y >= b.h + (b.obstacle ? 0 : 1.8) - 0.02 ||
       Math.hypot(body.x - b.x, body.z - b.z) > Math.hypot(b.w, b.d) / 2 + 6
     )
       continue;
+    if (b.destructibleId && impacts.has(b.destructibleId)) continue;
     const c = contact(entityBox(body), buildingBox(b));
-    if (c) resolveContact(body, undefined, c);
+    if (!c) continue;
+    if (predictBreak && vehicle(body) && b.destructibleId && b.obstacle) {
+      const v = pointVelocity(body, c.x, c.z);
+      const speed = Math.max(0, v.x * c.nx + v.z * c.nz);
+      // Predict only a lethal single impact; hidden prior damage stays server-owned.
+      if ((speed - 2) * 14 >= PROP_HEALTH[b.obstacle]) {
+        impacts.set(b.destructibleId, { x: body.vx * 0.7, y: 2, z: body.vz * 0.7 });
+        body.vx *= 0.96;
+        body.vz *= 0.96;
+        continue;
+      }
+    }
+    resolveContact(body, undefined, c);
   }
   for (const c of rampContacts(body, city)) resolveContact(body, undefined, c);
   resolveWorldBounds(body, city);
 }
 
 /** Cosmetic correction cannot displace the neighbours shown by the renderer. */
-export function constrainRenderPose(pose: Entity, city: City, nearby: Entity[]) {
+export function constrainRenderPose(
+  pose: Entity,
+  city: City,
+  nearby: Entity[],
+  impacts: PredictedImpacts = new Map(),
+) {
   for (let pass = 0; pass < 3; pass++) {
-    resolveStaticContacts(pose, city);
+    resolveStaticContacts(pose, city, impacts);
     for (const b of nearby) {
       if (
         b.id === pose.id ||

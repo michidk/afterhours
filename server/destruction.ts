@@ -2,6 +2,7 @@ import { terrainHeight, terrainMesh } from "../shared/terrain.ts";
 import RAPIER from "@dimforge/rapier3d-compat";
 import {
   destructibles,
+  PROP_HEALTH,
   setBrokenProps,
   type Destructible,
   type DebrisState,
@@ -22,15 +23,6 @@ import { insideBuilding } from "../shared/physics/collision.ts";
 import { shape, rayDistance } from "../shared/physics/collision.ts";
 
 await RAPIER.init();
-const health = {
-  palm: 65,
-  tree: 90,
-  lamp: 45,
-  bench: 40,
-  signal: 50,
-  hydrant: 45,
-  crate: 35,
-};
 const weight = {
   palm: 100,
   tree: 180,
@@ -120,7 +112,6 @@ export class Destruction {
     seconds: number,
   ) {
     if (this.active.size >= this.maxBodies) {
-      if (source.kind !== "corpse") return false;
       const oldest =
         [...this.active.entries()].find(
           ([, entry]) => entry.state.source.kind === "corpse",
@@ -138,7 +129,11 @@ export class Destruction {
           z: 0,
           w: Math.cos((source.kind === "corpse" ? 0 : (source.angle ?? 0)) / 2),
         })
-        .setTranslation(source.x, h / 2 + 0.16, source.z)
+        .setTranslation(
+          source.x,
+          groundLevel(source.x, source.z, this.city) + h / 2 + 0.16,
+          source.z,
+        )
         .setLinvel(velocity.x, velocity.y, velocity.z)
         .setAngvel({
           x: velocity.z * 0.3 + (corpse ? 2 : 0.7),
@@ -224,7 +219,7 @@ export class Destruction {
     const damage = (this.damageTaken.get(id) ?? 0) + amount;
     this.damageTaken.set(id, damage);
     if (
-      damage < health[p.kind] ||
+      damage < PROP_HEALTH[p.kind] ||
       !this.spawn(
         p,
         time,
@@ -271,7 +266,10 @@ export class Destruction {
   ray(x: number, z: number, y: number, dx: number, dz: number, range: number) {
     return this.grid
       .query(x + (dx * range) / 2, z + (dz * range) / 2, range / 2 + 6)
-      .filter((p) => !this.broken.has(p.id) && y >= 0 && y < p.h + 0.3)
+      .filter((p) => {
+        const base = groundLevel(p.x, p.z, this.city);
+        return !this.broken.has(p.id) && y >= base && y < base + p.h + 0.3;
+      })
       .map((p) => ({
         prop: p,
         distance: rayDistance(
@@ -290,7 +288,7 @@ export class Destruction {
     for (const p of this.grid.query(x, z, TUNING.explosionRadius)) {
       const dx = p.x - x,
         dz = p.z - z,
-        d = Math.hypot(dx, dz, y);
+        d = Math.hypot(dx, dz, y - groundLevel(p.x, p.z, this.city));
       if (d >= TUNING.explosionRadius) continue;
       this.hit(p.id, (1 - d / TUNING.explosionRadius) * 150, time, {
         x: (dx / (d || 1)) * 9,
@@ -323,7 +321,7 @@ export class Destruction {
           (e) =>
             !e.vehicle &&
             e.health > 0 &&
-            e.y < p.h &&
+            e.y < groundLevel(p.x, p.z, this.city) + p.h &&
             Math.hypot(e.x - p.x, e.z - p.z) <
               Math.max(p.w, p.d) / 2 + Math.max(shape(e).w, shape(e).d),
         )
@@ -359,12 +357,13 @@ export class Destruction {
       )) {
         const id = b.destructibleId ?? `building:${b.x},${b.z}`;
         if (this.fixed.has(id) || this.broken.has(id)) continue;
-        const height = b.h + (b.obstacle ? 0 : 1.8);
+        const base = b.obstacle ? groundLevel(b.x, b.z, this.city) : 0;
+        const height = b.h - base + (b.obstacle ? 0 : 1.8);
         this.fixed.set(
           id,
           world.createCollider(
             RAPIER.ColliderDesc.cuboid(b.w / 2, height / 2, b.d / 2)
-              .setTranslation(b.x, height / 2, b.z)
+              .setTranslation(b.x, base + height / 2, b.z)
               // Footprint frame: local x -> (cos a, sin a), a right-handed yaw of -a.
               .setRotation({
                 x: 0,

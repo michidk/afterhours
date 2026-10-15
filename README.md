@@ -44,6 +44,8 @@ Network and movement checks: `bun run test:network` (real WebSockets with delay 
 | Enter / H / Escape | Chat / help / close panels                                                                                                   |
 | M / N / F1         | Island map / mute sound / development menu (debug-enabled servers) with tools, clock, camera and network stats               |
 
+Local steering responds between network command ticks. High-speed prop impacts predict the car's passage and show immediate impact feedback; debris flight, damage, and pickups still wait for the server. Other drivers' and AI cars' future turns cannot be predicted exactly, so shared crashes can still need corrections. See [fast driving and shared collisions](docs/networking.md#fast-driving-and-shared-collisions).
+
 Standard gamepads use the left stick to move and steer, LT/RT to reverse/accelerate, A to brake or sprint, X to attack, Y to enter/exit, LB/RB to descend/ascend, B to reload, and the D-pad for inventory slots. View opens the map, Menu opens help, and the stick clicks toggle the jetpack and vehicle lights.
 
 ## What is in the city

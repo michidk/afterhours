@@ -2,6 +2,20 @@
 
 The server owns movement outcomes, damage, knockdown, seats and inventory. Clients predict kinematics with the shared solver, then replace that state with the latest authoritative snapshot and replay the remaining inputs before the next input or render. Every snapshot still updates authority and the remote interpolation timeline; queued snapshots do not each trigger an obsolete replay. Controls are sent before reconciliation runs. Prediction runs at 30 Hz with 120 Hz contact substeps. Render extrapolation and correction offsets never modify the replay state.
 
+## Fast driving and shared collisions
+
+The browser reads current controls for the fractional render step between 30 Hz commands. A turn can therefore appear on the next rendered frame instead of waiting for the next command. This changes only presentation; the server still consumes fixed-duration commands, and replay retains the exact controls that were sent.
+
+Fast impacts used to disagree even on an otherwise perfect connection. The server broke a tree and retained 96% of the vehicle's velocity, while prediction stopped the same car against an unbreakable tree. Prediction now uses the same prop health and impact threshold for lethal single strikes, removes the collider from its private replay, and applies the same velocity loss. It resets that private state on each authoritative reconciliation and rebuilds it from pending inputs. It never changes the city's destruction overlay, health, pickups, or ownership. Damage from earlier weak hits is not replicated, so those breaks still wait for authority.
+
+Prop collider tops, saved fixture placement, and debris spawn positions include terrain elevation. A car on raised ground is no longer mistaken for a car flying above a sea-level tree.
+
+A predicted prop impact gives the standing model a small, bounded tilt. The browser does not launch its own independently simulated tree: the server supplies the debris flight. If the server rejects the impact, the tilt settles back. At the 128-body debris limit, the server retires an older body's physics and retains its visible state until expiry, so capacity cannot make a new tree indestructible.
+
+Player cars and AI cars keep the same server authority. Prediction advances private nearby bodies using their last reported driving controls and resolves provisional collisions; ordinary remote rendering uses buffered snapshots. Future steering by another player or an AI remains unknown until the next snapshot. A head-on collision can therefore still require a correction. Giving one driver authority over the other car would exchange that correction for conflicting ownership and cheat opportunities. It would not remove network delay.
+
+This follows [Gabriel Gambetta's input replay and reconciliation](https://www.gabrielgambetta.com/client-side-prediction-server-reconciliation.html) and [Glenn Fiedler's separation of physics state from visual smoothing](https://gafferongames.com/post/state_synchronization/). Fiedler's [networked physics discussion](https://gafferongames.com/post/networked_physics_2004/) also explains why interacting bodies make prediction harder than motion against static geometry. [Epic's Unreal networked physics overview](https://dev.epicgames.com/documentation/en-us/unreal-engine/networked-physics-overview) describes the same rewind, correct, replay, and visual interpolation sequence for Resimulation mode, and supports mixing it with Predictive Interpolation for other actors. These are design references, not claims that every game uses the same implementation.
+
 ## Input scheduling
 
 The browser uses an elapsed-time accumulator for its 30 Hz input commands. Both timer wakeups and rendered frames pump the same clock, so overlapping callbacks cannot duplicate ticks. Short delays retain the fractional remainder and catch up with individually timestamped commands. A delay over 250 ms discards stale clock debt; hidden tabs reset the clock. The server still advances only one fixed physics tick at a time, regardless of packet bursts. Its per-client FIFO holds eight commands, enough for a full 250 ms catch-up burst; overflow sheds the oldest command.

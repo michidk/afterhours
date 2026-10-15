@@ -547,12 +547,15 @@ async function boot() {
       last = now;
       if (!joined) return;
       pumpInput(now);
-      const rendered = network?.renderEntities(now) || entities;
       const cameraInput =
         cityMap?.open ||
         ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName || "")
           ? idle()
           : automation?.input || controls.read();
+      const rendered =
+        network?.renderEntities(now, scene.debugCamera.active ? idle() : cameraInput) ||
+        entities;
+      scene.destruction.setPredictedImpacts(network?.predictedImpacts ?? new Map());
       scene.update(rendered, playerId, dt, cameraInput);
       cityRenderer?.fadeOccluders(scene.camera.position, scene.target, dt);
       streamClock += dt;

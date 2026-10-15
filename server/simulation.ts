@@ -571,7 +571,7 @@ export class Simulation {
             ? "impactWood"
             : "impact",
         x: p.x,
-        y: 0.5,
+        y: groundLevel(p.x, p.z, this.city) + 0.5,
         z: p.z,
       });
     }

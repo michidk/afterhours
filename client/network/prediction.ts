@@ -1,4 +1,5 @@
-import type { Entity, City } from "../../shared/world.ts";
+import type { PredictedImpacts } from "../../shared/destruction.ts";
+import type { Entity, City, Input } from "../../shared/world.ts";
 import type { InputFrame } from "../../shared/protocol.ts";
 import {
   predictStep,
@@ -29,6 +30,7 @@ export class Prediction {
   private nearby: Entity[] = [];
   private shadows: Entity[] = [];
   private contacts = new Set<string>();
+  private impacts: PredictedImpacts = new Map();
   private suspended = false;
   private discardedThrough = -1;
   constructor(
@@ -48,6 +50,7 @@ export class Prediction {
     this.nearby = [];
     this.shadows = [];
     this.contacts.clear();
+    this.impacts.clear();
     this.suspended = false;
     this.discardedThrough = -1;
     this.lastRender = 0;
@@ -85,6 +88,7 @@ export class Prediction {
     this.nearby = entities;
     this.shadows = predictionWorld(this.body, entities);
     this.contacts = new Set([this.body.id]);
+    this.impacts = new Map();
     this.suspended = ack < this.discardedThrough;
     if (this.worldReady(this.body)) {
       // Replay a complete prefix, never a suffix or an unbounded backlog.
@@ -102,6 +106,7 @@ export class Prediction {
           TUNING.tick,
           this.shadows,
           this.contacts,
+          this.impacts,
         );
       }
     }
@@ -112,6 +117,7 @@ export class Prediction {
       this.body = structuredClone(authoritative);
       this.shadows = predictionWorld(this.body, entities);
       this.contacts = new Set([this.body.id]);
+      this.impacts = new Map();
     }
     if (previous) {
       const next = this.sample(now)!.body,
@@ -182,12 +188,12 @@ export class Prediction {
       this.offset.x = this.offset.z = this.offset.y = 0;
     if (Math.abs(this.offset.angle) < 0.00001) this.offset.angle = 0;
   }
-  render(now: number) {
+  render(now: number, input?: Input) {
     this.decayOffset(now);
     this.lastRender = now;
-    const sample = this.sample(now);
+    const sample = this.sample(now, input);
     if (!sample) return undefined;
-    const { body: pose, neighbours, contacts, mode } = sample;
+    const { body: pose, neighbours, contacts, impacts, mode } = sample;
     if (this.displayed && this.presentationMode !== mode) {
       this.offset = {
         x: this.displayed.x - pose.x,
@@ -227,13 +233,13 @@ export class Prediction {
       Math.hypot(this.offset.x, this.offset.z) > 0.001 ||
       Math.abs(this.offset.angle) > 0.001
     )
-      constrainRenderPose(pose, this.city, neighbours);
+      constrainRenderPose(pose, this.city, neighbours, impacts);
     this.displayed = { x: pose.x, y: pose.y, z: pose.z, angle: pose.angle };
-    return { body: pose, neighbours, contacts };
+    return { body: pose, neighbours, contacts, impacts };
   }
-  private sample(now: number) {
+  private sample(now: number, input?: Input) {
     if (this.body && !this.missingMap && this.worldReady(this.body)) {
-      const predicted = this.extrapolate(this.body, now);
+      const predicted = this.extrapolate(this.body, now, input);
       if (this.worldReady(predicted.body))
         return { ...predicted, mode: "predicted" as const };
     }
@@ -243,10 +249,11 @@ export class Prediction {
       body: structuredClone(this.authoritative),
       neighbours: structuredClone(this.nearby),
       contacts: new Set<string>(),
+      impacts: new Map<string, { x: number; y: number; z: number }>(),
       mode: "authoritative" as const,
     };
   }
-  private extrapolate(body: Entity, now: number) {
+  private extrapolate(body: Entity, now: number, input?: Input) {
     const pose = {
       ...body,
       wheelSkids: body.wheelSkids?.slice(),
@@ -254,6 +261,7 @@ export class Prediction {
     };
     const neighbours = structuredClone(this.shadows);
     const contacts = new Set(this.contacts);
+    const impacts = new Map(this.impacts);
     // Fill the gap between 30 Hz inputs at display refresh rate. This copy never
     // changes the replay state or decides gameplay outcomes. The rendered pose sits
     // one tick ahead of the last command's timestamp. Scale wall time by the
@@ -269,15 +277,16 @@ export class Prediction {
       if (partial > 0)
         predictStep(
           pose,
-          this.lastInput.input,
+          input ?? this.lastInput.input,
           this.city,
           this.nearby,
           partial,
           neighbours,
           contacts,
+          impacts,
         );
     }
-    return { body: pose, neighbours, contacts };
+    return { body: pose, neighbours, contacts, impacts };
   }
   input(frame: InputFrame, nearby: Entity[], interval = TUNING.tick * 1000) {
     if (!this.body) return;
@@ -302,6 +311,7 @@ export class Prediction {
         TUNING.tick,
         this.shadows,
         this.contacts,
+        this.impacts,
       );
   }
 }
