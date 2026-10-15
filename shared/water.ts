@@ -76,17 +76,9 @@ export const isWater = (x: number, z: number, city?: WaterCity) =>
 export const groundLevel = (x: number, z: number, city?: WaterCity) =>
   Math.max(waterLevel(x, z, city), terrainHeight(x, z, city));
 
-/** Full rotated hull against the island; a centre-only check strands long boats. */
+/** Keep bodies inside the world edge and on the ground or water surface. */
 export function resolveWorldBounds(e: Entity, city?: City) {
   let impact = 0;
-  if (
-    city?.terrain &&
-    Math.abs(e.x) < LIMIT &&
-    Math.abs(e.z) < LIMIT &&
-    watercraft(e.kind)
-  ) {
-    impact = resolveShore(e, city);
-  }
   if (watercraft(e.kind)) {
     const c = city?.terrain
       ? undefined
@@ -102,7 +94,8 @@ export function resolveWorldBounds(e: Entity, city?: City) {
       }
       e.angularVelocity = (e.angularVelocity || 0) * 0.5;
     }
-    e.y = WATER_LEVEL;
+    // Boats keep their momentum onto land and slide to a halt (physics/watercraft.ts).
+    e.y = city?.terrain ? groundLevel(e.x, e.z, city) : WATER_LEVEL;
     e.vy = 0;
   }
   const s = shape(e),
@@ -129,51 +122,5 @@ export function resolveWorldBounds(e: Entity, city?: City) {
         ? terrainHeight(e.x, e.z, city)
         : groundLevel(e.x, e.z, city),
     );
-  return impact;
-}
-
-/** Sample the rotated footprint; move boats downhill and cars uphill at the coast. */
-function resolveShore(e: Entity, city: City) {
-  const boat = watercraft(e.kind),
-    s = shape(e),
-    c = Math.cos(e.angle),
-    n = Math.sin(e.angle);
-  let impact = 0;
-  for (let pass = 0; pass < 12; pass++) {
-    let moved = false;
-    for (const u of [-1, 0, 1])
-      for (const v of [-1, 0, 1]) {
-        const x = e.x + u * s.w * c + v * s.d * n;
-        const z = e.z - u * s.w * n + v * s.d * c;
-        const h = terrainHeight(x, z, city),
-          target = WATER_LEVEL + (boat ? -0.05 : 0.05);
-        if (boat ? h <= target : h >= target) continue;
-        let dx = terrainHeight(x + 1, z, city) - terrainHeight(x - 1, z, city);
-        let dz = terrainHeight(x, z + 1, city) - terrainHeight(x, z - 1, city);
-        let length = Math.hypot(dx, dz);
-        if (length < 0.0001) {
-          dx = -x;
-          dz = -z;
-          length = Math.hypot(dx, dz) || 1;
-        }
-        const sign = boat ? -1 : 1,
-          nx = (sign * dx) / length,
-          nz = (sign * dz) / length;
-        const distance = Math.min(
-          32,
-          Math.max(0.1, Math.abs(h - target) / Math.max(length / 2, 0.01)),
-        );
-        e.x += nx * distance;
-        e.z += nz * distance;
-        const speed = e.vx * nx + e.vz * nz;
-        if (speed < 0) {
-          impact = Math.max(impact, -speed);
-          e.vx -= nx * speed * 1.15;
-          e.vz -= nz * speed * 1.15;
-        }
-        moved = true;
-      }
-    if (!moved) break;
-  }
   return impact;
 }

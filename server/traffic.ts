@@ -1,7 +1,7 @@
 import { carGrounded } from "../shared/physics/ramps.ts";
 import { groundLevel } from "../shared/water.ts";
 import { Navigation } from "../shared/navigation.ts";
-import { VEHICLES, type VehicleModel } from "../shared/catalog.ts";
+import { TUNING, VEHICLES, type VehicleModel } from "../shared/catalog.ts";
 import type { Entity } from "../shared/world.ts";
 import type { Simulation } from "./simulation.ts";
 
@@ -54,6 +54,8 @@ export class TrafficManager {
   private spawnSites?: ReturnType<typeof makeSpawnSites>;
   private progress = new Map<string, Progress>();
   private replacements: Replacement[] = [];
+  /** Cars their citizen drivers walked away from, cleared once no player can see them. */
+  private abandoned = new Set<Entity>();
   private nextSample = 0;
   private nextRespawn = 0;
   private cursor = 0;
@@ -61,6 +63,11 @@ export class TrafficManager {
   private jamCount = 0;
   private honks = 0;
   private respawned = 0;
+
+  abandon(car: Entity, time: number) {
+    this.abandoned.add(car);
+    this.scheduleReplacement(car, time);
+  }
 
   scheduleReplacement(car: Entity, time: number) {
     this.replacements.push({
@@ -74,6 +81,22 @@ export class TrafficManager {
     if (sim.time < this.nextSample) return false;
     this.nextSample = sim.time + TRAFFIC.sampleSeconds;
     const all = [...sim.entities.values()];
+    const players = all.filter((e) => e.kind === "player");
+    for (const car of this.abandoned) {
+      if (sim.entities.get(car.id) !== car || car.driver || car.ai || car.wreck) {
+        this.abandoned.delete(car);
+        continue;
+      }
+      if (
+        car.seats?.some(Boolean) ||
+        players.some(
+          (p) => Math.hypot(p.x - car.x, p.z - car.z) < TUNING.interestRadius,
+        )
+      )
+        continue;
+      sim.entities.delete(car.id);
+      this.abandoned.delete(car);
+    }
     const cars = all.filter(
       (e) =>
         e.kind === "car" &&
@@ -145,12 +168,7 @@ export class TrafficManager {
 
   private replenish(sim: Simulation) {
     const replacement = this.replacements[0];
-    if (
-      !replacement ||
-      sim.time < replacement.due ||
-      sim.time < this.nextRespawn ||
-      sim.entities.size >= 300
-    )
+    if (!replacement || sim.time < replacement.due || sim.time < this.nextRespawn)
       return false;
     const all = [...sim.entities.values()];
     const players = all.filter((e) => e.kind === "player");

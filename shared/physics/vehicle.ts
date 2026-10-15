@@ -24,6 +24,9 @@ export const CAR = {
   handbrakeStrength: 0.75,
   brakeRolling: 8,
   recovery: 0.15,
+  /** Brake deceleration a parked or stopped car holds against shoves and slopes. */
+  parkingBrake: 9,
+  holdSpeed: 2,
 };
 export interface Drive {
   throttle: number;
@@ -103,7 +106,14 @@ export function carForces(e: Entity, input: Drive, dt: number, grounded = e.y <=
   }
   // Service brake for AI stopping; handbrake remains the reference rear-wheel model.
   const speed = Math.hypot(e.vx, e.vz),
-    brake = Math.min(speed / dt, (input.serviceBrake || 0) * 14);
+    // Empty cars keep the parking brake on; a driver off the throttle holds the hill.
+    holding = !e.ai && (!e.driver || (input.throttle === 0 && speed < CAR.holdSpeed)),
+    brake = Math.min(
+      speed / dt,
+      holding ? CAR.parkingBrake : (input.serviceBrake || 0) * 14,
+    );
+  if (holding && !e.driver)
+    e.angularVelocity = (e.angularVelocity || 0) * Math.exp(-6 * dt);
   if (speed > 0) {
     fx -= (e.vx / speed) * brake * bodyMass;
     fz -= (e.vz / speed) * brake * bodyMass;

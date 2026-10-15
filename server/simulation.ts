@@ -439,7 +439,7 @@ export class Simulation {
     this.ai.assign(person, this.serial, false);
     this.ai.citizens.transferDriver(car, person, this.time);
     car.ai = false;
-    this.ai.routes.delete(car.id);
+    if (this.ai.routes.delete(car.id)) this.traffic.abandon(car, this.time);
     return true;
   }
   toggleLights(id: string) {
@@ -908,7 +908,7 @@ export class Simulation {
                 };
           if (e.ai) drives.set(e, drive);
           e.drive = { ...drive };
-          watercraftForces(e, drive, dt);
+          watercraftForces(e, drive, dt, this.city);
         } else if (
           !e.driver &&
           (e.y > groundLevel(e.x, e.z, this.city) + 0.2 || e.flight === "falling")

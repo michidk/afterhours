@@ -25,6 +25,7 @@ const run = (s: Simulation, seconds: number) => {
 test("four tyres provide symmetric rolling resistance and steering torque", () => {
   const s = empty(),
     car = s.spawn("car", 0, 0);
+  car.driver = "driver";
   car.vz = 10;
   carForces(car, { throttle: 0, steer: 0, brake: false }, 1 / 120);
   assert.ok(Math.abs(car.vz - (10 - 1.3 / 120)) < 1e-8);
@@ -35,6 +36,14 @@ test("four tyres provide symmetric rolling resistance and steering torque", () =
   for (let i = 0; i < 20; i++)
     carForces(car, { throttle: 0, steer: 0, brake: false }, 1 / 120);
   assert.equal(car.rearGripLoss, 0);
+});
+test("a shoved parked car slides to a halt on its brakes instead of rolling away", () => {
+  const s = empty(),
+    car = s.spawn("car", 0, 0);
+  car.vz = 5;
+  run(s, 1);
+  assert.ok(Math.hypot(car.vx, car.vz) < 0.01);
+  assert.ok(car.z < 2);
 });
 test("car steering builds to full lock and recentres faster on release", () => {
   const car = empty().spawn("car", 0, 0);
@@ -341,7 +350,9 @@ test("AI cars and pedestrians remain active over a full traffic cycle", () => {
     [...s.entities.values()].map((e) => [e.id, { x: e.x, z: e.z }]),
   );
   run(s, 22);
-  const cars = [...s.entities.values()].filter((e) => e.ai && e.kind === "car"),
+  const cars = [...s.entities.values()].filter(
+      (e) => e.ai && e.kind === "car" && start.has(e.id),
+    ),
     people = [...s.entities.values()].filter(
       (e) => e.ai && e.kind === "pedestrian" && start.has(e.id),
     );
@@ -361,6 +372,7 @@ test("a sedan survives ordinary crashes and burns only from a very hard wall imp
     const s = empty(),
       car = s.spawn("car", 0, 0);
     s.city.buildings = [{ x: 0, z: 10, w: 12, d: 1, h: 10, color: "#fff", style: 0 }];
+    car.driver = "driver";
     car.vz = speed;
     run(s, 1.2);
     return car;
@@ -382,6 +394,7 @@ test("a sedan survives ordinary crashes and burns only from a very hard wall imp
   const s = empty(),
     car = s.spawn("car", 0, 0);
   s.city.buildings = [{ x: 0, z: 10, w: 12, d: 1, h: 10, color: "#fff", style: 0 }];
+  car.driver = "driver";
   car.vz = 20;
   run(s, 1.2);
   const afterFirst = car.health;

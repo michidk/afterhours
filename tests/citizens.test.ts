@@ -158,23 +158,29 @@ test("timid drivers stop, exit once, and flee; aggressive drivers exit and attac
 
 test("blocked exits retry without leaving phantom people; burning and wrecked cars never spawn survivors", () => {
   const { sim, car, advance } = setup();
+  const people = () =>
+    [...sim.entities.values()].filter((e) => e.kind === "pedestrian").length;
   const v = car("timid");
   for (const x of [v.x - 3, v.x + 3])
     sim.city.buildings.push({ x, z: 0, w: 1, d: 8, h: 8, color: "#fff", style: 0 });
   sim.damage(v, 2);
   advance(1);
-  assert.equal(sim.entities.size, 1);
+  assert.equal(people(), 0);
   assert.equal(v.ai, true);
   sim.city.buildings = [];
   advance(1);
-  assert.equal(sim.entities.size, 2);
+  assert.equal(people(), 1);
+  // Nobody can see the abandoned car, so traffic clears it and queues a replacement.
+  advance(1);
+  assert.equal(sim.entities.has(v.id), false);
+  assert.equal(sim.traffic.diagnostics.pendingRespawns, 1);
   for (const wrecked of [false, true]) {
     const other = car("timid");
     sim.damage(other, 999);
     if (wrecked) other.wreck = 30;
-    const count: number = sim.entities.size;
+    const count = people();
     advance(0.1);
-    assert.equal(sim.entities.size, count);
+    assert.equal(people(), count);
   }
 });
 

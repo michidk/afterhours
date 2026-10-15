@@ -15,7 +15,13 @@ import {
 } from "../shared/water.ts";
 import { LIMIT, idle, type Entity } from "../shared/world.ts";
 import { Simulation } from "../server/simulation.ts";
-import { predictStep, entityBox } from "../shared/physics/index.ts";
+import {
+  carAltitude,
+  carForces,
+  carGrounded,
+  predictStep,
+  watercraftForces,
+} from "../shared/physics/index.ts";
 import { CityStore } from "../server/city-stream.ts";
 import { emptyCity, mapManifestSchema } from "../shared/city-stream.ts";
 import { packHeights, unpackHeights } from "../shared/city-pack.ts";
@@ -111,26 +117,27 @@ test("characters and cars follow hills identically in authority and prediction",
   }
 });
 
-test("rotated boats stay off the irregular shore and all actors hit the invisible offshore wall", () => {
-  for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
+test("boats run aground and slide to a halt on land; all actors hit the invisible offshore wall", () => {
+  for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
     let r = 800;
     while (!isWater(Math.cos(a) * r, Math.sin(a) * r, city)) r += 0.5;
-    const boat = body("speedboat", Math.cos(a) * (r - 1), Math.sin(a) * (r - 1));
-    boat.angle = a;
+    const boat = body("speedboat", Math.cos(a) * (r + 10), Math.sin(a) * (r + 10));
+    boat.model = "offshore";
+    boat.driver = "pilot";
     boat.vx = -Math.cos(a) * 20;
     boat.vz = -Math.sin(a) * 20;
-    resolveWorldBounds(boat, city);
-    const s = entityBox(boat);
-    for (const u of [-1, 0, 1])
-      for (const v of [-1, 0, 1])
-        assert.ok(
-          isWater(
-            boat.x + u * s.w * Math.cos(a) + v * s.d * Math.sin(a),
-            boat.z - u * s.w * Math.sin(a) + v * s.d * Math.cos(a),
-            city,
-          ),
-        );
-    assert.equal(boat.y, -1.1);
+    boat.angle = Math.atan2(boat.vx, boat.vz);
+    for (let i = 0; i < 600; i++) {
+      watercraftForces(boat, { throttle: 1, steer: 0, brake: false }, 1 / 60, city);
+      boat.x += boat.vx / 60;
+      boat.z += boat.vz / 60;
+      resolveWorldBounds(boat, city);
+    }
+    // Full throttle cannot push a beached hull; friction stops it short of the interior.
+    assert.ok(!isWater(boat.x, boat.z, city));
+    assert.equal(Math.hypot(boat.vx, boat.vz), 0);
+    assert.ok(r - Math.hypot(boat.x, boat.z) < 60);
+    assert.equal(boat.y, groundLevel(boat.x, boat.z, city));
   }
   for (const kind of ["player", "car", "boat", "helicopter", "plane"] as const) {
     const e = body(kind, WORLD_LIMIT + 20, -WORLD_LIMIT - 20);
@@ -183,4 +190,39 @@ test("players can board and leave parked vehicles on a hillside", () => {
   assert.equal(car.driver, undefined);
   assert.equal(player.parachute, undefined);
   assert.equal(player.y, groundLevel(player.x, player.z, city));
+});
+
+test("parked cars and stopped drivers off the throttle hold their place on a hill", () => {
+  let x = 0,
+    z = 0;
+  // A dry, steady slope of roughly 15%.
+  for (let i = 0; i < city.terrain!.heights.length; i += 7) {
+    x = (i % TERRAIN_SIDE) * TERRAIN_STEP - LIMIT;
+    z = Math.floor(i / TERRAIN_SIDE) * TERRAIN_STEP - LIMIT;
+    const slope = (terrainHeight(x + 2, z, city) - terrainHeight(x - 2, z, city)) / 4;
+    if (
+      Math.abs(slope) > 0.12 &&
+      Math.abs(slope) < 0.2 &&
+      terrainHeight(x, z, city) > 2
+    )
+      break;
+  }
+  for (const driver of [undefined, "driver"]) {
+    const car = body("car", x, z);
+    car.driver = driver;
+    const start = { x: car.x, z: car.z };
+    for (let i = 0; i < 360; i++) {
+      const previous = { x: car.x, y: car.y, z: car.z, vy: car.vy, vz: car.vz };
+      carForces(
+        car,
+        { throttle: 0, steer: 0, brake: false },
+        1 / 120,
+        carGrounded(car, city),
+      );
+      car.x += car.vx / 120;
+      car.z += car.vz / 120;
+      carAltitude(car, previous, city, 1 / 120);
+    }
+    assert.ok(Math.hypot(car.x - start.x, car.z - start.z) < 0.05);
+  }
 });

@@ -172,6 +172,7 @@ export function predictStep(
           brake: input.brake,
         },
         h,
+        city,
       );
     else if (
       !e.driver &&
@@ -199,7 +200,7 @@ export function predictStep(
         (!b.driver && !b.ai ? { throttle: 0, steer: 0, brake: false } : undefined);
       if (b.kind === "car" && b.flooded !== undefined) driftFlooded(b, h);
       else if (b.kind === "car" && drive) carForces(b, drive, h, carGrounded(b, city));
-      if (watercraft(b.kind) && drive) watercraftForces(b, drive, h);
+      if (watercraft(b.kind) && drive) watercraftForces(b, drive, h, city);
       const speed = Math.hypot(b.vx, b.vz),
         limit = b.model ? VEHICLES[b.model].speed : 52;
       if (vehicle(b) && speed > limit) {

@@ -160,8 +160,18 @@ export function flyHelicopter(
   if (e.flight === "takingOff" && e.y >= groundLevel(e.x, e.z, city) + 9)
     e.flight = "cruising";
   if (!atLanding && e.y < ahead + 1) maxSpeed = 0;
-  e.vx += (dx * maxSpeed - e.vx) * (1 - Math.exp(-tuning.acceleration * dt));
-  e.vz += (dz * maxSpeed - e.vz) * (1 - Math.exp(-tuning.acceleration * dt));
+  // Sideways momentum bleeds off slower than the pilot accelerates, so turns slide a little.
+  const along = 1 - Math.exp(-tuning.acceleration * dt),
+    across =
+      e.flight === "landing" || !length
+        ? along
+        : 1 - Math.exp(-tuning.acceleration * 0.5 * dt),
+    parallel = e.vx * dx + e.vz * dz,
+    sideX = (e.vx - dx * parallel) * (1 - across),
+    sideZ = (e.vz - dz * parallel) * (1 - across),
+    forward = parallel + (maxSpeed - parallel) * along;
+  e.vx = dx * forward + sideX;
+  e.vz = dz * forward + sideZ;
   if (length > 0.01) {
     const error = wrap(Math.atan2(dx, dz) - e.angle);
     e.angularVelocity = clamp(error * tuning.yaw, -tuning.turn, tuning.turn);
