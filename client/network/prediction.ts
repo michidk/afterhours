@@ -10,6 +10,26 @@ import {
 import { TUNING } from "../../shared/catalog.ts";
 
 const MAX_PREDICTION_STEPS = Math.floor(TUNING.predictionSeconds / TUNING.tick);
+/**
+ * Presentation clock for the controlled body. The input clock re-paces commands on
+ * every server report, by up to a few milliseconds on a jittery link, and one command
+ * is one tick of motion, so drawing it at the command rate makes the speed surge and
+ * sag. The drawn body instead runs on its own clock at the average command rate,
+ * drifting toward the newest command by at most `skew` while it is within half a
+ * tick, up to `catchUp` (or `brake` when ahead) when it is a tick and a half away,
+ * and snapping beyond
+ * `snap` ticks. Rates average over `average` seconds; a change larger than `step`
+ * is a real slowdown or recovery and is followed at once.
+ */
+export const PRESENTATION = {
+  gain: 0.5,
+  skew: 0.05,
+  catchUp: 0.25,
+  brake: 0.6,
+  snap: 2,
+  average: 0.3,
+  step: 0.45,
+};
 const MAX_PENDING_INPUTS = Math.ceil(2 / TUNING.tick);
 type PredictedInput = InputFrame & { interval: number };
 export class Prediction {
@@ -23,6 +43,8 @@ export class Prediction {
   /** Seconds the rendered body runs ahead of the authoritative snapshot it replays from. */
   ahead = 0;
   private smoothedAt = 0;
+  /** Presented command position in sequence units, its time and average rate. */
+  private presented: { at: number; seq: number; rate: number } | undefined;
   private lastReconcile = 0;
   private lastInput: PredictedInput | undefined;
   private displayed: Pick<Entity, "x" | "y" | "z" | "angle"> | undefined;
@@ -57,6 +79,7 @@ export class Prediction {
     this.discardedThrough = -1;
     this.lastRender = 0;
     this.smoothedAt = 0;
+    this.presented = undefined;
     this.lastReconcile = 0;
     this.lastCorrection = { distance: 0, angle: 0 };
   }
@@ -193,7 +216,7 @@ export class Prediction {
   render(now: number, input?: Input) {
     this.decayOffset(now);
     this.lastRender = now;
-    const sample = this.sample(now, input);
+    const sample = this.sample(now, input, true);
     if (!sample) return undefined;
     const { body: pose, neighbours, contacts, impacts, mode } = sample;
     if (this.displayed && this.presentationMode !== mode) {
@@ -239,9 +262,9 @@ export class Prediction {
     this.displayed = { x: pose.x, y: pose.y, z: pose.z, angle: pose.angle };
     return { body: pose, neighbours, contacts, impacts };
   }
-  private sample(now: number, input?: Input) {
+  private sample(now: number, input?: Input, advance = false) {
     if (this.body && !this.missingMap && this.worldReady(this.body)) {
-      const predicted = this.extrapolate(this.body, now, input);
+      const predicted = this.extrapolate(this.body, now, input, advance);
       if (this.worldReady(predicted.body))
         return { ...predicted, mode: "predicted" as const };
     }
@@ -255,7 +278,47 @@ export class Prediction {
       mode: "authoritative" as const,
     };
   }
-  private extrapolate(body: Entity, now: number, input?: Input) {
+  /**
+   * Ticks the drawn body stands past the newest command: where the presentation clock
+   * is now, relative to that command. Steady pacing gives exactly the time since the
+   * command over its interval, as before.
+   */
+  private presentation(now: number, advance: boolean) {
+    const last = this.lastInput!,
+      tick = TUNING.tick * 1000,
+      target = last.seq + Math.max(0, (now - last.timestamp) / last.interval),
+      p = this.presented;
+    let next: { at: number; seq: number; rate: number };
+    if (!p || now < p.at) next = { at: now, seq: target, rate: tick / last.interval };
+    else {
+      const wall = (now - p.at) / tick,
+        instant = tick / last.interval,
+        // A large change is the server really slowing or recovering: follow it at once.
+        rate =
+          Math.abs(instant - p.rate) > PRESENTATION.step * p.rate
+            ? instant
+            : p.rate +
+              (instant - p.rate) *
+                (1 - Math.exp(-(now - p.at) / 1000 / PRESENTATION.average)),
+        error = target - (p.seq + wall * rate),
+        // Running ahead of the commands may brake hard; falling behind catches up
+        // gently, since a visible surge is worse than a brief slowdown.
+        limit =
+          PRESENTATION.skew +
+          ((error < 0 ? PRESENTATION.brake : PRESENTATION.catchUp) -
+            PRESENTATION.skew) *
+            Math.max(0, Math.min(1, Math.abs(error) - 0.5)),
+        trim = Math.max(-limit, Math.min(limit, error * PRESENTATION.gain));
+      next = { at: now, seq: p.seq + wall * rate * (1 + trim), rate };
+      if (Math.abs(target - next.seq) > PRESENTATION.snap) next.seq = target;
+    }
+    if (advance) this.presented = next;
+    return Math.max(
+      -PRESENTATION.snap,
+      Math.min(PRESENTATION.snap, next.seq - last.seq),
+    );
+  }
+  private extrapolate(body: Entity, now: number, input?: Input, advance = false) {
     const pose = {
       ...body,
       wheelSkids: body.wheelSkids?.slice(),
@@ -272,12 +335,16 @@ export class Prediction {
     // instead of holding the pose and then lurching when the command arrives.
     this.ahead = Math.min(this.pending.length, MAX_PREDICTION_STEPS) * TUNING.tick;
     if (this.lastInput && !this.suspended) {
-      const partial = Math.min(
-        TUNING.tick * 2,
-        Math.max(0, (now - this.lastInput.timestamp) / this.lastInput.interval) *
-          TUNING.tick,
-      );
+      const partial = this.presentation(now, advance) * TUNING.tick;
       this.ahead += partial;
+      // Behind the newest command (the clock ran slightly slow): step back along the
+      // motion; a fraction of a tick, so the straight-line estimate is exact enough.
+      if (partial < 0) {
+        pose.x += pose.vx * partial;
+        pose.y += pose.vy * partial;
+        pose.z += pose.vz * partial;
+        pose.angle = wrap(pose.angle + (pose.angularVelocity || 0) * partial);
+      }
       if (partial > 0)
         predictStep(
           pose,

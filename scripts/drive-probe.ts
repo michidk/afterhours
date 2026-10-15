@@ -17,6 +17,7 @@ import { CityStore } from "../server/city-stream.ts";
 import { generateCity } from "./city-generator.ts";
 import { idle } from "../shared/world.ts";
 import { TUNING, VEHICLES } from "../shared/catalog.ts";
+import { groundLevel } from "../shared/water.ts";
 
 export interface LinkProfile {
   /** Fixed one-way delay in milliseconds. */
@@ -39,7 +40,8 @@ export const LINK_PROFILES: Record<string, LinkProfile> = {
 };
 export interface ProbeOptions {
   profile?: keyof typeof LINK_PROFILES | LinkProfile;
-  model?: "sport" | "sedan";
+  /** A car, or the Scout helicopter flown at cruise altitude. */
+  model?: "sport" | "sedan" | "scout";
   /** Simulated seconds of held throttle. */
   seconds?: number;
   /** Client wakeup period in milliseconds (16 approximates a 60 fps browser). */
@@ -126,7 +128,13 @@ export async function probeDriving(options: ProbeOptions = {}) {
     networks.push(driver);
     const player = sim.entities.get(driver.playerId)!;
     player.x = player.z = 0;
-    const car = sim.spawn("car", 0, 0, undefined, model);
+    const flying = VEHICLES[model].kind === "helicopter";
+    const car = sim.spawn(flying ? "helicopter" : "car", 0, 0, undefined, model);
+    if (flying) {
+      // Already airborne, so the run measures cruise rather than the take-off.
+      car.flight = "cruising";
+      car.y = groundLevel(0, 0, city) + 40;
+    }
     car.driver = player.id;
     player.vehicle = car.id;
     player.seat = 0;
@@ -207,6 +215,8 @@ export async function probeDriving(options: ProbeOptions = {}) {
       maxAhead = 0;
     const frames: {
       at: number;
+      y: number;
+      seenY: number | undefined;
       z: number;
       speed: number;
       seen: number | undefined;
@@ -267,6 +277,8 @@ export async function probeDriving(options: ProbeOptions = {}) {
         frames.push({
           at: now,
           expected: limit * 0.016 * ((TUNING.tick * 1000) / tickPeriod(now)),
+          y: pose.y,
+          seenY: seen?.y,
           z: pose.z,
           speed: Math.hypot(pose.vx, pose.vz),
           seen: seen?.z,
@@ -326,8 +338,39 @@ export async function probeDriving(options: ProbeOptions = {}) {
         dips,
       };
     };
-    const local = steps("z"),
-      remote = steps("seen");
+    /**
+     * Smoothness at constant speed: the change of the per-frame step (jerk, in m per
+     * frame per frame) along the travel and the per-frame vertical movement. A steady
+     * cruise has both near zero; hitches and corrections show as spikes.
+     */
+    const smoothness = (along: "z" | "seen", up: "y" | "seenY") => {
+      const jerks: number[] = [],
+        lifts: number[] = [];
+      for (let i = 2; i < cruise.length; i++) {
+        const [a, b, c] = [
+          cruise[i - 2][along],
+          cruise[i - 1][along],
+          cruise[i][along],
+        ];
+        if (a !== undefined && b !== undefined && c !== undefined)
+          jerks.push(Math.abs(c - 2 * b + a));
+        const [p, q] = [cruise[i - 1][up], cruise[i][up]];
+        if (p !== undefined && q !== undefined) lifts.push(Math.abs(q - p));
+      }
+      const sorted = [...jerks].sort((x, y) => x - y),
+        mean = (xs: number[]) => xs.reduce((t, x) => t + x, 0) / Math.max(1, xs.length);
+      return {
+        jerkMean: +mean(jerks).toFixed(4),
+        jerkP95: +(sorted[Math.floor(sorted.length * 0.95)] ?? 0).toFixed(4),
+        jerkMax: +(sorted.at(-1) ?? 0).toFixed(4),
+        /** Frames whose step differs from the previous one by over 10% of a step. */
+        hitches: jerks.filter((j) => j > expected * 0.1).length,
+        verticalMean: +mean(lifts).toFixed(4),
+        verticalMax: +Math.max(0, ...lifts).toFixed(4),
+      };
+    };
+    const local = { ...steps("z"), ...smoothness("z", "y") },
+      remote = { ...steps("seen"), ...smoothness("seen", "seenY") };
     return {
       profile:
         typeof options.profile === "object"
@@ -394,7 +437,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   };
   const report = await probeDriving({
     profile: arg("profile", "spiky") as keyof typeof LINK_PROFILES,
-    model: arg("model", "sport") as "sport" | "sedan",
+    model: arg("model", "sport") as "sport" | "sedan" | "scout",
     seconds: Number(arg("seconds", "15")),
     wakeup: Number(arg("wakeup", "16")),
     serverSlow: Number(arg("server-slow", "0")),

@@ -36,12 +36,54 @@ checks the queue policy itself over a real socket: bounded bursts, held slots fi
 without a second step, mispredictions counted, runtime credit, stale sequences, the
 reported buffer depth and the 250 ms silence release.
 
+`--model scout` flies the Scout helicopter instead, already cruising at altitude, full
+speed north. Both the driver's and the observer's frames also report smoothness: the
+jerk (the change of the per-frame step, in metres per frame per frame) with its mean,
+95th percentile and maximum, `hitches` (frames whose step differs from the previous one
+by over 10% of a step) and the vertical movement per frame. `tests/input-cadence.test.ts`
+asserts that a helicopter over the spiky link draws with no hitches and a jerk under
+3 cm per frame per frame.
+
 `bun run bot:drive` is the live second client. It joins any running server with the
 browser's own networking stack, spawns a car on a debug-enabled server, drives at full
 speed, and prints per-second networking stats and a final summary including `/health`.
 Delay, jitter and spikes apply to its socket only, so it can run beside a real browser
 session to compare what each player sees, or against the production URL with
-`--model none` to walk.
+`--model none` to walk. `--model scout` boards a Scout helicopter, climbs for four
+seconds and then flies full speed north; only the cruise is measured. The summary adds
+`hitches`, the 95th percentile and worst relative error of the drawn speed per frame,
+`speedJitterP95`/`speedJitterMax` (the change of that error between consecutive
+frames: stutter) and the worst unexplained vertical movement. `FRAME_LOG=<file>` writes
+every measured frame with its timing, snapshot arrival, pending commands and the input
+interval, which is how the pacing stutter below was found.
+
+### Presentation clock (2026-10-15)
+
+A helicopter flown at full speed looked uneven on a jittery link although nothing was
+corrected. The live bot with 60 ms delay, 40 ms jitter and 150 ms spikes showed the drawn
+speed swinging by up to 40% between frames (stutter p95 0.10, worst 0.51), and the frame
+log tied every swing to the input interval: the input clock re-paces commands on each
+server report, between about 27 and 42 ms, and prediction drew one tick of motion per
+command interval. The drawn body now runs on its own presentation clock at the
+averaged command rate (`PRESENTATION` in `client/network/prediction.ts`): it drifts
+toward the newest command by at most 5% while within half a tick, catches up by up to
+25% or brakes by up to 60% when 1.5 ticks away, follows a pacing change of over 45%
+(a real server slowdown or recovery) at once, and snaps only beyond two ticks. With
+steady pacing it draws exactly what the old extrapolation did.
+
+| Run                                                     | Before        | After         |
+| ------------------------------------------------------- | ------------- | ------------- |
+| Probe, helicopter, spiky link: hitches / worst jerk     | 24 / 0.076    | 0 / 0.014     |
+| Probe, helicopter, WAN link                             | 21 / 0.065    | 0 / 0.017     |
+| Probe, helicopter, distant link                         | 54 / 0.074    | 3 / 0.096     |
+| Probe, sports car, spiky / WAN hitches                  | 16 / 12       | 0 / 0         |
+| Live bot, helicopter, jittery link: stutter p95 / worst | 0.102 / 0.508 | 0.043 / 0.105 |
+
+The server's queue statistics are unchanged, since the input clock is untouched; an
+attempt to smooth the clock itself instead let the server run up to 28 ticks on held
+controls and was dropped. On the jittery live link the drawn speed still drifts by up to
+about 20% over many frames while it follows the clock, which reads as easing rather than
+stutter.
 
 `bun run bench:server --players 2` runs the real server loop (runtime, sessions, snapshot encoding, WebSockets) with bots and prints the busiest functions by self and inclusive time. `bun run bench:ticks --seconds 600` times every section of every tick and lists the slowest ticks with their causes. `bun run bench:lod` compares full-rate and level-of-detail simulation in alternating blocks by thread CPU time, which other load on the machine distorts far less than wall time (Windows quantises it to about 16 ms, so read the means, not the percentiles).
 

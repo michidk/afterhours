@@ -48,11 +48,13 @@ if (
   throw Error(
     "Durations and speed must be positive; link delays nonnegative; spike-rate in [0, 1]",
   );
-if (
-  model !== "none" &&
-  (!(model in VEHICLES) || VEHICLES[model as keyof typeof VEHICLES].kind !== "car")
-)
-  throw Error(`--model must be a car model or "none", got ${model}`);
+const kind = model === "none" ? "none" : VEHICLES[model as keyof typeof VEHICLES]?.kind;
+if (kind !== "none" && kind !== "car" && kind !== "helicopter")
+  throw Error(`--model must be a car or helicopter model or "none", got ${model}`);
+/** A helicopter climbs first, then flies straight; only the cruise is measured. */
+const flying = kind === "helicopter",
+  climbSeconds = 4,
+  warmup = flying ? climbSeconds + 4 : 0;
 
 const output = arg("output", "");
 const request = async (path: string) => {
@@ -184,7 +186,9 @@ const debug: typeof network.debug = async (command) => {
 let bodyId = network.playerId;
 if (model !== "none") {
   if (!debugAllowed)
-    throw Error("Spawning a car needs a debug-enabled server (dev, or ALLOW_DEBUG=1)");
+    throw Error(
+      "Spawning a vehicle needs a debug-enabled server (dev, or ALLOW_DEBUG=1)",
+    );
   await debug({ kind: "teleport", x: center.x, z: center.z });
   const before = new Set((await debug({ kind: "state" })).entities.map((e) => e.id));
   const spawned = await debug({ kind: "spawn", model: model as "sport" });
@@ -232,6 +236,16 @@ const steer = (t: number): Partial<Input> => {
 };
 const summary = {
   frames: 0,
+  /** Frames whose drawn speed differs from the body's speed by over 10%. */
+  hitches: 0,
+  /** 95th percentile and worst relative error of the drawn per-frame speed. */
+  speedErrorP95: 0,
+  speedErrorMax: 0,
+  /** 95th percentile and worst change of the drawn speed between consecutive frames: stutter. */
+  speedJitterP95: 0,
+  speedJitterMax: 0,
+  /** Drawn vertical movement per frame in metres beyond what the body's climb explains. */
+  verticalWobbleMax: 0,
   backward: 0,
   forwardLurches: 0,
   freezes: 0,
@@ -242,7 +256,10 @@ const summary = {
   maxPending: 0,
   topSpeed: 0,
 };
-let previousPose: { x: number; z: number; at: number } | undefined;
+let previousPose: { x: number; y: number; z: number; at: number } | undefined;
+const speedErrors: number[] = [],
+  speedJitters: number[] = [];
+let previousError: number | undefined;
 let lastCorrections = 0;
 let lastSample = 0;
 let lastFrame = performance.now();
@@ -288,19 +305,48 @@ const sampler = setInterval(() => {
   if (!pose || !p) return;
   const speed = Math.hypot(pose.vx, pose.vz);
   summary.topSpeed = Math.max(summary.topSpeed, speed);
-  if (previousPose && speed > 5) {
+  const measuring = (now - started) / 1000 >= warmup;
+  if (previousPose && speed > 5 && measuring) {
     const dt = (now - previousPose.at) / 1000;
     const along =
       ((pose.x - previousPose.x) * pose.vx + (pose.z - previousPose.z) * pose.vz) /
       speed;
     const expected = speed * dt;
+    const error = Math.abs(along - expected) / Math.max(expected, 1e-6);
+    speedErrors.push(error);
+    const signed = (along - expected) / Math.max(expected, 1e-6);
+    if (previousError !== undefined)
+      speedJitters.push(Math.abs(signed - previousError));
+    previousError = signed;
+    if (error > 0.1) summary.hitches++;
+    if (process.env.FRAME_LOG)
+      appendFileSync(
+        process.env.FRAME_LOG,
+        JSON.stringify({
+          at: +now.toFixed(1),
+          dt: +(dt * 1000).toFixed(1),
+          error: +((along - expected) / expected).toFixed(3),
+          snapshot: network.received > previousPose.at,
+          pending: p.pending.length,
+          ack: network.ack,
+          seq: network.seq,
+          lastInput: (
+            p as unknown as { lastInput?: { timestamp: number; interval: number } }
+          ).lastInput,
+          offset: +Math.hypot(p.offset.x, p.offset.z).toFixed(4),
+        }) + "\n",
+      );
+    summary.verticalWobbleMax = Math.max(
+      summary.verticalWobbleMax,
+      Math.abs(pose.y - previousPose.y - pose.vy * dt),
+    );
     summary.frames++;
     summary.maxStep = Math.max(summary.maxStep, along);
     if (along < -0.005) summary.backward++;
     if (along > expected * 1.5) summary.forwardLurches++;
     if (along < expected * 0.5) summary.freezes++;
   }
-  previousPose = { x: pose.x, z: pose.z, at: now };
+  previousPose = { x: pose.x, y: pose.y, z: pose.z, at: now };
   if (p.corrections !== lastCorrections) {
     summary.corrections++;
     if (p.lastCorrection.distance > 1) summary.correctionsOver1m++;
@@ -337,6 +383,17 @@ const finish = async () => {
   clearInterval(sampler);
   clearInterval(reporter);
   control = idle();
+  speedErrors.sort((a, b) => a - b);
+  summary.speedErrorP95 = +(
+    speedErrors[Math.floor(speedErrors.length * 0.95)] ?? 0
+  ).toFixed(3);
+  summary.speedErrorMax = +(speedErrors.at(-1) ?? 0).toFixed(3);
+  speedJitters.sort((a, b) => a - b);
+  summary.speedJitterP95 = +(
+    speedJitters[Math.floor(speedJitters.length * 0.95)] ?? 0
+  ).toFixed(3);
+  summary.speedJitterMax = +(speedJitters.at(-1) ?? 0).toFixed(3);
+  summary.verticalWobbleMax = +summary.verticalWobbleMax.toFixed(3);
   let health: unknown;
   try {
     health = await (
@@ -375,7 +432,10 @@ const finish = async () => {
 process.on("SIGINT", () => void finish());
 while (performance.now() - started < seconds * 1000) {
   const t = (performance.now() - started) / 1000;
-  control = { ...idle(), up: true, sprint: model === "none", ...steer(t) };
+  control = flying
+    ? // Climb clear of the roofs, then full speed straight ahead (north).
+      { ...idle(), up: t >= climbSeconds, ascend: t < climbSeconds }
+    : { ...idle(), up: true, sprint: model === "none", ...steer(t) };
   await pause(50);
 }
 await finish();

@@ -103,3 +103,13 @@ test("driving survives slowdown after entering cruise and recovers its normal sp
   assert.equal(report.recovered.dips, 0, detail);
   assert.ok(Math.abs(report.recovered.meanStep - 0.832) < 0.02, detail);
 });
+
+test("a helicopter at full speed over a jittery link draws at a steady speed", async () => {
+  const report = await probeDriving({ profile: "spiky", model: "scout", seconds: 15 });
+  const detail = JSON.stringify({ client: report.client, cruise: report.cruise });
+  assert.equal(report.client.corrections, 0, detail);
+  // Input pacing changes on every server report must not reach the drawn speed.
+  assert.equal(report.cruise.hitches, 0, detail);
+  assert.ok(report.cruise.jerkMax < 0.03, detail);
+  assert.equal(report.cruise.backward, 0, detail);
+});
