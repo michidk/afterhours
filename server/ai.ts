@@ -133,7 +133,7 @@ export class CityAI {
     if (route.previous === undefined) return;
     let goal = ((route.trip + 1) * 17 + 3) % this.navigation.roads.length;
     if (goal === route.destination) goal = (goal + 1) % this.navigation.roads.length;
-    const ids = this.navigation.roadPath(route.destination, goal);
+    const ids = this.navigation.roadPath(route.destination, goal, route.previous);
     if (ids.length < 2) return;
     route.points = [
       ...route.points.slice(route.index, route.points.length - 1),
@@ -238,7 +238,7 @@ export class CityAI {
           let goal = (route.trip * 17 + 3) % this.navigation.roads.length;
           if (goal === route.destination)
             goal = (goal + 1) % this.navigation.roads.length;
-          const ids = this.navigation.roadPath(route.destination, goal);
+          const ids = this.navigation.roadPath(route.destination, goal, route.previous);
           route.points = this.navigation.lanePath(ids);
           route.previous = ids[ids.length - 2];
           route.destination = goal;

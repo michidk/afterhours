@@ -129,8 +129,21 @@ export class Navigation {
         : {}),
     };
   }
-  roadPath(start: number, goal: number) {
-    return path(this.roads, start, goal, (n) => n.edges);
+  /**
+   * With `from`, the node a car arrives from, the route may not turn straight back
+   * along that segment (except at a dead end): a U-turn swings wide over the kerb.
+   */
+  roadPath(start: number, goal: number, from?: number) {
+    const first = this.roads[start],
+      onward =
+        first && from !== undefined && first.edges.length > 1
+          ? first.edges.filter((id) => id !== from)
+          : undefined;
+    const ids = path(this.roads, start, goal, (n) =>
+      n === first && onward ? onward : n.edges,
+    );
+    // A goal only reachable back the way the car came still gets a route.
+    return ids.length || !onward ? ids : path(this.roads, start, goal, (n) => n.edges);
   }
   /**
    * Lane targets along a node path. Generated junctions record their stop line,

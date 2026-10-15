@@ -93,9 +93,10 @@ export function destructibles(
     ] as const) {
       if (!controlled) continue;
       // Generated cities give the stop line's distance, so the pole stands on the
-      // kerb beside it rather than inside the junction.
+      // sidewalk beside it rather than inside the junction, clear of the kerb that
+      // turning cars brush.
       const along = end * (length / 2 - (stop ?? 9)),
-        lateral = end * (road.width / 2 + 0.5);
+        lateral = end * (road.width / 2 + 1);
       result.push(
         prop(
           "signal",

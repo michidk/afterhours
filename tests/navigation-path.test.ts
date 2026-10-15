@@ -77,3 +77,23 @@ test("route search handles the same node, invalid ids, unreachable nodes and tie
   assert.deepEqual(path(graph, 0, 3, edges), [0, 1, 3]);
   assert.deepEqual(path(graph, 0, 4, edges), []);
 });
+
+test("a car's route does not turn straight back along the segment it arrived on", () => {
+  const nav = navigationFor(generateCity());
+  let checked = 0;
+  for (const node of nav.roads) {
+    if (node.edges.length < 3) continue;
+    const from = node.edges[0];
+    for (const goal of [from, ...nav.roads[from].edges]) {
+      const ids = nav.roadPath(node.id, goal, from);
+      assert.ok(ids.length >= 2 || goal === node.id, `road ${node.id} reaches ${goal}`);
+      if (goal !== node.id) assert.notEqual(ids[1], from, `no U-turn at ${node.id}`);
+      checked++;
+    }
+  }
+  assert.ok(checked > 20);
+  // A dead end leaves no other way out.
+  const end = nav.roads.find((n) => n.edges.length === 1);
+  if (end)
+    assert.equal(nav.roadPath(end.id, end.edges[0], end.edges[0])[1], end.edges[0]);
+});

@@ -137,12 +137,11 @@ export function cityFromMap(map: GeneratedMap): City {
         kind: KIND[e.kind],
         phaseA: map.geometry.phases[e.id][0],
         phaseB: map.geometry.phases[e.id][1],
-        approachA:
-          i === 1 && junction.has(e.a) ? round(trims[e.id][0] + 4.4) : undefined,
+        // Between close junctions both stop lines meet mid-link, so a waiting car
+        // never stands inside the junction behind it.
+        approachA: i === 1 && junction.has(e.a) ? round(stopA) : undefined,
         approachB:
-          i === pts.length - 1 && junction.has(e.b)
-            ? round(trims[e.id][1] + 4.4)
-            : undefined,
+          i === pts.length - 1 && junction.has(e.b) ? round(total - stopB) : undefined,
         ...(junction.has(e.a) &&
         along[i - 1] <= stopA &&
         (stopA < along[i] || i === pts.length - 1)
