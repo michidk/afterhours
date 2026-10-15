@@ -4,44 +4,44 @@ The library contains 149 edited CC0 clips across 53 sound banks. Every bank has 
 
 ## Shipped sounds
 
-| Bank         | Takes | Trigger                                       | Variation or behavior                                                        |
-| ------------ | ----: | --------------------------------------------- | ---------------------------------------------------------------------------- |
-| engineSedan  |     2 | Active sedan                                  | Separate car recordings; speed controls pitch                                |
-| engineSport  |     2 | Active sport car                              | Separate steady AC Cobra excerpts; speed controls pitch                      |
-| engineVan    |     2 | Active van                                    | Separate truck and diesel recordings; speed controls pitch                   |
-| horn         |     2 | AI traffic blocked for eight seconds          | Two car recordings; repeats every six seconds; audible within 50 m           |
-| helicopter   |     3 | Active helicopter                             | Different recording sections; lower pitch during takeoff                     |
-| plane        |     3 | Active plane                                  | Different flyby sections; speed controls pitch                               |
-| skid         |     3 | Nearby skidding car                           | Different tyre squeals; speed controls intensity                             |
-| pistol       |     3 | Authoritative pistol shot                     | Different Walther PPQ shots; ±0.6 semitones                                  |
-| smg          |     3 | Authoritative SMG shot                        | Different M45 shots; ±0.6 semitones                                          |
-| reloadPistol |     2 | Confirmed pistol reload starts                | Different gun-loading recordings; ±0.35 semitones                            |
-| reloadSmg    |     2 | Confirmed SMG reload starts                   | Different rifle and gun-loading recordings; ±0.35 semitones                  |
-| dryFire      |     3 | Empty gun with no reserve                     | Recorded Taurus trigger pulls; limited by weapon cooldown                    |
-| swing        |     3 | Authoritative melee attempt, including misses | Air and cloth foley; ±1.5 semitones                                          |
-| punch        |     5 | Fist connects with a character                | Medium punch takes; ±1.4 semitones                                           |
-| bat          |     5 | Bat connects with a character                 | Heavy punch takes; ±1.2 semitones                                            |
-| impact       |     5 | Vehicle crash, metal prop hit or break        | Metal impacts; ±1.8 semitones                                                |
-| impactWood   |     5 | Tree, palm, or bench hit or break             | Wood impacts; ±1.5 semitones                                                 |
-| impactBody   |     5 | Bullet hits a character; local health falls   | Soft impacts; ±1.2 semitones                                                 |
-| explosion    |     3 | Authoritative vehicle explosion               | Separate recordings; audible within 85 m                                     |
-| footConcrete |     5 | Grounded character walks outside a park       | Distance-based steps; ±1 semitone                                            |
-| footGrass    |     5 | Grounded character walks in a park            | Distance-based steps; ±1 semitone                                            |
-| landing      |     3 | Confirmed parachute closes on landing         | Soft contact foley; ±1 semitone                                              |
-| door         |     3 | Confirmed vehicle entry or exit               | Actual car door closures for every vehicle type                              |
-| pickup       |     3 | Local inventory receives an item              | Quiet confirmation cues                                                      |
-| drop         |     3 | Local inventory loses an item while alive     | Light metal contact foley                                                    |
-| equip        |     3 | Local melee weapon or fists selection         | Knife-draw handling foley                                                    |
-| equipGun     |     3 | Local pistol or SMG selection                 | Recorded gun handling; ±0.6 semitones                                        |
-| parachute    |     3 | Confirmed parachute opens                     | Purpose-built deployment foley from two creators                             |
-| death        |     3 | Local health reaches zero                     | Quiet interface cue; no voice recording                                      |
-| respawn      |     3 | Local health recovers from zero               | Quiet interface cue; inventory reset stays silent                            |
-| ui           |     3 | Map or help toggles                           | Quiet click samples                                                          |
-| fire         |     3 | Nearby vehicle burns                          | Gasoline fire excerpts; fades on extinguish or explosion                     |
-| wind         |     3 | Local parachute descent                       | Wind recordings; descent speed controls intensity                            |
-| jetpack      |     3 | Active powered jetpack movement               | Reuses wind takes; spatial attenuation within 28 m                           |
-| canopy       |     3 | Local parachute descent                       | Quiet fabric flutter; stops when the canopy closes                           |
-| water        |     3 | Server reports broken hydrant debris          | Pressurized pipe-leak excerpts; nearest two hydrants, removed on restoration |
+| Bank         | Takes | Trigger                                       | Variation or behavior                                                                                                                           |
+| ------------ | ----: | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| engineSedan  |     2 | Active sedan                                  | Separate car recordings; speed controls pitch                                                                                                   |
+| engineSport  |     2 | Active sport car                              | Separate steady AC Cobra excerpts; speed controls pitch                                                                                         |
+| engineVan    |     2 | Active van                                    | Separate truck and diesel recordings; speed controls pitch                                                                                      |
+| horn         |     2 | AI traffic blocked for eight seconds          | Two car recordings; repeats every six seconds; audible within 50 m                                                                              |
+| helicopter   |     3 | Active helicopter                             | Different recording sections; lower pitch during takeoff                                                                                        |
+| plane        |     3 | Active plane                                  | Different flyby sections; speed controls pitch                                                                                                  |
+| skid         |     3 | Nearby skidding car                           | Different tyre squeals; speed controls intensity                                                                                                |
+| pistol       |     3 | Authoritative pistol shot                     | Different Walther PPQ shots; ±0.6 semitones                                                                                                     |
+| smg          |     3 | Authoritative SMG shot                        | Different M45 shots; ±0.6 semitones                                                                                                             |
+| reloadPistol |     2 | Confirmed pistol reload starts                | Different gun-loading recordings; ±0.35 semitones                                                                                               |
+| reloadSmg    |     2 | Confirmed SMG reload starts                   | Different rifle and gun-loading recordings; ±0.35 semitones                                                                                     |
+| dryFire      |     3 | Empty gun with no reserve                     | Recorded Taurus trigger pulls; limited by weapon cooldown                                                                                       |
+| swing        |     3 | Authoritative melee attempt, including misses | Air and cloth foley; ±1.5 semitones                                                                                                             |
+| punch        |     5 | Fist connects with a character                | Medium punch takes; ±1.4 semitones                                                                                                              |
+| bat          |     5 | Bat connects with a character                 | Heavy punch takes; ±1.2 semitones                                                                                                               |
+| impact       |     5 | Vehicle crash, metal prop hit or break        | Metal impacts; ±1.8 semitones                                                                                                                   |
+| impactWood   |     5 | Tree, palm, or bench hit or break             | Wood impacts; ±1.5 semitones                                                                                                                    |
+| impactBody   |     5 | Bullet hits a character; local health falls   | Soft impacts; ±1.2 semitones                                                                                                                    |
+| explosion    |     3 | Authoritative vehicle explosion               | Separate recordings; audible within 85 m                                                                                                        |
+| footConcrete |     5 | Grounded character walks outside a park       | Distance-based steps; ±1 semitone                                                                                                               |
+| footGrass    |     5 | Grounded character walks in a park            | Distance-based steps; ±1 semitone                                                                                                               |
+| landing      |     3 | Confirmed parachute closes on landing         | Soft contact foley; ±1 semitone                                                                                                                 |
+| door         |     3 | Confirmed vehicle entry or exit               | Actual car door closures for every vehicle type                                                                                                 |
+| pickup       |     3 | Local inventory receives an item              | Quiet confirmation cues                                                                                                                         |
+| drop         |     3 | Local inventory loses an item while alive     | Light metal contact foley                                                                                                                       |
+| equip        |     3 | Local melee weapon or fists selection         | Knife-draw handling foley                                                                                                                       |
+| equipGun     |     3 | Local pistol or SMG selection                 | Recorded gun handling; ±0.6 semitones                                                                                                           |
+| parachute    |     3 | Confirmed parachute opens                     | Purpose-built deployment foley from two creators                                                                                                |
+| death        |     3 | Local health reaches zero                     | Quiet interface cue; no voice recording                                                                                                         |
+| respawn      |     3 | Local health recovers from zero               | Quiet interface cue; inventory reset stays silent                                                                                               |
+| ui           |     3 | Map or help toggles                           | Quiet click samples                                                                                                                             |
+| fire         |     3 | Nearby vehicle burns                          | Gasoline fire excerpts; fades on extinguish or explosion                                                                                        |
+| wind         |     3 | Local parachute descent                       | Wind recordings; descent speed controls intensity                                                                                               |
+| jetpack      |     3 | Active powered jetpack movement               | Reuses wind takes; spatial attenuation within 28 m                                                                                              |
+| canopy       |     3 | Local parachute descent                       | Quiet fabric flutter; stops when the canopy closes                                                                                              |
+| water        |     3 | Server reports broken hydrant debris          | Pressurized pipe-leak excerpts; nearest two hydrants, removed on restoration                                                                    |
 | coast        |     3 | Player near or in sea or lake water           | Full volume while swimming; within 35 m of water (counting height above it) fades from a quarter to silence; silent elsewhere (`surfIntensity`) |
 
 ## Engine behavior

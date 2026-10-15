@@ -88,7 +88,13 @@ export const WAVES = [
   { heading: 1.5, length: 8.5, height: 0.035, phase: 2.6 },
 ].map((w) => {
   const k = (2 * Math.PI) / w.length;
-  return { ...w, k, omega: Math.sqrt(9.81 * k), dx: Math.sin(w.heading), dz: Math.cos(w.heading) };
+  return {
+    ...w,
+    k,
+    omega: Math.sqrt(9.81 * k),
+    dx: Math.sin(w.heading),
+    dz: Math.cos(w.heading),
+  };
 });
 /** Swell dies out over `shoal` metres of depth; the shore laps `swash` metres up the beach. */
 export const SURF = { shoal: 6, swash: 0.18, reach: 3, push: 4 };

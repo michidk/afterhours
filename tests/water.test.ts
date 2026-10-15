@@ -225,7 +225,10 @@ test("swimmers can board together, exit to water, and step onto the shoreline", 
   assert.equal(craft.driver, driver.id);
   s.inputs.set(passenger.id, { ...idle(), up: true });
   run(s, 1);
-  assert.ok(Math.abs(craft.z) < 0.2, "passengers do not control propulsion; only the swell rocks it");
+  assert.ok(
+    Math.abs(craft.z) < 0.2,
+    "passengers do not control propulsion; only the swell rocks it",
+  );
   s.interact(passenger.id);
   assert.equal(passenger.vehicle, undefined);
   assert.equal(passenger.y, surfaceLevel(passenger.x, passenger.z, s.city));

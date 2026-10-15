@@ -150,7 +150,8 @@ $("#join").addEventListener("submit", (event) => {
         entities = m.entities;
         pickups = m.pickups;
         // Ease toward server time so the swell never jumps; snap after a stall.
-        scene.time += (m.time - scene.time) * (Math.abs(m.time - scene.time) > 1 ? 1 : 0.2);
+        scene.time +=
+          (m.time - scene.time) * (Math.abs(m.time - scene.time) > 1 ? 1 : 0.2);
         scene.day = m.day;
         scene.dayRate = m.dayRate ?? 1 / 75;
         scene.updatePickups(m.pickups);

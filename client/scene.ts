@@ -787,9 +787,15 @@ export class CityScene {
           n.rotation.z += e.vx * 0.025;
         }
         const surface = surfaceLevel(e.x, e.z, this.city);
-        if (!e.down && !e.parachute && isWater(e.x, e.z, this.city) && e.y < surface + 0.4) {
+        if (
+          !e.down &&
+          !e.parachute &&
+          isWater(e.x, e.z, this.city) &&
+          e.y < surface + 0.4
+        ) {
           const bed = terrainHeight(e.x, e.z, this.city),
-            stroke = surface - bed > 1.4 ? Math.min(1, Math.hypot(e.vx, e.vz) / 1.5) : 0;
+            stroke =
+              surface - bed > 1.4 ? Math.min(1, Math.hypot(e.vx, e.vz) / 1.5) : 0;
           // Tread water with the shoulders at the surface, or lie along it to swim;
           // in the shallows the feet stay on the bed.
           n.position.set(

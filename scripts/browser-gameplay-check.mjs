@@ -199,7 +199,11 @@ try {
     const swimHeight = () => page.evaluate("window.afterhoursDebug.inspect().player.y");
     const waterBefore = await swimHeight();
     await pause(500);
-    assert.notEqual(waterBefore, await swimHeight(), "The swimmer did not ride the swell");
+    assert.notEqual(
+      waterBefore,
+      await swimHeight(),
+      "The swimmer did not ride the swell",
+    );
     await transportCapture("water");
     const aiBefore = (
       await page.evaluate("window.afterhoursDebug.state()")

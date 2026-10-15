@@ -166,6 +166,7 @@ export function poseSwimmer(root: TransformNode, stroke: number, time: number) {
       const side = Math.sign(arm.position.x);
       arm.rotation.x =
         stroke > 0.5 ? -((time * 4 + (side > 0 ? Math.PI : 0)) % (Math.PI * 2)) : 0;
-      arm.rotation.z = stroke > 0.5 ? 0 : side * (1.1 + 0.25 * Math.sin(time * 3 + side));
+      arm.rotation.z =
+        stroke > 0.5 ? 0 : side * (1.1 + 0.25 * Math.sin(time * 3 + side));
     }
 }

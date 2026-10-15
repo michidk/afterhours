@@ -142,7 +142,11 @@ function depthTexture(host: CityScene) {
       const i = (gz * TERRAIN_SIDE + gx) * 4,
         depth =
           WATER_LEVEL -
-          terrainHeight(gx * TERRAIN_STEP - LIMIT, gz * TERRAIN_STEP - LIMIT, host.city);
+          terrainHeight(
+            gx * TERRAIN_STEP - LIMIT,
+            gz * TERRAIN_STEP - LIMIT,
+            host.city,
+          );
       data[i] = Math.round(
         Math.max(0, Math.min(1, (depth - DEPTH.min) / DEPTH.range)) * 255,
       );
@@ -183,7 +187,9 @@ export class WaterRenderer {
         indices.push(a, a + 1, b, a + 1, b + 1, b);
       }
     this.mesh = new Mesh("animated water", host.scene);
-    Object.assign(new VertexData(), { positions, normals, indices }).applyToMesh(this.mesh);
+    Object.assign(new VertexData(), { positions, normals, indices }).applyToMesh(
+      this.mesh,
+    );
     this.mesh.position.y = WATER_LEVEL;
     this.mesh.alwaysSelectAsActiveMesh = true;
     this.mesh.receiveShadows = true;
