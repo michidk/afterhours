@@ -19,7 +19,8 @@ const MAX_PREDICTION_STEPS = Math.floor(TUNING.predictionSeconds / TUNING.tick);
  * tick, up to `catchUp` (or `brake` when ahead) when it is a tick and a half away,
  * and snapping beyond
  * `snap` ticks. Rates average over `average` seconds; a change larger than `step`
- * is a real slowdown or recovery and is followed at once.
+ * is a real slowdown or recovery and is followed at once. The drawn body never moves
+ * back: far ahead it holds still. Frames longer than `longFrame` ms skip smoothing.
  */
 export const PRESENTATION = {
   gain: 0.5,
@@ -29,6 +30,7 @@ export const PRESENTATION = {
   snap: 2,
   average: 0.3,
   step: 0.45,
+  longFrame: 100,
 };
 const MAX_PENDING_INPUTS = Math.ceil(2 / TUNING.tick);
 type PredictedInput = InputFrame & { interval: number };
@@ -289,7 +291,14 @@ export class Prediction {
       target = last.seq + Math.max(0, (now - last.timestamp) / last.interval),
       p = this.presented;
     let next: { at: number; seq: number; rate: number };
-    if (!p || now < p.at) next = { at: now, seq: target, rate: tick / last.interval };
+    // Long frames (a stalled or software-rendered browser) gain nothing from
+    // smoothing: draw where the commands put the body, as before.
+    if (!p || now < p.at || now - p.at > PRESENTATION.longFrame)
+      next = {
+        at: now,
+        seq: Math.max(target, p?.seq ?? target),
+        rate: tick / last.interval,
+      };
     else {
       const wall = (now - p.at) / tick,
         instant = tick / last.interval,
@@ -310,7 +319,9 @@ export class Prediction {
             Math.max(0, Math.min(1, Math.abs(error) - 0.5)),
         trim = Math.max(-limit, Math.min(limit, error * PRESENTATION.gain));
       next = { at: now, seq: p.seq + wall * rate * (1 + trim), rate };
-      if (Math.abs(target - next.seq) > PRESENTATION.snap) next.seq = target;
+      // Snap forward when far behind; when far ahead hold still, never step back.
+      if (target - next.seq > PRESENTATION.snap) next.seq = target;
+      else if (next.seq - target > PRESENTATION.snap) next.seq = p.seq;
     }
     if (advance) this.presented = next;
     return Math.max(
