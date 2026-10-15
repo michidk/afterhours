@@ -8,6 +8,7 @@ import { loadCity } from "../server/city-loader.ts";
 import { CityStore } from "../server/city-stream.ts";
 import { idle, spawnOrigin } from "../shared/world.ts";
 import { TUNING } from "../shared/catalog.ts";
+import { groundLevel, isWater } from "../shared/water.ts";
 
 const city = await loadCity();
 const mapId = new CityStore(city).manifest.mapId;
@@ -260,15 +261,30 @@ for (const delay of [0, 150, 360]) {
     });
     for (const model of ["sedan", "scout"] as const) {
       driving = model === "sedan";
+      // Stopping on a slope also measures gravity, so use the flat runway.
+      const vehicleOrigin = driving
+        ? { x: city.airport.x - 50, z: city.airport.z - 50 }
+        : origin;
+      if (driving) {
+        const floor = groundLevel(vehicleOrigin.x, vehicleOrigin.z, city);
+        for (let distance = 0; distance <= 140; distance += 5) {
+          const z = vehicleOrigin.z + distance;
+          assert.ok(!isWater(vehicleOrigin.x, z, city), "dry driving fixture");
+          assert.ok(
+            Math.abs(groundLevel(vehicleOrigin.x, z, city) - floor) < 0.01,
+            "flat driving fixture",
+          );
+        }
+      }
       await observer.debug({
         kind: "teleport",
-        x: origin.x + 25,
-        z: origin.z - 25,
+        x: vehicleOrigin.x + 25,
+        z: vehicleOrigin.z - 25,
       });
       await walker.debug({
         kind: "teleport",
-        x: origin.x,
-        z: origin.z,
+        x: vehicleOrigin.x,
+        z: vehicleOrigin.z,
       });
       await pause(150);
       const before = new Set(
@@ -279,7 +295,7 @@ for (const delay of [0, 150, 360]) {
       const vehicle = spawned.entities.find(
         (e) => e.model === model && !before.has(e.id),
       );
-      assert.ok(vehicle, `spawn ${model} in the saved spawn clearing`);
+      assert.ok(vehicle, `spawn ${model} in the saved city`);
       await pause(150);
       await walker.debug({ kind: "teleport", x: vehicle.x + 3, z: vehicle.z });
       walker.send({ type: "interact" });

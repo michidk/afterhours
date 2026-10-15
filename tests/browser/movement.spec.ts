@@ -494,15 +494,15 @@ for (const model of ["sedan", "scout"] as const) {
     );
     await page.keyboard.press("f");
     await page.waitForFunction((id) => {
-      const d = window.afterhoursDebug!;
-      return d.network.entities.get(d.network.playerId)?.vehicle === id;
+      const d = window.afterhoursDebug;
+      return !!d && d.network.entities.get(d.network.playerId)?.vehicle === id;
     }, vehicleId);
     if (model === "scout") {
       await page.keyboard.down("Space");
       try {
         await page.waitForFunction(
           (id) =>
-            window.afterhoursDebug!.network.entities.get(id)?.flight === "cruising",
+            window.afterhoursDebug?.network.entities.get(id)?.flight === "cruising",
           vehicleId,
         );
       } finally {
