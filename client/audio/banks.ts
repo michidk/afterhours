@@ -162,7 +162,8 @@ export const SOUND_BANKS = {
   jetpack: bank(clips("wind", 3), { loop: true, volume: 0.12, pitch: 0.5, range: 28 }),
   canopy: bank(clips("canopy", 3), { loop: true, volume: 0.08, pitch: 0.5, range: 0 }),
   water: bank(clips("water", 3), { loop: true, volume: 0.18, pitch: 0.5, range: 22 }),
-  coast: bank(clips("coast", 3), { loop: true, volume: 0.12, pitch: 0.35, range: 0 }),
+  // Swimming plays it at full volume; the shore at most a quarter (surfIntensity).
+  coast: bank(clips("coast", 3), { loop: true, volume: 0.6, pitch: 0.35, range: 0 }),
   pistol: bank(clips("pistol", 3), { volume: 0.55, pitch: 0.6, range: 65, voices: 8 }),
   smg: bank(clips("smg", 3), { volume: 0.45, pitch: 0.6, range: 60, voices: 8 }),
   reloadPistol: bank(clips("reload-pistol", 2), {

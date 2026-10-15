@@ -9,6 +9,7 @@ import {
   type Sound,
 } from "./banks.ts";
 import { propulsionRunning } from "../../shared/propulsion.ts";
+import { isWater, surfaceLevel, swimming } from "../../shared/water.ts";
 /** A listener-only cue plays only for a source this close to the listener, i.e. the listener. */
 const LISTENER_CUE_DISTANCE = 3;
 import {
@@ -30,6 +31,30 @@ type Voice = {
   variation: number;
   cutoff: number;
 };
+/** Surf is heard within this many metres of water, counting height above the surface. */
+export const SURF_RANGE = 35;
+/**
+ * Sea and lake loudness for a listener: full while swimming, a quarter at the water's
+ * edge fading to nothing at SURF_RANGE, and silence anywhere else.
+ */
+export function surfIntensity(listener: Entity, city?: City) {
+  if (!listener.vehicle && swimming(listener, city)) return 1;
+  let water = isWater(listener.x, listener.z, city)
+    ? { x: listener.x, z: listener.z, radius: 0 }
+    : undefined;
+  // shortcut: rings of 8 samples miss water narrower than the gap between them; use a distance field if that matters.
+  for (const radius of [3, 7, 12, 18, 26, SURF_RANGE])
+    for (let i = 0; i < 8 && !water; i++) {
+      const x = listener.x + Math.cos((i * Math.PI) / 4) * radius,
+        z = listener.z + Math.sin((i * Math.PI) / 4) * radius;
+      if (isWater(x, z, city)) water = { x, z, radius };
+    }
+  if (!water) return 0;
+  // Height above that water counts too: a cliff top or roof hears little surf.
+  const height = Math.max(0, listener.y - surfaceLevel(water.x, water.z, city));
+  const distance = Math.hypot(water.radius, height);
+  return distance >= SURF_RANGE ? 0 : 0.25 * (1 - distance / SURF_RANGE) ** 2;
+}
 export class GameAudio {
   private context: AudioContext | undefined;
   private master: GainNode | undefined;
@@ -462,9 +487,8 @@ export class GameAudio {
         loop("wind", "wind", listener, 1, Math.min(1, Math.abs(listener.vy) / 4));
         loop("canopy", "canopy", listener, 1, Math.min(1, Math.abs(listener.vy) / 4));
       }
-      const shore = Math.max(Math.abs(listener.x), Math.abs(listener.z));
-      if (shore > 690)
-        loop("coast", "coast", listener, 1, Math.min(1, (shore - 690) / 100));
+      const surf = surfIntensity(listener, city);
+      if (surf > 0) loop("coast", "coast", listener, 1, surf);
       for (const entry of this.hydrants
         .slice()
         .sort(

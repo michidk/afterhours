@@ -42,7 +42,7 @@ The library contains 149 edited CC0 clips across 53 sound banks. Every bank has 
 | jetpack      |     3 | Active powered jetpack movement               | Reuses wind takes; spatial attenuation within 28 m                           |
 | canopy       |     3 | Local parachute descent                       | Quiet fabric flutter; stops when the canopy closes                           |
 | water        |     3 | Server reports broken hydrant debris          | Pressurized pipe-leak excerpts; nearest two hydrants, removed on restoration |
-| coast        |     3 | Player approaches island edge                 | Waves fade in beyond 690 m on either axis                                    |
+| coast        |     3 | Player near or in sea or lake water           | Full volume while swimming; within 35 m of water (counting height above it) fades from a quarter to silence; silent elsewhere (`surfIntensity`) |
 
 ## Engine behavior
 
