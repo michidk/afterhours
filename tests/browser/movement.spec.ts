@@ -27,6 +27,25 @@ interface MovementSample {
 // off CI only; input cadence, authority speed, rewind and stop checks always run.
 const freezeLimitMs = process.env.CI ? Infinity : 250;
 
+/**
+ * Wait until the city around the player has streamed in. Building freshly streamed
+ * chunks with software WebGL stretches frames past the input clock's 250 ms
+ * catch-up limit, so a hold measured while a new area loads sends too few commands.
+ */
+async function waitForStreamedCity(page: import("@playwright/test").Page) {
+  await page.waitForFunction(
+    () => {
+      const stream = window.afterhoursDebug?.stream();
+      return !!stream && stream.pending === 0;
+    },
+    undefined,
+    { polling: 250, timeout: 90_000 },
+  );
+  await page.evaluate(async () => {
+    for (let i = 0; i < 10; i++) await window.afterhoursDebug!.settle();
+  });
+}
+
 declare global {
   interface Window {
     afterhoursDebug?: AgentInterface;
@@ -137,6 +156,7 @@ for (const delay of [0, 150]) {
       },
       { x: manifest.airport.x + 50, z: manifest.airport.z - 60 },
     );
+    await waitForStreamedCity(page);
     await page.evaluate(async (delay) => {
       const debug = window.afterhoursDebug;
       if (!debug) throw Error("Debug interface missing");
@@ -506,6 +526,7 @@ for (const model of ["sedan", "scout"] as const) {
       // Away from the town hall's parked cars, so F boards the spawned vehicle.
       { model, origin: { x: manifest.airport.x + 50, z: manifest.airport.z - 60 } },
     );
+    await waitForStreamedCity(page);
     await page.keyboard.press("f");
     await page.waitForFunction((id) => {
       const d = window.afterhoursDebug;

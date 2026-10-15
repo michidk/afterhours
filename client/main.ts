@@ -136,10 +136,17 @@ $("#join").addEventListener("submit", (event) => {
         if (!debugAllowed) $("#debug").classList.add("hidden");
         document.querySelector(".debug-hint")?.classList.toggle("hidden", !m.debug);
         if (debugAllowed && network) {
-          automation = new AgentInterface(network, scene, setCamera, {
-            places: async () => adminPlaces(cityStream.map, await cityMap!.landmarks()),
-            players: () => roster.filter((player) => player.id !== playerId),
-          });
+          automation = new AgentInterface(
+            network,
+            scene,
+            setCamera,
+            {
+              places: async () =>
+                adminPlaces(cityStream.map, await cityMap!.landmarks()),
+              players: () => roster.filter((player) => player.id !== playerId),
+            },
+            () => cityStream.diagnostics,
+          );
           Object.defineProperty(window, "afterhoursDebug", {
             configurable: true,
             value: automation,

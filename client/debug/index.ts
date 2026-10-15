@@ -23,7 +23,12 @@ export class AgentInterface {
     readonly scene: CityScene,
     readonly setCamera: (mode: CameraMode) => void,
     readonly admin?: AdminSources,
+    private streamState?: () => { pending: number; wanted: number; resident: number },
   ) {}
+  /** City chunk streaming: chunks still downloading, wanted around the view, loaded. */
+  stream() {
+    return this.streamState?.();
+  }
   inspect() {
     return structuredClone({
       player: this.network.entities.get(this.network.playerId),
