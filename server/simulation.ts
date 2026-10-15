@@ -57,6 +57,8 @@ import {
   WORLD_LIMIT,
   watercraft,
   resolveWorldBounds,
+  setWaveTime,
+  surfaceLevel,
 } from "../shared/water.ts";
 import { watercraftForces } from "../shared/physics/watercraft.ts";
 import { Inventory } from "./inventory.ts";
@@ -269,7 +271,7 @@ export class Simulation {
       kind,
       x,
       z,
-      y: groundLevel(x, z, this.city),
+      y: (watercraft(kind) ? surfaceLevel : groundLevel)(x, z, this.city),
       angle: 0,
       vx: 0,
       vz: 0,
@@ -311,7 +313,7 @@ export class Simulation {
       p.vz = v.vz;
       p.vy = Math.min(0, v.vy);
       p.parachute =
-        (v.y > groundLevel(v.x, v.z, this.city) + 0.2 &&
+        (v.y > surfaceLevel(v.x, v.z, this.city) + 0.2 &&
           (v.kind === "helicopter" || v.kind === "plane")) ||
         undefined;
     }
@@ -358,7 +360,7 @@ export class Simulation {
     v.takeoffDelay = undefined;
     if (
       (v.kind === "helicopter" || v.kind === "plane") &&
-      v.y > groundLevel(v.x, v.z, this.city) + 0.2
+      v.y > surfaceLevel(v.x, v.z, this.city) + 0.2
     )
       v.flight = "falling";
     else if (v.kind === "helicopter") v.flight = "grounded";
@@ -368,7 +370,7 @@ export class Simulation {
     const airborne =
       v.kind === "car"
         ? !carGrounded(v, this.city) && v.flooded === undefined
-        : v.y > groundLevel(v.x, v.z, this.city) + 0.2;
+        : v.y > surfaceLevel(v.x, v.z, this.city) + 0.2;
     if (airborne && v.kind !== "helicopter" && v.kind !== "plane") return false;
     const model = v.model && VEHICLES[v.model];
     const distance = Math.max(
@@ -405,7 +407,7 @@ export class Simulation {
           continue;
         p.x = x;
         p.z = z;
-        p.y = airborne ? v.y : groundLevel(x, z, this.city);
+        p.y = airborne ? v.y : surfaceLevel(x, z, this.city);
         p.vx = airborne ? clamp(v.vx, -6, 6) : 0;
         p.vz = airborne ? clamp(v.vz, -6, 6) : 0;
         p.vy = airborne ? -1 : 0;
@@ -609,7 +611,7 @@ export class Simulation {
           p.vz = clamp(e.vz, -6, 6);
           p.vy = Math.min(0, e.vy);
           p.parachute =
-            (p.y > groundLevel(p.x, p.z, this.city) + 0.2 &&
+            (p.y > surfaceLevel(p.x, p.z, this.city) + 0.2 &&
               (e.kind === "helicopter" || e.kind === "plane")) ||
             undefined;
         }
@@ -781,6 +783,7 @@ export class Simulation {
     near?: Entity[],
   ) {
     this.time += stepDt;
+    setWaveTime(this.time);
     this.grenades.step(
       this.city,
       this.time,

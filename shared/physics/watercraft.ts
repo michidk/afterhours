@@ -1,6 +1,13 @@
 import { DEFAULT_MODELS, VEHICLES } from "../catalog.ts";
 import type { City, Entity } from "../world.ts";
-import { groundLevel, isWater, WATER_LEVEL, watercraft } from "../water.ts";
+import {
+  groundLevel,
+  isWater,
+  SURF,
+  surfaceLevel,
+  surfaceSlope,
+  watercraft,
+} from "../water.ts";
 import { clamp, type Drive } from "./vehicle.ts";
 
 /** A beached hull slides on its keel: no thrust or steering, only friction and slope. */
@@ -36,7 +43,11 @@ export function watercraftForces(e: Entity, drive: Drive, dt: number, city?: Cit
   e.angularVelocity =
     (e.angularVelocity || 0) +
     (targetYaw - (e.angularVelocity || 0)) * (1 - Math.exp(-4 * dt));
-  e.y = city?.terrain ? groundLevel(e.x, e.z, city) : WATER_LEVEL;
+  // The swell rocks the hull back and forth down its slope.
+  const slope = surfaceSlope(e.x, e.z, city);
+  e.vx -= SURF.push * slope.x * dt;
+  e.vz -= SURF.push * slope.z * dt;
+  e.y = surfaceLevel(e.x, e.z, city);
   e.vy = 0;
 }
 

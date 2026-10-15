@@ -36,7 +36,8 @@ import {
   WORLD_LIMIT,
   groundLevel,
   isWater,
-  waterLevel,
+  surfaceLevel,
+  swimming,
   watercraft,
   WATER_LEVEL,
 } from "../shared/water.ts";
@@ -145,7 +146,8 @@ $("#join").addEventListener("submit", (event) => {
       state(m) {
         entities = m.entities;
         pickups = m.pickups;
-        scene.time = m.time;
+        // Ease toward server time so the swell never jumps; snap after a stall.
+        scene.time += (m.time - scene.time) * (Math.abs(m.time - scene.time) > 1 ? 1 : 0.2);
         scene.day = m.day;
         scene.dayRate = m.dayRate ?? 1 / 75;
         scene.updatePickups(m.pickups);
@@ -693,8 +695,7 @@ async function boot() {
           ? "KM/H"
           : p.parachute
             ? "PARACHUTE"
-            : isWater(p.x, p.z, scene.city) &&
-                p.y <= waterLevel(p.x, p.z, scene.city) + 0.1
+            : swimming(p, scene.city)
               ? "SWIMMING"
               : "ON FOOT";
         $("#weapon").textContent = p.down
@@ -744,7 +745,7 @@ async function boot() {
               availableSeat(e) >= 0 &&
               !e.wreck &&
               e.burning === undefined &&
-              e.y - groundLevel(e.x, e.z, scene.city) < 0.5 &&
+              e.y - surfaceLevel(e.x, e.z, scene.city) < 0.5 &&
               Math.abs(e.y - p.y) < (watercraft(e.kind) ? 1.6 : 0.5) &&
               Math.hypot(e.x - p.x, e.z - p.z) < 6,
           )
@@ -771,7 +772,7 @@ async function boot() {
               ? `${availableSeat(nearVehicle) === 0 ? "Drive" : "Ride in"} ${nearVehicle.model ? VEHICLES[nearVehicle.model].name : nearVehicle.kind} (${occupiedSeats(nearVehicle)}/${seatCapacity(nearVehicle)} seats)`
               : "No nearby vehicle or weapon";
         $("#prompt").innerHTML = v
-          ? v.y - groundLevel(v.x, v.z, scene.city) > 0.2 &&
+          ? v.y - surfaceLevel(v.x, v.z, scene.city) > 0.2 &&
             (v.kind === "helicopter" || v.kind === "plane")
             ? `<kbd>F</kbd> Exit and deploy parachute`
             : `<kbd>F</kbd> Exit ${v.kind}${v.kind === "plane" ? " · E / Q altitude" : ""}`

@@ -5,7 +5,7 @@ import { Simulation } from "../server/simulation.ts";
 import { idle } from "../shared/world.ts";
 import { propulsionRunning } from "../shared/propulsion.ts";
 import { FLOOD, waterDepth } from "../shared/physics/flooding.ts";
-import { groundLevel, isWater, waterLevel } from "../shared/water.ts";
+import { groundLevel, isWater, surfaceLevel, waterLevel } from "../shared/water.ts";
 
 const saved = await loadCity();
 
@@ -52,8 +52,8 @@ test("a car driven into deep water floods, sinks, lets its driver swim out and t
   assert.equal(driver.vehicle, undefined, "the driver gets out");
   for (let i = 0; i < 30; i++) sim.tick(1 / 30);
   assert.ok(
-    Math.abs(driver.y - waterLevel(driver.x, driver.z, sim.city)) < 0.05,
-    "and swims at the surface",
+    Math.abs(driver.y - surfaceLevel(driver.x, driver.z, sim.city)) < 0.05,
+    "and swims on the swell",
   );
   for (let i = 0; i < FLOOD.seconds * 30; i++) sim.tick(1 / 30);
   assert.notEqual(car.wreck, undefined, "the flooded car explodes");

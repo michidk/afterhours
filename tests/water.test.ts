@@ -10,6 +10,7 @@ import {
   groundLevel,
   isWater,
   resolveWorldBounds,
+  surfaceLevel,
 } from "../shared/water.ts";
 import {
   contact,
@@ -47,7 +48,8 @@ function run(s: Simulation, seconds: number) {
   for (let i = 0; i < Math.round(seconds * 30); i++) s.tick(1 / 30);
 }
 function afloat(e: Entity) {
-  assert.equal(e.y, -1.1);
+  // Bodies the server integrates once per tick can trail the wave clock by a few substeps.
+  assert.ok(Math.abs(e.y - surfaceLevel(e.x, e.z)) < 0.03, "rides the swell");
   assert.equal(
     contact(entityBox(e), island),
     undefined,
@@ -223,10 +225,10 @@ test("swimmers can board together, exit to water, and step onto the shoreline", 
   assert.equal(craft.driver, driver.id);
   s.inputs.set(passenger.id, { ...idle(), up: true });
   run(s, 1);
-  assert.equal(craft.z, 0, "passengers do not control propulsion");
+  assert.ok(Math.abs(craft.z) < 0.2, "passengers do not control propulsion; only the swell rocks it");
   s.interact(passenger.id);
   assert.equal(passenger.vehicle, undefined);
-  assert.equal(passenger.y, -1.1);
+  assert.equal(passenger.y, surfaceLevel(passenger.x, passenger.z, s.city));
   assert.equal(passenger.parachute, undefined);
   assert.equal(craft.driver, driver.id);
   s.inputs.set(passenger.id, { ...idle(), right: true });
@@ -256,7 +258,7 @@ test("swimming slows locomotion, then a parachute lands at water height", () => 
   p.parachute = true;
   s.inputs.set(p.id, idle());
   run(s, 4);
-  assert.equal(p.y, -1.1);
+  assert.equal(p.y, surfaceLevel(p.x, p.z, s.city), "lands on the swell");
   assert.equal(p.parachute, undefined);
 });
 

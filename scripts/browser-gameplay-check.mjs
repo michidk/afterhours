@@ -195,14 +195,11 @@ try {
       );
     }
     await page.evaluate("window.afterhoursDebug.teleport(-950,0)");
-    const waterBefore = await page.evaluate(
-      'Array.from(window.afterhoursDebug.scene.scene.getMeshByName("animated water").getVerticesData("position")).slice(0,90)',
-    );
+    // The swell is displaced on the GPU; a swimmer's authoritative height rides it.
+    const swimHeight = () => page.evaluate("window.afterhoursDebug.inspect().player.y");
+    const waterBefore = await swimHeight();
     await pause(500);
-    const waterAfter = await page.evaluate(
-      'Array.from(window.afterhoursDebug.scene.scene.getMeshByName("animated water").getVerticesData("position")).slice(0,90)',
-    );
-    assert.notDeepEqual(waterBefore, waterAfter, "Water vertices did not animate");
+    assert.notEqual(waterBefore, await swimHeight(), "The swimmer did not ride the swell");
     await transportCapture("water");
     const aiBefore = (
       await page.evaluate("window.afterhoursDebug.state()")

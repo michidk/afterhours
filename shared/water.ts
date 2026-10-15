@@ -1,5 +1,5 @@
 import { LIMIT, type Entity, type City, type Kind } from "./world.ts";
-import { contact, entityBox, shape } from "./physics/collision.ts";
+import { contact, entityBox, shape, vehicle } from "./physics/collision.ts";
 import { TERRAIN_SIDE, TERRAIN_STEP, terrainHeight } from "./terrain.ts";
 import { pointInPolygon } from "./polygon.ts";
 import { clamp } from "./physics/vehicle.ts";
@@ -73,8 +73,65 @@ export function waterLevel(x: number, z: number, city?: WaterCity) {
 }
 export const isWater = (x: number, z: number, city?: WaterCity) =>
   terrainHeight(x, z, city) < waterLevel(x, z, city);
+/** The still surface: static placement and rest checks. Floating bodies use surfaceLevel. */
 export const groundLevel = (x: number, z: number, city?: WaterCity) =>
   Math.max(waterLevel(x, z, city), terrainHeight(x, z, city));
+
+/**
+ * Sea swell: deep-water sine waves (lengths and heights in metres) summed along their
+ * headings. Lakes and rivers stay calm. The client's water shader is generated from this.
+ */
+export const WAVES = [
+  { heading: 0.55, length: 46, height: 0.3, phase: 0 },
+  { heading: 1.05, length: 27, height: 0.15, phase: 1.7 },
+  { heading: 0.15, length: 15, height: 0.075, phase: 4.1 },
+  { heading: 1.5, length: 8.5, height: 0.035, phase: 2.6 },
+].map((w) => {
+  const k = (2 * Math.PI) / w.length;
+  return { ...w, k, omega: Math.sqrt(9.81 * k), dx: Math.sin(w.heading), dz: Math.cos(w.heading) };
+});
+/** Swell dies out over `shoal` metres of depth; the shore laps `swash` metres up the beach. */
+export const SURF = { shoal: 6, swash: 0.18, reach: 3, push: 4 };
+export const WAVE_MAX = WAVES.reduce((sum, w) => sum + w.height, SURF.swash);
+export const smoothstep = (a: number, b: number, v: number) => {
+  const t = clamp((v - a) / (b - a), 0, 1);
+  return t * t * (3 - 2 * t);
+};
+/** Sea surface offset from WATER_LEVEL at a point `depth` metres deep. */
+export function seaWave(x: number, z: number, time: number, depth: number) {
+  let h = 0;
+  for (const w of WAVES)
+    h += w.height * Math.sin(w.k * (w.dx * x + w.dz * z) - w.omega * time + w.phase);
+  // Shoreward-running swash rises a little way up the beach and drains back.
+  const lap = smoothstep(-0.5, 0, depth) * (1 - smoothstep(0.5, SURF.reach, depth));
+  return (
+    h * smoothstep(0, SURF.shoal, depth) +
+    SURF.swash * lap * Math.sin(1.2 * time + 1.4 * depth + 0.02 * (x + z))
+  );
+}
+// shortcut: one wave clock per process; give each Simulation its own if a server hosts several worlds.
+let clock = 0;
+/** The server sets its simulation time every substep; clients set their estimate of it. */
+export const setWaveTime = (time: number) => void (clock = time);
+export const waveTime = () => clock;
+/** Where floating bodies rest: on the swell at sea, a still lake, or dry ground. */
+export function surfaceLevel(x: number, z: number, city?: WaterCity, time = clock) {
+  const level = waterLevel(x, z, city),
+    ground = terrainHeight(x, z, city);
+  return Math.max(
+    ground,
+    level === WATER_LEVEL ? level + seaWave(x, z, time, level - ground) : level,
+  );
+}
+/** Surface gradient over a hull-sized span. */
+export function surfaceSlope(x: number, z: number, city?: WaterCity, span = 1.5) {
+  return {
+    x: (surfaceLevel(x + span, z, city) - surfaceLevel(x - span, z, city)) / (2 * span),
+    z: (surfaceLevel(x, z + span, city) - surfaceLevel(x, z - span, city)) / (2 * span),
+  };
+}
+export const swimming = (e: Entity, city?: WaterCity) =>
+  isWater(e.x, e.z, city) && e.y <= surfaceLevel(e.x, e.z, city) + 0.1;
 
 /** Keep bodies inside the world edge and on the ground or water surface. */
 export function resolveWorldBounds(e: Entity, city?: City) {
@@ -95,8 +152,6 @@ export function resolveWorldBounds(e: Entity, city?: City) {
       e.angularVelocity = (e.angularVelocity || 0) * 0.5;
     }
     // Boats keep their momentum onto land and slide to a halt (physics/watercraft.ts).
-    e.y = city?.terrain ? groundLevel(e.x, e.z, city) : WATER_LEVEL;
-    e.vy = 0;
   }
   const s = shape(e),
     c = Math.abs(Math.cos(e.angle)),
@@ -114,13 +169,19 @@ export function resolveWorldBounds(e: Entity, city?: City) {
     e.z = clamp(e.z, -limit + rz, limit - rz);
     if (e.vz * e.z > 0) e.vz *= -0.15;
   }
+  if (watercraft(e.kind)) {
+    e.y = surfaceLevel(e.x, e.z, city);
+    e.vy = 0;
+  }
   // A flooded car sinks below the surface it would otherwise rest on.
-  if (!watercraft(e.kind))
+  else
     e.y = Math.max(
       e.y,
       e.flooded !== undefined
         ? terrainHeight(e.x, e.z, city)
-        : groundLevel(e.x, e.z, city),
+        : vehicle(e)
+          ? groundLevel(e.x, e.z, city)
+          : surfaceLevel(e.x, e.z, city),
     );
   return impact;
 }

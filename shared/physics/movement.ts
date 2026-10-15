@@ -6,10 +6,13 @@ import { JETPACK, jetpackThrust } from "./jetpack.ts";
 import { idle, inputX, inputY, type City, type Entity, type Input } from "../world.ts";
 import {
   groundLevel,
-  isWater,
-  waterLevel,
+  setWaveTime,
+  surfaceLevel,
+  swimming,
   WATER_LEVEL,
+  WAVE_MAX,
   watercraft,
+  waveTime,
   resolveWorldBounds,
 } from "../water.ts";
 import { watercraftForces } from "./watercraft.ts";
@@ -45,7 +48,7 @@ export function characterForces(
         ? 6
         : e.jetpack?.active && e.jetpack.fuel > 0 && e.y > 0.2 && !e.vehicle && !e.down
           ? JETPACK.speed
-          : isWater(e.x, e.z, city) && e.y <= waterLevel(e.x, e.z, city) + 0.1
+          : swimming(e, city)
             ? 2.8
             : input.sprint || input.brake
               ? TUNING.sprint * PHYSIQUES[e.character?.physique ?? "regular"].speed
@@ -76,9 +79,9 @@ export function characterAltitude(
   dt: number,
   input: Input = idle(),
 ) {
-  let floor = groundLevel(e.x, e.z, city);
+  let floor = surfaceLevel(e.x, e.z, city);
   // The quay's shallow step is traversable from swimming height.
-  if (floor === 0 && e.y >= WATER_LEVEL - 0.02 && e.y < 0) e.y = 0;
+  if (floor === 0 && e.y >= WATER_LEVEL - WAVE_MAX && e.y < 0) e.y = 0;
   for (const b of staticGeometry(city).query(e.x, e.z, 1)) {
     const roof = b.h + 1.8;
     if (!b.obstacle && roof <= e.y + 0.02 && insideBuilding(b, e.x, e.z))
@@ -146,8 +149,11 @@ export function predictStep(
   const count = Math.ceil(dt / TUNING.physicsStep),
     h = dt / count;
   const bodies = [e, ...shadows];
+  // The caller sets the wave clock to the end of `dt`; replay the server's substep times.
+  const end = waveTime();
   for (let i = 0; i < count; i++) {
-    if (e.down || e.wreck) return;
+    if (e.down || e.wreck) break;
+    setWaveTime(end - dt + (i + 1) * h);
     const previous = { x: e.x, y: e.y, z: e.z, vy: e.vy, vz: e.vz };
     if (!vehicle(e)) characterForces(e, input, h, undefined, city);
     else if (e.kind === "car") {
@@ -211,10 +217,11 @@ export function predictStep(
       b.z += b.vz * h;
       if (vehicle(b)) b.angle = wrap(b.angle + (b.angularVelocity || 0) * h);
       if (b.kind === "car") carAltitude(b, previous, city, h);
-      else b.y = Math.max(groundLevel(b.x, b.z, city), b.y + b.vy * h);
+      else b.y = Math.max(surfaceLevel(b.x, b.z, city), b.y + b.vy * h);
     }
     resolveMovementContacts(bodies, city, contacts, impacts);
   }
+  setWaveTime(end);
 }
 
 /** Provisional contact solve; never damage entities or change gameplay ownership. */

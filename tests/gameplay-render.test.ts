@@ -128,15 +128,16 @@ test("all catalog models, weapons, supplies, grenades, parachutes and animated w
     assert.ok(scene.getMeshByName("thrown grenade"));
     host.updateGrenades([]);
     assert.equal(scene.getMeshByName("thrown grenade"), null);
+    Object.assign(host, { camera: { position: new Vector3(100.3, 40, -50.2) } });
     const water = new WaterRenderer(host);
     const mesh = scene.getMeshByName("animated water")!;
-    const before = Array.from(mesh.getVerticesData(VertexBuffer.PositionKind)!);
     host.batchStatic([mesh as Mesh]);
     assert.equal(mesh.isDisposed(), false);
-    water.update(1, 1);
-    const after = Array.from(mesh.getVerticesData(VertexBuffer.PositionKind)!);
-    assert.notDeepEqual(after, before);
-    assert.ok(after.filter((_, i) => i % 3 === 1).every((y) => Math.abs(y) <= 0.131));
+    // The swell is displaced on the GPU; the grid follows the camera in whole cells.
+    water.update(1);
+    assert.equal(mesh.position.y, WATER_LEVEL);
+    assert.ok(Math.abs(mesh.position.x - 100.3) < 1 && Math.abs(mesh.position.z + 50.2) < 1);
+    assert.ok(mesh.getVerticesData(VertexBuffer.PositionKind)!.every((v, i) => i % 3 !== 1 || v === 0));
     assert.equal(WATER_LEVEL, -1.1);
     const effects = new Effects(scene, (color, glow) => host.mat(color, glow));
     effects.effect({ kind: "flame", x: 0, y: 1, z: 0, angle: 0, length: 9 });

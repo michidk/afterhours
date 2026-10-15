@@ -1,7 +1,7 @@
 import { SceneryCulling } from "./world/culling.ts";
 import { buildInlandWater, buildTerrain } from "./world/terrain.ts";
 import { buildHeadlightCones, CarLights } from "./models/car-lights.ts";
-import { buildCharacter, poseCharacter } from "./models/character.ts";
+import { buildCharacter, poseCharacter, poseSwimmer } from "./models/character.ts";
 import { buildRoad } from "./models/road.ts";
 import { buildBuilding } from "./models/buildings/index.ts";
 import "@babylonjs/core/Shaders/default.vertex";
@@ -53,7 +53,14 @@ import { buildParachute } from "./models/parachute.ts";
 import { buildWeapon } from "./models/weapons.ts";
 import { WaterRenderer } from "./world/water.ts";
 import { buildWatercraft } from "./models/watercraft.ts";
-import { groundLevel, watercraft } from "../shared/water.ts";
+import {
+  groundLevel,
+  isWater,
+  setWaveTime,
+  surfaceLevel,
+  surfaceSlope,
+  watercraft,
+} from "../shared/water.ts";
 import type { GrenadeState } from "../shared/grenades.ts";
 import type { MeshGroup } from "../shared/city-mesh.ts";
 import { uploadMeshes } from "./world/mesh-buffers.ts";
@@ -658,7 +665,13 @@ export class CityScene {
     input: Input = idle(),
   ) {
     this.day = (this.day + this.dayRate * dt) % 24;
-    this.water.update(this.time, dt);
+    // Snapshots correct the clock; between them it runs on so the swell moves smoothly.
+    this.time += dt;
+    setWaveTime(this.time);
+    this.water.update(this.time);
+    for (const node of this.pickupNodes.values())
+      if (isWater(node.position.x, node.position.z, this.city))
+        node.position.y = surfaceLevel(node.position.x, node.position.z, this.city);
     const extrapolation = Math.min(
       TUNING.snapshot,
       Math.max(0, (performance.now() - this.grenadeReceived) / 1000),
@@ -752,10 +765,14 @@ export class CityScene {
             child.rotation.z += dt * (propulsionRunning(e) ? 60 : 0);
       }
       if (watercraft(e.kind)) {
-        n.rotation.x = Math.sin(this.time * 2 + e.x * 0.1) * 0.025;
+        // Ride the swell at render time, pitching and rolling with its slope.
+        const slope = surfaceSlope(e.x, e.z, this.city),
+          sx = Math.sin(e.angle),
+          cz = Math.cos(e.angle);
+        n.position.y = surfaceLevel(e.x, e.z, this.city) + 0.3;
+        n.rotation.x = -Math.atan(slope.x * sx + slope.z * cz);
         n.rotation.z =
-          -(e.angularVelocity || 0) * 0.12 +
-          Math.sin(this.time * 1.5 + e.z * 0.1) * 0.025;
+          -(e.angularVelocity || 0) * 0.12 - Math.atan(slope.x * cz - slope.z * sx);
         for (const child of parts) {
           if (child.name.startsWith("AI skipper")) child.setEnabled(!!e.ai);
           if (child.name === "water propeller")
@@ -768,6 +785,20 @@ export class CityScene {
         if (e.parachute) {
           n.rotation.x = -e.vz * 0.025;
           n.rotation.z += e.vx * 0.025;
+        }
+        const surface = surfaceLevel(e.x, e.z, this.city);
+        if (!e.down && !e.parachute && isWater(e.x, e.z, this.city) && e.y < surface + 0.4) {
+          const bed = terrainHeight(e.x, e.z, this.city),
+            stroke = surface - bed > 1.4 ? Math.min(1, Math.hypot(e.vx, e.vz) / 1.5) : 0;
+          // Tread water with the shoulders at the surface, or lie along it to swim;
+          // in the shallows the feet stay on the bed.
+          n.position.set(
+            e.x - Math.sin(e.angle) * 0.9 * stroke,
+            Math.max(bed + 0.3, surface - 1.38 + 1.09 * stroke),
+            e.z - Math.cos(e.angle) * 0.9 * stroke,
+          );
+          n.rotation.x = stroke * 1.35;
+          poseSwimmer(n, stroke, this.time);
         }
         for (const child of parts)
           if (child.name === "leg")
