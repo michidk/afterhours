@@ -118,7 +118,7 @@ test("a body within a human's reach is simulated exactly as before", () => {
   assert.deepEqual(trajectory(true), trajectory(false));
 });
 
-test("a distant body integrates once per tick and lands where the full-rate path does", () => {
+test("a distant body integrates every other tick and lands where the full-rate path does", () => {
   const trajectory = (lod: boolean) => {
     const s = world();
     s.lod = lod;
@@ -127,17 +127,22 @@ test("a distant body integrates once per tick and lands where the full-rate path
     ped.ai = car.ai = true;
     s.ai.pedestrian = () => ({ x: 1, z: 0.4, sprint: false });
     s.ai.car = () => ({ throttle: 1, steer: 0.15, brake: false });
-    run(s, 1);
+    // Over two ticks a distant body takes exactly one step covering both.
+    run(s, 2);
     const first = { ped: ped.x, car: car.z };
-    run(s, 29 * 5);
+    run(s, 28 * 5);
     return { first, ped, car, tick: distant(s).size };
   };
   const full = trajectory(false),
     coarse = trajectory(true);
   assert.equal(full.tick, 0);
   assert.equal(coarse.tick, 2, "both are distant: nobody is connected");
-  // One 1/30 s Euler step toward (1, 0.4): speed gains acceleration * dt, then position moves.
-  const single = (TUNING.acceleration * TUNING.tick * TUNING.tick) / Math.hypot(1, 0.4);
+  // One 1/15 s Euler step toward (1, 0.4): speed gains acceleration * dt, then position moves.
+  // Its speed gains acceleration * dt, capped at the AI walking speed, then the
+  // position moves once at that speed.
+  const dt = 2 * TUNING.tick,
+    walk = Math.hypot(coarse.ped.vx, coarse.ped.vz),
+    single = (Math.min(TUNING.acceleration * dt, walk) * dt) / Math.hypot(1, 0.4);
   assert.ok(
     Math.abs(coarse.first.ped - 900 - single) < 1e-9,
     `a single step moved ${coarse.first.ped - 900}, expected ${single}`,

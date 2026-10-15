@@ -196,6 +196,8 @@ test("repeated driver exits replace citizens instead of growing the population",
   for (let cycle = 0; cycle < 20; cycle++) {
     sim.ai.citizens.state(car).personality = "timid";
     sim.damage(car, 2);
+    // Nobody is near, so the car is distant and moves on every other tick.
+    sim.tick(1 / 30);
     sim.tick(1 / 30);
     const person = [...sim.entities.values()].find((e) => e.kind === "pedestrian");
     assert.ok(person, "a damaged timid driver exits");

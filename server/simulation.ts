@@ -686,6 +686,11 @@ export class Simulation {
     const drives = new Map<Entity, Drive>();
     // Traffic and pedestrians nobody can see take one 30 Hz step in the first substep.
     const far = this.distantAi();
+    // Distant bodies take turns: each moves every other tick with twice the step, so it
+    // still advances at 15 Hz, the rate snapshots carry it at, for half the work.
+    const resting = new Set<Entity>();
+    for (const e of far)
+      if ((this.tickCount + (e.id.charCodeAt(e.id.length - 1) & 1)) % 2) resting.add(e);
     const near =
       far.size > 0 ? [...this.entities.values()].filter((e) => !far.has(e)) : undefined;
     for (let i = 0; i < steps; i++) {
@@ -702,6 +707,7 @@ export class Simulation {
         steps,
         far,
         i === 0 ? undefined : near,
+        resting,
       );
     }
     this.pausedInputs.clear();
@@ -765,10 +771,47 @@ export class Simulation {
    * spreads evenly, and keeps walking toward its last target in between. It re-plans with the
    * time since its previous plan, so its stuck and wait timers still measure real elapsed time.
    */
+  /**
+   * A parked vehicle at rest: no driver or AI, nothing burning, flooding or wrecked,
+   * no motion, settled on gentle ground or afloat. It skips integration and static
+   * contacts. It stays an obstacle, so a collision that gives it velocity wakes it on
+   * the next substep. Airport planes, moored boats and the town hall's cars all sleep.
+   */
+  private asleep(e: Entity) {
+    if (
+      !vehicle(e) ||
+      e.driver ||
+      e.ai ||
+      e.wreck !== undefined ||
+      e.burning !== undefined ||
+      e.flooded !== undefined ||
+      Math.abs(e.vx) > 0.02 ||
+      Math.abs(e.vz) > 0.02 ||
+      Math.abs(e.vy) > 0.02 ||
+      Math.abs(e.angularVelocity || 0) > 0.01
+    )
+      return false;
+    if (watercraft(e.kind)) return true;
+    if (e.kind === "car") {
+      if (!carGrounded(e, this.city)) return false;
+      // The parking brake holds about half a grade; steeper ground may still roll it.
+      const slope = Math.hypot(
+        groundLevel(e.x + 1, e.z, this.city) - groundLevel(e.x - 1, e.z, this.city),
+        groundLevel(e.x, e.z + 1, this.city) - groundLevel(e.x, e.z - 1, this.city),
+      );
+      return slope / 2 < 0.3;
+    }
+    return (
+      (e.flight === undefined || e.flight === "grounded") &&
+      e.y <= groundLevel(e.x, e.z, this.city) + 0.2
+    );
+  }
   private pedestrianIntent(e: Entity, decisionDt: number, distant: boolean): Intent {
     const cached = this.plans.get(e);
     if (distant && cached) {
-      if ((this.tickCount + cached.phase) % 4 !== 0) {
+      // Distant bodies move every other tick, so count only those ticks: two of
+      // them, four ticks of time, between plans, staggered over all four ticks.
+      if ((Math.floor(this.tickCount / 2) + cached.phase) % 2 !== 0) {
         // Repeating an attack every tick would be a different behaviour; only movement repeats.
         return { x: cached.intent.x, z: cached.intent.z, sprint: cached.intent.sprint };
       }
@@ -800,6 +843,7 @@ export class Simulation {
     substeps: number,
     far: Set<Entity>,
     near?: Entity[],
+    resting = new Set<Entity>(),
   ) {
     this.time += stepDt;
     setWaveTime(this.time);
@@ -820,9 +864,15 @@ export class Simulation {
       this.spatial.clear();
       for (const e of list) if (!e.vehicle) this.spatial.insert(e, e.x, e.z, 6);
     }
+    const sleeping = new Set<Entity>();
     for (const e of list) {
-      // A distant body is integrated once per tick, so it covers the whole tick at once.
-      const dt = far.has(e) ? stepDt * substeps : stepDt;
+      if (resting.has(e)) {
+        sleeping.add(e);
+        continue;
+      }
+      // A distant body is integrated once every other tick, covering both ticks at once.
+      const dt = far.has(e) ? stepDt * substeps * 2 : stepDt,
+        decide = far.has(e) ? decisionDt * 2 : decisionDt;
       e.cooldown = Math.max(0, (e.cooldown || 0) - dt);
       if (e.kind === "player") this.inventory.tick(e, this.time);
       if (e.wreck) {
@@ -847,6 +897,17 @@ export class Simulation {
         if (e.flooded <= 0) this.explode(e);
       }
       if (e.vehicle) continue;
+      if (this.asleep(e)) {
+        sleeping.add(e);
+        // Settle the last traces of motion; nobody drives it, so its lights are off.
+        e.vx = e.vz = e.vy = 0;
+        e.angularVelocity = 0;
+        if (e.kind === "car") e.lightsOn = false;
+        // Moored boats keep riding the swell, settled once per tick.
+        if (watercraft(e.kind) && substep === substeps - 1)
+          e.y = surfaceLevel(e.x, e.z, this.city);
+        continue;
+      }
       if (e.down) {
         e.down = Math.max(0, e.down - dt);
         e.vx *= Math.exp(-5 * dt);
@@ -860,7 +921,7 @@ export class Simulation {
         if (!vehicle(e)) {
           if (!e.down) {
             const aiDirection = e.ai
-              ? (intents.get(e) ?? this.pedestrianIntent(e, decisionDt, far.has(e)))
+              ? (intents.get(e) ?? this.pedestrianIntent(e, decide, far.has(e)))
               : undefined;
             if (aiDirection) intents.set(e, aiDirection);
             characterForces(
@@ -898,7 +959,7 @@ export class Simulation {
             ? { throttle: 0, steer: 0, brake: true }
             : e.ai
               ? (drives.get(e) ??
-                this.ai.car(e, this.spatial.query(e.x, e.z, 24), this.time, decisionDt))
+                this.ai.car(e, this.spatial.query(e.x, e.z, 24), this.time, decide))
               : {
                   throttle: inputY(input),
                   steer: inputX(input),
@@ -987,7 +1048,7 @@ export class Simulation {
     for (let pass = 0; pass < 3; pass++) {
       const bodies = pass === 0 ? list : fine;
       for (const e of bodies) {
-        if (e.vehicle || !this.entities.has(e.id)) continue;
+        if (e.vehicle || sleeping.has(e) || !this.entities.has(e.id)) continue;
         const pose = {
           x: e.x,
           y: e.y,

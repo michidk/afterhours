@@ -85,6 +85,12 @@ Profiling the real server loop (`bun run bench:server`) put about 85% of the tic
 - **First debris event.** Rapier built the terrain acceleration structures on the first live step, 84 ms inside a tick. `prepare()` now runs a throwaway body against the terrain before the server listens; the first impact costs about 30 ms in total.
 - The spatial index of moving bodies is rebuilt only on the substeps where AI decisions read it.
 
+### Sleeping parked vehicles and 15 Hz distant bodies (2026-10-15)
+
+The new destinations park vehicles all over the island: moored boats, airport planes, the town hall's cars and the racers on the grid. The level of detail covers only AI bodies, so every one of them ran full-rate physics, and the tick cost about 19% more than before (mean 5.3 ms against 4.4 ms on a desktop, `bun run bench:simulation`). A vehicle with no driver or AI, nothing burning, flooding or wrecked, no motion, and settled on ground gentler than half a grade or afloat now sleeps (`Simulation.asleep`): it skips integration and static contacts but stays an obstacle, so a hit that gives it velocity wakes it on the next substep. Moored boats keep their height on the swell, set once per tick. Distant AI bodies now move every other tick with a doubled step and doubled decision time, half of them on each tick, which is 15 Hz: the rate snapshots carry them at. Their pedestrians count only the ticks they move when spacing re-plans. Together the tick fell to a mean of 3.2 ms (p95 5.0 ms, from 7.9 ms).
+
+On 2026-10-15 production also stalled for seconds at a time because its node ran at 95% CPU, almost all of it another workload; a single-threaded 30 Hz simulation cannot keep time on an oversubscribed node however cheap its ticks are.
+
 Wall-clock timing on a shared machine is noisy, so the comparisons use alternating blocks and thread CPU time (`bun run bench:lod`). They show relative cost, not production capacity: measure `/health` after a rollout (`ticks` against wall time, `late`, `tickP95Ms`). Distant bodies beyond a human's view are simulated more coarsely by design; a debug camera that moves snapshot interest far from every human will show them.
 
 ## Server overload
