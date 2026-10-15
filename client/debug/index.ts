@@ -4,6 +4,14 @@ import type { VehicleModel } from "../../shared/catalog.ts";
 import type { GameNetwork } from "../network/index.ts";
 import type { CityScene } from "../scene.ts";
 import type { CameraMode, CameraPoint } from "../camera/debug.ts";
+import type { PlayerSummary } from "../../shared/protocol.ts";
+import type { AdminPlaceGroup } from "./admin.ts";
+
+/** Data the admin tools read from the running client. */
+export interface AdminSources {
+  places(): Promise<AdminPlaceGroup[]>;
+  players(): PlayerSummary[];
+}
 
 export class AgentInterface {
   input: Input | undefined;
@@ -14,6 +22,7 @@ export class AgentInterface {
     readonly network: GameNetwork,
     readonly scene: CityScene,
     readonly setCamera: (mode: CameraMode) => void,
+    readonly admin?: AdminSources,
   ) {}
   inspect() {
     return structuredClone({
@@ -75,6 +84,26 @@ export class AgentInterface {
   }
   teleport(x: number, z: number) {
     return this.command({ kind: "teleport", x, z });
+  }
+  /** Admin: nearest clear site to x, z; a seated driver brings the vehicle along. */
+  teleportTo(x: number, z: number) {
+    return this.command({ kind: "teleport", x, z, near: true });
+  }
+  /** Admin: move beside another connected player, however far away. */
+  gotoPlayer(id: string) {
+    return this.command({ kind: "gotoPlayer", id });
+  }
+  /** Admin: move another connected player beside you. */
+  bringPlayer(id: string) {
+    return this.command({ kind: "bringPlayer", id });
+  }
+  /** Admin: named destinations grouped by landmark kind. */
+  async places() {
+    return (await this.admin?.places()) ?? [];
+  }
+  /** Admin: connected players other than you. */
+  players() {
+    return structuredClone(this.admin?.players() ?? []);
   }
   spawn(model: VehicleModel) {
     return this.command({ kind: "spawn", model });

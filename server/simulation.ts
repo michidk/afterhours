@@ -63,7 +63,7 @@ import {
 import { watercraftForces } from "../shared/physics/watercraft.ts";
 import { Inventory } from "./inventory.ts";
 import { SpatialGrid } from "../shared/spatial.ts";
-import type { Building } from "../shared/world.ts";
+import { airportsOf, type Building } from "../shared/world.ts";
 
 import { flyPlane } from "../shared/physics/plane.ts";
 import { fallAircraft } from "../shared/physics/abandoned-aircraft.ts";
@@ -72,7 +72,7 @@ import { safeSpawn } from "./lifecycle.ts";
 import { availableSeat, vehicleSeats } from "../shared/seats.ts";
 import { Destruction } from "./destruction.ts";
 import { FLOOD, driftFlooded, floods } from "../shared/physics/flooding.ts";
-import type { Vec3 } from "../shared/destruction.ts";
+import { strikeDamage, strikeVelocity, type Vec3 } from "../shared/destruction.ts";
 import { Grenades } from "./grenades.ts";
 import type { PickupPayload } from "../shared/protocol.ts";
 /** Crates hand out every weapon but fists in turn, each fully loaded. */
@@ -138,37 +138,56 @@ export class Simulation {
       taken.push(s);
       return s;
     };
-    for (const [dx, dz, model] of [
-      [4, 25, undefined],
-      [-4, 44, "sport"],
-      [68, 25, "van"],
-    ] as const) {
-      const s = site(dx, dz);
-      this.spawn("car", s.x, s.z, undefined, model);
-    }
+    const starters = ["sedan", "sport", "van", "sedan", "sport", "sedan"] as const;
+    const hall = this.city.townHall;
+    if (hall?.parking.length)
+      // Starter cars stand in every few bays of the town hall car park.
+      starters.forEach((model, i) => {
+        const bay = hall.parking[(i * 5 + 2) % hall.parking.length];
+        this.spawn("car", bay.x, bay.z, undefined, model).angle = bay.angle;
+      });
+    else
+      for (const [dx, dz, model] of [
+        [4, 25, undefined],
+        [-4, 44, "sport"],
+        [68, 25, "van"],
+      ] as const) {
+        const s = site(dx, dz);
+        this.spawn("car", s.x, s.z, undefined, model);
+      }
+    for (const slot of this.city.racetrack?.grid ?? [])
+      this.spawn("car", slot.x, slot.z, undefined, "sport").angle = slot.angle;
     const heli = site(0, 36);
     this.spawn("helicopter", heli.x, heli.z);
-    this.spawn(
-      "plane",
-      this.city.airport.x,
-      this.city.airport.z - this.city.airport.d / 2 + 14,
-    );
     const utility = site(-64, 30);
     this.spawn("helicopter", utility.x, utility.z, undefined, "utility");
-    this.spawn(
-      "plane",
-      this.city.airport.x - 22,
-      this.city.airport.z - this.city.airport.d / 2 + 14,
-      undefined,
-      "aerobatic",
-    );
-    for (const [i, model] of (
-      ["boat", "launch", "jetski", "racer", "speedboat", "offshore"] as const
-    ).entries()) {
-      // Saved geometry stays immutable; craft use the fixed navigable shoreline.
-      this.spawn(VEHICLES[model].kind, -LIMIT - 7, -48 + i * 16, undefined, model);
-      const craft = this.spawn(VEHICLES[model].kind, 0, 0, undefined, model);
-      this.ai.assignWatercraft(craft, i);
+    // Every airport has a plane and an aerobatic plane at the runway threshold.
+    for (const a of airportsOf(this.city)) {
+      this.spawn("plane", a.x, a.z - a.d / 2 + 14);
+      this.spawn("plane", a.x - 22, a.z - a.d / 2 + 14, undefined, "aerobatic");
+    }
+    const craft = [
+      "boat",
+      "launch",
+      "jetski",
+      "racer",
+      "speedboat",
+      "offshore",
+    ] as const;
+    const berths = (this.city.harbours ?? []).flatMap((h) => h.berths);
+    // Boats lie moored in the harbours; cities without any keep a row offshore.
+    if (berths.length)
+      berths.forEach((berth, i) => {
+        const model = craft[i % craft.length];
+        this.spawn(VEHICLES[model].kind, berth.x, berth.z, undefined, model).angle =
+          berth.angle;
+      });
+    else
+      for (const [i, model] of craft.entries())
+        this.spawn(VEHICLES[model].kind, -LIMIT - 7, -48 + i * 16, undefined, model);
+    for (const [i, model] of craft.entries()) {
+      const boat = this.spawn(VEHICLES[model].kind, 0, 0, undefined, model);
+      this.ai.assignWatercraft(boat, i);
     }
     for (const p of this.city.pickups)
       this.inventory.addSource(
@@ -1006,11 +1025,11 @@ export class Simulation {
                 speed = Math.max(0, v.x * c.nx + v.z * c.nz);
               if (
                 speed > 2 &&
-                this.damageProp(b.destructibleId, (speed - 2) * 14, {
-                  x: e.vx * 0.7,
-                  y: 2,
-                  z: e.vz * 0.7,
-                })
+                this.damageProp(
+                  b.destructibleId,
+                  strikeDamage(speed),
+                  strikeVelocity(e),
+                )
               ) {
                 e.vx *= 0.96;
                 e.vz *= 0.96;

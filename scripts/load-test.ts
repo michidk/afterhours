@@ -1,4 +1,5 @@
-﻿import { decodeSnapshot } from "../shared/codec.ts";
+import { reuseCityEnv } from "./city-files.ts";
+import { decodeSnapshot } from "../shared/codec.ts";
 import { spawn } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import { WebSocket } from "ws";
@@ -10,7 +11,10 @@ const port = 19574,
   child = spawn(
     process.execPath,
     ["--import", "tsx", "server/index.ts", "--production"],
-    { env: { ...process.env, PORT: String(port), ALLOW_DEBUG: "0" }, stdio: "pipe" },
+    {
+      env: { ...process.env, ...reuseCityEnv(), PORT: String(port), ALLOW_DEBUG: "0" },
+      stdio: "pipe",
+    },
   );
 const sockets: WebSocket[] = [],
   timers: ReturnType<typeof setInterval>[] = [];

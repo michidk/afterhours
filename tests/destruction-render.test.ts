@@ -69,16 +69,24 @@ test("streamed fixtures hide, debris interpolates/fades, lights restore and mesh
     renderer.setPredictedImpacts(new Map([[source.id, { x: 0, y: 2, z: 30 }]]));
     renderer.update(16);
     const provisional = scene.getTransformNodeByName("fixture:" + source.id)!;
-    assert.ok(provisional.rotation.x > 0 && provisional.rotation.x <= 0.3);
     assert.equal(
       provisional.isEnabled(),
-      true,
-      "prediction cannot confirm destruction",
+      false,
+      "a predicted strike throws the fixture",
     );
-    assert.equal(renderer.diagnostics.debris, 0, "no competing debris trajectory");
+    assert.equal(renderer.diagnostics.debris, 1);
+    assert.equal(host.lighting.lamps.length, 0, "a thrown lamp goes dark at once");
+    for (let now = 32; now <= 160; now += 16) renderer.update(now);
+    const launched = scene.getTransformNodeByName("debris:" + source.id)!;
+    assert.ok(
+      launched.position.z > 2,
+      "the cosmetic launch flies before the server answers",
+    );
     renderer.setPredictedImpacts(new Map());
-    for (let now = 32; now <= 400; now += 16) renderer.update(now);
-    assert.ok(Math.abs(provisional.rotation.x) < 0.001, "rejected impacts settle back");
+    for (let now = 176; now <= 1000; now += 16) renderer.update(now);
+    assert.equal(renderer.diagnostics.debris, 0, "an unconfirmed strike is withdrawn");
+    assert.equal(provisional.isEnabled(), true, "and its fixture stands again");
+    assert.equal(host.lighting.lamps.length, 1);
     renderer.setBroken([source.id]);
     renderer.syncStatic([source]);
     assert.equal(host.lighting.lamps.length, 0, "late-loaded destroyed lamps stay off");

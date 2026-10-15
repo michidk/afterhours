@@ -4,6 +4,9 @@ import {
   destructibles,
   PROP_HEALTH,
   setBrokenProps,
+  DEBRIS_LIFT,
+  debrisRotation,
+  debrisSpin,
   type Destructible,
   type DebrisState,
   type Vec3,
@@ -45,6 +48,10 @@ export class Destruction {
   readonly maxBodies = 128;
   private grid = new SpatialGrid<Destructible>(32);
   private damageTaken = new Map<string, number>();
+  /** Damage on standing fixtures, so clients predict the strike that finishes one. */
+  get damage(): ReadonlyMap<string, number> {
+    return this.damageTaken;
+  }
   private physics?: RAPIER.World;
   private fixed = new Map<string, RAPIER.Collider>();
   private proxies = new Map<string, RAPIER.RigidBody>();
@@ -123,23 +130,14 @@ export class Destruction {
       corpse = source.kind === "corpse";
     const body = world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic()
-        .setRotation({
-          x: 0,
-          y: Math.sin((source.kind === "corpse" ? 0 : (source.angle ?? 0)) / 2),
-          z: 0,
-          w: Math.cos((source.kind === "corpse" ? 0 : (source.angle ?? 0)) / 2),
-        })
+        .setRotation(debrisRotation(source.kind === "corpse" ? 0 : (source.angle ?? 0)))
         .setTranslation(
           source.x,
-          groundLevel(source.x, source.z, this.city) + h / 2 + 0.16,
+          groundLevel(source.x, source.z, this.city) + h / 2 + DEBRIS_LIFT,
           source.z,
         )
         .setLinvel(velocity.x, velocity.y, velocity.z)
-        .setAngvel({
-          x: velocity.z * 0.3 + (corpse ? 2 : 0.7),
-          y: 0.3,
-          z: -velocity.x * 0.3 - 0.8,
-        })
+        .setAngvel(debrisSpin(velocity, corpse))
         .setLinearDamping(0.6)
         .setAngularDamping(0.8)
         .setCcdEnabled(true),

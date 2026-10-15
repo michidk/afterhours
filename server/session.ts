@@ -298,9 +298,32 @@ export class Sessions {
       }
       c.actions.set(m.type, now);
       try {
-        const state = executeDebug(this.sim, p, m.command);
-        if (m.command.kind === "observe") state.server = this.diagnostics?.();
-        if (m.command.kind === "teleport") c.queue = [];
+        const command = m.command;
+        // Reconnect ghosts keep their entity for a while; only live players are targets.
+        const target =
+          command.kind === "gotoPlayer" || command.kind === "bringPlayer"
+            ? [...this.clients].find(
+                ([peer, other]) =>
+                  other.id === command.id && peer.readyState === WebSocket.OPEN,
+              )
+            : undefined;
+        if (
+          (command.kind === "gotoPlayer" || command.kind === "bringPlayer") &&
+          !target
+        )
+          throw Error("Unknown player");
+        const state = executeDebug(this.sim, p, command);
+        if (command.kind === "observe") state.server = this.diagnostics?.();
+        // Commands queued before a jump would replay from the wrong place.
+        if (command.kind === "teleport" || command.kind === "gotoPlayer") c.queue = [];
+        if (command.kind === "bringPlayer" && target) {
+          target[1].queue = [];
+          this.send(target[0], {
+            type: "chat",
+            name: "Admin",
+            text: `${p.name || "An admin"} moved you to them`,
+          });
+        }
         this.send(ws, { type: "debugResult", requestId: m.requestId, state });
       } catch (error) {
         this.send(ws, {
@@ -455,6 +478,11 @@ export class Sessions {
     const destruction = {
         type: "destruction",
         brokenProps: [...this.sim.destruction.broken].sort(),
+        propDamage: Object.fromEntries(
+          [...this.sim.destruction.damage]
+            .sort(([a], [b]) => (a < b ? -1 : 1))
+            .map(([id, damage]) => [id, Math.round(damage * 10) / 10]),
+        ),
       },
       destructionKey = JSON.stringify(destruction);
     this.frames++;

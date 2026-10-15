@@ -1,6 +1,6 @@
 # Operations
 
-`docker compose up -d --build` builds the production client/server and starts Caddy plus one Node process. `data/` is a read-only bind mount so manually generated artifacts can be replaced without rebuilding the image. After `bun run city:generate`, restart `game` to load the file. Never regenerate during startup. Production debug is explicitly disabled in the compose environment.
+`docker compose up -d --build` builds the production client/server and starts Caddy plus one Node process. Every boot regenerates the city into `data/` (a writable bind mount) before the server listens: about 25 s on a desktop and several times that on a slow host, with a peak of about 2 GB in the generator process. Health checks and startup probes must allow for it, and the container needs a writable `data/` and at least 3 GB of memory. Set `CITY_REGENERATE=0` to serve the files already in `data/`. Production debug is explicitly disabled in the compose environment.
 
 Default local HTTPS is localhost:8443. Caddy's local CA root lives in its persistent data volume; copy it with `docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./local-root.crt` and trust it using your operating system certificate manager for local browser testing. Do not commit certificates/private keys. Public DNS/domain mode uses ACME certificates; set DOMAIN plus HTTP_PORT=80 and HTTPS_PORT=443 before starting compose. Both ports must reach Caddy. WebSocket upgrades and Host/Origin are preserved by reverse_proxy.
 

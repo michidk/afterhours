@@ -1,3 +1,4 @@
+import { reuseCityEnv } from "../scripts/city-files.ts";
 import { WORLD_LIMIT } from "../shared/water.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -129,7 +130,12 @@ test("script debug interface controls real transport and production rejects it",
       process.execPath,
       ["--import", "tsx", "server/index.ts", "--production"],
       {
-        env: { ...process.env, PORT: String(port), ALLOW_DEBUG: enabled ? "1" : "0" },
+        env: {
+          ...process.env,
+          ...reuseCityEnv(),
+          PORT: String(port),
+          ALLOW_DEBUG: enabled ? "1" : "0",
+        },
         stdio: "pipe",
       },
     );

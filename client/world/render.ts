@@ -1,3 +1,4 @@
+import { airportsOf } from "../../shared/world.ts";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { segmentHitsBuilding, type Footprint } from "./occluders.ts";
@@ -109,16 +110,16 @@ export class CityRenderer {
       if (entry.field === "props" || entry.field === "parks" || entry.field === "roads")
         (fixtures[entry.field] as unknown[]).push(entry.value);
     this.host.destruction?.syncStatic(destructibles(fixtures));
-    const a = this.map.airport,
-      airportVisible = [...keys].some((key) => {
-        const b = chunkBounds(key);
-        return (
+    const airportVisible = [...keys].some((key) => {
+      const b = chunkBounds(key);
+      return airportsOf(this.map).some(
+        (a) =>
           b.maxX >= a.x - a.w / 2 &&
           b.minX <= a.x + a.w / 2 &&
           b.maxZ >= a.z - a.d / 2 &&
-          b.minZ <= a.z + a.d / 2
-        );
-      });
+          b.minZ <= a.z + a.d / 2,
+      );
+    });
     if (airportVisible && !this.airport)
       this.airport = this.group(
         emptyCity(this.map),

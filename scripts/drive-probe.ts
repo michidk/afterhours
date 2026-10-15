@@ -51,6 +51,10 @@ export interface ProbeOptions {
   /** Attach the input clock to snapshot buffer reports. */
   regulate?: boolean;
   seed?: number;
+  /** Street furniture placed in the city; the car starts at the origin heading +z. */
+  props?: { kind: "palm" | "lamp" | "tree"; x: number; z: number; h: number }[];
+  /** Steering held from this many seconds on, so the car can swerve into props. */
+  steerFrom?: number;
 }
 interface Link {
   outgoing: { at: number; data: Parameters<WebSocket["send"]>[0] }[];
@@ -79,7 +83,7 @@ export async function probeDriving(options: ProbeOptions = {}) {
     link.base + rand() * link.spread + (rand() < link.p ? link.spike : 0);
 
   const city = generateCity();
-  city.props = [];
+  city.props = options.props ?? [];
   city.buildings = [];
   const sim = new Simulation(city);
   sim.entities.clear();
@@ -224,7 +228,14 @@ export async function probeDriving(options: ProbeOptions = {}) {
       }
       if (now % wakeup === 0)
         clock.advance(now, (timestamp) =>
-          driver.input({ ...idle(), up: true }, timestamp),
+          driver.input(
+            {
+              ...idle(),
+              up: true,
+              right: options.steerFrom !== undefined && now >= options.steerFrom * 1000,
+            },
+            timestamp,
+          ),
         );
       for (const entry of links)
         while (entry.outgoing[0]?.at <= now) {
@@ -359,6 +370,7 @@ export async function probeDriving(options: ProbeOptions = {}) {
       remote,
       recovered: window ? steps("z", window.until * 1000 + 3000) : undefined,
       finalAuthorityZ: +car.z.toFixed(1),
+      brokenProps: [...sim.destruction.broken],
       /** One entry per correction: what the client and server believed at that moment. */
       trace,
     };

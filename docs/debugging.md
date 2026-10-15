@@ -17,7 +17,7 @@ bun run debug -- move forward 1
 bun run debug -- day-cycle
 ```
 
-`state` reports authoritative entities, the script player's identity/input, city seed, simulation time, and clock rate. `time HOUR RATE` changes the shared clock in hours per real second; omitted rate pauses it. Normal speed is `1/75`, a 30-minute day. `spawn` accepts `sedan`, `sport`, `van`, `scout`, `utility`, or `plane`. Teleport and spawn placement are validated by the server. `interact`, `drop`, and `reload` use normal gameplay messages. Movement is limited to ten seconds and releases controls afterward.
+`state` reports authoritative entities, the script player's identity/input, city seed, simulation time, and clock rate. `time HOUR RATE` changes the shared clock in hours per real second; omitted rate pauses it. Normal speed is `1/75`, a 30-minute day. `spawn` accepts `sedan`, `sport`, `van`, `scout`, `utility`, or `plane`. Teleport and spawn placement are validated by the server. A teleport moves a seated driver together with the vehicle and its passengers when the vehicle fits at the destination; a passenger, or a driver whose vehicle does not fit, leaves the seat and arrives on foot. `interact`, `drop`, and `reload` use normal gameplay messages. Movement is limited to ten seconds and releases controls afterward.
 
 Each CLI invocation joins its own temporary player. For a scenario that must retain one player, import `AgentClient` from `scripts/agent-client.ts` in a TypeScript script:
 
@@ -55,6 +55,11 @@ d.camera("fly", { x: 0, y: 12, z: 25 }, 0, 0.08);
 d.look(100, -20); // mouse-like look deltas
 d.camera("follow");
 await d.spawn("sport");
+await d.places(); // admin destinations grouped by landmark kind
+await d.teleportTo(-400, 220); // nearest clear site to a point
+d.players(); // other connected players: id, name, colour
+await d.gotoPlayer("e12"); // move beside a player, however far away
+await d.bringPlayer("e12"); // move a player beside you
 d.action("interact"); // ordinary gameplay action; follow mode required
 await d.time(16.5, 1 / 75); // resume normal shared clock
 ```
@@ -91,7 +96,7 @@ The camera browser scenario verified movement/zoom/look in both modes, unchanged
 ## Debug windows
 
 Press F1 on a debug-enabled server, then use the toolbar to open Vehicles, Day / night,
-Camera, Networking, Server stats, or Object inspector. Drag a title bar to move a window;
+Camera, Networking, Server stats, Object inspector, or Admin. Drag a title bar to move a window;
 its minus button collapses it and its close button hides it. Focus a title bar and use
 arrow keys to move it with the keyboard. Reset layout restores the default positions.
 Escape or F1 hides the tools. Layout lasts until the page reloads.
@@ -113,6 +118,25 @@ suppresses left-click firing while active. Static scenery shows mesh and hit inf
 batched scenery does not have individual AI or entity state. Removed entities are marked
 unavailable. Server requests stop when both monitoring windows are collapsed or hidden.
 
-The inspector and server diagnostics use the existing authorized debug connection.
+## Admin teleports
+
+The Admin window lists Places and Players. Places has a button for every landmark the
+city ships (from the island atlas, grouped by kind, so new landmark kinds appear without
+client changes) plus Spawn, City centre and Airport when no landmark already marks them.
+Players lists every other connected player with Go to and Bring here. Results and
+rejections appear in the window status line; the moved player sees a chat line from Admin.
+
+Every action is an ordinary `debugCommand` (`teleport` with `near: true`, `gotoPlayer`,
+`bringPlayer`), so the same debug gate, zod validation and per-connection rate limit
+apply. The server looks players up by id, so far players outside snapshot interest work;
+unknown ids, non-players, disconnected reconnect ghosts and yourself are rejected, and
+coordinates must be finite and inside the world boundary. Destinations search rings up to
+40 m for a clear dry site. Bodies land on the ground (`groundLevel`, or the water surface
+for boats) with zero velocity and idle controls, and the moved client's queued inputs are
+dropped. A driver brings the vehicle and passengers along, keeping its heading; aircraft
+arrive parked. Knocked-down players cannot be moved. The jump exceeds the prediction
+correction limit, so the client snaps instead of smoothing across it.
+
+The inspector, admin teleports and server diagnostics use the existing authorized debug connection.
 Production still requires explicit `ALLOW_DEBUG=1`; enabling it grants these tools to
 all connected players.

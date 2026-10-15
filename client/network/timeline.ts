@@ -8,6 +8,10 @@ export class SnapshotTimeline {
   delay = 0.1;
   private clock: number | undefined;
   private lastFrame: number | undefined;
+  /** Server time currently on screen for interpolated bodies. */
+  get renderTime() {
+    return this.clock;
+  }
   reset() {
     this.history = [];
     this.delay = 0.1;

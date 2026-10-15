@@ -1,4 +1,9 @@
-import { PROP_HEALTH, type PredictedImpacts } from "../destruction.ts";
+import {
+  remainingPropHealth,
+  strikeDamage,
+  strikeVelocity,
+  type PredictedImpacts,
+} from "../destruction.ts";
 import { PHYSIQUES } from "../character.ts";
 import { staticGeometry } from "./static.ts";
 import { fallAircraft } from "./abandoned-aircraft.ts";
@@ -268,9 +273,12 @@ function resolveStaticContacts(
     if (predictBreak && vehicle(body) && b.destructibleId && b.obstacle) {
       const v = pointVelocity(body, c.x, c.z);
       const speed = Math.max(0, v.x * c.nx + v.z * c.nz);
-      // Predict only a lethal single impact; hidden prior damage stays server-owned.
-      if ((speed - 2) * 14 >= PROP_HEALTH[b.obstacle]) {
-        impacts.set(b.destructibleId, { x: body.vx * 0.7, y: 2, z: body.vz * 0.7 });
+      // The server reports dents, so the strike that finishes a damaged prop predicts too.
+      if (
+        speed > 2 &&
+        strikeDamage(speed) >= remainingPropHealth(city, b.destructibleId, b.obstacle)
+      ) {
+        impacts.set(b.destructibleId, strikeVelocity(body));
         body.vx *= 0.96;
         body.vz *= 0.96;
         continue;

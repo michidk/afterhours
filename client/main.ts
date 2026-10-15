@@ -3,7 +3,13 @@ import { TUNING, VEHICLES, WEAPONS, isVehicleModel } from "../shared/catalog.ts"
 import { availableSeat, occupiedSeats, seatCapacity } from "../shared/seats.ts";
 import type { Pickup, PlayerPosition, PlayerSummary } from "../shared/protocol.ts";
 import "./style.css";
-import { mountDebugWindows, updateServerStats } from "./ui/debug-windows.ts";
+import {
+  mountDebugWindows,
+  renderAdminPlaces,
+  renderAdminPlayers,
+  updateServerStats,
+} from "./ui/debug-windows.ts";
+import { adminPlaces } from "./debug/admin.ts";
 import { inspectAtPointer } from "./ui/debug-inspector.ts";
 import { mountUI } from "./ui/index.ts";
 import { loadoutHTML } from "./ui/loadout.ts";
@@ -130,7 +136,10 @@ $("#join").addEventListener("submit", (event) => {
         if (!debugAllowed) $("#debug").classList.add("hidden");
         document.querySelector(".debug-hint")?.classList.toggle("hidden", !m.debug);
         if (debugAllowed && network) {
-          automation = new AgentInterface(network, scene, setCamera);
+          automation = new AgentInterface(network, scene, setCamera, {
+            places: async () => adminPlaces(cityStream.map, await cityMap!.landmarks()),
+            players: () => roster.filter((player) => player.id !== playerId),
+          });
           Object.defineProperty(window, "afterhoursDebug", {
             configurable: true,
             value: automation,
@@ -181,6 +190,7 @@ $("#join").addEventListener("submit", (event) => {
         roster = players;
         playerList.update(players, playerId);
         nameplates.roster(players);
+        if (debugAllowed) renderAdmin();
       },
       destruction(ids) {
         scene.destruction.setBroken(ids);
@@ -313,6 +323,41 @@ $("#time-resume").onclick = () =>
   void automation?.time(scene.day, 1 / 75).catch((error) => toast(String(error)));
 $("#time-cycle").onclick = () =>
   void automation?.time(0, 0.8).catch((error) => toast(String(error)));
+/** Admin teleports report progress and server rejections in the window itself. */
+function adminRun(label: string, action: Promise<unknown> | undefined) {
+  if (!action) return;
+  const status = $("#admin-status");
+  status.textContent = `${label}…`;
+  action.then(
+    () => (status.textContent = `${label}: done`),
+    (error: unknown) =>
+      (status.textContent = `${label}: ${String(error instanceof Error ? error.message : error).replace(/^Error: /, "")}`),
+  );
+}
+function renderAdmin() {
+  renderAdminPlayers(
+    $("#admin-players"),
+    roster,
+    playerId,
+    (player) => adminRun(`Going to ${player.name}`, automation?.gotoPlayer(player.id)),
+    (player) => adminRun(`Bringing ${player.name}`, automation?.bringPlayer(player.id)),
+  );
+}
+// The launcher toggles visibility first; refresh whenever the window opens.
+$('[aria-controls="debug-admin"]').addEventListener("click", () => {
+  if ($("#debug-admin").classList.contains("hidden")) return;
+  renderAdmin();
+  void automation?.places().then(
+    (groups) =>
+      renderAdminPlaces($("#admin-places"), groups, (place) =>
+        adminRun(
+          `Teleporting to ${place.name}`,
+          automation?.teleportTo(place.x, place.z),
+        ),
+      ),
+    () => ($("#admin-places").textContent = "Map unavailable. Reopen to retry."),
+  );
+});
 const canvas = $<HTMLCanvasElement>("#world");
 let inspectionPointer: { x: number; y: number } | undefined;
 let inspectedId: string | undefined;
@@ -647,7 +692,10 @@ async function boot() {
       const rendered =
         network?.renderEntities(now, scene.debugCamera.active ? idle() : cameraInput) ||
         entities;
-      scene.destruction.setPredictedImpacts(network?.predictedImpacts ?? new Map());
+      scene.destruction.setPredictedImpacts(
+        network?.predictedImpacts ?? new Map(),
+        network?.debrisClock,
+      );
       scene.update(rendered, playerId, dt, cameraInput);
       cityRenderer?.fadeOccluders(scene.camera.position, scene.target, dt);
       streamClock += dt;

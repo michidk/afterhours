@@ -1,3 +1,4 @@
+import { reuseCityEnv } from "../scripts/city-files.ts";
 import { DEFAULT_CHARACTER } from "../shared/character.ts";
 import { decodeSnapshot, applyPatch } from "../shared/codec.ts";
 import { test } from "node:test";
@@ -13,7 +14,15 @@ test("multiplayer authority, delta recovery, input sequences, jitter, reconnects
   const child = spawn(
       process.execPath,
       ["--import", "tsx", "server/index.ts", "--production"],
-      { env: { ...process.env, PORT: String(port), ALLOW_DEBUG: "0" }, stdio: "pipe" },
+      {
+        env: {
+          ...process.env,
+          ...reuseCityEnv(),
+          PORT: String(port),
+          ALLOW_DEBUG: "0",
+        },
+        stdio: "pipe",
+      },
     ),
     sockets: WebSocket[] = [];
   try {

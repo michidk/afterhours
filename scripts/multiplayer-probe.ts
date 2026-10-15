@@ -1,3 +1,4 @@
+import { reuseCityEnv } from "./city-files.ts";
 // Independent real clients exercise the production network/prediction stack.
 // Defaults to an owned local server; --url explicitly targets a live debug server.
 import { spawn, type ChildProcess } from "node:child_process";
@@ -74,7 +75,7 @@ try {
       process.execPath,
       ["--import", "tsx", "server/index.ts", "--production"],
       {
-        env: { ...process.env, PORT: "0", ALLOW_DEBUG: "1" },
+        env: { ...process.env, ...reuseCityEnv(), PORT: "0", ALLOW_DEBUG: "1" },
         stdio: ["ignore", "pipe", "pipe"],
       },
     );

@@ -14,7 +14,12 @@ RUN bun install --frozen-lockfile --production
 COPY --from=build /app/dist ./dist
 COPY server ./server
 COPY shared ./shared
-COPY data ./data
+# The server regenerates the city on every boot: generator, converter and the
+# renderer used to bake meshes ship too, and data/ must be writable.
+COPY mapgen ./mapgen
+COPY scripts ./scripts
+COPY client ./client
+RUN mkdir -p data && chown node:node data
 USER node
 ENV NODE_ENV=production PORT=5173 ALLOW_DEBUG=0
 EXPOSE 5173

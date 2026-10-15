@@ -1,3 +1,4 @@
+import { reuseCityEnv } from "./city-files.ts";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { setTimeout as pause } from "node:timers/promises";
@@ -28,7 +29,7 @@ for (const delay of [0, 150, 360]) {
     process.execPath,
     ["--import", "tsx", "server/index.ts", "--production"],
     {
-      env: { ...process.env, PORT: "0", ALLOW_DEBUG: "1" },
+      env: { ...process.env, ...reuseCityEnv(), PORT: "0", ALLOW_DEBUG: "1" },
       stdio: ["ignore", "pipe", "pipe"],
     },
   );

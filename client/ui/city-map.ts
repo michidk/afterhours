@@ -1,3 +1,4 @@
+import { airportsOf } from "../../shared/world.ts";
 import { TERRAIN_SIDE, TERRAIN_STEP } from "../../shared/terrain.ts";
 import {
   cityAtlasSchema,
@@ -187,6 +188,12 @@ export class CityMap {
     })();
     return this.request;
   }
+  /** Named landmarks from the island atlas, downloading it on first use. */
+  async landmarks() {
+    await this.load();
+    if (!this.atlas) throw Error("Map unavailable");
+    return this.atlas.landmarks;
+  }
   update(player: Entity, entities: Entity[], players: MapPlayer[] = []) {
     this.player = player;
     this.entities = entities;
@@ -339,22 +346,41 @@ export class CityMap {
         c.lineTo(road.bx, road.bz);
         c.stroke();
       }
-    const airport = this.manifest.airport;
-    c.fillStyle = "#263e41";
-    c.fillRect(
-      airport.x - airport.w / 2,
-      airport.z - airport.d / 2,
-      airport.w,
-      airport.d,
-    );
-    c.strokeStyle = "#d9c49d";
-    c.lineWidth = 2 / v.scale;
-    c.setLineDash([6 / v.scale, 4 / v.scale]);
-    c.beginPath();
-    c.moveTo(airport.x, airport.z - airport.d / 2 + 10);
-    c.lineTo(airport.x, airport.z + airport.d / 2 - 10);
-    c.stroke();
-    c.setLineDash([]);
+    for (const airport of airportsOf(this.manifest)) {
+      c.fillStyle = "#263e41";
+      c.fillRect(
+        airport.x - airport.w / 2,
+        airport.z - airport.d / 2,
+        airport.w,
+        airport.d,
+      );
+      c.strokeStyle = "#d9c49d";
+      c.lineWidth = 2 / v.scale;
+      c.setLineDash([6 / v.scale, 4 / v.scale]);
+      c.beginPath();
+      c.moveTo(airport.x, airport.z - airport.d / 2 + 10);
+      c.lineTo(airport.x, airport.z + airport.d / 2 - 10);
+      c.stroke();
+      c.setLineDash([]);
+    }
+    const track = this.atlas?.racetrack;
+    if (track) {
+      c.strokeStyle = "#2c3b38";
+      c.lineJoin = "round";
+      for (const [extra, colour] of [
+        [3, "#2c3b38"],
+        [0, "#e9dcc0"],
+      ] as const) {
+        c.strokeStyle = colour;
+        c.lineWidth = Math.max(track.width, 1.8 / v.scale) + extra;
+        c.beginPath();
+        for (let i = 0; i < track.path.length; i += 2)
+          if (i) c.lineTo(track.path[i], track.path[i + 1]);
+          else c.moveTo(track.path[i], track.path[i + 1]);
+        c.closePath();
+        c.stroke();
+      }
+    }
     c.restore();
     // Labels and markers keep their screen size when zooming.
     c.textAlign = "center";

@@ -7,7 +7,7 @@ services:
       ALLOW_DEBUG: 0
       CITY_PATH: /app/data/city.json
     volumes:
-      - ./data:/app/data:ro
+      - ./data:/app/data
     healthcheck:
       test:
         [
@@ -19,6 +19,8 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
+      # Every boot regenerates the city before the server listens.
+      start_period: 300s
   caddy:
     image: caddy:2
     restart: unless-stopped

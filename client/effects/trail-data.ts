@@ -7,6 +7,18 @@ export const TRAIL_TILE_LIMIT = 16;
 export const TRAIL_LIFT = 0.14;
 /** Clears the slightly higher airfield runway markings. */
 export const TRAIL_AIRFIELD_LIFT = 0.2;
+/** Rubber stays for minutes, then fades out over the final stretch in a few steps. */
+export const TRAIL_LIFETIME = 180;
+export const TRAIL_FADE = 60;
+const TRAIL_SHADES = 6;
+/** Most marks kept at once; past it the oldest go first, however young. */
+export const TRAIL_MARK_LIMIT = 20000;
+/** Opacity step of a mark. Tiles repaint only when one of their marks changes step. */
+export const trailShade = (life: number) =>
+  Math.max(
+    0,
+    Math.min(1, Math.ceil((life / TRAIL_FADE) * TRAIL_SHADES) / TRAIL_SHADES),
+  );
 export type TrailMark = {
   x: number;
   z: number;
@@ -14,6 +26,8 @@ export type TrailMark = {
   length: number;
   life: number;
   tiles: string[];
+  /** Opacity step the mark was last painted with. */
+  shade?: number;
 };
 
 /** Absolute world coordinates; neither coverage nor detail depends on city size. */
@@ -48,7 +62,7 @@ export function paintTrail(
   );
   ctx.rotate(mark.angle);
   ctx.lineCap = "round";
-  const alpha = Math.min(1, mark.life / 10);
+  const alpha = trailShade(mark.life);
   // Translucent rubber bands soften the edge and preserve tyre grooves.
   for (const [width, opacity] of [
     [0.28, 0.12],

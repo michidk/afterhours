@@ -1,5 +1,10 @@
 import { TERRAIN_SIDE } from "../shared/terrain.ts";
-import { destructionOverlay } from "../shared/destruction.ts";
+import {
+  destructibles,
+  destructionOverlay,
+  setPropDamage,
+} from "../shared/destruction.ts";
+import { TUNING } from "../shared/catalog.ts";
 import { generateCity } from "../scripts/city-generator.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -391,7 +396,7 @@ test("prediction checks the replayed and displayed positions, not only the snaps
     driver: undefined,
     vehicle: car.id,
   };
-  const prediction = new Prediction(city, (point) => point.x < 1.8);
+  const prediction = new Prediction(city, (point) => point.x < 1.7);
   prediction.reconcile(p, [p, car], -1);
   prediction.input({ seq: 0, timestamp: 1000, input: idle() }, [p, car]);
   assert.ok(prediction.body!.x > 1);
@@ -923,4 +928,38 @@ test("live steering responds between commands without changing replay or authori
   } finally {
     sim.destruction.dispose();
   }
+});
+
+test("a dent the server reported lets the client predict the strike that fells a tree", () => {
+  const strike = (damage: Record<string, number>) => {
+    const city = emptyCity({ seed: 42, airport: { x: 640, z: -640, w: 128, d: 200 } });
+    city.props = [{ kind: "tree", x: 0, z: 4.5, h: 7 }];
+    const id = destructibles(city)[0].id;
+    setPropDamage(city, damage);
+    const car: Entity = {
+      id: "car",
+      kind: "car",
+      model: "sedan",
+      driver: "p",
+      x: 0,
+      z: 0,
+      y: 0,
+      vx: 0,
+      vz: 6,
+      vy: 0,
+      angle: 0,
+      health: 100,
+      color: "#fff",
+    };
+    const impacts = new Map();
+    for (let i = 0; i < 40; i++)
+      predictStep(car, idle(), city, [], TUNING.tick, [], undefined, impacts);
+    return { id, impacts, z: car.z };
+  };
+  const intact = strike({});
+  assert.equal(intact.impacts.size, 0, "6 m/s cannot fell an intact tree");
+  assert.ok(intact.z < 3, "so the car stops against it");
+  const dented = strike({ [intact.id]: 80 });
+  assert.ok(dented.impacts.has(dented.id), "the same strike fells a dented one");
+  assert.ok(dented.z > 5, "and the car carries on through");
 });

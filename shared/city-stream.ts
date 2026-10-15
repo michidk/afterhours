@@ -22,6 +22,7 @@ export const mapManifestSchema = z.object({
   limit: z.literal(LIMIT),
   chunkSize: z.literal(CITY_CHUNK_SIZE),
   airport: citySchema.shape.airport,
+  airports: citySchema.shape.airports,
   geometryVersion: z.literal(1).optional(),
   centre: citySchema.shape.centre,
   /** Set when /city/terrain/<mapId> serves 16-bit centimetre heights. */
@@ -49,6 +50,7 @@ export const cityAtlasSchema = z.object({
   parks: z.array(citySchema.shape.parks.element).max(2000),
   landmarks: z.array(citySchema.shape.landmarks.element).max(1000),
   ramps: z.array(citySchema.shape.ramps.element).max(1000),
+  racetrack: citySchema.shape.racetrack,
 });
 export type CityAtlas = z.infer<typeof cityAtlasSchema>;
 const entry = <T extends z.ZodType>(value: T) =>
@@ -75,7 +77,8 @@ export type ClientMap = MapManifest & {
 };
 export const cityWaterSchema = citySchema.shape.water.unwrap();
 export function emptyCity(
-  map: Pick<ClientMap, "seed" | "airport" | "terrain" | "centre" | "water">,
+  map: Pick<ClientMap, "seed" | "airport" | "terrain" | "centre" | "water"> &
+    Partial<Pick<ClientMap, "airports">>,
 ): City {
   return {
     seed: map.seed,
@@ -83,6 +86,7 @@ export function emptyCity(
     water: map.water,
     centre: map.centre,
     airport: map.airport,
+    airports: map.airports,
     roads: [],
     buildings: [],
     props: [],

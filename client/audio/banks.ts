@@ -229,6 +229,9 @@ export interface DriftSoundMix {
   scrubTone: number;
 }
 
+/** Body slip angles (degrees) where tyre noise starts and reaches full level. */
+export const DRIFT_SOUND = { quietAngle: 12, span: 28, gain: 0.7 };
+
 /** Shape tyre audio from actual sideways motion instead of road speed alone. */
 export function driftSoundMix(entity: Entity): DriftSoundMix | undefined {
   if (entity.kind !== "car" || !entity.skidding) return;
@@ -236,12 +239,20 @@ export function driftSoundMix(entity: Entity): DriftSoundMix | undefined {
     sideways = Math.abs(
       Math.cos(entity.angle) * entity.vx - Math.sin(entity.angle) * entity.vz,
     ),
-    slip = Math.max(0, Math.min(1, (sideways - 0.6) / 7.4)),
-    moving = Math.max(0, Math.min(1, (speed - 0.8) / 8)),
+    forward = Math.abs(
+      Math.sin(entity.angle) * entity.vx + Math.cos(entity.angle) * entity.vz,
+    ),
+    // Body slip angle: a gripped fast corner stays quiet, a real slide squeals.
+    angle = (Math.atan2(sideways, Math.max(1, forward)) * 180) / Math.PI,
+    slip = Math.max(
+      0,
+      Math.min(1, (angle - DRIFT_SOUND.quietAngle) / DRIFT_SOUND.span),
+    ),
+    moving = Math.max(0, Math.min(1, (speed - 3) / 9)),
     slippingWheels = entity.wheelSkids?.filter(Boolean).length ?? 2,
     contact = 0.72 + Math.min(2, slippingWheels) * 0.14,
-    intensity = moving * contact * (0.28 + slip * 0.72);
-  if (intensity < 0.025) return;
+    intensity = moving * contact * slip * slip * DRIFT_SOUND.gain;
+  if (intensity < 0.02) return;
   return {
     squealRate: 0.82 + slip * 0.28 + Math.min(speed, 40) * 0.004,
     squealGain: intensity,

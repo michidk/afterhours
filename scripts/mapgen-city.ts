@@ -25,6 +25,14 @@ import { maskOutlines } from "../mapgen/hydrology.ts";
 import { packSurfaceChunks } from "../shared/city-pack.ts";
 import { destructibles } from "../shared/destruction.ts";
 import { edgeHeightAt, sinkUnderStreets } from "../mapgen/streetfit.ts";
+import {
+  compass,
+  placeHarbours,
+  placeRacetrack,
+  placeTownHall,
+  wetMask,
+  type FeatureContext,
+} from "./mapgen-features.ts";
 
 // `+ 0` turns -0 into 0 so packed and parsed artifacts compare equal.
 const round = (v: number) => Math.round(v * 100) / 100 + 0;
@@ -315,8 +323,71 @@ export function cityFromMap(map: GeneratedMap): City {
   for (let i = buildings.length - 1; i >= 0; i--)
     if (!keep.has(buildings[i])) buildings.splice(i, 1);
 
-  // Airport: the flattest free square away from downtown; the pad is stamped flat.
-  const airport = placeAirport(map, roads, buildings, shift, heights);
+  // Destinations: a town hall where players spawn, two airports, a racetrack and
+  // three harbours. Each keeps clear of the streets and of the ones placed before it.
+  const pavedRings = [...asphalt, ...sidewalks].map((flat) => {
+    const ring: Point[] = [];
+    let x0 = Infinity,
+      x1 = -Infinity,
+      z0 = Infinity,
+      z1 = -Infinity;
+    for (let i = 0; i < flat.length; i += 3) {
+      ring.push({ x: flat[i], z: flat[i + 2] });
+      x0 = Math.min(x0, flat[i]);
+      x1 = Math.max(x1, flat[i]);
+      z0 = Math.min(z0, flat[i + 2]);
+      z1 = Math.max(z1, flat[i + 2]);
+    }
+    return { ring, x0, x1, z0, z1 };
+  });
+  const features: FeatureContext = {
+    map,
+    heights,
+    roads,
+    buildings,
+    asphalt,
+    sidewalks,
+    markings,
+    taken: [],
+    wet: wetMask(map),
+    paved: (p) =>
+      pavedRings.some(
+        (a) =>
+          p.x >= a.x0 &&
+          p.x <= a.x1 &&
+          p.z >= a.z0 &&
+          p.z <= a.z1 &&
+          pointInPolygon(p, a.ring),
+      ),
+  };
+  const townHall = placeTownHall(features);
+  // Airports: the flattest free squares away from downtown and from each other.
+  const airports: City["airport"][] = [];
+  for (let i = 0; i < 2; i++) {
+    let a: City["airport"] | undefined;
+    for (const apart of [900, 600, 350])
+      try {
+        a = placeAirport(
+          map,
+          roads,
+          buildings,
+          shift,
+          heights,
+          features.taken,
+          airports,
+          apart,
+        );
+        break;
+      } catch (error) {
+        if (apart === 350) throw error;
+      }
+    if (!a) throw Error("No site for an airport");
+    airports.push(a);
+    features.taken.push(rotatedRect(a, a.w + 60, a.d + 60, 0));
+  }
+  const airport = airports[0];
+  const racetrack = placeRacetrack(features);
+  const harbours = placeHarbours(features);
   sinkUnderStreets(
     { heights, side: TERRAIN_SIDE, step: TERRAIN_STEP, half: LIMIT },
     [
@@ -325,10 +396,10 @@ export function cityFromMap(map: GeneratedMap): City {
     ],
     [
       ...buildings,
-      {
-        ...airport,
-        y: terrainHeight(airport.x, airport.z, { terrain: { heights } }),
-      },
+      ...airports.map((a) => ({
+        ...a,
+        y: terrainHeight(a.x, a.z, { terrain: { heights } }),
+      })),
     ],
   );
   // Shipped heights are whole centimetres; round down so no surface sample rises.
@@ -351,8 +422,9 @@ export function cityFromMap(map: GeneratedMap): City {
   const props: City["props"] = [],
     seen = new Set<string>();
   const inside = (p: Point, pad: number) =>
-    Math.abs(p.x - airport.x) < airport.w / 2 + pad &&
-    Math.abs(p.z - airport.z) < airport.d / 2 + pad;
+    airports.some(
+      (a) => Math.abs(p.x - a.x) < a.w / 2 + pad && Math.abs(p.z - a.z) < a.d / 2 + pad,
+    ) || features.taken.some((ring) => pointInPolygon(p, ring));
   // Trees never stand in a river channel.
   const inRiver = (q: Point) =>
     map.rivers.some((river) =>
@@ -483,6 +555,8 @@ export function cityFromMap(map: GeneratedMap): City {
       if (fits(hw, hd + 1)) ((hd += 1), (grown = true));
     }
     if (!fits(hw, hd) || hw < 4 || hd < 4) continue;
+    const slab = rotatedRect(c, hw * 2, hd * 2, 0);
+    if (features.taken.some((ring) => convexOverlap(ring, slab))) continue;
     const garden = park.kind !== "woodland" && hw >= 5.5 && hd >= 10.5;
     parks.push({
       x: round(c.x),
@@ -553,9 +627,28 @@ export function cityFromMap(map: GeneratedMap): City {
     (t, b) => (b.h - (b.y ?? 0) > t.h - (t.y ?? 0) ? b : t),
     buildings[0],
   );
+  const middle = { x: 0, z: 0 };
   const landmarks: City["landmarks"] = [
     { x: centre.x, z: centre.z, name: "CITY CENTRE", kind: "plaza" },
-    { x: airport.x, z: airport.z, name: "AIRPORT", kind: "airport" },
+    { ...townHall.spawn, name: "TOWN HALL", kind: "townhall" },
+    ...airports.map((a) => ({
+      x: a.x,
+      z: a.z,
+      name: `${compass(a, middle)} AIRPORT`,
+      kind: "airport" as const,
+    })),
+    {
+      x: racetrack.path[0],
+      z: racetrack.path[1],
+      name: "RACETRACK",
+      kind: "racetrack",
+    },
+    ...harbours.map((h) => ({
+      x: h.x,
+      z: h.z,
+      name: `${compass(h, middle)} HARBOUR`,
+      kind: "harbour" as const,
+    })),
   ];
   if (tallest)
     landmarks.push({ x: tallest.x, z: tallest.z, name: "THE SPIRE", kind: "tower" });
@@ -723,6 +816,10 @@ export function cityFromMap(map: GeneratedMap): City {
     ramps: [],
     pickups,
     airport,
+    airports,
+    townHall,
+    racetrack,
+    harbours,
     landmarks,
   };
 }
@@ -799,6 +896,9 @@ function placeAirport(
   buildings: Building[],
   shift: number,
   heights: number[],
+  taken: Point[][] = [],
+  others: Point[] = [],
+  apart = 0,
 ) {
   const f = map.shaped,
     size = 220,
@@ -845,6 +945,7 @@ function placeAirport(
     for (let z = -LIMIT + half + 40; z <= LIMIT - half - 40; z += 32)
       for (let x = -LIMIT + half + 40; x <= LIMIT - half - 40; x += 32) {
         if (Math.hypot(x - map.centre.x, z - map.centre.z) < far) continue;
+        if (others.some((o) => Math.hypot(x - o.x, z - o.z) < apart)) continue;
         let min = Infinity,
           max = -Infinity,
           sum = 0,
@@ -884,7 +985,13 @@ function placeAirport(
             }
             return false;
           });
-        if (occupied) continue;
+        if (
+          occupied ||
+          taken.some((ring) =>
+            convexOverlap(ring, rotatedRect({ x, z }, size, size, 0)),
+          )
+        )
+          continue;
         const score = max - min + sum / count / 20;
         if (!best || score < best.score) best = { x, z, score };
       }

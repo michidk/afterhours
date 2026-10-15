@@ -1,4 +1,5 @@
 import type { PredictedImpacts } from "../../shared/destruction.ts";
+import type { DebrisClock } from "../world/destruction.ts";
 import type { Character } from "../../shared/character.ts";
 import { VERSION } from "../../shared/version.ts";
 import type {
@@ -16,7 +17,7 @@ import { Prediction, interpolate } from "./prediction.ts";
 import { SnapshotTimeline } from "./timeline.ts";
 import type { InputClock } from "../input/clock.ts";
 import { emptyCity } from "../../shared/city-stream.ts";
-import { setBrokenProps } from "../../shared/destruction.ts";
+import { setBrokenProps, setPropDamage } from "../../shared/destruction.ts";
 import type { DebugCommand, DebugResult, DebugState } from "../../shared/debug.ts";
 import { wrap } from "../../shared/physics/vehicle.ts";
 export interface NetworkHooks {
@@ -34,6 +35,8 @@ export class GameNetwork {
   prediction: Prediction | undefined;
   playerId = "";
   predictedImpacts: PredictedImpacts = new Map();
+  /** Server times on screen for remote bodies and for this client's predicted body. */
+  debrisClock: DebrisClock | undefined;
   seq = 0;
   frame = 0;
   serverTime = 0;
@@ -219,7 +222,10 @@ export class GameNetwork {
       if (m.type === "positions")
         this.hooks.positions?.((m as PlayerPositions).players);
       if (m.type === "destruction") {
-        if (this.city) setBrokenProps(this.city, m.brokenProps);
+        if (this.city) {
+          setBrokenProps(this.city, m.brokenProps);
+          setPropDamage(this.city, m.propDamage ?? {});
+        }
         this.hooks.destruction?.(m.brokenProps);
       }
       if (m.type === "pong" && Number.isFinite(m.timestamp)) {
@@ -377,6 +383,11 @@ export class GameNetwork {
     }
     const prediction = this.prediction?.render(now, input);
     this.predictedImpacts = prediction?.impacts ?? new Map();
+    const remote = this.timeline.renderTime ?? this.serverTime;
+    this.debrisClock = {
+      remote,
+      local: prediction ? this.serverTime + (this.prediction?.ahead ?? 0) : remote,
+    };
     const controlled = currentPlayer?.vehicle
       ? this.entities.get(currentPlayer.vehicle)
       : currentPlayer;

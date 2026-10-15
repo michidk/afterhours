@@ -2,6 +2,8 @@ import type { Entity, WorldEvent } from "../../shared/world.ts";
 import { CAR_WHEEL_MOUNTS, displayedWheelPoint } from "../models/car-wheels.ts";
 import { TRAIL_LIFT } from "./trail-data.ts";
 
+/** Shortest rubber segment; longer segments stretch the mark budget over minutes. */
+const MARK_STEP = 0.25;
 type Anchor = { x: number; z: number; slipping: boolean };
 /** Cosmetic tracks follow displayed tyres, including prediction, rather than packet arrival. */
 export class TyreTracks {
@@ -31,7 +33,7 @@ export class TyreTracks {
             angle: e.angle,
             length: 0.15,
           });
-        else if (slipping && a && distance >= 0.12)
+        else if (slipping && a && distance >= MARK_STEP)
           emit({
             kind: "skid",
             x: (a.x + point.x) / 2,
@@ -41,7 +43,7 @@ export class TyreTracks {
             length: distance + 0.06,
           });
         next.push(
-          slipping && a?.slipping && distance < 0.12 ? a : { ...point, slipping },
+          slipping && a?.slipping && distance < MARK_STEP ? a : { ...point, slipping },
         );
       }
       this.anchors.set(e.id, next);

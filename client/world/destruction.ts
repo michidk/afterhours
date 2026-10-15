@@ -4,14 +4,24 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { ParticleSystem } from "@babylonjs/core/Particles/particleSystem";
 import { createParticles } from "../effects/particles.ts";
-import type {
-  Destructible,
-  DebrisState,
-  PredictedImpacts,
+import {
+  DEBRIS_LIFT,
+  debrisRotation,
+  debrisSpin,
+  type Destructible,
+  type DebrisState,
+  type PredictedImpacts,
 } from "../../shared/destruction.ts";
 import { TUNING } from "../../shared/catalog.ts";
 import type { CityScene } from "../scene.ts";
 import { uploadMeshes } from "./mesh-buffers.ts";
+import {
+  advanceDebris,
+  clonePose,
+  correctionRate,
+  type DebrisPose,
+  type Extents,
+} from "./debris-motion.ts";
 
 type Model = {
   root: TransformNode;
@@ -20,16 +30,50 @@ type Model = {
   light?: { mesh: Mesh; axis: "x" | "z" };
   lit: boolean;
 };
-type Frame = { time: number; states: Map<string, DebrisState> };
+type Frame = { serial: number; time: number; states: Map<string, DebrisState> };
+/**
+ * Server times on screen: remote bodies are interpolated in the past, while the
+ * predicted car runs ahead of the newest snapshot.
+ */
+export type DebrisClock = { remote: number; local: number };
+type Shown = {
+  model: Model;
+  source: DebrisState["source"];
+  /** Struck by this client's predicted car, so drawn in the car's time frame. */
+  local: boolean;
+  /** Cosmetic launch, flown until the server's debris arrives. */
+  launch?: DebrisPose;
+  launchedAt: number;
+  /** Last target pose and the server frame it came from (-1 for the launch). */
+  target?: DebrisPose;
+  frame?: number;
+  /** Visual error kept after a correction; it decays instead of snapping. */
+  offset: Vector3;
+  turn: Quaternion;
+};
+/** A predicted strike the server has not confirmed by then is withdrawn. */
+const CONFIRM_MS = 700;
+/** Corrections larger than this snap rather than slide. */
+const SNAP_DISTANCE = 10;
+const extents = (source: DebrisState["source"]): Extents => ({
+  w: source.w,
+  h: source.h,
+  d: source.d,
+});
+const quaternion = (q: DebrisPose["rotation"]) => new Quaternion(q.x, q.y, q.z, q.w);
 export class DestructionRenderer {
   private staticNodes = new Map<string, Model>();
-  private debrisNodes = new Map<string, Model>();
+  private fixtures = new Map<string, Destructible>();
+  private debris = new Map<string, Shown>();
   private broken = new Set<string>();
+  private hidden = new Set<string>();
   private frames: Frame[] = [];
+  private serial = 0;
   private received = 0;
   private impacts: PredictedImpacts = new Map();
+  private clock: DebrisClock | undefined;
+  private remoteTime = -Infinity;
   private updated = 0;
-  private tilted = new Set<string>();
   private water = new Map<string, ParticleSystem[]>();
   constructor(private host: CityScene) {}
   syncStatic(fixtures: Destructible[]) {
@@ -38,117 +82,232 @@ export class DestructionRenderer {
       if (!wanted.has(id)) {
         this.disposeModel(model);
         this.staticNodes.delete(id);
+        this.fixtures.delete(id);
+        this.hidden.delete(id);
         this.stopWater(id);
       }
-    for (const p of fixtures)
+    for (const p of fixtures) {
+      this.fixtures.set(p.id, p);
       if (!this.staticNodes.has(p.id)) this.staticNodes.set(p.id, this.make(p, true));
-    this.refresh();
+    }
+    this.refresh(this.staticNodes.keys(), true);
   }
   setBroken(ids: string[]) {
     this.broken = new Set(ids);
-    this.refresh();
+    this.refresh(this.staticNodes.keys(), true);
   }
   receive(states: DebrisState[], time: number, now = performance.now()) {
-    this.frames.push({ time, states: new Map(states.map((s) => [s.id, s])) });
+    this.frames.push({
+      serial: ++this.serial,
+      time,
+      states: new Map(states.map((s) => [s.id, s])),
+    });
     if (this.frames.length > 8) this.frames.shift();
     this.received = now;
   }
-  setPredictedImpacts(impacts: PredictedImpacts) {
+  /** Fixtures this client's car is predicted to break, and the clocks to draw them at. */
+  setPredictedImpacts(impacts: PredictedImpacts, clock?: DebrisClock) {
     this.impacts = impacts;
+    this.clock = clock;
   }
   update(now = performance.now()) {
     const dt = Math.max(0, Math.min(0.1, (now - this.updated) / 1000));
     this.updated = now;
-    // Bounded impact feedback, not a competing simulation of the debris trajectory.
-    for (const id of this.impacts.keys()) this.tilted.add(id);
-    for (const id of this.tilted) {
-      const model = this.staticNodes.get(id);
-      if (!model || this.broken.has(id)) {
-        this.tilted.delete(id);
-        if (model) model.root.rotation.x = model.root.rotation.z = 0;
+    const latest = this.frames.at(-1),
+      elapsed = Math.max(0, now - this.received) / 1000;
+    // Without network clocks (tests, tools) debris plays 80 ms behind its newest sample.
+    const remote = this.clock?.remote ?? (latest ? latest.time + elapsed - 0.08 : 0),
+      local = this.clock?.local ?? remote;
+    this.remoteTime = remote;
+    const ground = (x: number, z: number) => this.host.groundAt(x, z);
+    // Throw a fixture the moment this client's prediction breaks it, from the same
+    // launch the server uses, instead of waiting a round trip for its debris.
+    for (const [id, velocity] of this.impacts) {
+      const shown = this.debris.get(id);
+      if (shown) {
+        shown.local = true;
         continue;
       }
-      const impact = this.impacts.get(id);
-      const speed = impact ? Math.hypot(impact.x, impact.z) : 0;
-      const blend = 1 - Math.exp(-24 * dt);
-      const x = impact && speed ? (impact.z / speed) * 0.3 : 0;
-      const z = impact && speed ? (-impact.x / speed) * 0.3 : 0;
-      model.root.rotation.x += (x - model.root.rotation.x) * blend;
-      model.root.rotation.z += (z - model.root.rotation.z) * blend;
-      if (!impact && Math.hypot(model.root.rotation.x, model.root.rotation.z) < 0.001) {
-        model.root.rotation.x = model.root.rotation.z = 0;
-        this.tilted.delete(id);
-      }
+      const p = this.fixtures.get(id);
+      if (!p) continue;
+      this.debris.set(id, {
+        model: this.make(p, false),
+        source: p,
+        local: true,
+        launch: {
+          position: { x: p.x, y: ground(p.x, p.z) + p.h / 2 + DEBRIS_LIFT, z: p.z },
+          rotation: debrisRotation(p.angle ?? 0),
+          velocity: { ...velocity },
+          angularVelocity: debrisSpin(velocity),
+        },
+        launchedAt: now,
+        offset: Vector3.Zero(),
+        turn: Quaternion.Identity(),
+      });
     }
-    const latest = this.frames.at(-1);
-    if (!latest) return;
-    const time = latest.time + Math.max(0, now - this.received) / 1000,
-      renderTime = time - 0.08;
-    let previous = this.frames[0],
-      next = latest;
-    for (let i = 1; i < this.frames.length; i++)
-      if (this.frames[i].time >= renderTime) {
-        previous = this.frames[i - 1];
-        next = this.frames[i];
-        break;
+    if (latest)
+      for (const [id, state] of latest.states)
+        if (!this.debris.has(id))
+          this.debris.set(id, {
+            model: this.make(state.source, false),
+            source: state.source,
+            local: false,
+            launchedAt: now,
+            offset: Vector3.Zero(),
+            turn: Quaternion.Identity(),
+          });
+    for (const [id, shown] of this.debris) {
+      const state = latest?.states.get(id);
+      const withdrawn =
+        !state &&
+        (!shown.launch ||
+          (!this.impacts.has(id) &&
+            now - shown.launchedAt > (this.broken.has(id) ? 2000 : CONFIRM_MS)));
+      if (withdrawn) {
+        // Expired debris, or a predicted strike the server did not make.
+        this.disposeModel(shown.model);
+        this.debris.delete(id);
+        continue;
       }
-    for (const [id, model] of this.debrisNodes)
-      if (!latest.states.has(id)) {
-        this.disposeModel(model);
-        this.debrisNodes.delete(id);
+      const shape = extents(shown.source);
+      let target: DebrisPose, frame: number;
+      if (state) {
+        target = this.sample(id, shown.local ? local : remote, shape, ground);
+        frame = latest!.serial;
+        shown.launch = undefined;
+      } else {
+        advanceDebris(shown.launch!, dt, ground, shape);
+        target = clonePose(shown.launch!);
+        frame = -1;
       }
-    for (const [id, state] of latest.states) {
-      let model = this.debrisNodes.get(id);
-      if (!model) {
-        model = this.make(state.source, false);
-        this.debrisNodes.set(id, model);
+      if (shown.target && shown.frame !== frame) {
+        // A new sample, or the server taking over from the launch, moved the target.
+        // Keep the drawn pose where it would have been and let the difference decay.
+        const expected = advanceDebris(clonePose(shown.target), dt, ground, shape);
+        shown.offset.x += expected.position.x - target.position.x;
+        shown.offset.y += expected.position.y - target.position.y;
+        shown.offset.z += expected.position.z - target.position.z;
+        shown.turn = shown.turn.multiply(
+          quaternion(expected.rotation).multiply(
+            Quaternion.Inverse(quaternion(target.rotation)),
+          ),
+        );
+        if (shown.offset.length() > SNAP_DISTANCE) {
+          shown.offset.setAll(0);
+          shown.turn = Quaternion.Identity();
+        }
       }
-      const a = previous.states.get(id) ?? state,
-        b = next.states.get(id) ?? state,
-        t =
-          next.time > previous.time
-            ? Math.max(
-                0,
-                Math.min(1, (renderTime - previous.time) / (next.time - previous.time)),
-              )
-            : 1,
-        extrapolate = Math.max(0, Math.min(0.08, renderTime - latest.time));
+      shown.target = target;
+      shown.frame = frame;
+      shown.offset.scaleInPlace(Math.exp(-correctionRate(shown.offset.length()) * dt));
+      shown.turn = Quaternion.Slerp(
+        shown.turn,
+        Quaternion.Identity(),
+        1 - Math.exp(-6 * dt),
+      );
+      const model = shown.model;
       model.root.position.set(
-        a.position.x +
-          (b.position.x - a.position.x) * t +
-          state.velocity.x * extrapolate,
-        a.position.y +
-          (b.position.y - a.position.y) * t +
-          state.velocity.y * extrapolate,
-        a.position.z +
-          (b.position.z - a.position.z) * t +
-          state.velocity.z * extrapolate,
+        target.position.x + shown.offset.x,
+        target.position.y + shown.offset.y,
+        target.position.z + shown.offset.z,
       );
-      model.root.rotationQuaternion = Quaternion.Slerp(
-        new Quaternion(a.rotation.x, a.rotation.y, a.rotation.z, a.rotation.w),
-        new Quaternion(b.rotation.x, b.rotation.y, b.rotation.z, b.rotation.w),
-        t,
-      );
-      const fade = Math.max(
-        0,
-        Math.min(1, (state.expiresAt - time) / TUNING.debrisFadeSeconds),
-      );
+      model.root.rotationQuaternion = shown.turn.multiply(quaternion(target.rotation));
+      const fade = state
+        ? Math.max(
+            0,
+            Math.min(
+              1,
+              (state.expiresAt - (latest!.time + elapsed)) / TUNING.debrisFadeSeconds,
+            ),
+          )
+        : 1;
       for (const mesh of model.meshes) mesh.visibility = fade;
+      // Another driver's strike appears when its moment is on screen, not on arrival.
+      const started = shown.local || !state || remote >= state.brokenAt;
       model.root.setEnabled(
-        fade > 0 &&
+        started &&
+          fade > 0 &&
           Math.hypot(
             model.root.position.x - this.host.target.x,
             model.root.position.z - this.host.target.z,
           ) < 160,
       );
     }
+    this.refresh(new Set([...this.broken, ...this.debris.keys(), ...this.hidden]));
   }
-  private refresh() {
-    for (const [id, model] of this.staticNodes) {
-      const broken = this.broken.has(id);
-      model.root.setEnabled(!broken);
-      this.light(model, !broken);
-      if (broken && id.startsWith("hydrant:")) this.startWater(id, model.root.position);
+  /** Server debris at a display time: interpolated within the samples, flown beyond them. */
+  private sample(
+    id: string,
+    time: number,
+    shape: Extents,
+    ground: (x: number, z: number) => number,
+  ): DebrisPose {
+    let a: DebrisState | undefined,
+      b: DebrisState | undefined,
+      at = 0,
+      bt = 0;
+    for (const frame of this.frames) {
+      const state = frame.states.get(id);
+      if (!state) continue;
+      if (frame.time <= time || !a) {
+        a = state;
+        at = frame.time;
+      }
+      if (frame.time >= time) {
+        b = state;
+        bt = frame.time;
+        break;
+      }
+    }
+    // Beyond the newest sample (the predicted car's time frame): fly it forward.
+    if (!b || bt <= at)
+      return advanceDebris(
+        clonePose(a!),
+        Math.min(0.5, Math.max(0, time - at)),
+        ground,
+        shape,
+      );
+    const t = Math.max(0, Math.min(1, (time - at) / (bt - at))),
+      mix = (p: number, q: number) => p + (q - p) * t,
+      rotation = Quaternion.Slerp(quaternion(a!.rotation), quaternion(b.rotation), t);
+    return {
+      position: {
+        x: mix(a!.position.x, b.position.x),
+        y: mix(a!.position.y, b.position.y),
+        z: mix(a!.position.z, b.position.z),
+      },
+      rotation: { x: rotation.x, y: rotation.y, z: rotation.z, w: rotation.w },
+      velocity: {
+        x: mix(a!.velocity.x, b.velocity.x),
+        y: mix(a!.velocity.y, b.velocity.y),
+        z: mix(a!.velocity.z, b.velocity.z),
+      },
+      angularVelocity: { ...b.angularVelocity },
+    };
+  }
+  /** A fixture stands until its strike is on screen: predicted, or reached by the clock. */
+  private isHidden(id: string) {
+    const shown = this.debris.get(id);
+    if (shown?.launch) return true;
+    if (!this.broken.has(id)) return false;
+    const state = this.frames.at(-1)?.states.get(id);
+    return !state || !shown || shown.local || this.remoteTime >= state.brokenAt;
+  }
+  private refresh(ids: Iterable<string>, force = false) {
+    for (const id of ids) {
+      const model = this.staticNodes.get(id);
+      if (!model) {
+        this.hidden.delete(id);
+        continue;
+      }
+      const hide = this.isHidden(id);
+      if (!force && hide === this.hidden.has(id)) continue;
+      if (hide) this.hidden.add(id);
+      else this.hidden.delete(id);
+      model.root.setEnabled(!hide);
+      this.light(model, !hide);
+      if (hide && this.broken.has(id) && id.startsWith("hydrant:"))
+        this.startWater(id, model.root.position);
       else this.stopWater(id);
     }
   }
@@ -352,16 +511,21 @@ export class DestructionRenderer {
   get diagnostics() {
     return {
       fixtures: this.staticNodes.size,
-      debris: this.debrisNodes.size,
+      debris: this.debris.size,
       fountains: this.water.size,
     };
   }
   dispose() {
-    for (const model of [...this.staticNodes.values(), ...this.debrisNodes.values()])
+    for (const model of [
+      ...this.staticNodes.values(),
+      ...[...this.debris.values()].map((shown) => shown.model),
+    ])
       this.disposeModel(model);
     for (const id of this.water.keys()) this.stopWater(id);
     this.staticNodes.clear();
-    this.debrisNodes.clear();
+    this.debris.clear();
+    this.fixtures.clear();
+    this.hidden.clear();
     this.frames = [];
   }
 }

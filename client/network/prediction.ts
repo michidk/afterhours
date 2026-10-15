@@ -20,6 +20,8 @@ export class Prediction {
   lastCorrection = { distance: 0, angle: 0 };
   offset = { x: 0, z: 0, y: 0, angle: 0 };
   lastRender = 0;
+  /** Seconds the rendered body runs ahead of the authoritative snapshot it replays from. */
+  ahead = 0;
   private smoothedAt = 0;
   private lastReconcile = 0;
   private lastInput: PredictedInput | undefined;
@@ -268,12 +270,14 @@ export class Prediction {
     // paced input interval when the server is slow; allowing a second tick keeps
     // it continuous when a late wakeup produces that command up to a tick late,
     // instead of holding the pose and then lurching when the command arrives.
+    this.ahead = Math.min(this.pending.length, MAX_PREDICTION_STEPS) * TUNING.tick;
     if (this.lastInput && !this.suspended) {
       const partial = Math.min(
         TUNING.tick * 2,
         Math.max(0, (now - this.lastInput.timestamp) / this.lastInput.interval) *
           TUNING.tick,
       );
+      this.ahead += partial;
       if (partial > 0)
         predictStep(
           pose,

@@ -81,7 +81,14 @@ test("the immutable saved map supplies every model safely without enlarging land
         undefined,
         id,
       );
-    if ("water" in spec) afloat(placed);
+    // Boats lie moored in the harbours of the saved city.
+    if ("water" in spec) {
+      assert.ok(isWater(placed.x, placed.z, saved), `${id} floats`);
+      assert.ok(
+        Math.abs(placed.y - surfaceLevel(placed.x, placed.z, saved)) < 0.03,
+        "rides the swell",
+      );
+    }
   }
   assert.equal(JSON.stringify(saved), source);
   assert.throws(

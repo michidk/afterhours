@@ -1,3 +1,4 @@
+import { airportsOf } from "../shared/world.ts";
 import { SceneryCulling } from "./world/culling.ts";
 import { buildInlandWater, buildTerrain } from "./world/terrain.ts";
 import { buildHeadlightCones, CarLights } from "./models/car-lights.ts";
@@ -41,6 +42,11 @@ import { DebugCamera } from "./camera/debug.ts";
 import { EnvironmentLighting, SCENE_LIGHT_COUNT } from "./lighting/index.ts";
 import { idle, type Input } from "../shared/world.ts";
 import { rampHeight, carGrounded } from "../shared/physics/ramps.ts";
+import { CarSuspension } from "./world/car-suspension.ts";
+import { BlobShadows } from "./world/blob-shadows.ts";
+
+/** Wheel centre height in a car model's local frame. */
+const WHEEL_HEIGHT = 0.48;
 import { rampMesh } from "./models/ramp.ts";
 import { TyreTracks } from "./effects/tyre-tracks.ts";
 import { terrainHeight } from "../shared/terrain.ts";
@@ -104,6 +110,11 @@ export class CityScene {
   destruction: DestructionRenderer;
   effects: Effects;
   private tyreTracks = new TyreTracks((x, z) => terrainHeight(x, z, this.city));
+  private suspension = new CarSuspension();
+  private blobShadows?: BlobShadows;
+  /** What a vehicle stands on: terrain, still water and ramps. */
+  private vehicleFloor = (x: number, z: number) =>
+    this.city ? rampHeight(x, z, this.city) : 0;
   /** Wall-clock start of recent hit flinches and melee swings, keyed by entity. */
   private flinches = new Map<string, { at: number; angle: number }>();
   private swings = new Map<string, number>();
@@ -343,25 +354,25 @@ export class CityScene {
           );
       }
     }
-    if (options.airport !== false) {
-      const a = city.airport,
-        ay = ground(a.x, a.z);
-      this.box("airfield apron", a.x, ay + 0.03, a.z, a.w, 0.06, a.d, "#a3ab9b");
-      this.box("runway", a.x, ay + 0.08, a.z, 22, 0.06, a.d - 8, "#4d585a");
-      for (let i = -a.d / 2 + 12; i <= a.d / 2 - 12; i += 10)
-        this.box("runway markings", a.x, ay + 0.13, a.z + i, 0.4, 0.04, 3, "#f4e7c3");
-      for (const side of [-1, 1])
-        for (let i = -a.d / 2 + 8; i <= a.d / 2 - 8; i += 12)
-          this.cylinder(
-            "runway light",
-            a.x + side * 11,
-            ay + 0.2,
-            a.z + i,
-            0.12,
-            0.25,
-            "#f1ca6a",
-          ).material = this.streetGlow;
-    }
+    if (options.airport !== false)
+      for (const a of airportsOf(city)) {
+        const ay = ground(a.x, a.z);
+        this.box("airfield apron", a.x, ay + 0.03, a.z, a.w, 0.06, a.d, "#a3ab9b");
+        this.box("runway", a.x, ay + 0.08, a.z, 22, 0.06, a.d - 8, "#4d585a");
+        for (let i = -a.d / 2 + 12; i <= a.d / 2 - 12; i += 10)
+          this.box("runway markings", a.x, ay + 0.13, a.z + i, 0.4, 0.04, 3, "#f4e7c3");
+        for (const side of [-1, 1])
+          for (let i = -a.d / 2 + 8; i <= a.d / 2 - 8; i += 12)
+            this.cylinder(
+              "runway light",
+              a.x + side * 11,
+              ay + 0.2,
+              a.z + i,
+              0.12,
+              0.25,
+              "#f1ca6a",
+            ).material = this.streetGlow;
+      }
     for (const landmark of city.landmarks)
       this.sign(
         landmark.name,
@@ -567,7 +578,7 @@ export class CityScene {
         const wheel = this.cylinder(
           "wheel",
           mount.x,
-          0.48,
+          WHEEL_HEIGHT,
           mount.z,
           0.25,
           0.76,
@@ -704,19 +715,20 @@ export class CityScene {
       n.rotation.y = e.angle;
       n.rotation.z = e.down ? Math.PI / 2 : 0;
       n.rotation.x = 0;
-      if (e.kind === "car" && carGrounded(e, this.city)) {
-        const sx = Math.sin(e.angle),
-          cz = Math.cos(e.angle);
-        const forward =
-          (rampHeight(e.x + sx * 0.1, e.z + cz * 0.1, this.city) -
-            rampHeight(e.x - sx * 0.1, e.z - cz * 0.1, this.city)) /
-          0.2;
-        const sideways =
-          (rampHeight(e.x + cz * 0.1, e.z - sx * 0.1, this.city) -
-            rampHeight(e.x - cz * 0.1, e.z + sx * 0.1, this.city)) /
-          0.2;
-        n.rotation.x = -Math.atan(forward);
-        n.rotation.z = -Math.atan(sideways);
+      // Wheels keep their ground contact while the sprung body moves above them.
+      let wheelDrop = 0;
+      if (e.kind === "car") {
+        const body = this.suspension.update(
+          e,
+          dt,
+          carGrounded(e, this.city),
+          this.vehicleFloor,
+          this.time,
+        );
+        n.position.y += body.heave.value;
+        n.rotation.x = -body.pitch.value;
+        n.rotation.z = -body.roll.value;
+        wheelDrop = body.heave.value / n.scaling.y;
       }
       const parts = this.parts.get(e.id)!;
       for (const child of parts)
@@ -744,8 +756,10 @@ export class CityScene {
             ? 1
             : Math.max(0, Math.min(1, e.wreck / TUNING.debrisFadeSeconds));
         if (e.wreck) child.material = this.mat("#30312e");
-        if (child.name === "wheel" && child.position.z > 0)
-          child.rotation.y = e.steering || 0;
+        if (child.name === "wheel") {
+          child.position.y = WHEEL_HEIGHT - wheelDrop;
+          if (child.position.z > 0) child.rotation.y = e.steering || 0;
+        }
       }
       if (e.kind === "helicopter") {
         n.rotation.z +=
@@ -853,6 +867,12 @@ export class CityScene {
       (mark) => this.effects.trails.add(mark),
     );
     this.effects.update(dt, this.target);
+    this.suspension.prune(this.time);
+    this.blobShadows ??= new BlobShadows(this.scene, this.vehicleFloor);
+    this.blobShadows.update(
+      entities.filter((e) => drawnBody(e)),
+      this.target,
+    );
     this.destruction.update();
     const p = entities.find((e) => e.id === me);
     if (p && !this.debugCamera.active) {

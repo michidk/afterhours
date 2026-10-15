@@ -6,6 +6,8 @@ import { packedSurfaceChunksSchema, packedTerrainSchema } from "./city-pack.ts";
 const coordinate = z.number().finite().min(-LIMIT).max(LIMIT),
   size = z.number().finite().positive().max(256);
 const point = { x: coordinate, z: coordinate };
+const airfield = z.object({ ...point, w: size, d: size });
+const spot = z.object({ ...point, angle: z.number().finite() });
 export const citySchema = z.object({
   seed: z.number().int(),
   terrain: z
@@ -121,18 +123,44 @@ export const citySchema = z.object({
   pickups: z
     .array(z.object({ ...point, weapon: z.enum(["bat", "pistol", "smg"]) }))
     .max(100),
-  airport: z.object({ ...point, w: size, d: size }),
+  airport: airfield,
+  airports: z.array(airfield).max(8).optional(),
+  townHall: z
+    .object({
+      ...point,
+      angle: z.number().finite(),
+      spawn: z.object(point),
+      parking: z.array(spot).max(200),
+    })
+    .optional(),
+  racetrack: z
+    .object({
+      path: z
+        .array(coordinate)
+        .min(16)
+        .max(20000)
+        .refine((p) => p.length % 2 === 0, "racetrack path holds x, z pairs"),
+      width: z.number().positive().max(40),
+      grid: z.array(spot).max(40),
+    })
+    .optional(),
+  harbours: z
+    .array(
+      z.object({ ...point, angle: z.number().finite(), berths: z.array(spot).max(20) }),
+    )
+    .max(12)
+    .optional(),
   landmarks: z
     .array(
       z.object({
         ...point,
         name: z.string().max(60),
-        kind: z.enum(["tower", "plaza", "airport"]),
+        kind: z.enum(["tower", "plaza", "airport", "townhall", "racetrack", "harbour"]),
       }),
     )
     .max(100),
 });
-export const CITY_FORMAT_VERSION = 6;
+export const CITY_FORMAT_VERSION = 7;
 /** On disk the terrain is base64 int16 centimetres; see shared/city-pack.ts. */
 const TERRAIN_BYTES = TERRAIN_SIDE * TERRAIN_SIDE * 2;
 export const cityFileSchema = z.object({

@@ -8,9 +8,12 @@ import { Simulation } from "./simulation.ts";
 import { CityStore } from "./city-stream.ts";
 import { loadCityMeshes } from "./city-mesh-loader.ts";
 import { VERSION } from "../shared/version.ts";
+import { regenerateCity } from "./city-regenerate.ts";
 
 const production = process.argv.includes("--production"),
   port = Number(process.env.PORT || 5173);
+// Every boot rebuilds the city with the current generator before serving it.
+await regenerateCity();
 const sim = new Simulation(await loadCity());
 // Build terrain colliders before accepting players, not on the first prop impact.
 sim.destruction.prepare();

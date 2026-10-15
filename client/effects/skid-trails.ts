@@ -1,3 +1,4 @@
+import { airportsOf } from "../../shared/world.ts";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
@@ -14,6 +15,9 @@ import {
   TRAIL_TILE_LIMIT,
   TRAIL_LIFT,
   TRAIL_AIRFIELD_LIFT,
+  TRAIL_LIFETIME,
+  TRAIL_MARK_LIMIT,
+  trailShade,
   trailTileGeometry,
   type TrailMark,
 } from "./trail-data.ts";
@@ -39,21 +43,33 @@ export class SkidTrails {
     if (![e.x, e.z, e.angle ?? 0, e.length ?? 0.15].every(Number.isFinite)) return;
     const length = Math.min(3.1, Math.max(0.08, e.length ?? 0.15)),
       tiles = trailTiles(e.x, e.z, length);
-    this.marks.push({ x: e.x, z: e.z, angle: e.angle ?? 0, length, life: 40, tiles });
+    this.marks.push({
+      x: e.x,
+      z: e.z,
+      angle: e.angle ?? 0,
+      length,
+      life: TRAIL_LIFETIME,
+      tiles,
+      shade: 1,
+    });
     for (const tile of tiles) this.dirty.add(tile);
-    if (this.marks.length > 8000)
+    if (this.marks.length > TRAIL_MARK_LIMIT)
       for (const tile of this.marks.shift()!.tiles) this.dirty.add(tile);
   }
 
   update(dt: number, focus?: { x: number; z: number }) {
     const byTile = new Map<string, TrailMark[]>();
     this.clock += dt;
-    const fade = this.clock >= 0.2;
+    // Fading is checked once a second; a tile repaints only when a mark's shade steps.
+    const fade = this.clock >= 1;
     if (fade) this.clock = 0;
     for (const mark of this.marks) {
       mark.life -= dt;
+      const shade = fade || mark.life <= 0 ? trailShade(mark.life) : mark.shade;
+      const changed = shade !== mark.shade;
+      mark.shade = shade;
       for (const key of mark.tiles) {
-        if ((fade && mark.life < 10) || mark.life <= 0) this.dirty.add(key);
+        if (changed || mark.life <= 0) this.dirty.add(key);
         if (mark.life <= 0) continue;
         const marks = byTile.get(key) ?? [];
         marks.push(mark);
@@ -94,13 +110,15 @@ export class SkidTrails {
           false,
         );
         texture.hasAlpha = true;
-        const airport = this.city?.airport,
-          airfield =
-            airport &&
-            col * WIDTH < airport.x + airport.w / 2 &&
-            (col + 1) * WIDTH > airport.x - airport.w / 2 &&
-            row * WIDTH < airport.z + airport.d / 2 &&
-            (row + 1) * WIDTH > airport.z - airport.d / 2;
+        const airfield =
+          !!this.city &&
+          airportsOf(this.city).some(
+            (airport) =>
+              col * WIDTH < airport.x + airport.w / 2 &&
+              (col + 1) * WIDTH > airport.x - airport.w / 2 &&
+              row * WIDTH < airport.z + airport.d / 2 &&
+              (row + 1) * WIDTH > airport.z - airport.d / 2,
+          );
         const geometry = trailTileGeometry(
           col,
           row,

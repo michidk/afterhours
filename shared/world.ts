@@ -210,14 +210,36 @@ export interface City {
    */
   walkways?: { points: number[]; links: number[] };
   pickups: { x: number; z: number; weapon: string }[];
-  airport: { x: number; z: number; w: number; d: number };
+  airport: Airfield;
+  /** Every airport of a generated city, `airport` first; authored cities have one. */
+  airports?: Airfield[];
+  /** Where players spawn, with a car park in front of it. */
+  townHall?: {
+    x: number;
+    z: number;
+    angle: number;
+    spawn: { x: number; z: number };
+    parking: Spot[];
+  };
+  /** A closed circuit: flat x, z centreline pairs, its width and starting grid. */
+  racetrack?: { path: number[]; width: number; grid: Spot[] };
+  /** Quays on the sea coast; `x, z` is the quay, berths lie in its basin. */
+  harbours?: { x: number; z: number; angle: number; berths: Spot[] }[];
   landmarks: {
     x: number;
     z: number;
     name: string;
-    kind: "tower" | "plaza" | "airport";
+    kind: LandmarkKind;
   }[];
 }
+export type Airfield = { x: number; z: number; w: number; d: number };
+/** A parking place: position and the yaw a vehicle stands at. */
+export type Spot = { x: number; z: number; angle: number };
+export type LandmarkKind =
+  "tower" | "plaza" | "airport" | "townhall" | "racetrack" | "harbour";
+/** Every airport of a city; authored cities and old artifacts only have `airport`. */
+export const airportsOf = (city: Pick<City, "airport" | "airports">) =>
+  city.airports?.length ? city.airports : [city.airport];
 export function random(seed: number) {
   return () => {
     seed |= 0;
@@ -254,6 +276,7 @@ export function district(x: number, z: number) {
   return "LITTLE HAVANA";
 }
 
-export function spawnOrigin(city: Pick<City, "centre">) {
+export function spawnOrigin(city: Pick<City, "centre" | "townHall">) {
+  if (city.townHall) return { ...city.townHall.spawn };
   return { x: (city.centre?.x ?? 0) + 11, z: (city.centre?.z ?? 0) + 25 };
 }

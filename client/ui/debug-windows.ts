@@ -1,5 +1,7 @@
 import { VEHICLES, WEAPONS } from "../../shared/catalog.ts";
 import type { ServerDiagnostics } from "../../shared/debug.ts";
+import type { PlayerSummary } from "../../shared/protocol.ts";
+import type { AdminPlace, AdminPlaceGroup } from "../debug/admin.ts";
 
 const spawnButtons = (names: string[]) =>
   names
@@ -45,6 +47,11 @@ const panels = [
     "inspector",
     "Object inspector",
     `<label><input type="checkbox" id="inspect-enabled"> Inspect objects under the pointer</label><p>Hover a person or vehicle. Move into this window to keep reading. Data refreshes once per second.</p><strong id="inspect-target">No object selected</strong><pre id="inspect-data">AI reactions, routes and entity state appear here.</pre>`,
+  ],
+  [
+    "admin",
+    "Admin",
+    `<h4>Places</h4><div id="admin-places"><p>Landmarks load when this window opens.</p></div><h4>Players</h4><ul id="admin-players" class="admin-players"></ul><p id="admin-status" role="status">Teleports are server commands; a driver brings the vehicle and its passengers.</p>`,
   ],
 ];
 export const debugWindowsHTML = `<div class="debug hidden" id="debug"><nav class="debug-launcher panel" aria-label="Debug windows"><strong>DEBUG</strong>${panels.map(([id, title]) => `<button data-debug-open="${id}" aria-controls="debug-${id}" aria-expanded="false">${title}</button>`).join("")}<button id="debug-reset">Reset layout</button><button id="debug-close" aria-label="Hide debug tools">×</button></nav>${panels.map(([id, title, content], i) => `<section class="debug-window panel hidden" id="debug-${id}" style="left:${24 + i * 34}px;top:${140 + i * 28}px" aria-label="${title}"><header tabindex="0" aria-label="Move ${title} window with arrow keys"><h3>${title}</h3><button data-debug-collapse aria-expanded="true" aria-label="Collapse ${title}">−</button><button data-debug-hide aria-label="Close ${title}">×</button></header><div class="debug-body">${content}</div></section>`).join("")}</div>`;
@@ -188,4 +195,78 @@ export function updateServerStats(element: HTMLElement, stats: ServerDiagnostics
       return [dt, dd];
     }),
   );
+}
+
+/** One collapsible group of teleport buttons per landmark kind; the first is open. */
+export function renderAdminPlaces(
+  element: HTMLElement,
+  groups: AdminPlaceGroup[],
+  go: (place: AdminPlace) => void,
+) {
+  element.replaceChildren(
+    ...groups.map((group, i) => {
+      const details = document.createElement("details"),
+        summary = document.createElement("summary");
+      details.open = i === 0;
+      summary.textContent = `${group.label} (${group.places.length})`;
+      details.append(
+        summary,
+        ...group.places.map((place) => {
+          const button = document.createElement("button");
+          button.textContent = place.name;
+          button.title = `${group.label} · ${Math.round(place.x)}, ${Math.round(place.z)}`;
+          button.onclick = () => {
+            go(place);
+            button.blur();
+          };
+          return button;
+        }),
+      );
+      return details;
+    }),
+  );
+  if (!groups.length) element.textContent = "This city has no named places.";
+}
+
+/** Other connected players with "Go to" and "Bring here" actions. */
+export function renderAdminPlayers(
+  element: HTMLElement,
+  players: PlayerSummary[],
+  self: string | undefined,
+  go: (player: PlayerSummary) => void,
+  bring: (player: PlayerSummary) => void,
+) {
+  const others = players.filter((player) => player.id !== self);
+  element.replaceChildren(
+    ...others.map((player) => {
+      const item = document.createElement("li"),
+        name = document.createElement("span");
+      name.textContent = player.name;
+      name.style.borderLeftColor = player.color;
+      item.append(
+        name,
+        ...(
+          [
+            ["Go to", go],
+            ["Bring here", bring],
+          ] as const
+        ).map(([label, action]) => {
+          const button = document.createElement("button");
+          button.textContent = label;
+          button.setAttribute("aria-label", `${label}: ${player.name}`);
+          button.onclick = () => {
+            action(player);
+            button.blur();
+          };
+          return button;
+        }),
+      );
+      return item;
+    }),
+  );
+  if (!others.length) {
+    const item = document.createElement("li");
+    item.textContent = "No other players connected.";
+    element.append(item);
+  }
 }

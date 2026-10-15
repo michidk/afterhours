@@ -163,3 +163,40 @@ export function setBrokenProps(city: City, ids: Iterable<string>) {
   overlay.ids = next;
   overlay.revision++;
 }
+
+/** Damage props have taken without breaking, as last reported by the server. */
+const damages = new WeakMap<City, Map<string, number>>();
+export function setPropDamage(city: City, damage: Record<string, number>) {
+  damages.set(city, new Map(Object.entries(damage)));
+}
+export const propDamage = (city: City, id: string) => damages.get(city)?.get(id) ?? 0;
+/** Health a fixture has left, so a client predicts the hit that finishes a dented prop. */
+export const remainingPropHealth = (city: City, id: string, kind: PropKind) =>
+  Math.max(0, PROP_HEALTH[kind] - propDamage(city, id));
+/** Damage a vehicle deals a fixture at this closing speed in m/s. */
+export const strikeDamage = (speed: number) => (speed - 2) * 14;
+/**
+ * Launch of a fixture a vehicle breaks: slightly faster than the car and up, so it
+ * leaves the bumper instead of riding it. Shared so the client's cosmetic launch
+ * starts exactly where the server's debris does.
+ */
+export const strikeVelocity = (body: { vx: number; vz: number }): Vec3 => ({
+  x: body.vx * 1.1,
+  y: 2.5 + Math.hypot(body.vx, body.vz) * 0.05,
+  z: body.vz * 1.1,
+});
+/** Height of a new debris body's centre above the ground under its fixture. */
+export const DEBRIS_LIFT = 0.16;
+/** Initial tumble of new debris: it topples the way it was pushed. */
+export const debrisSpin = (velocity: Vec3, corpse = false): Vec3 => ({
+  x: velocity.z * 0.3 + (corpse ? 2 : 0.7),
+  y: 0.3,
+  z: -velocity.x * 0.3 - 0.8,
+});
+/** Yaw of a fixture or corpse as the quaternion its debris starts from. */
+export const debrisRotation = (angle: number): Rotation => ({
+  x: 0,
+  y: Math.sin(angle / 2),
+  z: 0,
+  w: Math.cos(angle / 2),
+});

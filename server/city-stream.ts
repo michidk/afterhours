@@ -51,6 +51,7 @@ export class CityStore {
       limit: LIMIT,
       chunkSize: CITY_CHUNK_SIZE,
       airport: city.airport,
+      airports: city.airports,
       centre: city.centre,
       hasTerrain: city.terrain ? true : undefined,
       surface: city.surface ? true : undefined,
@@ -70,6 +71,7 @@ export class CityStore {
       parks: city.parks,
       landmarks: city.landmarks,
       ramps: city.ramps,
+      racetrack: city.racetrack,
     };
     this.atlasBody = new Body(JSON.stringify(this.atlas), "application/json");
     for (const key of chunksAround(0, 0, LIMIT))

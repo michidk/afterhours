@@ -3,6 +3,12 @@ import { z } from "zod";
 import type { Entity, Input } from "./world.ts";
 import type { Destructible, DebrisState } from "./destruction.ts";
 
+/** Teleport targets stay a few metres inside the shared world boundary. */
+const coordinate = z
+  .number()
+  .finite()
+  .min(-WORLD_LIMIT + 4)
+  .max(WORLD_LIMIT - 4);
 export const debugCommandSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("state") }),
   z.object({ kind: z.literal("observe"), id: z.string().min(1).max(120).optional() }),
@@ -14,17 +20,15 @@ export const debugCommandSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("teleport"),
-    x: z
-      .number()
-      .finite()
-      .min(-WORLD_LIMIT + 4)
-      .max(WORLD_LIMIT - 4),
-    z: z
-      .number()
-      .finite()
-      .min(-WORLD_LIMIT + 4)
-      .max(WORLD_LIMIT - 4),
+    x: coordinate,
+    z: coordinate,
+    /** Accept the nearest clear site within a short search when the point is occupied. */
+    near: z.boolean().optional(),
   }),
+  /** Admin: move yourself beside another connected player, wherever they are. */
+  z.object({ kind: z.literal("gotoPlayer"), id: z.string().min(1).max(120) }),
+  /** Admin: move another connected player beside yourself. */
+  z.object({ kind: z.literal("bringPlayer"), id: z.string().min(1).max(120) }),
   z.object({
     kind: z.literal("spawn"),
     model: z.enum([

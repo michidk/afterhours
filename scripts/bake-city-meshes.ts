@@ -1,3 +1,4 @@
+import { airportsOf } from "../shared/world.ts";
 import { writeFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
@@ -166,13 +167,14 @@ try {
     const part = emptyCity(store.manifest);
     for (const field of STATIC_FIELDS)
       Object.assign(part, { [field]: chunk[field].map((entry) => entry.value) });
-    const bounds = chunkBounds(key),
-      a = city.airport;
-    const visibleAirport =
-      bounds.maxX >= a.x - a.w / 2 &&
-      bounds.minX <= a.x + a.w / 2 &&
-      bounds.maxZ >= a.z - a.d / 2 &&
-      bounds.minZ <= a.z + a.d / 2;
+    const bounds = chunkBounds(key);
+    const visibleAirport = airportsOf(city).some(
+      (a) =>
+        bounds.maxX >= a.x - a.w / 2 &&
+        bounds.minX <= a.x + a.w / 2 &&
+        bounds.maxZ >= a.z - a.d / 2 &&
+        bounds.minZ <= a.z + a.d / 2,
+    );
     let surface: MeshGroup | undefined;
     if (chunk.surface) {
       const meshes = buildSurface(host, unpackSurface(chunk.surface, chunkOrigin(key)));

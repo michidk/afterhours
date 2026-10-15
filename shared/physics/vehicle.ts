@@ -17,6 +17,15 @@ export const CAR = {
   rolling: 32.5,
   lateral: 1100,
   steer: 0.55,
+  /** Forward speed in m/s at which the steering lock halves, so fast turns stay gripped. */
+  steerFalloff: 30,
+  /** Rear tyres grip harder than the fronts, so a car understeers before it slides. */
+  rearBias: 1.25,
+  /** Tyres skid (marks, squeal) only past this rear slip angle, and stop below the lower one. */
+  skidAngle: Math.tan((15 * Math.PI) / 180),
+  skidRelease: Math.tan((10 * Math.PI) / 180),
+  /** Sideways tyre speed in m/s needed for a skid, so slow parking turns stay quiet. */
+  skidSpeed: 3,
   steerRate: 1.65,
   steerReturn: 2.8,
   counterSteerRate: 3.5,
@@ -49,8 +58,12 @@ export function carForces(e: Entity, input: Drive, dt: number, grounded = e.y <=
   e.rearGripLoss = input.brake
     ? 1
     : Math.max(0, (e.rearGripLoss || 0) - dt / CAR.recovery);
+  const sin = Math.sin(e.angle),
+    cos = Math.cos(e.angle),
+    forward = e.vx * sin + e.vz * cos;
   const steering = e.steering || 0,
-    targetSteering = input.steer * CAR.steer,
+    targetSteering =
+      (input.steer * CAR.steer) / (1 + Math.abs(forward) / CAR.steerFalloff),
     steeringRate =
       targetSteering === 0
         ? CAR.steerReturn
@@ -65,9 +78,6 @@ export function carForces(e: Entity, input: Drive, dt: number, grounded = e.y <=
     e.wheelSkids.fill(false);
     return;
   }
-  const sin = Math.sin(e.angle),
-    cos = Math.cos(e.angle),
-    forward = e.vx * sin + e.vz * cos;
   const power = e.burning || e.wreck ? 0 : spec.engine;
   const drive =
     input.throttle * power * (input.throttle < 0 && forward <= 0 ? 0.75 : 1);
@@ -95,14 +105,20 @@ export function carForces(e: Entity, input: Drive, dt: number, grounded = e.y <=
       spec.grip *
       (w.front
         ? 1
-        : 1 - (e.rearGripLoss || 0) * CAR.handbrakeStrength * (1 - CAR.rearGrip));
+        : CAR.rearBias *
+          (1 - (e.rearGripLoss || 0) * CAR.handbrakeStrength * (1 - CAR.rearGrip)));
     const wx = -sx * rolling * rollingSpeed - cz * lateral * lateralSpeed;
     const wz = -cz * rolling * rollingSpeed + sx * lateral * lateralSpeed;
     fx += wx;
     fz += wz;
     torque += rz * wx - rx * wz;
+    const sideways = Math.abs(lateralSpeed),
+      slip = sideways / Math.max(1, Math.abs(rollingSpeed));
     e.wheelSkids[i] =
-      !w.front && Math.abs(lateralSpeed) * 0.7 > (e.wheelSkids[i] ? 0.8 : 1.5);
+      !w.front &&
+      (e.wheelSkids[i]
+        ? sideways > CAR.skidSpeed * 0.7 && slip > CAR.skidRelease
+        : sideways > CAR.skidSpeed && slip > CAR.skidAngle);
   }
   // Service brake for AI stopping; handbrake remains the reference rear-wheel model.
   const speed = Math.hypot(e.vx, e.vz),

@@ -1,3 +1,4 @@
+import { reuseCityEnv } from "./scripts/city-files.ts";
 import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
@@ -17,7 +18,7 @@ export default defineConfig({
     command: process.env.BROWSER_DOCKER_IMAGE
       ? `docker run --rm --name ${process.env.BROWSER_GAME_CONTAINER || "afterhours-browser-game"} -p 4175:5173 -e ALLOW_DEBUG=1 ${process.env.BROWSER_DOCKER_IMAGE}`
       : "node --import tsx server/index.ts --production",
-    env: { PORT: "4175", ALLOW_DEBUG: "1" },
+    env: { PORT: "4175", ALLOW_DEBUG: "1", ...reuseCityEnv() },
     url: "http://127.0.0.1:4175/health",
     timeout: 60_000,
     reuseExistingServer: false,

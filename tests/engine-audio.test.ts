@@ -181,6 +181,12 @@ test("drift audio gets brighter and louder with sideways tyre slip", () => {
     skidding: true,
     wheelSkids: [false, false, true, false],
   };
+  assert.equal(
+    driftSoundMix(car),
+    undefined,
+    "a gripped car is quiet even when flagged",
+  );
+  car.vx = 3.5;
   const scrub = driftSoundMix(car)!;
   car.vx = 8;
   car.vz = 8;

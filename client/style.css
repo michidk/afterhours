@@ -1053,3 +1053,31 @@ kbd {
   margin-left: auto;
   color: #f0bc6d;
 }
+
+.debug h4 {
+  font-size: 12px;
+  margin: 10px 0 4px;
+}
+.admin-players {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 11px;
+}
+.admin-players li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.admin-players span {
+  flex: 1;
+  min-width: 0;
+  padding-left: 6px;
+  border-left: 3px solid transparent;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#admin-places details {
+  margin: 4px 0;
+}
