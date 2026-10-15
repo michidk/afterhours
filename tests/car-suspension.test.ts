@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CarSuspension, SUSPENSION } from "../client/world/car-suspension.ts";
+import {
+  CarSuspension,
+  SUSPENSION,
+  groundAttitude,
+} from "../client/world/car-suspension.ts";
 import type { Entity } from "../shared/world.ts";
 
 const car = (): Entity => ({
@@ -72,4 +76,21 @@ test("braking dips the nose and a turn leans the body out", () => {
     pose = body.update(e, dt, true, flat, i * dt);
   }
   assert.ok(pose.roll.value > 0.02, "right side rises in a right turn");
+});
+
+test("in a dip the body rides on its wheels' ground, not the lower ground at its centre", () => {
+  const e = car();
+  // A V-shaped dip: the centre sits 0.4 m below the ground under the axles.
+  const dip = (_x: number, z: number) => Math.min(0.4, Math.abs(z) * 0.3);
+  const ground = groundAttitude(e, dip);
+  assert.equal(ground.heights.length, 4);
+  assert.ok(
+    ground.mean > dip(0, 0) + 0.3,
+    "the wheel plane is above the centre's ground",
+  );
+  assert.ok(Math.abs(ground.pitch) < 0.01 && Math.abs(ground.roll) < 0.01);
+  const hill = groundAttitude(e, (_x, z) => z * 0.2);
+  assert.ok(Math.abs(hill.pitch - Math.atan(0.2)) < 0.01, "nose up the hill");
+  const bank = groundAttitude(e, (x) => x * 0.1);
+  assert.ok(bank.roll > 0.05, "right side higher on a bank rising to the right");
 });

@@ -1,4 +1,5 @@
 import { VEHICLES } from "../../shared/catalog.ts";
+import { CAR_WHEEL_MOUNTS, displayedWheelPoint } from "../models/car-wheels.ts";
 import type { Entity } from "../../shared/world.ts";
 
 /**
@@ -54,20 +55,24 @@ function settle(
   }
 }
 
-/** Slope of the ground across the car's wheelbase and track, not just under its centre. */
+/**
+ * The ground under each drawn wheel (front left, front right, rear left, rear right),
+ * the plane through them and its height under the car's centre.
+ */
 export function groundAttitude(e: Entity, height: (x: number, z: number) => number) {
   const model = VEHICLES[e.model ?? "sedan"],
-    ahead = model.length * 0.3,
-    side = model.width * 0.4,
-    s = Math.sin(e.angle),
-    c = Math.cos(e.angle);
-  const front = height(e.x + s * ahead, e.z + c * ahead),
-    rear = height(e.x - s * ahead, e.z - c * ahead),
-    right = height(e.x + c * side, e.z - s * side),
-    left = height(e.x - c * side, e.z + s * side);
+    heights = CAR_WHEEL_MOUNTS.map((_, i) => {
+      const p = displayedWheelPoint(e, i);
+      return height(p.x, p.z);
+    }),
+    [fl, fr, rl, rr] = heights,
+    wheelbase = ((CAR_WHEEL_MOUNTS[0].z - CAR_WHEEL_MOUNTS[2].z) * model.length) / 4.3,
+    track = model.width;
   return {
-    pitch: Math.atan2(front - rear, 2 * ahead),
-    roll: Math.atan2(right - left, 2 * side),
+    pitch: Math.atan2((fl + fr - rl - rr) / 2, wheelbase),
+    roll: Math.atan2((fr + rr - fl - rl) / 2, track),
+    heights,
+    mean: (fl + fr + rl + rr) / 4,
   };
 }
 

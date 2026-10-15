@@ -42,11 +42,13 @@ import { DebugCamera } from "./camera/debug.ts";
 import { EnvironmentLighting, SCENE_LIGHT_COUNT } from "./lighting/index.ts";
 import { idle, type Input } from "../shared/world.ts";
 import { rampHeight, carGrounded } from "../shared/physics/ramps.ts";
-import { CarSuspension } from "./world/car-suspension.ts";
+import { CarSuspension, groundAttitude } from "./world/car-suspension.ts";
 import { BlobShadows } from "./world/blob-shadows.ts";
 
 /** Wheel centre height in a car model's local frame. */
 const WHEEL_HEIGHT = 0.48;
+/** How far a wheel moves up or down from its rest position on the body (m). */
+const WHEEL_TRAVEL = 0.25;
 import { rampMesh } from "./models/ramp.ts";
 import { TyreTracks } from "./effects/tyre-tracks.ts";
 import { terrainHeight } from "../shared/terrain.ts";
@@ -715,20 +717,19 @@ export class CityScene {
       n.rotation.y = e.angle;
       n.rotation.z = e.down ? Math.PI / 2 : 0;
       n.rotation.x = 0;
-      // Wheels keep their ground contact while the sprung body moves above them.
-      let wheelDrop = 0;
+      // The sprung body rides above the ground under all four wheels; each wheel
+      // then sits on its own ground, within the suspension's travel.
+      let wheels: { grounded: boolean; heights: number[]; drop: number } | undefined;
       if (e.kind === "car") {
-        const body = this.suspension.update(
-          e,
-          dt,
-          carGrounded(e, this.city),
-          this.vehicleFloor,
-          this.time,
-        );
-        n.position.y += body.heave.value;
+        const grounded = carGrounded(e, this.city),
+          body = this.suspension.update(e, dt, grounded, this.vehicleFloor, this.time),
+          ground = groundAttitude(e, this.vehicleFloor);
+        // In a dip between the axles the centre's ground is lower than the wheels'.
+        n.position.y =
+          (grounded ? Math.max(e.y, ground.mean) : e.y) + 0.3 + body.heave.value;
         n.rotation.x = -body.pitch.value;
         n.rotation.z = -body.roll.value;
-        wheelDrop = body.heave.value / n.scaling.y;
+        wheels = { grounded, heights: ground.heights, drop: body.heave.value };
       }
       const parts = this.parts.get(e.id)!;
       for (const child of parts)
@@ -757,10 +758,11 @@ export class CityScene {
             : Math.max(0, Math.min(1, e.wreck / TUNING.debrisFadeSeconds));
         if (e.wreck) child.material = this.mat("#30312e");
         if (child.name === "wheel") {
-          child.position.y = WHEEL_HEIGHT - wheelDrop;
+          child.position.y = WHEEL_HEIGHT - (wheels?.drop ?? 0) / n.scaling.y;
           if (child.position.z > 0) child.rotation.y = e.steering || 0;
         }
       }
+      if (wheels?.grounded) this.seatWheels(n, parts, wheels.heights);
       if (e.kind === "helicopter") {
         // The simulated rotor attitude: nose down to accelerate, banked into turns.
         n.rotation.x = e.pitch ?? 0;
@@ -950,6 +952,22 @@ export class CityScene {
       this.flinches.set(e.target, { at: now, angle: e.angle ?? 0 });
     if (e.kind === "swing" && e.source) this.swings.set(e.source, now);
     this.effects.effect(e);
+  }
+  /**
+   * Put each wheel of a grounded car on the ground below it: the body's pitch, roll
+   * and bounce move the wheels through their travel instead of lifting them off or
+   * sinking them in. Wheels are ordered front left, front right, rear left, rear right.
+   */
+  private seatWheels(root: TransformNode, parts: Mesh[], heights: number[]) {
+    root.computeWorldMatrix(true);
+    for (const wheel of parts) {
+      if (wheel.name !== "wheel") continue;
+      const index = (wheel.position.z > 0 ? 0 : 2) + (wheel.position.x < 0 ? 0 : 1),
+        rest = heights[index] + 0.3 + WHEEL_HEIGHT * root.scaling.y,
+        now = wheel.computeWorldMatrix(true).getTranslation().y,
+        travel = Math.max(-WHEEL_TRAVEL, Math.min(WHEEL_TRAVEL, rest - now));
+      wheel.position.y += travel / root.scaling.y;
+    }
   }
   /** Melee punch thrust and a recoil lean away from the blow that just landed. */
   private react(n: TransformNode, e: Entity) {
