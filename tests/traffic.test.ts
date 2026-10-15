@@ -189,3 +189,77 @@ test("blocked cars honk on elevated terrain, while airborne cars stay quiet", ()
   assert.equal(sim.entities.size, 2);
   sim.destruction.dispose();
 });
+
+test("repeated driver exits replace citizens instead of growing the population", () => {
+  const { sim, cars, sample } = fixture(1);
+  let car = cars[0];
+  for (let cycle = 0; cycle < 20; cycle++) {
+    sim.ai.citizens.state(car).personality = "timid";
+    sim.damage(car, 2);
+    sim.tick(1 / 30);
+    const person = [...sim.entities.values()].find((e) => e.kind === "pedestrian");
+    assert.ok(person, "a damaged timid driver exits");
+    assert.ok(sim.ai.routes.has(person.id));
+    sample(sim.time + 20);
+    assert.equal(sim.entities.has(person.id), false);
+    assert.equal(sim.ai.routes.has(person.id), false);
+    assert.equal(sim.entities.size, 1);
+    assert.equal(sim.ai.routes.size, 1);
+    const replacement = [...sim.entities.values()][0];
+    assert.equal(replacement.kind, "car");
+    assert.equal(replacement.ai, true);
+    car = replacement;
+  }
+  assert.equal(sim.traffic.diagnostics.respawned, 20);
+  sim.destruction.dispose();
+});
+
+test("drivers stay while reacting or visible and do not block expired wreck replacements", () => {
+  const { sim, cars, sample } = fixture(2);
+  const [car, wreck] = cars;
+  sim.ai.citizens.state(car).personality = "timid";
+  sim.damage(car, 2);
+  sim.tick(1 / 30);
+  const person = [...sim.entities.values()].find((e) => e.kind === "pedestrian");
+  assert.ok(person);
+  sample(11);
+  assert.equal(sim.entities.has(person.id), true, "still fleeing");
+  assert.equal(sim.traffic.diagnostics.respawned, 0);
+  const observer = sim.join("Observer", "#fff");
+  observer.x = person.x;
+  observer.z = person.z;
+  sim.entities.delete(wreck.id);
+  sim.ai.routes.delete(wreck.id);
+  sim.traffic.scheduleReplacement(wreck, 11);
+  sample(22);
+  assert.equal(sim.entities.has(person.id), true, "visible after calming down");
+  assert.equal(sim.traffic.diagnostics.respawned, 1, "wreck is not blocked");
+  assert.equal(sim.traffic.diagnostics.pendingRespawns, 1);
+  observer.x = 1000;
+  observer.z = 1000;
+  sample(28);
+  assert.equal(sim.entities.has(person.id), false);
+  assert.equal(sim.traffic.diagnostics.pendingRespawns, 0);
+  assert.equal(sim.traffic.diagnostics.respawned, 2);
+  sim.destruction.dispose();
+});
+
+test("a retired driver remains until a safe replacement site exists", () => {
+  const { sim, cars, sample } = fixture(1);
+  sim.ai.citizens.state(cars[0]).personality = "timid";
+  sim.damage(cars[0], 2);
+  sim.tick(1 / 30);
+  const person = [...sim.entities.values()].find((e) => e.kind === "pedestrian");
+  assert.ok(person);
+  sim.city.buildings = [
+    { x: 0, z: 0, w: LIMIT * 2, d: LIMIT * 2, h: 12, color: "#fff", style: 0 },
+  ];
+  sample(20);
+  assert.equal(sim.entities.has(person.id), true);
+  assert.equal(sim.traffic.diagnostics.respawned, 0);
+  sim.city.buildings = [];
+  sample(21);
+  assert.equal(sim.entities.has(person.id), false);
+  assert.equal(sim.traffic.diagnostics.respawned, 1);
+  sim.destruction.dispose();
+});

@@ -439,7 +439,7 @@ export class Simulation {
     this.ai.assign(person, this.serial, false);
     this.ai.citizens.transferDriver(car, person, this.time);
     car.ai = false;
-    if (this.ai.routes.delete(car.id)) this.traffic.abandon(car, this.time);
+    if (this.ai.routes.delete(car.id)) this.traffic.abandon(car, person, this.time);
     return true;
   }
   toggleLights(id: string) {

@@ -30,6 +30,7 @@ interface Replacement {
   model: VehicleModel;
   color: string;
   due: number;
+  formerDriver?: Entity;
 }
 const makeSpawnSites = (navigation: Navigation) =>
   navigation.roads.flatMap((from) =>
@@ -49,7 +50,7 @@ const makeSpawnSites = (navigation: Navigation) =>
     ),
   );
 
-/** Track blocked traffic and replenish only expired wrecks. */
+/** Track blocked traffic and replace expired wrecks or retired drivers. */
 export class TrafficManager {
   private spawnSites?: ReturnType<typeof makeSpawnSites>;
   private progress = new Map<string, Progress>();
@@ -64,16 +65,17 @@ export class TrafficManager {
   private honks = 0;
   private respawned = 0;
 
-  abandon(car: Entity, time: number) {
+  abandon(car: Entity, person: Entity, time: number) {
     this.abandoned.add(car);
-    this.scheduleReplacement(car, time);
+    this.scheduleReplacement(car, time, person);
   }
 
-  scheduleReplacement(car: Entity, time: number) {
+  scheduleReplacement(car: Entity, time: number, formerDriver?: Entity) {
     this.replacements.push({
       model: car.model && VEHICLES[car.model].kind === "car" ? car.model : "sedan",
       color: car.color,
       due: time + TRAFFIC.respawnDelaySeconds,
+      formerDriver,
     });
   }
 
@@ -167,11 +169,23 @@ export class TrafficManager {
   }
 
   private replenish(sim: Simulation) {
-    const replacement = this.replacements[0];
-    if (!replacement || sim.time < replacement.due || sim.time < this.nextRespawn)
-      return false;
+    if (!this.replacements.length || sim.time < this.nextRespawn) return false;
     const all = [...sim.entities.values()];
     const players = all.filter((e) => e.kind === "player");
+    const index = this.replacements.findIndex(({ due, formerDriver: person }) => {
+      if (sim.time < due) return false;
+      if (!person || sim.entities.get(person.id) !== person) return true;
+      return (
+        !person.vehicle &&
+        !person.down &&
+        sim.ai.citizens.reaction(person, sim.time).kind === "routine" &&
+        players.every(
+          (p) => Math.hypot(p.x - person.x, p.z - person.z) >= TUNING.interestRadius,
+        )
+      );
+    });
+    const replacement = this.replacements[index];
+    if (!replacement) return false;
     const radius = VEHICLES[replacement.model].length / 2 + 1;
     const spawnSites = (this.spawnSites ??= makeSpawnSites(sim.ai.navigation));
     for (let i = 0; i < spawnSites.length; i++) {
@@ -197,7 +211,12 @@ export class TrafficManager {
         replacement.model,
       );
       sim.ai.assignCar(car, site.from, site.to, site.fraction, this.cursor);
-      this.replacements.shift();
+      const person = replacement.formerDriver;
+      if (person && sim.entities.get(person.id) === person) {
+        sim.entities.delete(person.id);
+        sim.ai.routes.delete(person.id);
+      }
+      this.replacements.splice(index, 1);
       this.respawned++;
       this.nextRespawn = sim.time + TRAFFIC.respawnSeconds;
       return true;
