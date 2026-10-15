@@ -173,6 +173,8 @@ export interface City {
   terrain?: { heights: number[] };
   /** Downtown reference point for spawns; generated cities are not centred on 0,0. */
   centre?: { x: number; z: number };
+  /** Where players appear: the town hall plaza in generated cities. */
+  spawn?: { x: number; z: number };
   /** Street polygons packed per 128 m chunk; see shared/city-pack.ts. */
   surface?: PackedSurfaceChunks;
   roads: Road[];
@@ -276,7 +278,7 @@ export function district(x: number, z: number) {
   return "LITTLE HAVANA";
 }
 
-export function spawnOrigin(city: Pick<City, "centre" | "townHall">) {
-  if (city.townHall) return { ...city.townHall.spawn };
+export function spawnOrigin(city: Pick<City, "centre" | "spawn">) {
+  if (city.spawn) return { ...city.spawn };
   return { x: (city.centre?.x ?? 0) + 11, z: (city.centre?.z ?? 0) + 25 };
 }

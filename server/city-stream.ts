@@ -53,6 +53,7 @@ export class CityStore {
       airport: city.airport,
       airports: city.airports,
       centre: city.centre,
+      spawn: city.spawn,
       hasTerrain: city.terrain ? true : undefined,
       surface: city.surface ? true : undefined,
       hasWater: city.water ? true : undefined,

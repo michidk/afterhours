@@ -805,6 +805,7 @@ export function cityFromMap(map: GeneratedMap): City {
     seed: map.options.seed,
     terrain: { heights },
     centre,
+    spawn: { ...townHall.spawn },
     surface: packSurfaceChunks({ asphalt, sidewalks, markings }),
     walkways,
     water,

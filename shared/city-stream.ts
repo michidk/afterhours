@@ -25,6 +25,7 @@ export const mapManifestSchema = z.object({
   airports: citySchema.shape.airports,
   geometryVersion: z.literal(1).optional(),
   centre: citySchema.shape.centre,
+  spawn: citySchema.shape.spawn,
   /** Set when /city/terrain/<mapId> serves 16-bit centimetre heights. */
   hasTerrain: z.boolean().optional(),
   /** Set when chunks carry packed street polygons instead of road boxes. */
@@ -78,7 +79,7 @@ export type ClientMap = MapManifest & {
 export const cityWaterSchema = citySchema.shape.water.unwrap();
 export function emptyCity(
   map: Pick<ClientMap, "seed" | "airport" | "terrain" | "centre" | "water"> &
-    Partial<Pick<ClientMap, "airports">>,
+    Partial<Pick<ClientMap, "airports" | "spawn">>,
 ): City {
   return {
     seed: map.seed,
@@ -87,6 +88,7 @@ export function emptyCity(
     centre: map.centre,
     airport: map.airport,
     airports: map.airports,
+    spawn: map.spawn,
     roads: [],
     buildings: [],
     props: [],

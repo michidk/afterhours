@@ -18,6 +18,7 @@ export const citySchema = z.object({
     })
     .optional(),
   centre: z.object(point).optional(),
+  spawn: z.object(point).optional(),
   /** Street polygons packed per 128 m chunk; see shared/city-pack.ts. */
   surface: packedSurfaceChunksSchema.optional(),
   roads: z

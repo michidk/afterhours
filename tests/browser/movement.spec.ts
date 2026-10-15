@@ -121,6 +121,22 @@ for (const delay of [0, 150]) {
         debug?.network.prediction?.body && debug.scene.nodes.has(debug.network.playerId)
       );
     });
+    // The spawn plaza is hemmed in by the town hall and its car park: walk on the
+    // open airport apron, where three seconds of movement meet nothing.
+    const manifest: MapManifest = await (await request.get("/city")).json();
+    await page.evaluate(
+      async (at) => {
+        await window.afterhoursDebug!.teleport(at.x, at.z);
+      },
+      { x: manifest.airport.x + 50, z: manifest.airport.z - 60 },
+    );
+    await page.waitForFunction(
+      (at) => {
+        const body = window.afterhoursDebug?.network.prediction?.body;
+        return !!body && Math.hypot(body.x - at.x, body.z - at.z) < 3;
+      },
+      { x: manifest.airport.x + 50, z: manifest.airport.z - 60 },
+    );
     await page.evaluate(async (delay) => {
       const debug = window.afterhoursDebug;
       if (!debug) throw Error("Debug interface missing");
@@ -382,10 +398,7 @@ test("nighttime scenery is ready far ahead and lamp pools stay lit when approach
         .filter((entry) => entry.name.includes("/city/chunks/")).length,
   );
   const manifest: MapManifest = await (await request.get("/city")).json();
-  const origin = {
-    x: (manifest.centre?.x ?? 0) + 11,
-    z: (manifest.centre?.z ?? 0) + 25,
-  };
+  const origin = spawnOrigin(manifest);
   const span = (center: number) =>
     Math.floor(Math.min(manifest.limit, center + 512) / manifest.chunkSize) -
     Math.floor(Math.max(-manifest.limit, center - 512) / manifest.chunkSize) +
@@ -490,7 +503,8 @@ for (const model of ["sedan", "scout"] as const) {
         await d.teleport(vehicle.x + 3, vehicle.z);
         return vehicle.id;
       },
-      { model, origin: spawnOrigin(manifest) },
+      // Away from the town hall's parked cars, so F boards the spawned vehicle.
+      { model, origin: { x: manifest.airport.x + 50, z: manifest.airport.z - 60 } },
     );
     await page.keyboard.press("f");
     await page.waitForFunction((id) => {

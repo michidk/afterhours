@@ -13,7 +13,11 @@ import { groundLevel, isWater } from "../shared/water.ts";
 
 const city = await loadCity();
 const mapId = new CityStore(city).manifest.mapId;
-const origin = spawnOrigin(city);
+// The spawn plaza is hemmed in by the town hall and its car park; walk on the open
+// airport apron instead, where a few seconds of movement meet nothing.
+const origin = city.spawn
+  ? { x: city.airport.x + 50, z: city.airport.z - 60 }
+  : spawnOrigin(city);
 
 async function until(check: () => boolean, description: string) {
   const deadline = performance.now() + 10000;

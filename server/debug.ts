@@ -149,6 +149,8 @@ function siteFits(
   z: number,
   ignore: Set<string>,
   dry: boolean,
+  /** Searched sites also keep clear of people and vehicles; an exact teleport may stand beside one. */
+  crowd = true,
 ) {
   const radius = vehicle(mover) ? reach(mover) + 1 : 0.6;
   if (sim.blocked(x, z, radius)) return false;
@@ -158,6 +160,7 @@ function siteFits(
       for (const dz of [-1, 0, 1])
         if (!isWater(x + dx * radius, z + dz * radius, sim.city)) return false;
   } else if ((vehicle(mover) || dry) && isWater(x, z, sim.city)) return false;
+  if (!crowd) return true;
   const y = groundLevel(x, z, sim.city);
   for (const e of sim.entities.values()) {
     if (ignore.has(e.id) || e.vehicle || Math.abs(e.y - y) > 3) continue;
@@ -179,7 +182,7 @@ function findSite(
   ignore: Set<string>,
   { exact = false, search = true, start = 3 },
 ) {
-  if (exact && siteFits(sim, mover, target.x, target.z, ignore, false))
+  if (exact && siteFits(sim, mover, target.x, target.z, ignore, false, false))
     return { x: target.x, z: target.z };
   if (!search) return undefined;
   for (let radius = start; radius < 40; radius += 3)
