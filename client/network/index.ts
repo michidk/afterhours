@@ -5,6 +5,8 @@ import type {
   Snapshot,
   Welcome,
   InputFrame,
+  PlayerPosition,
+  PlayerPositions,
   PlayerRoster,
   PlayerSummary,
 } from "../../shared/protocol.ts";
@@ -23,6 +25,7 @@ export interface NetworkHooks {
   chat: (name: string, text: string) => void;
   status: (state: string) => void;
   roster?: (players: PlayerSummary[]) => void;
+  positions?: (players: PlayerPosition[]) => void;
   destruction?: (brokenProps: string[]) => void;
 }
 export class GameNetwork {
@@ -213,6 +216,8 @@ export class GameNetwork {
       }
       if (m.type === "chat") this.hooks.chat(m.name, m.text);
       if (m.type === "roster") this.hooks.roster?.((m as PlayerRoster).players);
+      if (m.type === "positions")
+        this.hooks.positions?.((m as PlayerPositions).players);
       if (m.type === "destruction") {
         if (this.city) setBrokenProps(this.city, m.brokenProps);
         this.hooks.destruction?.(m.brokenProps);

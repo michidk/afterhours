@@ -100,13 +100,15 @@ test("congestion retries destruction and preserves the last delivered snapshot b
   );
   sessions.broadcast();
   await state;
+  // Map positions are droppable telemetry sent alongside; the reliable messages keep their order.
+  const reliable = received.filter((m) => m.type !== "positions");
   assert.deepEqual(
-    received.map((m) => m.type),
+    reliable.map((m) => m.type),
     ["destruction", "state"],
   );
-  assert.deepEqual(received[0].brokenProps, ["prop:0"]);
-  assert.equal(received[1].full, true);
-  assert.equal(received[1].base, 0);
+  assert.deepEqual(reliable[0].brokenProps, ["prop:0"]);
+  assert.equal(reliable[1].full, true);
+  assert.equal(reliable[1].base, 0);
 });
 
 test("a full city restores an active session while rejecting a new player", async (t) => {

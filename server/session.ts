@@ -8,6 +8,8 @@ import {
   type InputFrame,
   type Snapshot,
   type PlayerRoster,
+  type PlayerPosition,
+  type PlayerPositions,
   type PlayerSummary,
 } from "../shared/protocol.ts";
 import { idle, type Entity, type Input } from "../shared/world.ts";
@@ -41,6 +43,7 @@ interface Client {
   known: Map<string, Map<string, string | undefined>>;
   view?: { x: number; z: number };
   rosterKey?: string;
+  positionsAt?: number;
   destructionKey?: string;
 }
 /** Movement controls only; aim, attack and shot timing never change a predicted step. */
@@ -455,6 +458,8 @@ export class Sessions {
       },
       destructionKey = JSON.stringify(destruction);
     this.frames++;
+    const positions: PlayerPositions = { type: "positions", players: this.positions() },
+      now = performance.now();
     const encodedEntities = new Map<
       string,
       { rounded: Entity; fields: Map<string, string | undefined> }
@@ -551,6 +556,9 @@ export class Sessions {
         if (c.destructionKey !== destructionKey && this.send(ws, destruction)) {
           c.destructionKey = destructionKey;
         }
+        // The map needs everyone's place, not entities; twice a second is plenty.
+        if (now - (c.positionsAt ?? -Infinity) >= 500 && this.send(ws, positions))
+          c.positionsAt = now;
         if (this.send(ws, snapshot)) {
           c.known = known;
           c.frame = this.frames;
@@ -561,6 +569,23 @@ export class Sessions {
   close() {
     for (const ws of this.clients.keys()) ws.close(1001, "Server restarting");
     this.wss.close();
+  }
+  /** Joined players' places (a seated player is where their vehicle is), rounded for the wire. */
+  positions(): PlayerPosition[] {
+    const players: PlayerPosition[] = [];
+    for (const [ws, c] of this.clients) {
+      if (ws.readyState !== WebSocket.OPEN || !c.id) continue;
+      const p = this.sim.entities.get(c.id);
+      if (p?.kind !== "player") continue;
+      const body = (p.vehicle && this.sim.entities.get(p.vehicle)) || p;
+      players.push({
+        id: p.id,
+        x: Math.round(body.x * 10) / 10,
+        z: Math.round(body.z * 10) / 10,
+        angle: Math.round(body.angle * 100) / 100,
+      });
+    }
+    return players.sort((a, b) => a.id.localeCompare(b.id));
   }
   /** Connected, joined sessions only; spatial interest and reconnect ghosts do not affect membership. */
   roster(): PlayerSummary[] {

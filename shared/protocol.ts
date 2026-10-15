@@ -113,6 +113,17 @@ export interface PlayerRoster {
   type: "roster";
   players: PlayerSummary[];
 }
+/** Where every joined player is, regardless of network interest; drives the island map. */
+export interface PlayerPosition {
+  id: string;
+  x: number;
+  z: number;
+  angle: number;
+}
+export interface PlayerPositions {
+  type: "positions";
+  players: PlayerPosition[];
+}
 export interface InputFrame {
   seq: number;
   timestamp: number;

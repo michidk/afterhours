@@ -5,6 +5,7 @@ import {
   type ClientMap,
 } from "../../shared/city-stream.ts";
 import { district, type Entity } from "../../shared/world.ts";
+import { swatch, type MapPlayer } from "./map-players.ts";
 
 /** North-up coordinates shared by drawing, zoom anchoring and pointer panning. */
 export class MapViewport {
@@ -52,6 +53,9 @@ export class CityMap {
   private request?: Promise<void>;
   private player?: Entity;
   private entities: Entity[] = [];
+  private players: MapPlayer[] = [];
+  private listKey = "";
+  private list: HTMLElement;
   private drag?: { id: number; x: number; y: number };
   private returnFocus?: HTMLElement;
   private observer: ResizeObserver;
@@ -65,6 +69,16 @@ export class CityMap {
     private download: typeof fetch = (...args) => fetch(...args),
   ) {
     this.context = canvas.getContext("2d")!;
+    this.list = root.querySelector<HTMLElement>("#map-players")!;
+    this.list.addEventListener("click", (event) => {
+      const id = (event.target as HTMLElement).closest<HTMLElement>("[data-map-player]")
+        ?.dataset.mapPlayer;
+      const target = this.players.find((p) => p.id === id);
+      if (!target) return;
+      this.view.x = target.x;
+      this.view.z = target.z;
+      this.draw();
+    });
     root.querySelector<HTMLButtonElement>("[data-map-close]")!.onclick = () =>
       this.setOpen(false);
     root.querySelector<HTMLButtonElement>("[data-map-center]")!.onclick = () => {
@@ -173,10 +187,36 @@ export class CityMap {
     })();
     return this.request;
   }
-  update(player: Entity, entities: Entity[]) {
+  update(player: Entity, entities: Entity[], players: MapPlayer[] = []) {
     this.player = player;
     this.entities = entities;
+    this.players = players;
+    this.renderList();
     if (this.open) this.draw();
+  }
+  /** The side list changes with membership, not with movement. */
+  private renderList() {
+    const key = this.players.map((p) => `${p.id}|${p.name}|${p.color}`).join("\n");
+    if (key === this.listKey) return;
+    this.listKey = key;
+    this.list.replaceChildren(
+      ...this.players.map((p) => {
+        const item = document.createElement("li"),
+          button = document.createElement("button"),
+          dot = document.createElement("i");
+        button.dataset.mapPlayer = p.id;
+        button.title = p.self ? "Centre on yourself" : `Centre on ${p.name}`;
+        dot.style.background = swatch(p.color);
+        button.append(dot, p.name);
+        if (p.self) {
+          const you = document.createElement("small");
+          you.textContent = "you";
+          button.append(you);
+        }
+        item.append(button);
+        return item;
+      }),
+    );
   }
   private resize() {
     const rect = this.canvas.getBoundingClientRect();
@@ -202,16 +242,34 @@ export class CityMap {
       for (let x = 0; x < side; x++) {
         const h = heights[z * TERRAIN_SIDE + x],
           i = (z * side + x) * 4;
-        if (h < -1.1) continue;
-        // hsl(105, 18%, light) without formatting a string per cell.
-        const light = Math.max(0, Math.min(1, (32 + h / 6) / 100)),
-          chroma = (1 - Math.abs(2 * light - 1)) * 0.18,
-          m = light - chroma / 2;
-        const [r, g, b] =
-          h < -0.1 ? [0.655, 0.596, 0.439] : [m + chroma * 0.25, m + chroma, m];
-        image.data[i] = r * 255;
-        image.data[i + 1] = g * 255;
-        image.data[i + 2] = b * 255;
+        let r: number, g: number, b: number;
+        if (h < -1.1) {
+          // Shallows fade into the deep colour behind the island.
+          const t = Math.min(1, (-1.1 - h) / 9);
+          [r, g, b] = [0.24 - 0.17 * t, 0.5 - 0.33 * t, 0.56 - 0.35 * t];
+        } else {
+          // Light from the north-west: slopes facing it brighten, the others darken.
+          const at = (cx: number, cz: number) =>
+            heights[
+              Math.min(side, Math.max(0, cz)) * TERRAIN_SIDE +
+                Math.min(side, Math.max(0, cx))
+            ];
+          const gx = (at(x + 1, z) - at(x - 1, z)) / (2 * TERRAIN_STEP),
+            gz = (at(x, z + 1) - at(x, z - 1)) / (2 * TERRAIN_STEP),
+            relief = (0.5 * gx - 0.5 * gz) / Math.hypot(gx, gz, 1);
+          const shade = Math.max(0.55, Math.min(1.6, 1 + relief * 1.6));
+          // hsl(105, 18%, light) without formatting a string per cell.
+          const light = Math.max(0, Math.min(1, ((32 + h / 6) / 100) * shade)),
+            chroma = (1 - Math.abs(2 * light - 1)) * 0.18,
+            m = light - chroma / 2;
+          [r, g, b] =
+            h < -0.1
+              ? [0.655 * shade, 0.596 * shade, 0.439 * shade]
+              : [m + chroma * 0.25, m + chroma, m];
+        }
+        image.data[i] = Math.min(255, r * 255);
+        image.data[i + 1] = Math.min(255, g * 255);
+        image.data[i + 2] = Math.min(255, b * 255);
         image.data[i + 3] = 255;
       }
     context.putImageData(image, 0, 0);
@@ -230,7 +288,8 @@ export class CityMap {
     c.fillStyle = "#425752";
     if (this.manifest.terrain) {
       // The 8 m grid has ~150k cells; rasterise it once and blit it per frame.
-      c.imageSmoothingEnabled = false;
+      c.imageSmoothingEnabled = true;
+      c.imageSmoothingQuality = "high";
       c.drawImage(this.terrainImage(), -limit, -limit, limit * 2, limit * 2);
     } else c.fillRect(-limit, -limit, limit * 2, limit * 2);
     c.strokeStyle = "#ebd5ac55";
@@ -245,15 +304,41 @@ export class CityMap {
         park.d ?? 38,
       );
     }
-    for (const road of this.atlas?.roads ?? []) {
-      c.strokeStyle = "#adb4a0";
-      c.lineWidth = road.width;
-      c.lineCap = "round";
+    // Lakes and rivers sit on the terrain, under the streets that cross them.
+    c.fillStyle = c.strokeStyle = "#3d8493";
+    c.lineCap = c.lineJoin = "round";
+    for (const lake of this.manifest.water?.lakes ?? []) {
       c.beginPath();
-      c.moveTo(road.ax, road.az);
-      c.lineTo(road.bx, road.bz);
-      c.stroke();
+      lake.outline.forEach((n, i) => {
+        if (i % 2 === 0) (i ? c.lineTo : c.moveTo).call(c, n, lake.outline[i + 1]);
+      });
+      c.closePath();
+      c.fill();
     }
+    for (const river of this.manifest.water?.rivers ?? [])
+      for (let i = 4; i < river.points.length; i += 4) {
+        c.lineWidth = Math.max(river.points[i + 3], 1.5 / v.scale);
+        c.beginPath();
+        c.moveTo(river.points[i - 4], river.points[i - 3]);
+        c.lineTo(river.points[i], river.points[i + 1]);
+        c.stroke();
+      }
+    // Streets get a dark outline, drawn first so junctions merge, and stay visible
+    // when the whole island is in view.
+    const roads = this.atlas?.roads ?? [];
+    for (const [width, colour] of [
+      [3, "#2c3b38"],
+      [0, undefined],
+    ] as const)
+      for (const road of roads) {
+        c.strokeStyle = colour ?? (road.width >= 12 ? "#f0e6c4" : "#c8ccb9");
+        c.lineWidth = Math.max(road.width, 1.8 / v.scale) + width;
+        c.lineCap = "round";
+        c.beginPath();
+        c.moveTo(road.ax, road.az);
+        c.lineTo(road.bx, road.bz);
+        c.stroke();
+      }
     const airport = this.manifest.airport;
     c.fillStyle = "#263e41";
     c.fillRect(
@@ -325,18 +410,53 @@ export class CityMap {
       c.lineTo(p.x + 4, p.y + 3);
       c.fill();
     }
-    for (const e of this.entities) {
-      if (e.kind !== "player" || e.id === this.player?.id) continue;
-      const p = v.screen(e.x, e.z);
-      c.fillStyle = "#7dcada";
+    // Name tags nudge down rather than cover each other; the player's own claims its spot first.
+    const tags: { x: number; y: number; w: number }[] = [];
+    const place = (text: string, x: number, y: number) => {
+      c.font = "600 11px 'DM Sans', sans-serif";
+      const w = c.measureText(text).width + 14;
+      let ty = y;
+      for (
+        let k = 0;
+        k < 8 &&
+        tags.some((t) => Math.abs(t.x - x) < (t.w + w) / 2 && Math.abs(t.y - ty) < 18);
+        k++
+      )
+        ty += 19;
+      tags.push({ x, y: ty, w });
+      return { text, x, y: ty, w };
+    };
+    const paint = (
+      tag: { text: string; x: number; y: number; w: number },
+      you: boolean,
+    ) => {
+      c.font = "600 11px 'DM Sans', sans-serif";
+      c.fillStyle = you ? "#f0bc6d" : "#102127e0";
       c.beginPath();
-      c.arc(p.x, p.y, 4, 0, Math.PI * 2);
+      c.roundRect(tag.x - tag.w / 2, tag.y - 9, tag.w, 18, 9);
       c.fill();
+      c.fillStyle = you ? "#1b2a2c" : "#fff6de";
+      c.fillText(tag.text, tag.x, tag.y + 0.5);
+    };
+    const me = this.players.find((q) => q.self);
+    const here = this.player && v.screen(this.player.x, this.player.z);
+    const mine = here && place(me ? `${me.name} · you` : "You", here.x, here.y + 22);
+    for (const other of this.players) {
+      if (other.self) continue;
+      const p = v.screen(other.x, other.z);
+      if (p.x < -40 || p.x > v.width + 40 || p.y < -40 || p.y > v.height + 40) continue;
+      c.fillStyle = swatch(other.color);
+      c.strokeStyle = "#fff6d8";
+      c.lineWidth = 2.5;
+      c.beginPath();
+      c.arc(p.x, p.y, 6, 0, Math.PI * 2);
+      c.stroke();
+      c.fill();
+      paint(place(other.name, p.x, p.y + 17), false);
     }
-    if (this.player) {
-      const p = v.screen(this.player.x, this.player.z);
+    if (this.player && here && mine) {
       c.save();
-      c.translate(p.x, p.y);
+      c.translate(here.x, here.y);
       c.rotate(this.player.angle);
       c.fillStyle = "#fff6d8";
       c.strokeStyle = "#132d32";
@@ -350,6 +470,7 @@ export class CityMap {
       c.fill();
       c.stroke();
       c.restore();
+      paint(mine, true);
     }
     c.fillStyle = "#f2d49b";
     c.font = "bold 14px sans-serif";

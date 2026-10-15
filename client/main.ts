@@ -1,12 +1,13 @@
 import { mountCharacterMenu } from "./ui/character-menu.ts";
 import { TUNING, VEHICLES, WEAPONS, isVehicleModel } from "../shared/catalog.ts";
 import { availableSeat, occupiedSeats, seatCapacity } from "../shared/seats.ts";
-import type { Pickup } from "../shared/protocol.ts";
+import type { Pickup, PlayerPosition, PlayerSummary } from "../shared/protocol.ts";
 import "./style.css";
 import { mountDebugWindows, updateServerStats } from "./ui/debug-windows.ts";
 import { inspectAtPointer } from "./ui/debug-inspector.ts";
 import { mountUI } from "./ui/index.ts";
 import { loadoutHTML } from "./ui/loadout.ts";
+import { mapPlayers, swatch } from "./ui/map-players.ts";
 import { CityMap } from "./ui/city-map.ts";
 import { updateNetworkStats } from "./ui/network-stats.ts";
 import { PlayerList } from "./ui/player-list.ts";
@@ -47,6 +48,8 @@ const characterMenu = mountCharacterMenu();
 const nameplates = new Nameplates();
 let pickups: Pickup[] = [];
 let loadoutShown = "";
+let roster: PlayerSummary[] = [];
+const farPlayers = new Map<string, PlayerPosition>();
 const $ = <T extends HTMLElement = HTMLElement>(s: string) =>
   document.querySelector<T>(s)!;
 const playerList = new PlayerList(
@@ -169,7 +172,12 @@ $("#join").addEventListener("submit", (event) => {
         $("#messages").append(p);
         while ($("#messages").children.length > 6) $("#messages").firstChild?.remove();
       },
+      positions(players) {
+        farPlayers.clear();
+        for (const p of players) farPlayers.set(p.id, p);
+      },
       roster(players) {
+        roster = players;
         playerList.update(players, playerId);
         nameplates.roster(players);
       },
@@ -474,10 +482,18 @@ function drawMap(p: Entity) {
     map.fillRect(b.x - b.w / 2, b.z - b.d / 2, b.w, b.d);
   for (const e of entities) {
     if (e.kind === "pedestrian") continue;
-    map.fillStyle = e.kind === "player" ? "#fff8de" : "#efbd66";
+    const player = e.kind === "player";
+    map.fillStyle = player
+      ? swatch(roster.find((r) => r.id === e.id)?.color ?? "")
+      : "#efbd66";
     map.beginPath();
-    map.arc(e.x, e.z, e.kind === "player" ? 3 : 2, 0, 7);
+    map.arc(e.x, e.z, player ? 3.5 : 2, 0, 7);
     map.fill();
+    if (player) {
+      map.strokeStyle = "#fff8de";
+      map.lineWidth = 1.2;
+      map.stroke();
+    }
   }
   map.restore();
   map.save();
@@ -780,7 +796,11 @@ async function boot() {
             ? `<kbd>W A S D</kbd> Steer parachute`
             : `<kbd>F</kbd> ${action}`;
         drawMap(p);
-        cityMap?.update(p, rendered);
+        cityMap?.update(
+          p,
+          rendered,
+          mapPlayers(roster, rendered, farPlayers, playerId),
+        );
       }
       profiler?.record({
         interval,
