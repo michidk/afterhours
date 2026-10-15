@@ -171,13 +171,22 @@ export class DestructionRenderer {
     const h = this.host,
       root = new TransformNode(`${live ? "fixture" : "debris"}:${p.id}`, h.scene),
       meshStart = h.scene.meshes.length;
+    // Lowest ground under the trunk, so a fixture on a slope never floats or sinks.
+    const base = Math.min(
+      ...[0, 1, 2, 3, 4].map((i) =>
+        h.groundAt(
+          p.x + (i ? Math.sin((i * Math.PI) / 2) * 0.4 : 0),
+          p.z + (i ? Math.cos((i * Math.PI) / 2) * 0.4 : 0),
+        ),
+      ),
+    );
     const saved = live && p.kind !== "corpse" ? h.staticFixtures?.get(p.id) : undefined;
     if (live && h.savedGeometry && !saved)
       throw Error(`Saved fixture mesh missing: ${p.id}`);
     if (saved) {
       const meshes = uploadMeshes(h, saved);
       for (const mesh of meshes) mesh.parent = root;
-      root.position.set(p.x, h.groundAt(p.x, p.z) + p.h / 2, p.z);
+      root.position.set(p.x, base + p.h / 2, p.z);
       root.rotation.y = p.kind !== "corpse" ? (p.angle ?? 0) : 0;
       const model: Model = { root, meshes, lit: false };
       const bulb = meshes.find(
@@ -290,7 +299,7 @@ export class DestructionRenderer {
       h.shadows.addShadowCaster(mesh);
     }
     h.shadowCandidates.push(...meshes);
-    root.position.set(p.x, h.groundAt(p.x, p.z) + p.h / 2, p.z);
+    root.position.set(p.x, base + p.h / 2, p.z);
     if (p.kind !== "corpse") root.rotation.y = p.angle ?? 0;
     const model: Model = { root, meshes, lit: false };
     if (live && p.kind === "lamp") {
