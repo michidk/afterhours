@@ -190,7 +190,8 @@ for (const delay of [0, 150, 360]) {
       const heldSeconds = (performance.now() - started) / 1000;
       const distance = walker.entities.get(bodyId)!.z - initialZ;
       const commands = walker.seq - initialSeq;
-      await pause(scenario === "car" ? 15000 : 3000);
+      // Cars brake from speed and helicopters coast into a hover; both need longer.
+      await pause(scenario === "car" ? 15000 : scenario === "helicopter" ? 6000 : 3000);
       clearInterval(sampling);
       const moving = samples.filter((s) => s.at >= 750 && s.at < 2800);
       const measure = (key: "local" | "remote") => {
