@@ -762,9 +762,9 @@ export class CityScene {
         }
       }
       if (e.kind === "helicopter") {
-        n.rotation.z +=
-          (Math.sin(n.rotation.y) * e.vz - Math.cos(n.rotation.y) * e.vx) * 0.012;
-        n.rotation.x = Math.min(0.18, Math.hypot(e.vx, e.vz) * 0.012);
+        // The simulated rotor attitude: nose down to accelerate, banked into turns.
+        n.rotation.x = e.pitch ?? 0;
+        n.rotation.z = e.roll ?? 0;
         for (const child of parts)
           if (child.name.startsWith("rotor"))
             child.rotation.y +=

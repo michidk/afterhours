@@ -79,6 +79,10 @@ export function flyHelicopter(
     e.vz *= Math.exp(-6 * dt);
     e.angularVelocity = (e.angularVelocity || 0) * Math.exp(-6 * dt);
     if (Math.abs(e.angularVelocity) < 0.001) e.angularVelocity = 0;
+    if (e.pitch || e.roll) {
+      e.pitch = Math.abs(e.pitch ?? 0) < 0.001 ? 0 : (e.pitch ?? 0) * Math.exp(-6 * dt);
+      e.roll = Math.abs(e.roll ?? 0) < 0.001 ? 0 : (e.roll ?? 0) * Math.exp(-6 * dt);
+    }
     e.vy = 0;
     return;
   }
@@ -95,10 +99,12 @@ export function flyHelicopter(
       e.vx = e.vz = 0;
     }
   }
-  let dx = inputX(input),
-    dz = inputY(input);
-  let maxSpeed: number = e.model ? VEHICLES[e.model].speed : 15;
-  if (e.flight === "landing") {
+  // Pilots fly relative to the nose; an automatic landing flies straight at its site.
+  const piloted = e.flight !== "landing";
+  let dx = 0,
+    dz = 0,
+    maxSpeed: number = model.speed;
+  if (!piloted) {
     dx = (e.landingX ?? e.x) - e.x;
     dz = (e.landingZ ?? e.z) - e.z;
     maxSpeed = Math.min(8, Math.hypot(dx, dz) * 1.4);
@@ -108,6 +114,10 @@ export function flyHelicopter(
     dx /= length;
     dz /= length;
   }
+  // A pilot looks ahead along the direction of travel, or the nose when hovering.
+  const travel = Math.hypot(e.vx, e.vz),
+    lookX = piloted ? (travel > 0.5 ? e.vx / travel : Math.sin(e.angle)) : dx,
+    lookZ = piloted ? (travel > 0.5 ? e.vz / travel : Math.cos(e.angle)) : dz;
   const footprint = rotorRadius(e);
   // Automatic landings clear the whole rotor; pilots only collide with the fuselage.
   const reach = e.flight === "landing" ? footprint : 2;
@@ -122,7 +132,7 @@ export function flyHelicopter(
     )
       under = Math.max(under, other.y + 2);
   // Look ahead so the pilot must climb over a roof; never teleport through it.
-  const ahead = surface(city, e.x + dx * 6, e.z + dz * 6, reach);
+  const ahead = surface(city, e.x + lookX * 6, e.z + lookZ * 6, reach);
   const ceiling = groundLevel(e.x, e.z, city) + tuning.ceiling;
   const atLanding =
     e.flight === "landing" &&
@@ -159,8 +169,17 @@ export function flyHelicopter(
   e.y = Math.max(groundLevel(e.x, e.z, city), e.y + e.vy * dt);
   if (e.flight === "takingOff" && e.y >= groundLevel(e.x, e.z, city) + 9)
     e.flight = "cruising";
-  if (!atLanding && e.y < ahead + 1) maxSpeed = 0;
-  // Sideways momentum bleeds off slower than the pilot accelerates, so turns slide a little.
+  const blocked = !atLanding && e.y < ahead + 1;
+  if (piloted) {
+    flyAttitude(e, input, model, blocked, dt);
+    return;
+  }
+  if (blocked) maxSpeed = 0;
+  // The autopilot levels the airframe and steers the velocity directly.
+  const level = Math.exp(-model.flight.tiltRate * dt);
+  e.pitch = (e.pitch ?? 0) * level;
+  e.roll = (e.roll ?? 0) * level;
+  // Sideways momentum bleeds off slower than the autopilot accelerates.
   const along = 1 - Math.exp(-tuning.acceleration * dt),
     across =
       e.flight === "landing" || !length
@@ -183,4 +202,62 @@ export function flyHelicopter(
     e.vz = 0;
     e.flight = "grounded";
   }
+}
+
+/** Gravity, matching falls elsewhere, which the rotor's tilted lift works against. */
+const GRAVITY = 18;
+type HelicopterSpec = Extract<
+  (typeof VEHICLES)[keyof typeof VEHICLES],
+  { kind: "helicopter" }
+>;
+/**
+ * Piloted flight. W/S tilt the rotor disc nose down or up and A/D yaw the airframe;
+ * the tilted lift accelerates the helicopter and drag sets its top speed, so it keeps
+ * its momentum and takes a moment to stop. Attitude and yaw rate build up and settle
+ * over time. Turning at speed banks the airframe so the lift curves the flight path
+ * with the nose; hands off, a stabiliser leans against any drift until it hovers.
+ */
+function flyAttitude(
+  e: Entity,
+  input: Input,
+  model: HelicopterSpec,
+  blocked: boolean,
+  dt: number,
+) {
+  const t = model.flight,
+    s = Math.sin(e.angle),
+    c = Math.cos(e.angle),
+    forward = e.vx * s + e.vz * c,
+    right = e.vx * c - e.vz * s,
+    stick = clamp(inputY(input), -1, 1),
+    pedal = clamp(inputX(input), -1, 1);
+  // At speed the nose turns only as fast as a full bank can curve the flight path;
+  // hovering, it pirouettes at the full pedal rate.
+  const turn = Math.min(
+    t.turn,
+    (GRAVITY * Math.tan(t.bank)) / Math.max(1, Math.abs(forward)),
+  );
+  e.angularVelocity =
+    (e.angularVelocity || 0) +
+    (pedal * turn - (e.angularVelocity || 0)) * (1 - Math.exp(-t.yaw * dt));
+  // The stabiliser leans fully against drift from 4 m/s down, so a hover settles briskly.
+  const drift = (v: number) => clamp(v / 4, -1, 1);
+  const pitchTarget = stick ? stick * t.tilt : -drift(forward) * t.tilt * 0.6,
+    bankTarget = clamp(
+      Math.atan2(forward * e.angularVelocity, GRAVITY) - drift(right) * t.bank * 0.6,
+      -t.bank,
+      t.bank,
+    ),
+    ease = 1 - Math.exp(-t.tiltRate * dt);
+  e.pitch = (e.pitch ?? 0) + (pitchTarget - (e.pitch ?? 0)) * ease;
+  e.roll = (e.roll ?? 0) + (bankTarget - (e.roll ?? 0)) * ease;
+  // Full forward tilt balances drag exactly at the model's top speed; air resists
+  // sideways motion twice as much, so the helicopter carves rather than skids.
+  const drag = (GRAVITY * Math.tan(t.tilt)) / model.speed;
+  let ahead = forward + (GRAVITY * Math.tan(e.pitch) - drag * forward) * dt;
+  const side = right + (GRAVITY * Math.tan(e.roll) - drag * 2 * right) * dt;
+  // A roof ahead stops the approach until the pilot climbs over it.
+  if (blocked && ahead > 0) ahead *= Math.exp(-8 * dt);
+  e.vx = s * ahead + c * side;
+  e.vz = c * ahead - s * side;
 }

@@ -70,6 +70,9 @@ export interface Entity {
   cooldown?: number;
   down?: number;
   angularVelocity?: number;
+  /** Helicopter attitude in radians: nose down and right side down are positive. */
+  pitch?: number;
+  roll?: number;
   steering?: number;
   /** Last driving forces applied by authority, held during remote prediction. */
   drive?: Drive;

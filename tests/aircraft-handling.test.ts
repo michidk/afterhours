@@ -80,14 +80,32 @@ for (const model of ["scout", "utility"] as const) {
     }
     const y = e.y;
     assert.ok(y > 15);
-    s.inputs.set("pilot", { ...idle(), right: true, descend: true });
+    // D yaws the nose right; the flight path follows it in a banked turn.
+    s.inputs.set("pilot", { ...idle(), up: true, right: true, descend: true });
     run(s, 2);
     assert.ok(e.y < y - 3);
-    assert.ok(e.x > 5);
-    assert.ok(e.angle > 1);
+    assert.ok(e.angle > 1, "the nose turns right");
+    assert.ok((e.roll ?? 0) > 0.2, "banked into the turn");
+    // W flies where the nose points, whichever way that is.
+    s.inputs.set("pilot", { ...idle(), up: true });
+    run(s, 2);
+    const heading = Math.atan2(e.vx, e.vz);
+    assert.ok(
+      Math.abs(Math.atan2(Math.sin(heading - e.angle), Math.cos(heading - e.angle))) <
+        0.15,
+      "travel follows the nose",
+    );
+    assert.ok((e.pitch ?? 0) > 0.15, "nose down to fly forward");
+    // Hands off, momentum carries it a while before the stabiliser settles a hover.
     s.inputs.set("pilot", idle());
-    run(s, 3);
-    assert.ok(Math.hypot(e.vx, e.vz) < 0.03);
+    run(s, 1);
+    assert.ok(Math.hypot(e.vx, e.vz) > 2, "momentum carries on");
+    run(s, 9);
+    assert.ok(Math.hypot(e.vx, e.vz) < 0.1);
+    assert.ok(
+      Math.abs(e.pitch ?? 0) < 0.02 && Math.abs(e.roll ?? 0) < 0.02,
+      "level hover",
+    );
     assert.ok(e.y >= 2, "descent remains clear of ground");
     const hover = e.y;
     run(s, 2);

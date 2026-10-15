@@ -181,16 +181,18 @@ test("helicopter needs pilot climb to cross a roof and keeps moving after parach
   p.x = 0;
   p.z = 0;
   const heli = s.spawn("helicopter", 0, 0);
+  // Nose toward +x, where the building stands; W flies along the nose.
+  heli.angle = Math.PI / 2;
   s.city.buildings = [{ x: 22, z: 0, w: 12, d: 20, h: 25, color: "#fff", style: 0 }];
   s.interact(p.id);
-  s.inputs.set(p.id, { ...idle(), right: true, ascend: true });
+  s.inputs.set(p.id, { ...idle(), up: true, ascend: true });
   run(s, 1.5);
-  s.inputs.set(p.id, { ...idle(), right: true });
+  s.inputs.set(p.id, { ...idle(), up: true });
   for (let i = 0; i < 120; i++) {
     s.tick(1 / 30);
     assert.ok(heli.x < 14, "a low helicopter cannot fly into the wall");
   }
-  s.inputs.set(p.id, { ...idle(), right: true, ascend: true });
+  s.inputs.set(p.id, { ...idle(), up: true, ascend: true });
   for (let i = 0; i < 240; i++) {
     s.tick(1 / 30);
     if (heli.x > 16 && heli.x < 28) assert.ok(heli.y >= 26.8, "roof clearance");

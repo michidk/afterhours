@@ -422,6 +422,12 @@ export function interpolate(
     vz: a.vz + (b.vz - a.vz) * t,
     vy: a.vy + (b.vy - a.vy) * t,
     angle: a.angle + wrap(b.angle - a.angle) * fraction,
+    ...(b.pitch !== undefined || b.roll !== undefined
+      ? {
+          pitch: (a.pitch ?? 0) + ((b.pitch ?? 0) - (a.pitch ?? 0)) * fraction,
+          roll: (a.roll ?? 0) + ((b.roll ?? 0) - (a.roll ?? 0)) * fraction,
+        }
+      : {}),
     aim:
       b.aim === undefined
         ? undefined

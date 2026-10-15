@@ -76,7 +76,7 @@ test("bounded flight retains turns and brakes and does not revive acknowledged t
       [player, helicopter],
     );
   prediction.reconcile(player, [player, { ...helicopter, z: 5 }], 9, 1000);
-  assert.ok(prediction.body!.x > 0.5, "replay the unacknowledged turn first");
+  assert.ok(prediction.body!.angle > 0.1, "replay the unacknowledged turn first");
   assert.equal(prediction.pending[0].seq, 10);
   prediction.reconcile(
     player,
@@ -85,7 +85,7 @@ test("bounded flight retains turns and brakes and does not revive acknowledged t
     1033,
   );
   assert.ok(
-    Math.hypot(prediction.body!.vx, prediction.body!.vz) < 6,
+    Math.hypot(prediction.body!.vx, prediction.body!.vz) < Math.hypot(10, 5) - 0.5,
     "the next replay prefix brakes",
   );
   const stopped = { ...helicopter, x: 3, z: 8, vx: 0, vz: 0 };

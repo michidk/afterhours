@@ -226,6 +226,7 @@ export function relocate(
       );
       seated.vx = seated.vz = seated.vy = 0;
       seated.angularVelocity = 0;
+      seated.pitch = seated.roll = 0;
       seated.drive = undefined;
       if (seated.kind === "helicopter" || seated.kind === "plane") {
         // Match a freshly spawned aircraft parked on the ground.
