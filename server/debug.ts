@@ -4,7 +4,7 @@ import { idle, type Entity } from "../shared/world.ts";
 import type { Simulation } from "./simulation.ts";
 import { groundLevel, isWater, watercraft } from "../shared/water.ts";
 
-export function debugState(sim: Simulation, player: Entity): DebugState {
+export function debugState(sim: Simulation, player: Entity, full = true): DebugState {
   return {
     playerId: player.id,
     time: sim.time,
@@ -12,20 +12,45 @@ export function debugState(sim: Simulation, player: Entity): DebugState {
     dayRate: sim.dayRate,
     citySeed: sim.city.seed,
     traffic: sim.traffic.diagnostics,
-    entities: structuredClone([...sim.entities.values()]),
+    entities: full ? structuredClone([...sim.entities.values()]) : [],
     input: { ...(sim.inputs.get(player.id) || idle()) },
     destruction: {
-      brokenProps: [...sim.destruction.broken],
-      nearby: [...sim.destruction.fixtures.values()].filter(
-        (p) => Math.hypot(p.x - player.x, p.z - player.z) < 60,
-      ),
-      debris: structuredClone(sim.destruction.snapshot(player, 120)),
+      brokenProps: full ? [...sim.destruction.broken] : [],
+      nearby: full
+        ? [...sim.destruction.fixtures.values()].filter(
+            (p) => Math.hypot(p.x - player.x, p.z - player.z) < 60,
+          )
+        : [],
+      debris: full ? structuredClone(sim.destruction.snapshot(player, 120)) : [],
       maxBodies: sim.destruction.maxBodies,
     },
   };
 }
 
 export function executeDebug(sim: Simulation, player: Entity, command: DebugCommand) {
+  if (command.kind === "observe") {
+    const entity = command.id ? sim.entities.get(command.id) : undefined;
+    return {
+      ...debugState(sim, player, false),
+      inspection: entity
+        ? {
+            id: entity.id,
+            data: JSON.stringify(
+              {
+                entity,
+                input: sim.inputs.get(entity.id),
+                vehicle: entity.model ? VEHICLES[entity.model] : undefined,
+                citizen: sim.ai.citizens.inspect(entity),
+                route: sim.ai.routes.get(entity.id),
+                waterRoute: sim.ai.waterRoutes.get(entity.id),
+              },
+              null,
+              2,
+            ),
+          }
+        : null,
+    };
+  }
   if (command.kind === "destroyProp") {
     const p = sim.destruction.fixtures.get(command.id);
     if (!p) throw Error("Unknown destructible prop");

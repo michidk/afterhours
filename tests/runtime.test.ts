@@ -162,3 +162,39 @@ test("health separates tick CPU from wall time and includes snapshot work", (t) 
     runtime.stop();
   }
 });
+
+test("debug telemetry distinguishes queued simulation time from dropped time", (t) => {
+  const sim = new Simulation(generateCity());
+  const sessions = new Sessions(
+    createServer(),
+    sim,
+    false,
+    new CityStore(sim.city).manifest,
+  );
+  const runtime = new Runtime(sim, sessions);
+  let clock = 0;
+  t.mock.method(performance, "now", () => clock);
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  t.mock.method(sim, "tick", () => {});
+  t.mock.method(sessions, "tick", () => {});
+  t.mock.method(sessions, "broadcast", () => {});
+  try {
+    runtime.start();
+    clock = 1000;
+    t.mock.timers.tick(5);
+    const stats = sessions.diagnostics!();
+    assert.equal(stats.late, 1);
+    assert.equal(stats.catchUpTicks, 3);
+    assert.ok(Math.abs(stats.droppedMs - 733.3333333333334) < 0.001);
+    assert.ok(Math.abs(stats.backlogMs - 133.33333333333334) < 0.001);
+    clock += 10;
+    assert.ok(Math.abs(runtime.metrics().backlogMs - 143.33333333333334) < 0.001);
+    assert.ok(
+      stats.memoryMB > 0 &&
+        stats.heapUsedMB > 0 &&
+        stats.heapLimitMB > stats.heapUsedMB,
+    );
+  } finally {
+    runtime.stop();
+  }
+});

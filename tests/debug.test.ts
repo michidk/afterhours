@@ -154,6 +154,10 @@ test("script debug interface controls real transport and production rejects it",
       assert.equal(client.welcome.debug, enabled);
       if (!enabled) {
         await assert.rejects(
+          client.command({ kind: "observe", id: client.welcome.id }),
+          /disabled/,
+        );
+        await assert.rejects(
           client.command({ kind: "time", hour: 0, rate: 0 }),
           /disabled/,
         );
@@ -164,6 +168,15 @@ test("script debug interface controls real transport and production rejects it",
         await pause(150);
         assert.ok(client.entities.has(client.welcome.id));
       } else {
+        const observed = await client.command({
+          kind: "observe",
+          id: client.welcome.id,
+        });
+        assert.equal(observed.inspection?.id, client.welcome.id);
+        assert.deepEqual(observed.entities, []);
+        assert.ok(observed.server && observed.server.heapUsedMB > 0);
+        assert.ok(observed.server.tickBudgetMs > 0);
+        await pause(150);
         const state = await client.command({ kind: "time", hour: 6.5, rate: 0 });
         assert.equal(state.day, 6.5);
         await pause(200);
@@ -215,5 +228,45 @@ test("script debug interface controls real transport and production rejects it",
       client?.close();
       child.kill();
     }
+  }
+});
+
+test("object inspection exposes real AI state without creating or mutating it", () => {
+  const sim = new Simulation(generateCity());
+  try {
+    const player = sim.join("Inspector", "#fff");
+    assert.equal(sim.ai.citizens.inspect(player), undefined);
+    const observedPlayer = executeDebug(sim, player, {
+      kind: "observe",
+      id: player.id,
+    });
+    assert.equal(sim.ai.citizens.inspect(player), undefined);
+    assert.deepEqual(observedPlayer.entities, []);
+    assert.deepEqual(observedPlayer.destruction.nearby, []);
+    const pedestrian = [...sim.entities.values()].find((e) => e.kind === "pedestrian")!;
+    const citizen = sim.ai.citizens.state(pedestrian);
+    citizen.reaction = { kind: "fight", target: player, until: 42 };
+    const result = executeDebug(sim, player, { kind: "observe", id: pedestrian.id });
+    const data = JSON.parse(result.inspection!.data);
+    assert.equal(data.entity.id, pedestrian.id);
+    assert.deepEqual(data.citizen.reaction, {
+      kind: "fight",
+      target: player.id,
+      until: 42,
+    });
+    data.entity.health = -100;
+    assert.ok(pedestrian.health > 0);
+    assert.equal(
+      executeDebug(sim, player, { kind: "observe", id: "removed" }).inspection,
+      null,
+    );
+    const car = [...sim.entities.values()].find((e) => e.kind === "car")!;
+    const carData = JSON.parse(
+      executeDebug(sim, player, { kind: "observe", id: car.id }).inspection!.data,
+    );
+    assert.equal(carData.entity.model, car.model);
+    assert.ok(carData.vehicle.length > 0);
+  } finally {
+    sim.destruction.dispose();
   }
 });

@@ -3,6 +3,8 @@ import { TUNING, VEHICLES, WEAPONS, isVehicleModel } from "../shared/catalog.ts"
 import { availableSeat, occupiedSeats, seatCapacity } from "../shared/seats.ts";
 import type { Pickup } from "../shared/protocol.ts";
 import "./style.css";
+import { mountDebugWindows, updateServerStats } from "./ui/debug-windows.ts";
+import { inspectAtPointer } from "./ui/debug-inspector.ts";
 import { mountUI } from "./ui/index.ts";
 import { CityMap } from "./ui/city-map.ts";
 import { updateNetworkStats } from "./ui/network-stats.ts";
@@ -38,6 +40,7 @@ import {
   WATER_LEVEL,
 } from "../shared/water.ts";
 mountUI();
+mountDebugWindows();
 const characterMenu = mountCharacterMenu();
 const nameplates = new Nameplates();
 let pickups: Pickup[] = [];
@@ -300,7 +303,13 @@ $("#time-resume").onclick = () =>
 $("#time-cycle").onclick = () =>
   void automation?.time(0, 0.8).catch((error) => toast(String(error)));
 const canvas = $<HTMLCanvasElement>("#world");
+let inspectionPointer: { x: number; y: number } | undefined;
+let inspectedId: string | undefined;
+canvas.addEventListener("pointerleave", () => {
+  inspectionPointer = undefined;
+});
 canvas.addEventListener("pointermove", (e) => {
+  inspectionPointer = { x: e.clientX, y: e.clientY };
   if (scene?.debugCamera.active) {
     if (e.buttons & 2) scene.debugCamera.look(e.movementX, e.movementY);
     return;
@@ -310,7 +319,12 @@ canvas.addEventListener("pointermove", (e) => {
 canvas.addEventListener("pointerdown", (event) => {
   if (joined) {
     audio.unlock();
-    if (!cityMap?.open && !scene.debugCamera.active && event.button === 0)
+    if (
+      !cityMap?.open &&
+      !scene.debugCamera.active &&
+      !inspecting() &&
+      event.button === 0
+    )
       controls.click();
   }
 });
@@ -360,6 +374,65 @@ setInterval(() => {
   if (debugAllowed && network && !$("#debug").classList.contains("hidden"))
     updateNetworkStats($("#network-stats"), network);
 }, 250);
+function debugPanelOpen(id: string) {
+  const panel = $(`#debug-${id}`);
+  return (
+    debugAllowed &&
+    !$("#debug").classList.contains("hidden") &&
+    !panel.classList.contains("hidden") &&
+    !panel.querySelector<HTMLElement>(".debug-body")!.hidden
+  );
+}
+function inspecting() {
+  return debugPanelOpen("inspector") && $<HTMLInputElement>("#inspect-enabled").checked;
+}
+let observing = false;
+setInterval(async () => {
+  const current = automation;
+  if (
+    !current ||
+    observing ||
+    document.hidden ||
+    (!debugPanelOpen("server") && !inspecting())
+  )
+    return;
+  if (inspecting() && inspectionPointer && scene) {
+    const hit = inspectAtPointer(scene, inspectionPointer.x, inspectionPointer.y);
+    const previousId = inspectedId;
+    inspectedId = hit?.kind === "entity" ? hit.id : undefined;
+    $("#inspect-target").textContent =
+      hit?.kind === "entity" ? hit.id : hit?.name || "No object under pointer";
+    if (!inspectedId || inspectedId !== previousId)
+      $("#inspect-data").textContent =
+        hit?.kind === "scenery"
+          ? hit.data
+          : inspectedId
+            ? "Loading server state…"
+            : "Hover a person, vehicle or scenery.";
+  }
+  observing = true;
+  try {
+    const state = await current.command({
+      kind: "observe",
+      id: inspecting() ? inspectedId : undefined,
+    });
+    if (automation !== current) return;
+    if (state.server) {
+      updateServerStats($("#server-stats"), state.server);
+      $("#server-status").textContent = `Updated ${new Date().toLocaleTimeString()}`;
+    }
+    if (inspecting() && inspectedId) {
+      $("#inspect-data").textContent =
+        state.inspection?.data || "Object no longer exists on the server.";
+    }
+  } catch (error) {
+    $("#server-status").textContent = `Unavailable: ${String(error)}`;
+    if (inspecting() && inspectedId)
+      $("#inspect-data").textContent = `Unavailable: ${String(error)}`;
+  } finally {
+    observing = false;
+  }
+}, 1000);
 const map = $<HTMLCanvasElement>("#minimap").getContext("2d")!;
 function drawMap(p: Entity) {
   const scale = 0.9;

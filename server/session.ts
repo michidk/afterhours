@@ -13,6 +13,7 @@ import {
 import { idle, type Entity, type Input } from "../shared/world.ts";
 import { TUNING, isWeaponKind, type VehicleModel } from "../shared/catalog.ts";
 import { Simulation } from "./simulation.ts";
+import type { ServerDiagnostics } from "../shared/debug.ts";
 import { executeDebug } from "./debug.ts";
 import type { MapManifest } from "../shared/city-stream.ts";
 interface Client {
@@ -72,6 +73,7 @@ export class Sessions {
   /** Commands shed because a client's FIFO overflowed. */
   dropped = 0;
   debug: boolean;
+  diagnostics?: () => ServerDiagnostics;
   wss: WebSocketServer;
   constructor(
     server: Server,
@@ -294,6 +296,7 @@ export class Sessions {
       c.actions.set(m.type, now);
       try {
         const state = executeDebug(this.sim, p, m.command);
+        if (m.command.kind === "observe") state.server = this.diagnostics?.();
         if (m.command.kind === "teleport") c.queue = [];
         this.send(ws, { type: "debugResult", requestId: m.requestId, state });
       } catch (error) {

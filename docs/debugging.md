@@ -87,3 +87,32 @@ The script checks fixed times, pause, a complete accelerated cycle, and clock wr
 | Midnight | [00:00](screenshots/midnight.png) | [00:00](screenshots/sky-midnight.png) |
 
 The camera browser scenario verified movement/zoom/look in both modes, unchanged player position, idle authoritative inputs, and restored walking after Escape. Regression tests cover camera coordinate accessors, unrestricted zoom and reversible lens changes, pitch bounds, lighting continuity and midnight wrap, debug command validation, authoritative execution, and disabled production access. Browser captures use SwiftShader and establish visual/functionality evidence only; they do not establish hardware performance.
+
+## Debug windows
+
+Press F1 on a debug-enabled server, then use the toolbar to open Vehicles, Day / night,
+Camera, Networking, Server stats, or Object inspector. Drag a title bar to move a window;
+its minus button collapses it and its close button hides it. Focus a title bar and use
+arrow keys to move it with the keyboard. Reset layout restores the default positions.
+Escape or F1 hides the tools. Layout lasts until the page reloads.
+
+Server stats refresh once per second while that window is expanded. Tick CPU and wall
+p95 cover the latest 600 ticks (up to 20 seconds); CPU is the simulation thread's work,
+not host-wide CPU utilization. Backlog measures simulation time still owed, including
+elapsed time since the last scheduler pass. Catch-up ticks, dropped time, and overloads
+are cumulative since startup. RSS includes native physics allocations; JavaScript heap
+usage and its limit are separate. Available memory is reported by Node for the process,
+including supported container constraints. These are usage indicators, not OS pressure
+stall measurements.
+
+Enable the inspector checkbox and hover a person or vehicle to read its authoritative
+entity fields, vehicle configuration, current input, AI personality and reaction, and
+route state. AI state describes the actual decision system; it does not generate thoughts.
+Move the pointer into a window to keep the selected object while reading. Inspection
+suppresses left-click firing while active. Static scenery shows mesh and hit information;
+batched scenery does not have individual AI or entity state. Removed entities are marked
+unavailable. Server requests stop when both monitoring windows are collapsed or hidden.
+
+The inspector and server diagnostics use the existing authorized debug connection.
+Production still requires explicit `ALLOW_DEBUG=1`; enabling it grants these tools to
+all connected players.

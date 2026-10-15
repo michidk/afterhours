@@ -1,3 +1,4 @@
+import { getHeapStatistics } from "node:v8";
 import { performance } from "node:perf_hooks";
 import { TUNING } from "../shared/catalog.ts";
 import type { Simulation } from "./simulation.ts";
@@ -8,12 +9,18 @@ export class Runtime {
   ticks = 0;
   late = 0;
   catchUpTicks = 0;
+  backlogMs = 0;
+  private lastPumpAt = 0;
+  droppedMs = 0;
   constructor(
     readonly sim: Simulation,
     readonly sessions: Sessions,
-  ) {}
+  ) {
+    sessions.diagnostics = () => this.metrics();
+  }
   start() {
-    let last = performance.now(),
+    this.lastPumpAt = performance.now();
+    let last = this.lastPumpAt,
       accumulator = 0;
     const snapshotInterval = TUNING.tick * 2000;
     let nextSnapshot = last + snapshotInterval;
@@ -24,9 +31,11 @@ export class Runtime {
       const maxBacklog = TUNING.inputQueue * TUNING.tick;
       if (accumulator > maxBacklog) {
         this.late++;
+        this.droppedMs += (accumulator - maxBacklog) * 1000;
         accumulator = maxBacklog;
       }
       last = now;
+      this.lastPumpAt = now;
       let catchup = 0;
       while (
         accumulator >= TUNING.tick &&
@@ -46,6 +55,7 @@ export class Runtime {
         if (catchup > 0) this.catchUpTicks++;
         catchup++;
       }
+      this.backlogMs = accumulator * 1000;
       if (this.ticks !== lastSnapshotTick && performance.now() >= nextSnapshot) {
         const startCpu = process.threadCpuUsage(),
           start = performance.now();
@@ -67,6 +77,14 @@ export class Runtime {
     const wall = this.samples.map((s) => s.wallMs).sort((a, b) => a - b),
       cpu = this.samples.map((s) => s.cpuMs).sort((a, b) => a - b);
     return {
+      tickBudgetMs: TUNING.tick * 1000,
+      backlogMs:
+        this.backlogMs +
+        (this.timer ? Math.max(0, performance.now() - this.lastPumpAt) : 0),
+      droppedMs: this.droppedMs,
+      heapUsedMB: process.memoryUsage().heapUsed / 1048576,
+      heapLimitMB: getHeapStatistics().heap_size_limit / 1048576,
+      availableMemoryMB: process.availableMemory() / 1048576,
       players: this.sessions.clients.size,
       entities: this.sim.entities.size,
       traffic: this.sim.traffic.diagnostics,

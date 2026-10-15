@@ -5,6 +5,7 @@ import type { Destructible, DebrisState } from "./destruction.ts";
 
 export const debugCommandSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("state") }),
+  z.object({ kind: z.literal("observe"), id: z.string().min(1).max(120).optional() }),
   z.object({ kind: z.literal("destroyProp"), id: z.string().min(1).max(120) }),
   z.object({
     kind: z.literal("time"),
@@ -45,6 +46,8 @@ export const debugCommandSchema = z.discriminatedUnion("kind", [
 ]);
 export type DebugCommand = z.infer<typeof debugCommandSchema>;
 export interface DebugState {
+  server?: ServerDiagnostics;
+  inspection?: { id: string; data: string } | null;
   playerId: string;
   time: number;
   day: number;
@@ -71,4 +74,21 @@ export interface DebugResult {
   requestId: number;
   state?: DebugState;
   error?: string;
+}
+
+export interface ServerDiagnostics {
+  tickBudgetMs: number;
+  tickCpuP95Ms: number;
+  tickP95Ms: number;
+  tickMaxMs: number;
+  backlogMs: number;
+  catchUpTicks: number;
+  droppedMs: number;
+  late: number;
+  memoryMB: number;
+  heapUsedMB: number;
+  heapLimitMB: number;
+  availableMemoryMB: number;
+  players: number;
+  entities: number;
 }

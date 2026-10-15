@@ -30,6 +30,25 @@ export class Citizens {
   private reports = new WeakMap<Entity, number>();
   private formerDrivers = new WeakMap<Entity, Entity>();
 
+  inspect(e: Entity) {
+    const state = this.states.get(e);
+    if (!state) return undefined;
+    const reaction = state.reaction;
+    const describe = (r: FootReaction) =>
+      r.kind === "fight"
+        ? { kind: r.kind, target: r.target.id, until: r.until }
+        : { ...r };
+    return {
+      ...state,
+      reaction:
+        reaction.kind === "fight"
+          ? describe(reaction)
+          : reaction.kind === "exit"
+            ? { ...reaction, next: describe(reaction.next) }
+            : { ...reaction },
+    };
+  }
+
   state(e: Entity): Citizen {
     let state = this.states.get(e);
     if (!state) {

@@ -28,21 +28,21 @@ Network and movement checks: `bun run test:network` (real WebSockets with delay 
 
 ## Controls
 
-| Key                | Action                                                                                                                       |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| WASD / arrows      | Walk, swim, or fly helicopters; cars and watercraft use W/S throttle and A/D steer; planes use W throttle, S brake, A/D turn |
-| Shift              | Sprint on foot; aircraft descend / enabled jetpack descent (left or right Shift)                                             |
-| Space              | Sprint / car and watercraft handbrake / aircraft climb                                                                       |
-| F                  | Take a seat, exit, or collect a weapon, ammo, or jetpack; airborne exits deploy a parachute                                  |
-| Mouse              | Aim the upper body independently of walking; left click attacks                                                              |
-| J                  | Punch / swing / fire                                                                                                         |
-| 1–4                | Equip inventory slot                                                                                                         |
-| G / R              | Drop active jetpack or equipped weapon / reload                                                                              |
-| E / Q              | Same as Space / Shift: aircraft climb / descend; enabled jetpack thrust / descent                                            |
-| B                  | Enable or disable equipped jetpack                                                                                           |
-| L                  | Toggle car headlights and taillights from the driver seat; they switch on by themselves when you take the wheel after dark   |
-| Enter / H / Escape | Chat / help / close panels                                                                                                   |
-| M / N / F1         | Island map / mute sound / development menu (debug-enabled servers) with tools, clock, camera and network stats               |
+| Key                | Action                                                                                                                                          |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| WASD / arrows      | Walk, swim, or fly helicopters; cars and watercraft use W/S throttle and A/D steer; planes use W throttle, S brake, A/D turn                    |
+| Shift              | Sprint on foot; aircraft descend / enabled jetpack descent (left or right Shift)                                                                |
+| Space              | Sprint / car and watercraft handbrake / aircraft climb                                                                                          |
+| F                  | Take a seat, exit, or collect a weapon, ammo, or jetpack; airborne exits deploy a parachute                                                     |
+| Mouse              | Aim the upper body independently of walking; left click attacks                                                                                 |
+| J                  | Punch / swing / fire                                                                                                                            |
+| 1–4                | Equip inventory slot                                                                                                                            |
+| G / R              | Drop active jetpack or equipped weapon / reload                                                                                                 |
+| E / Q              | Same as Space / Shift: aircraft climb / descend; enabled jetpack thrust / descent                                                               |
+| B                  | Enable or disable equipped jetpack                                                                                                              |
+| L                  | Toggle car headlights and taillights from the driver seat; they switch on by themselves when you take the wheel after dark                      |
+| Enter / H / Escape | Chat / help / close panels                                                                                                                      |
+| M / N / F1         | Island map / mute sound / draggable debug windows (debug-enabled servers): vehicles, time, camera, networking, server stats and hover inspector |
 
 Local steering responds between network command ticks. High-speed prop impacts predict the car's passage and show immediate impact feedback; debris flight, damage, and pickups still wait for the server. Other drivers' and AI cars' future turns cannot be predicted exactly, so shared crashes can still need corrections. See [fast driving and shared collisions](docs/networking.md#fast-driving-and-shared-collisions).
 

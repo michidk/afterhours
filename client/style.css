@@ -637,14 +637,6 @@ kbd {
   font-size: 11px;
   outline: none;
 }
-.debug {
-  pointer-events: auto;
-  position: absolute;
-  right: 28px;
-  top: 85px;
-  width: 260px;
-  padding: 20px;
-}
 .debug h3 {
   font-size: 14px;
   margin: 0 0 6px;
@@ -729,10 +721,6 @@ kbd {
 }
 .map-legend {
   color: #f1c279;
-}
-.debug {
-  max-height: calc(100vh - 120px);
-  overflow-y: auto;
 }
 .debug label {
   display: block;
@@ -875,7 +863,94 @@ kbd {
   text-align: right;
   overflow-wrap: anywhere;
 }
+
+/* Debug windows share the HUD layer but capture input only inside their panels. */
 .debug {
-  width: min(360px, calc(100vw - 32px));
+  position: fixed;
+  inset: 0;
+  width: auto;
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 50;
+}
+.debug-launcher {
+  position: absolute;
+  top: 80px;
+  left: 16px;
   right: 16px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 12px;
+  pointer-events: auto;
+}
+.debug-launcher strong {
+  font-size: 12px;
+  margin-right: 10px;
+}
+.debug button[aria-expanded="true"] {
+  border-color: #e4bc65;
+}
+.debug-window {
+  position: absolute;
+  width: min(360px, calc(100vw - 16px));
+  max-height: calc(100vh - 48px);
+  padding: 0;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  background: #122027f5;
+  box-shadow: 0 12px 36px #0008;
+}
+.debug-window header {
+  display: flex;
+  align-items: center;
+  padding: 4px 10px;
+  min-height: 44px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  border-bottom: 1px solid #ffffff20;
+}
+.debug-window h3 {
+  flex: 1;
+  margin: 0;
+}
+.debug-body {
+  padding: 12px;
+  overflow: auto;
+  min-height: 0;
+}
+.debug-body[hidden] {
+  display: none;
+}
+.debug-window input[type="checkbox"] {
+  width: auto;
+}
+.debug-window pre {
+  font: 11px/1.5 monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.debug-window dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 7px 10px;
+  font: 11px/1.5 monospace;
+}
+.debug-window dt {
+  color: #b3c7c0;
+}
+.debug-window dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.debug-window :focus-visible {
+  outline: 2px solid #e4bc65;
+  outline-offset: 2px;
 }
