@@ -1081,3 +1081,12 @@ kbd {
 #admin-places details {
   margin: 4px 0;
 }
+
+.debug .spawn-group {
+  flex-basis: 100%;
+  margin: 6px 0 0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}

@@ -7,11 +7,28 @@ const spawnButtons = (names: string[]) =>
   names
     .map((name) => `<button data-spawn="${name}">${name.toUpperCase()}</button>`)
     .join("");
+const VEHICLE_GROUPS: [string, (kind: string) => boolean][] = [
+  ["Cars", (kind) => kind === "car"],
+  ["Helicopters", (kind) => kind === "helicopter"],
+  ["Planes", (kind) => kind === "plane"],
+  ["Boats", (kind) => kind !== "car" && kind !== "helicopter" && kind !== "plane"],
+];
+/** Vehicles grouped by type and labelled with their names, not their model ids. */
+const vehicleButtons = () =>
+  VEHICLE_GROUPS.map(([title, matches]) => {
+    const models = Object.entries(VEHICLES).filter(([, spec]) => matches(spec.kind));
+    return `<p class="spawn-group">${title}</p>${models
+      .map(
+        ([id, spec]) =>
+          `<button data-spawn="${id}" title="${id}">${spec.name.toUpperCase()}</button>`,
+      )
+      .join("")}`;
+  }).join("");
 const panels = [
   [
     "vehicles",
     "Vehicles",
-    spawnButtons(Object.keys(VEHICLES)) +
+    vehicleButtons() +
       `<details><summary>Player & equipment</summary>${spawnButtons([...Object.keys(WEAPONS).filter((k) => k !== "fists"), "jetpack", "heal", "respawn", "damage"])}</details>`,
   ],
   [
