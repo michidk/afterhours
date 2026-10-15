@@ -6,6 +6,7 @@ import "./style.css";
 import { mountDebugWindows, updateServerStats } from "./ui/debug-windows.ts";
 import { inspectAtPointer } from "./ui/debug-inspector.ts";
 import { mountUI } from "./ui/index.ts";
+import { loadoutHTML } from "./ui/loadout.ts";
 import { CityMap } from "./ui/city-map.ts";
 import { updateNetworkStats } from "./ui/network-stats.ts";
 import { PlayerList } from "./ui/player-list.ts";
@@ -44,6 +45,7 @@ mountDebugWindows();
 const characterMenu = mountCharacterMenu();
 const nameplates = new Nameplates();
 let pickups: Pickup[] = [];
+let loadoutShown = "";
 const $ = <T extends HTMLElement = HTMLElement>(s: string) =>
   document.querySelector<T>(s)!;
 const playerList = new PlayerList(
@@ -98,7 +100,6 @@ function handleGamepadActions() {
   if (controls.gamepadPressed(3)) send({ type: "interact" });
   if (controls.gamepadPressed(1)) send({ type: "reload" });
   if (controls.gamepadPressed(10)) send({ type: "jetpack" });
-  if (controls.gamepadPressed(11)) send({ type: "lights" });
   [12, 15, 13, 14].forEach((button, slot) => {
     if (controls.gamepadPressed(button)) send({ type: "equip", slot });
   });
@@ -238,7 +239,6 @@ window.addEventListener("keydown", (event) => {
   if (!scene.debugCamera.active && event.code === "KeyF") send({ type: "interact" });
   if (!scene.debugCamera.active && event.code === "KeyG") send({ type: "drop" });
   if (!scene.debugCamera.active && event.code === "KeyR") send({ type: "reload" });
-  if (!scene.debugCamera.active && event.code === "KeyL") send({ type: "lights" });
   if (!scene.debugCamera.active && event.code === "KeyB") send({ type: "jetpack" });
   if (!scene.debugCamera.active && /^Digit[1-4]$/.test(event.code))
     send({ type: "equip", slot: Number(event.code.slice(-1)) - 1 });
@@ -710,12 +710,12 @@ async function boot() {
           ?.setAttribute("aria-valuenow", String(Math.round(healthPercent)));
         const item = p.inventory?.[p.equipped || 0];
         if (!v && item)
-          $("#weapon").textContent =
-            (p.reloadUntil ? "RELOADING" : item.kind.toUpperCase()) +
-            (WEAPONS[item.kind].magazine > 0
-              ? ` | ${item.ammo} / ${item.reserve}`
-              : "") +
-            ` | ${p.inventory?.map((w, i) => `${i + 1} ${w.kind}`).join(" / ")}`;
+          $("#weapon").textContent = p.reloadUntil
+            ? "RELOADING"
+            : WEAPONS[item.kind].name.toUpperCase();
+        const slots =
+          !v && !p.down ? loadoutHTML(p.inventory, p.equipped, !!p.reloadUntil) : "";
+        if (slots !== loadoutShown) $("#loadout").innerHTML = loadoutShown = slots;
         $("#health").style.background =
           v?.burning !== undefined ? "#f47a44" : "#9fd3aa";
         if (v?.burning !== undefined)

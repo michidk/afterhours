@@ -442,19 +442,6 @@ export class Simulation {
     if (this.ai.routes.delete(car.id)) this.traffic.abandon(car, person, this.time);
     return true;
   }
-  toggleLights(id: string) {
-    const p = this.entities.get(id);
-    const car = p?.vehicle ? this.entities.get(p.vehicle) : undefined;
-    if (
-      p?.kind === "player" &&
-      !p.down &&
-      car?.kind === "car" &&
-      car.driver === id &&
-      !car.wreck &&
-      car.health > 0
-    )
-      car.lightsOn = !car.lightsOn;
-  }
   interact(id: string) {
     const p = this.entities.get(id);
     if (!p || p.down) return;
@@ -514,8 +501,6 @@ export class Simulation {
       if (seat === 0) {
         v.driver = id;
         v.ai = false;
-        // Taking the wheel starts the engine; headlights come on after dark.
-        if (v.kind === "car") v.lightsOn = this.night();
         this.ai.routes.delete(v.id);
         this.ai.waterRoutes.delete(v.id);
         if (v.kind === "helicopter") {
@@ -880,8 +865,13 @@ export class Simulation {
           }
         } else if (e.kind === "car") {
           if (e.ai) this.exitCitizen(e);
-          if (e.wreck || e.flooded !== undefined || e.health <= 0) e.lightsOn = false;
-          else if (e.ai) e.lightsOn = this.night();
+          // Headlights are automatic: on in the dark while someone or the AI is driving.
+          e.lightsOn =
+            this.night() &&
+            !!(e.driver || e.ai) &&
+            !e.wreck &&
+            e.flooded === undefined &&
+            e.health > 0;
           const drive = e.wreck
             ? { throttle: 0, steer: 0, brake: true }
             : e.ai
@@ -959,10 +949,7 @@ export class Simulation {
         }
         if (e.kind === "car") {
           carAltitude(e, previous, this.city, dt);
-          if (floods(e, this.city)) {
-            e.flooded = FLOOD.seconds;
-            e.lightsOn = false;
-          }
+          if (floods(e, this.city)) e.flooded = FLOOD.seconds;
         }
         if (!vehicle(e)) characterAltitude(e, this.city, dt, input);
         if (vehicle(e)) e.angle = wrap(e.angle + (e.angularVelocity || 0) * dt);

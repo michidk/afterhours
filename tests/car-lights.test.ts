@@ -26,73 +26,62 @@ function setup() {
   return { sim, car, driver };
 }
 
-test("only a living car driver toggles lights and parked lights retain their state", () => {
+const lit = (sim: Simulation, car: { lightsOn?: boolean }, hour: number) => {
+  sim.day = hour;
+  sim.dayRate = 0;
+  sim.tick(1 / 30);
+  return car.lightsOn;
+};
+
+test("headlights are automatic: on in the dark for a driven car, never for a parked one", () => {
+  assert.equal(messageSchema.safeParse({ type: "lights" }).success, false);
   const { sim, car, driver } = setup();
   const passenger = sim.join("Passenger", "#ffffff");
   passenger.x = passenger.z = 0;
   sim.interact(passenger.id);
-  assert.equal(car.driver, driver.id);
   assert.equal(passenger.vehicle, car.id);
-  assert.deepEqual(messageSchema.parse({ type: "lights" }), { type: "lights" });
-  const before = car.lightsOn;
-  sim.toggleLights(passenger.id);
-  assert.equal(car.lightsOn, before);
-  car.lightsOn = false;
-  sim.toggleLights(driver.id);
-  assert.equal(car.lightsOn, true);
-  sim.day = 12;
-  sim.tick(1 / 30);
-  assert.equal(car.lightsOn, true);
-  sim.toggleLights(driver.id);
-  assert.equal(car.lightsOn, false);
-  driver.down = 1;
-  sim.toggleLights(driver.id);
-  assert.equal(car.lightsOn, false);
-  driver.down = undefined;
-  sim.toggleLights(driver.id);
-  sim.interact(driver.id);
-  sim.toggleLights(driver.id);
-  sim.tick(1 / 30);
-  assert.equal(car.lightsOn, true);
-  car.wreck = 180;
-  sim.tick(1 / 30);
-  assert.equal(car.lightsOn, false);
-  sim.entities.delete(car.id);
-  const boat = sim.spawn("boat", 0, 0);
-  boat.driver = driver.id;
-  driver.vehicle = boat.id;
-  sim.toggleLights(driver.id);
-  assert.equal(boat.lightsOn, undefined);
-});
-
-test("AI lights follow dusk and dawn, and theft preserves manual control", () => {
-  const { sim, car, driver } = setup();
-  sim.interact(driver.id);
-  car.ai = true;
   for (const [hour, expected] of [
     [12, false],
     [18, true],
     [0, true],
     [5.99, true],
     [6, false],
-  ] as const) {
-    sim.day = hour;
-    sim.dayRate = 0;
-    sim.tick(1 / 30);
-    assert.equal(car.lightsOn, expected, String(hour));
-  }
-  driver.x = car.x;
-  driver.z = car.z;
-  sim.day = 0;
-  sim.tick(1 / 30);
+  ] as const)
+    assert.equal(lit(sim, car, hour), expected, String(hour));
+  // Leaving the car switches them off; the passenger alone does not light it.
   sim.interact(driver.id);
-  assert.equal(car.ai, false);
-  sim.toggleLights(driver.id);
-  sim.tick(1 / 30);
-  assert.equal(car.lightsOn, false);
+  assert.equal(lit(sim, car, 0), false);
+  car.driver = driver.id;
+  assert.equal(lit(sim, car, 0), true);
+  car.wreck = 180;
+  assert.equal(lit(sim, car, 0), false);
+  sim.entities.delete(car.id);
+  const boat = sim.spawn("boat", 0, 0);
+  boat.driver = driver.id;
+  driver.vehicle = boat.id;
+  assert.equal(lit(sim, boat, 0), undefined);
 });
 
-test("taking the wheel starts the engine and switches headlights on after dark", () => {
+test("AI cars light up at night, and a stolen or abandoned car follows the same rule", () => {
+  const { sim, car, driver } = setup();
+  sim.interact(driver.id);
+  car.ai = true;
+  for (const [hour, expected] of [
+    [12, false],
+    [21, true],
+    [3, true],
+  ] as const)
+    assert.equal(lit(sim, car, hour), expected, String(hour));
+  driver.x = car.x;
+  driver.z = car.z;
+  sim.interact(driver.id);
+  assert.equal(car.ai, false);
+  assert.equal(lit(sim, car, 0), true, "the thief is driving");
+  sim.interact(driver.id);
+  assert.equal(lit(sim, car, 0), false, "an empty car is dark");
+});
+
+test("taking the wheel starts the engine, and the lights follow the dark", () => {
   for (const [hour, expected] of [
     [12, false],
     [21, true],
@@ -104,16 +93,15 @@ test("taking the wheel starts the engine and switches headlights on after dark",
     city.pickups = [];
     const sim = new Simulation(city);
     sim.entities.clear();
-    sim.day = hour;
-    sim.dayRate = 0;
     const car = sim.spawn("car", 0, 0);
     assert.equal(propulsionRunning(car), false, "a parked car is off");
+    assert.equal(lit(sim, car, hour), false, "and dark");
     const driver = sim.join("Driver", "#ffffff");
     driver.x = driver.z = 0;
     sim.interact(driver.id);
     assert.equal(car.driver, driver.id);
     assert.equal(propulsionRunning(car), true, "the engine starts");
-    assert.equal(car.lightsOn, expected, String(hour));
+    assert.equal(lit(sim, car, hour), expected, String(hour));
   }
 });
 

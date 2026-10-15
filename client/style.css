@@ -954,3 +954,52 @@ kbd {
   outline: 2px solid #e4bc65;
   outline-offset: 2px;
 }
+
+.controls > .loadout {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  text-align: left;
+}
+.controls > .loadout:empty {
+  display: none;
+}
+.loadout .slot {
+  flex: 1;
+  min-width: 72px;
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid #ffffff15;
+  border-radius: 4px;
+  opacity: 0.55;
+}
+.loadout .slot.active {
+  opacity: 1;
+  border-color: #f0bc6d;
+  background: #f0bc6d22;
+}
+.loadout .slot.none {
+  opacity: 0.3;
+}
+.loadout kbd {
+  justify-self: start;
+  margin: 0 0 3px;
+}
+.loadout b {
+  font:
+    700 20px "Barlow Condensed",
+    sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.loadout small {
+  color: #a9bcb9;
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.loadout .slot.reloading b {
+  color: #f0bc6d;
+}
+.loadout .slot.dry b {
+  color: #f47a44;
+}

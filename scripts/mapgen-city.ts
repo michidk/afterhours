@@ -690,6 +690,25 @@ export function cityFromMap(map: GeneratedMap): City {
     flush();
   }
 
+  // Lakes and pads reshape the terrain after trees are placed. Drop any tree whose
+  // crown box (client/world/destruction.ts: 5.5 m wide, from 0.52 h up) would sit in
+  // the highest ground under it, measured from its trunk's lowest ground.
+  const lowest = (x: number, z: number, r: number, pick: typeof Math.min) => {
+    let v = terrainHeight(x, z, final);
+    for (const dx of [-r, -r / 2, 0, r / 2, r])
+      for (const dz of [-r, -r / 2, 0, r / 2, r])
+        v = pick(v, terrainHeight(x + dx, z + dz, final));
+    return v;
+  };
+  for (let i = props.length - 1; i >= 0; i--) {
+    const t = props[i];
+    if (
+      t.kind === "tree" &&
+      lowest(t.x, t.z, 2.75, Math.max) > lowest(t.x, t.z, 0.4, Math.min) + 0.52 * t.h
+    )
+      props.splice(i, 1);
+  }
+
   return {
     seed: map.options.seed,
     terrain: { heights },
