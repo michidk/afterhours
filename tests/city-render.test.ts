@@ -130,8 +130,9 @@ test("buildings fade only when the camera's line to the player crosses them", ()
     renderer.sync([store.chunks.get("0,0")!]);
     const [tower, other] = scene.meshes.filter((m) => m.name === "building");
     assert.ok(tower && other && tower !== other);
-    const settle = (camera: Vector3, target: Vector3, frames = 40) => {
-      for (let i = 0; i < frames; i++) renderer.fadeOccluders(camera, target, 1 / 30);
+    const settle = (camera: Vector3, target: Vector3, frames = 40, follow = true) => {
+      for (let i = 0; i < frames; i++)
+        renderer.fadeOccluders(camera, target, 1 / 30, follow);
     };
     // Standing 4 m from the tower's west wall with the camera behind on the same side.
     settle(new Vector3(10, 12, 40), new Vector3(26, 0, 40));
@@ -144,6 +145,16 @@ test("buildings fade only when the camera's line to the player crosses them", ()
     settle(new Vector3(70, 12, 40), new Vector3(26, 0, 40));
     assert.equal(tower.visibility, 0, "a building that blocks the view fades");
     assert.equal(other.visibility, 1, "and only that building");
+    settle(new Vector3(40, 50, 20), new Vector3(40, 0, 40), 40, false);
+    assert.equal(tower.visibility, 1, "free inspection restores the focused building");
+    settle(new Vector3(40, 12, 40), new Vector3(40, 12, 60), 40, false);
+    assert.equal(
+      tower.visibility,
+      1,
+      "fly inspection keeps buildings solid even inside",
+    );
+    settle(new Vector3(70, 12, 40), new Vector3(26, 0, 40));
+    assert.equal(tower.visibility, 0, "returning to follow restores player occlusion");
     // The sight line clears again: it returns.
     settle(new Vector3(10, 12, 40), new Vector3(26, 0, 40));
     assert.equal(tower.visibility, 1, "an unobstructed building fades back in");

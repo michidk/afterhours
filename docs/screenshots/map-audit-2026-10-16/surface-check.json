@@ -1,0 +1,12 @@
+[
+  {
+    "kind": "asphalt",
+    "vertices": 22923,
+    "minimumClearance": 0.060112500000002456
+  },
+  {
+    "kind": "sidewalks",
+    "vertices": 47293,
+    "minimumClearance": 0.06039999999999068
+  }
+]

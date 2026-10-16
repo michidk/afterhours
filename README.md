@@ -56,7 +56,7 @@ Standard gamepads use the left stick to move and steer, LT/RT to reverse/acceler
 - **Destruction:** palms, lamps, signs and hydrants can be knocked over or destroyed, then restore. See [destruction](docs/destruction.md).
 - **Weapon crates:** wooden crates stand at the kerb of about one in three street segments away from junctions. Two punches (or any weapon, crash or blast) break one open and drop a random weapon with a full magazine and full reserve; the crate comes back after 90 seconds.
 - **Characters:** three builds (Runner, Regular, Tank) with customizable appearance, saved on the device.
-- **Camera:** the follow camera dithers a building out only while that building is between the camera and the player, or the camera is inside it. A building beside you stays solid. The fade is a screen-door pattern, not transparency, so shadows and depth stay intact.
+- **Camera:** the follow camera dithers a building out only while that building is between the camera and the player, or the camera is inside it. A building beside you stays solid. Free and fly debug cameras keep all buildings solid for map inspection. The fade is a screen-door pattern, not transparency, so shadows and depth stay intact.
 - **Atmosphere:** day/night lighting and 149 CC0 sound clips ([credits](public/audio/CREDITS.md), [audio notes](docs/audio.md)). Sounds are local: engines, tyres, fire and footsteps fade out within about 30 m, aircraft and horns within 45 m, gunfire within 55 m and explosions within 75 m, and another player's inventory or life-state cues are never heard.
 
 ## The city
@@ -72,7 +72,7 @@ bun run city:generate --seed 713 --out data/city.json  # write the city artifact
 bun run city:meshes                                    # bake the static meshes only
 ```
 
-The generator in `mapgen/` builds an eroded island heightmap, rivers, a settlement, terrain-aware roads, blocks, lots and buildings. The checked-in seed 713 has about 4 km² of land, hills up to about 170 m and a downtown beside the main estuary. Building looks are twelve replaceable recipes in [shared/assets/buildings](shared/assets/buildings/README.md).
+The generator in `mapgen/` builds an eroded island heightmap, rivers, a settlement, terrain-aware roads, blocks, lots and buildings. Building bases clear the terrain across their full footprint; sites with more than 4.4 m of relief are omitted so the existing foundations stay grounded. Static scenery, including airport runways, is baked at the terrain height. The checked-in seed 713 has about 4 km² of land, hills up to about 170 m and a downtown beside the main estuary. Building looks are twelve replaceable recipes in [shared/assets/buildings](shared/assets/buildings/README.md).
 
 Every city also gets destinations, placed by `scripts/mapgen-features.ts` on land kept clear of the streets and of each other:
 

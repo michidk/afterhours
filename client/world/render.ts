@@ -142,14 +142,15 @@ export class CityRenderer {
    * Standing beside a wall, or having a tower nearby, leaves it solid; the building fades
    * when it is between the camera and the player, or when the camera is inside it.
    */
-  fadeOccluders(camera: Vector3, target: Vector3, dt: number) {
+  fadeOccluders(camera: Vector3, target: Vector3, dt: number, follow = true) {
     const eye = { x: camera.x, y: camera.y, z: camera.z },
       body = { x: target.x, y: target.y + SIGHT_HEIGHT, z: target.z },
       blend = 1 - Math.exp(-dt * 10);
     for (const [key, group] of this.features) {
       const building = this.footprints.get(key);
       if (!building) continue;
-      const goal = segmentHitsBuilding(eye, body, building, SIGHT_PAD) ? 0 : 1;
+      const goal =
+        follow && segmentHitsBuilding(eye, body, building, SIGHT_PAD) ? 0 : 1;
       for (const mesh of group.meshes)
         mesh.visibility =
           Math.abs(goal - mesh.visibility) < 0.01

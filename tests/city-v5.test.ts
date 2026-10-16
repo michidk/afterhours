@@ -152,8 +152,9 @@ test("generated artifact validates, packs compactly and places everything on lan
     assert.ok(b.y !== undefined && b.y > WATER_LEVEL, "pads sit above water");
     assert.ok(b.h > b.y!, "roof above pad");
     assert.ok(
-      Math.abs(terrainHeight(b.x, b.z, city) - b.y!) < 1.2,
-      "pad stamped into terrain",
+      b.y! >= terrainHeight(b.x, b.z, city) - 0.011 &&
+        b.y! - terrainHeight(b.x, b.z, city) <= 4.4,
+      "building stands above terrain with its foundation touching ground",
     );
   }
   for (const r of city.roads) {

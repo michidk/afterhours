@@ -704,7 +704,12 @@ async function boot() {
         network?.debrisClock,
       );
       scene.update(rendered, playerId, dt, cameraInput);
-      cityRenderer?.fadeOccluders(scene.camera.position, scene.target, dt);
+      cityRenderer?.fadeOccluders(
+        scene.camera.position,
+        scene.target,
+        dt,
+        !scene.debugCamera.active,
+      );
       streamClock += dt;
       if (joined && streamClock >= 0.1) {
         streamClock = 0;

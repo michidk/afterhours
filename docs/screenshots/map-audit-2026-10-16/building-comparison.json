@@ -1,0 +1,25 @@
+{
+  "beforeBuildings": 413,
+  "afterBuildings": 410,
+  "raised": 380,
+  "removed": [
+    {
+      "x": -443.83,
+      "z": 837.72,
+      "asset": "apartments"
+    },
+    {
+      "x": -478.75,
+      "z": 801.05,
+      "asset": "shop-house"
+    },
+    {
+      "x": -460.54,
+      "z": 820.93,
+      "asset": "shop-house"
+    }
+  ],
+  "terrainUnchanged": true,
+  "roadsUnchanged": true,
+  "landmarksUnchanged": true
+}

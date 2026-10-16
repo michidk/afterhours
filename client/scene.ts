@@ -316,12 +316,13 @@ export class CityScene {
         court: "#a1ad8b",
         quay: "#94978b",
       };
+      const surfaceGround = ground(surface.x, surface.z);
       const elevation =
         surface.kind === "parking" || surface.kind === "service" ? 0.12 : 0.04;
       this.box(
         surface.kind,
         surface.x,
-        elevation,
+        surfaceGround + elevation,
         surface.z,
         surface.w,
         0.06,
@@ -333,7 +334,7 @@ export class CityScene {
           this.box(
             "parking bay",
             surface.x + dx,
-            0.16,
+            surfaceGround + 0.16,
             surface.z,
             0.12,
             0.025,
@@ -347,7 +348,7 @@ export class CityScene {
           this.box(
             "service lane dash",
             surface.x + (alongX ? t : 0),
-            0.16,
+            surfaceGround + 0.16,
             surface.z + (alongX ? 0 : t),
             alongX ? 3 : 0.12,
             0.025,

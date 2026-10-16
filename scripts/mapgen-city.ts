@@ -405,12 +405,58 @@ export function cityFromMap(map: GeneratedMap): City {
   // Shipped heights are whole centimetres; round down so no surface sample rises.
   for (let i = 0; i < heights.length; i++)
     heights[i] = Math.floor(heights[i] * 100 + 1e-6) / 100 + 0;
-  // A pad the coarse grid could not keep beside a lower street is re-seated.
-  for (const b of buildings) {
-    const ground = round(terrainHeight(b.x, b.z, { terrain: { heights } }));
-    if (Math.abs(ground - b.y!) <= 0.8) continue;
-    b.h = round(b.h - b.y! + ground);
-    b.y = ground;
+  // Coarse terrain triangles can cross a pad between its centre and corners.
+  // Seat the whole footprint; omit slopes deeper than the rendered foundation.
+  for (let i = buildings.length - 1; i >= 0; i--) {
+    const b = buildings[i],
+      ring = rotatedRect(b, b.w, b.d, b.angle ?? 0),
+      ground: number[] = [],
+      sampleGround = (p: Point) =>
+        ground.push(terrainHeight(p.x, p.z, { terrain: { heights } }));
+    for (let j = 0; j < ring.length; j++) {
+      const a = ring[j],
+        c = ring[(j + 1) % ring.length];
+      sampleGround(a);
+      // The footprint's intersections with terrain edges bound each linear patch.
+      for (const coordinate of [
+        (p: Point) => p.x,
+        (p: Point) => p.z,
+        (p: Point) => p.x + p.z,
+      ]) {
+        const from = coordinate(a),
+          to = coordinate(c);
+        for (
+          let line = Math.ceil(Math.min(from, to) / TERRAIN_STEP) * TERRAIN_STEP;
+          line < Math.max(from, to);
+          line += TERRAIN_STEP
+        ) {
+          const t = (line - from) / (to - from);
+          sampleGround(lerpPoint(a, c, t));
+        }
+      }
+    }
+    for (
+      let z =
+        Math.ceil(Math.min(...ring.map((p) => p.z)) / TERRAIN_STEP) * TERRAIN_STEP;
+      z <= Math.max(...ring.map((p) => p.z));
+      z += TERRAIN_STEP
+    )
+      for (
+        let x =
+          Math.ceil(Math.min(...ring.map((p) => p.x)) / TERRAIN_STEP) * TERRAIN_STEP;
+        x <= Math.max(...ring.map((p) => p.x));
+        x += TERRAIN_STEP
+      )
+        if (pointInPolygon({ x, z }, ring)) sampleGround({ x, z });
+    const low = Math.min(...ground),
+      high = Math.max(...ground),
+      base = Math.ceil(high * 100) / 100;
+    if (base - low > 4.4) {
+      buildings.splice(i, 1);
+      continue;
+    }
+    b.h = round(b.h - b.y! + base);
+    b.y = base;
   }
 
   // Pedestrian walkways along the sidewalks and across the crosswalks.

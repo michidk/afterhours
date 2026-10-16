@@ -109,3 +109,20 @@ test("the server parks boats, planes and starter cars at the new sites", () => {
     sim.destruction.dispose();
   }
 });
+
+test("final building pads keep ground below walls and within foundation depth", () => {
+  assert.ok(city.buildings.length > 250, "the city retains its buildings");
+  for (const b of city.buildings) {
+    const angle = b.angle ?? 0;
+    for (const dx of [-b.w / 2, 0, b.w / 2])
+      for (const dz of [-b.d / 2, 0, b.d / 2]) {
+        const h = terrainHeight(
+          b.x + dx * Math.cos(angle) - dz * Math.sin(angle),
+          b.z + dx * Math.sin(angle) + dz * Math.cos(angle),
+          city,
+        );
+        assert.ok(h <= b.y! + 0.011, `ground buries walls at ${b.x}, ${b.z}`);
+        assert.ok(b.y! - h <= 4.4, `foundation floats at ${b.x}, ${b.z}`);
+      }
+  }
+});

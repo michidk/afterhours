@@ -36,6 +36,7 @@ const scene = new Scene(engine);
 const casters = new Set<Mesh>();
 const host = Object.assign(Object.create(CityScene.prototype), {
   scene,
+  city,
   culling: new SceneryCulling(scene),
   materials: new Map(),
   target: Vector3.Zero(),
@@ -115,6 +116,7 @@ function build(
   part: ReturnType<typeof emptyCity>,
   options: Parameters<CityScene["build"]>[1],
 ) {
+  part.terrain = city.terrain;
   host.build(part, options);
   host.batchStatic();
   const meshes = [...scene.meshes] as Mesh[];
