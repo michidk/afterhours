@@ -849,3 +849,57 @@ export function compass(p: Point, middle: Point) {
     "NORTHWEST",
   ][((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8];
 }
+
+/** Keep the runway and approaches clear, with services on either side. */
+export function dressAirport(ctx: FeatureContext, a: City["airport"]) {
+  const f = frame(a, 0),
+    level = groundAt(ctx, a);
+  for (const [u0, u1, v0, v1] of [
+    [30, 40, -90, 90],
+    [35, 95, -85, 85],
+    [11, 35, -75, -65],
+    [11, 35, 65, 75],
+    [-95, -28, -70, -30],
+  ])
+    for (const tile of tiles(f, u0, u1, v0, v1)) ctx.asphalt.push(flat(tile, level));
+  for (const [u, v, w, d, h, asset, color] of [
+    [72, -55, 36, 32, 14, "warehouse", "#93a9b6"],
+    [72, 55, 36, 32, 14, "warehouse", "#a6b7bd"],
+    [-62, 5, 56, 26, 10, "campus", "#d6d0b8"],
+    [-87, 48, 12, 12, 25, "deco-tower", "#bdd2d3"],
+  ] satisfies [number, number, number, number, number, Building["asset"], string][]) {
+    const p = f.at(u, v);
+    ctx.buildings.push({
+      ...p,
+      w,
+      d,
+      y: level,
+      h: level + h,
+      asset,
+      color,
+      style: 0,
+      angle: 0,
+      facing: 0,
+    });
+  }
+  for (const tile of tiles(f, -95, -28, -28, -18))
+    ctx.sidewalks.push(flat(tile, level));
+  const line = (
+    u0: number,
+    u1: number,
+    v0: number,
+    v1: number,
+    color: "yellow" | "white",
+  ) =>
+    ctx.markings.push({
+      color,
+      polygon: flat(
+        [f.at(u0, v0), f.at(u1, v0), f.at(u1, v1), f.at(u0, v1)],
+        level + 0.02,
+      ),
+    });
+  line(34.85, 35.15, -85, 85, "yellow");
+  for (const v of [-70, 70]) line(11, 35, v - 0.15, v + 0.15, "yellow");
+  for (let u = -92; u < -30; u += 5) line(u, u + 0.15, -68, -57, "white");
+  line(-92, -32, -57.15, -57, "white");
+}

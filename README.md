@@ -72,12 +72,12 @@ bun run city:generate --seed 713 --out data/city.json  # write the city artifact
 bun run city:meshes                                    # bake the static meshes only
 ```
 
-The generator in `mapgen/` builds an eroded island heightmap, rivers, a settlement, terrain-aware roads, blocks, lots and buildings. Building bases clear the terrain across their full footprint; sites with more than 4.4 m of relief are omitted so the existing foundations stay grounded. Static scenery, including airport runways, is baked at the terrain height. The checked-in seed 713 has about 4 km² of land, hills up to about 170 m and a downtown beside the main estuary. Building looks are twelve replaceable recipes in [shared/assets/buildings](shared/assets/buildings/README.md).
+The generator in `mapgen/` builds an eroded island heightmap, rivers, a settlement, terrain-aware roads, blocks, lots and buildings. Building bases clear the terrain across their full footprint; sites with more than 4.4 m of relief are omitted so the existing foundations stay grounded. Static scenery, including airport runways, is baked at the terrain height. Lake shorelines follow the terrain triangles at water level; streets share exact junction-mouth vertices, including bends and turning circles. The checked-in seed 713 has about 4 km² of land, hills up to about 170 m and a downtown beside the main estuary. Building looks are twelve replaceable recipes in [shared/assets/buildings](shared/assets/buildings/README.md).
 
 Every city also gets destinations, placed by `scripts/mapgen-features.ts` on land kept clear of the streets and of each other:
 
 - **Town hall:** a civic hall on a street-facing lot near downtown with a striped car park of about forty bays in front. Players spawn on the plaza between the two, and the starter cars stand in its bays.
-- **Two airports:** the flattest dry squares away from downtown, at least 600 m apart, each with a plane and an aerobatic plane at the runway threshold.
+- **Two airports:** the flattest dry squares away from downtown, at least 600 m apart, each with a terminal, two hangars, a control tower, taxiways, parking, and a plane and an aerobatic plane at the runway threshold.
 - **Racetrack:** a seeded closed circuit, 12 m wide, of Catmull-Rom curves with hairpins smoothed to a 20 m minimum radius. Its asphalt follows a smoothed profile of the land, so it climbs and falls; two sports cars wait on the grid behind the chequered line. It has no access road: drive across the fields.
 - **Three harbours:** concrete quays a metre above the sea on deep stretches of coast, each with a dredged basin, three moored boats and a harbour office.
 

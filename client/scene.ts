@@ -364,6 +364,29 @@ export class CityScene {
         this.box("runway", a.x, ay + 0.08, a.z, 22, 0.06, a.d - 8, "#4d585a");
         for (let i = -a.d / 2 + 12; i <= a.d / 2 - 12; i += 10)
           this.box("runway markings", a.x, ay + 0.13, a.z + i, 0.4, 0.04, 3, "#f4e7c3");
+        for (const side of [-1, 1]) {
+          this.box(
+            "runway edge stripe",
+            a.x + side * 10,
+            ay + 0.13,
+            a.z,
+            0.2,
+            0.04,
+            a.d - 16,
+            "#f4e7c3",
+          );
+          for (const dx of [-7, -4, 4, 7])
+            this.box(
+              "runway threshold",
+              a.x + dx,
+              ay + 0.13,
+              a.z + side * (a.d / 2 - 16),
+              1.2,
+              0.04,
+              8,
+              "#f4e7c3",
+            );
+        }
         for (const side of [-1, 1])
           for (let i = -a.d / 2 + 8; i <= a.d / 2 - 8; i += 12)
             this.cylinder(

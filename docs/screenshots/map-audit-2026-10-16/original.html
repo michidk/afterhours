@@ -1,0 +1,756 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  /><title>AFTERHOURS · Map audit</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      background: #18232e;
+      color: #edf2f6;
+      font:
+        17px/1.5 "Segoe UI",
+        sans-serif;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+    }
+    header,
+    main,
+    footer {
+      max-width: 1680px;
+      margin: auto;
+      padding: 28px 4vw;
+    }
+    header {
+      padding-top: 48px;
+    }
+    h1 {
+      font-size: clamp(2rem, 5vw, 4rem);
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+      margin: 0 0 18px;
+    }
+    h1 span {
+      display: block;
+      font-size: 0.45em;
+      letter-spacing: 0;
+      font-weight: 400;
+      margin-top: 16px;
+      color: #b7c9d8;
+    }
+    p {
+      max-width: 76ch;
+    }
+    a {
+      color: #a8d8fc;
+      text-underline-offset: 4px;
+    }
+    a:focus-visible {
+      outline: 3px solid #ffd589;
+      outline-offset: 5px;
+    }
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 20px;
+      margin-top: 28px;
+    }
+    nav a {
+      font-size: 14px;
+    }
+    section {
+      scroll-margin-top: 24px;
+      margin-bottom: 56px;
+    }
+    h2 {
+      font-size: 23px;
+      margin: 0 0 14px;
+      font-weight: 500;
+    }
+    .pair {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    figure {
+      margin: 0;
+      background: #243546;
+    }
+    figcaption {
+      padding: 9px 14px;
+    }
+    img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    figure a {
+      display: block;
+    }
+    .top {
+      display: inline-block;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+    footer {
+      border-top: 1px solid #465969;
+      color: #b7c9d8;
+    }
+    footer p {
+      margin-top: 0;
+    }
+    @media (max-width: 700px) {
+      .pair {
+        grid-template-columns: 1fr;
+      }
+      header,
+      main,
+      footer {
+        padding-left: 18px;
+        padding-right: 18px;
+      }
+      nav {
+        gap: 10px 16px;
+      }
+    }
+  </style>
+  <header id="top">
+    <h1>AFTERHOURS<span>Generated map audit</span></h1>
+    <p>
+      21 views, 42 screenshots. Compare the original city with the corrected terrain
+      placement. Select any image to open it at full size.
+    </p>
+    <p>
+      Fixed buried airport and park scenery, building foundations, and buildings fading
+      during free-camera inspection. City seed 713 · 16 October 2026.
+    </p>
+    <nav aria-label="Map views">
+      <a href="#buried-townhouse">Buried townhouse</a
+      ><a href="#buried-villa">Buried villa</a
+      ><a href="#city-centre-250">City centre · wide</a
+      ><a href="#city-centre-85">City centre · close</a
+      ><a href="#exposed-foundation">Exposed foundation</a
+      ><a href="#north-harbour-250">North harbour · wide</a
+      ><a href="#north-harbour-85">North harbour · close</a
+      ><a href="#northeast-airport-250">Northeast airport · wide</a
+      ><a href="#northeast-airport-85">Northeast airport · close</a
+      ><a href="#racetrack-250">Racetrack · wide</a
+      ><a href="#racetrack-85">Racetrack · close</a
+      ><a href="#south-airport-250">South airport · wide</a
+      ><a href="#south-airport-85">South airport · close</a
+      ><a href="#south-harbour-250">South harbour · wide</a
+      ><a href="#south-harbour-85">South harbour · close</a
+      ><a href="#southwest-harbour-250">Southwest harbour · wide</a
+      ><a href="#southwest-harbour-85">Southwest harbour · close</a
+      ><a href="#the-spire-250">The spire · wide</a
+      ><a href="#the-spire-85">The spire · close</a
+      ><a href="#town-hall-250">Town hall · wide</a
+      ><a href="#town-hall-85">Town hall · close</a>
+    </nav>
+  </header>
+  <main>
+    <section id="buried-townhouse">
+      <h2>Buried townhouse</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-buried-townhouse.png"
+            ><img
+              src="before/static-buried-townhouse.png"
+              alt="Before: Buried townhouse"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-buried-townhouse.png"
+            ><img
+              src="after/fixed-buried-townhouse.png"
+              alt="After: Buried townhouse"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="buried-villa">
+      <h2>Buried villa</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-buried-villa.png"
+            ><img
+              src="before/static-buried-villa.png"
+              alt="Before: Buried villa"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-buried-villa.png"
+            ><img
+              src="after/fixed-buried-villa.png"
+              alt="After: Buried villa"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="city-centre-250">
+      <h2>City centre · wide view</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-city-centre-250.png"
+            ><img
+              src="before/static-city-centre-250.png"
+              alt="Before: City centre · wide view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-city-centre-250.png"
+            ><img
+              src="after/fixed-city-centre-250.png"
+              alt="After: City centre · wide view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="city-centre-85">
+      <h2>City centre · close view</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-city-centre-85.png"
+            ><img
+              src="before/static-city-centre-85.png"
+              alt="Before: City centre · close view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-city-centre-85.png"
+            ><img
+              src="after/fixed-city-centre-85.png"
+              alt="After: City centre · close view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="exposed-foundation">
+      <h2>Exposed foundation</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-exposed-foundation.png"
+            ><img
+              src="before/static-exposed-foundation.png"
+              alt="Before: Exposed foundation"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-exposed-foundation.png"
+            ><img
+              src="after/fixed-exposed-foundation.png"
+              alt="After: Exposed foundation"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="north-harbour-250">
+      <h2>North harbour · wide view</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-north-harbour-250.png"
+            ><img
+              src="before/static-north-harbour-250.png"
+              alt="Before: North harbour · wide view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-north-harbour-250.png"
+            ><img
+              src="after/fixed-north-harbour-250.png"
+              alt="After: North harbour · wide view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="north-harbour-85">
+      <h2>North harbour · close view</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-north-harbour-85.png"
+            ><img
+              src="before/static-north-harbour-85.png"
+              alt="Before: North harbour · close view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-north-harbour-85.png"
+            ><img
+              src="after/fixed-north-harbour-85.png"
+              alt="After: North harbour · close view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="northeast-airport-250">
+      <h2>Northeast airport · wide view</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-northeast-airport-250.png"
+            ><img
+              src="before/static-northeast-airport-250.png"
+              alt="Before: Northeast airport · wide view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-northeast-airport-250.png"
+            ><img
+              src="after/fixed-northeast-airport-250.png"
+              alt="After: Northeast airport · wide view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="northeast-airport-85">
+      <h2>Northeast airport · close view</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-northeast-airport-85.png"
+            ><img
+              src="before/static-northeast-airport-85.png"
+              alt="Before: Northeast airport · close view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-northeast-airport-85.png"
+            ><img
+              src="after/fixed-northeast-airport-85.png"
+              alt="After: Northeast airport · close view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="racetrack-250">
+      <h2>Racetrack · wide view</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-racetrack-250.png"
+            ><img
+              src="before/static-racetrack-250.png"
+              alt="Before: Racetrack · wide view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-racetrack-250.png"
+            ><img
+              src="after/fixed-racetrack-250.png"
+              alt="After: Racetrack · wide view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="racetrack-85">
+      <h2>Racetrack · close view</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-racetrack-85.png"
+            ><img
+              src="before/static-racetrack-85.png"
+              alt="Before: Racetrack · close view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-racetrack-85.png"
+            ><img
+              src="after/fixed-racetrack-85.png"
+              alt="After: Racetrack · close view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="south-airport-250">
+      <h2>South airport · wide view</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-south-airport-250.png"
+            ><img
+              src="before/static-south-airport-250.png"
+              alt="Before: South airport · wide view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-south-airport-250.png"
+            ><img
+              src="after/fixed-south-airport-250.png"
+              alt="After: South airport · wide view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="south-airport-85">
+      <h2>South airport · close view</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-south-airport-85.png"
+            ><img
+              src="before/static-south-airport-85.png"
+              alt="Before: South airport · close view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-south-airport-85.png"
+            ><img
+              src="after/fixed-south-airport-85.png"
+              alt="After: South airport · close view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="south-harbour-250">
+      <h2>South harbour · wide view</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-south-harbour-250.png"
+            ><img
+              src="before/static-south-harbour-250.png"
+              alt="Before: South harbour · wide view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-south-harbour-250.png"
+            ><img
+              src="after/fixed-south-harbour-250.png"
+              alt="After: South harbour · wide view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="south-harbour-85">
+      <h2>South harbour · close view</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-south-harbour-85.png"
+            ><img
+              src="before/static-south-harbour-85.png"
+              alt="Before: South harbour · close view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-south-harbour-85.png"
+            ><img
+              src="after/fixed-south-harbour-85.png"
+              alt="After: South harbour · close view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="southwest-harbour-250">
+      <h2>Southwest harbour · wide view</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-southwest-harbour-250.png"
+            ><img
+              src="before/static-southwest-harbour-250.png"
+              alt="Before: Southwest harbour · wide view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-southwest-harbour-250.png"
+            ><img
+              src="after/fixed-southwest-harbour-250.png"
+              alt="After: Southwest harbour · wide view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="southwest-harbour-85">
+      <h2>Southwest harbour · close view</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-southwest-harbour-85.png"
+            ><img
+              src="before/static-southwest-harbour-85.png"
+              alt="Before: Southwest harbour · close view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-southwest-harbour-85.png"
+            ><img
+              src="after/fixed-southwest-harbour-85.png"
+              alt="After: Southwest harbour · close view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="the-spire-250">
+      <h2>The spire · wide view</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-the-spire-250.png"
+            ><img
+              src="before/static-the-spire-250.png"
+              alt="Before: The spire · wide view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-the-spire-250.png"
+            ><img
+              src="after/fixed-the-spire-250.png"
+              alt="After: The spire · wide view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="the-spire-85">
+      <h2>The spire · close view</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-the-spire-85.png"
+            ><img
+              src="before/static-the-spire-85.png"
+              alt="Before: The spire · close view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-the-spire-85.png"
+            ><img
+              src="after/fixed-the-spire-85.png"
+              alt="After: The spire · close view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="town-hall-250">
+      <h2>Town hall · wide view</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-town-hall-250.png"
+            ><img
+              src="before/static-town-hall-250.png"
+              alt="Before: Town hall · wide view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-town-hall-250.png"
+            ><img
+              src="after/fixed-town-hall-250.png"
+              alt="After: Town hall · wide view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="town-hall-85">
+      <h2>Town hall · close view</h2>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="before/static-town-hall-85.png"
+            ><img
+              src="before/static-town-hall-85.png"
+              alt="Before: Town hall · close view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="after/fixed-town-hall-85.png"
+            ><img
+              src="after/fixed-town-hall-85.png"
+              alt="After: Town hall · close view"
+              width="1280"
+              height="900"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+  </main>
+  <footer>
+    <p>
+      Captured headless at 1280 × 900 from the baked city meshes, with fixed lighting
+      and solid buildings. Dynamic entities, destructible props, shadows, sign text
+      textures, and animated sea are omitted. White sign planes are a viewer limitation.
+      These comparisons verify static placement, not gameplay, water appearance, or
+      performance.
+    </p>
+    <p>Terrain, roads, and landmark locations are unchanged between captures.</p>
+  </footer>
+</html>

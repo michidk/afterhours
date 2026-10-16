@@ -208,11 +208,11 @@ const MARKED_END = 5;
 const CROSSING_AT = 2.3;
 /** Walkways run just outside the middle of the sidewalk, clear of kerbside lamps. */
 const WALK = SIDEWALK / 2 + 0.35;
-/** A gentle continuation with equal widths is left to the band mitres. */
+/** Straight continuations with equal widths need no junction. */
 const continuation = (arms: Arm[]) =>
   arms.length === 2 &&
   arms[0].e.width === arms[1].e.width &&
-  Math.abs(signedAngle(arms[0].dir, mul(arms[1].dir, -1))) < (50 * Math.PI) / 180;
+  Math.abs(signedAngle(arms[0].dir, mul(arms[1].dir, -1))) < 1e-4;
 const culDeSacRadius = (arm: Arm) =>
   arm.hw + (arm.e.kind === "street" || arm.e.kind === "lane" ? 4.5 : 2);
 
@@ -304,7 +304,12 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
     const arms = armsAt[n.id];
     if (arms.length === 0) continue;
     if (arms.length === 1) {
-      culDeSac(n, arms[0], junctions, sidewalks, trim, turns, bandSide);
+      const arm = arms[0],
+        radius = culDeSacRadius(arm);
+      trim[arm.e.id][arm.atStart ? 0 : 1] = Math.min(
+        arm.limit,
+        Math.sqrt(Math.max(0, radius * radius - arm.hw * arm.hw)),
+      );
       continue;
     }
     if (continuation(arms)) {
@@ -391,8 +396,9 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
         length = polylineLength(pts),
         near = [...corners[k].points, ...corners[(k + count - 1) % count].points];
       const mouth = (cut: number) => {
-        const end = pointAt(pts, cut),
-          t = norm(sub(pointAt(pts, cut + 0.5), pointAt(pts, Math.max(0, cut - 0.5))));
+        const remaining = trimPolyline(pts, cut, 0),
+          end = remaining[0],
+          t = norm(sub(remaining[1], end));
         return { cut, end, t, l: perp(t) };
       };
       let m = mouth(Math.max(a.cutL, a.cutR) + 0.3);
@@ -509,6 +515,9 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
     junctions.push({ node: n.id, polygon: removeLoops(ring) });
     if (count >= 3) junctionNodes.add(n.id);
   }
+  for (const n of graph.nodes)
+    if (armsAt[n.id].length === 1)
+      culDeSac(n, armsAt[n.id][0], junctions, sidewalks, trim, turns, bandSide);
   const bands: RoadGeometry["bands"] = [];
   const walkways: RoadGeometry["walkways"] = { points: [], links: [] },
     walkEnds = new Map<string, number>();
@@ -635,42 +644,48 @@ function culDeSac(
   turns: { from: WalkEnd; to: WalkEnd; via: Point[] }[],
   bandSide: (arm: Arm, armLeft: boolean) => WalkEnd,
 ) {
-  const radius = culDeSacRadius(arm);
-  const cut = Math.sqrt(Math.max(0, radius * radius - arm.hw * arm.hw));
-  const end = add(n, mul(arm.dir, cut)),
-    l = perp(arm.dir);
+  const cuts = trim[arm.e.id];
+  const points = trimPolyline(arm.e.points, cuts[0], cuts[1]);
+  if (!arm.atStart) points.reverse();
+  const cut = cuts[arm.atStart ? 0 : 1],
+    end = points[0],
+    dir = norm(sub(points[1], end)),
+    l = perp(dir),
+    centre = sub(end, mul(dir, cut)),
+    radius = Math.hypot(cut, arm.hw);
   const endR = add(end, mul(l, -arm.hw)),
     endL = add(end, mul(l, arm.hw));
   // Ring runs from the left end around the far side to the right end.
-  const from = Math.atan2(endL.z - n.z, endL.x - n.x);
-  let to = Math.atan2(endR.z - n.z, endR.x - n.x);
+  const from = Math.atan2(endL.z - centre.z, endL.x - centre.x);
+  let to = Math.atan2(endR.z - centre.z, endR.x - centre.x);
   while (to <= from) to += Math.PI * 2;
   const steps = Math.max(8, Math.ceil(((to - from) * radius) / 1.5));
-  const arc = arcPoints(n, radius, from, to, steps);
+  const arc = arcPoints(centre, radius, from, to, steps);
+  arc[0] = endL;
+  arc[arc.length - 1] = endR;
   junctions.push({ node: n.id, polygon: [endR, endL, ...arc.slice(1, -1)] });
   // The ring starts square to the street sidewalks at the mouth, then widens to
   // the full circle.
   const outerL = add(endL, mul(l, SIDEWALK)),
     outerR = add(endR, mul(l, -SIDEWALK)),
-    outerFrom = Math.atan2(outerL.z - n.z, outerL.x - n.x);
-  let outerTo = Math.atan2(outerR.z - n.z, outerR.x - n.x);
+    outerFrom = Math.atan2(outerL.z - centre.z, outerL.x - centre.x);
+  let outerTo = Math.atan2(outerR.z - centre.z, outerR.x - centre.x);
   while (outerTo <= outerFrom) outerTo += Math.PI * 2;
-  sidewalks.push({
-    node: n.id,
-    polygon: [
-      ...arc,
-      outerR,
-      ...arcPoints(n, radius + SIDEWALK, outerTo, outerFrom, steps),
-      outerL,
-    ],
-  });
+  const outer = arcPoints(
+    centre,
+    Math.hypot(cut, arm.hw + SIDEWALK),
+    outerTo,
+    outerFrom,
+    steps,
+  );
+  outer[0] = outerR;
+  outer[outer.length - 1] = outerL;
+  sidewalks.push({ node: n.id, polygon: [...arc, ...outer] });
   turns.push({
     from: bandSide(arm, true),
     to: bandSide(arm, false),
-    via: arcPoints(n, radius + WALK, from, to, 16),
+    via: arcPoints(centre, Math.hypot(cut, arm.hw + WALK), outerFrom, outerTo, 16),
   });
-  if (arm.atStart) trim[arm.e.id][0] = cut;
-  else trim[arm.e.id][1] = cut;
 }
 
 /** Lane lines, centre lines, stop lines and zebra crossings for one band. */

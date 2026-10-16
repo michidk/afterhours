@@ -21,12 +21,13 @@ import {
 } from "../mapgen/geom.ts";
 import { SIDEWALK, simplifyPolyline } from "../mapgen/roadgeometry.ts";
 import { sample } from "../mapgen/field.ts";
-import { maskOutlines } from "../mapgen/hydrology.ts";
+import { lakeShorelines } from "../mapgen/shoreline.ts";
 import { packSurfaceChunks } from "../shared/city-pack.ts";
 import { destructibles } from "../shared/destruction.ts";
 import { edgeHeightAt, sinkUnderStreets } from "../mapgen/streetfit.ts";
 import {
   compass,
+  dressAirport,
   placeHarbours,
   placeRacetrack,
   placeTownHall,
@@ -383,6 +384,7 @@ export function cityFromMap(map: GeneratedMap): City {
       }
     if (!a) throw Error("No site for an airport");
     airports.push(a);
+    dressAirport(features, a);
     features.taken.push(rotatedRect(a, a.w + 60, a.d + 60, 0));
   }
   const airport = airports[0];
@@ -716,7 +718,7 @@ export function cityFromMap(map: GeneratedMap): City {
             channel[(cz + dz) * f.w + cx + dx] = 1;
     });
   const neighbours = (i: number) =>
-    [i - 1, i + 1, i - f.w, i + f.w].filter(
+    [i - 1, i + 1, i - f.w, i + f.w, i - f.w + 1, i + f.w - 1].filter(
       (n) => n >= 0 && n < f.w * f.h && Math.abs((n % f.w) - (i % f.w)) <= 1,
     );
   for (const lake of map.lakes) {
@@ -769,8 +771,8 @@ export function cityFromMap(map: GeneratedMap): City {
       }
       ring = next;
     }
-    for (const outline of maskOutlines(f, mask))
-      if (signedArea(outline) > 0)
+    for (const outline of lakeShorelines(heights, f.w, f.cell, f.size / 2, mask, level))
+      if (Math.abs(signedArea(outline)) > 1)
         water.lakes.push({
           level,
           outline: outline.flatMap((q) => [round(q.x), round(q.z)]),

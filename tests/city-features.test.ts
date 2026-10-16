@@ -126,3 +126,30 @@ test("final building pads keep ground below walls and within foundation depth", 
       }
   }
 });
+
+test("airport services leave the runway clear and lakes stay within their basins", () => {
+  for (const a of airportsOf(city)) {
+    const nearby = city.buildings.filter(
+      (b) => Math.abs(b.x - a.x) < 110 && Math.abs(b.z - a.z) < 110,
+    );
+    assert.equal(nearby.filter((b) => b.asset === "warehouse").length, 2);
+    assert.ok(nearby.some((b) => b.asset === "campus"));
+    assert.ok(nearby.some((b) => b.h - (b.y ?? 0) > 20));
+    for (const b of nearby)
+      assert.ok(Math.abs(b.x - a.x) - b.w / 2 > 11, "services stay outside the runway");
+  }
+  assert.ok(city.water!.lakes.length >= 2 && city.water!.lakes.length < 10);
+  for (const lake of city.water!.lakes) {
+    const xs = lake.outline.filter((_, i) => i % 2 === 0),
+      zs = lake.outline.filter((_, i) => i % 2 === 1);
+    assert.ok(Math.max(...xs) - Math.min(...xs) < 700);
+    assert.ok(Math.max(...zs) - Math.min(...zs) < 1000);
+    for (let i = 0; i < lake.outline.length; i += 2)
+      assert.ok(
+        Math.abs(
+          terrainHeight(lake.outline[i], lake.outline[i + 1], city) - lake.level,
+        ) < 0.15,
+        "shore meets terrain at water level",
+      );
+  }
+});
