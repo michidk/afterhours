@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>AFTERHOURS · Map fixes</title
+  ><style>
+    :root {
+      color-scheme: dark;
+      background: #18232e;
+      color: #edf2f6;
+      font:
+        17px/1.5 "Segoe UI",
+        sans-serif;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+    }
+    header,
+    main,
+    footer {
+      max-width: 1680px;
+      margin: auto;
+      padding: 28px 4vw;
+    }
+    header {
+      padding-top: 48px;
+    }
+    h1 {
+      font-size: clamp(2rem, 5vw, 4rem);
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+      margin: 0 0 18px;
+    }
+    h1 span {
+      display: block;
+      font-size: 0.45em;
+      letter-spacing: 0;
+      font-weight: 400;
+      margin-top: 16px;
+      color: #b7c9d8;
+    }
+    p {
+      max-width: 76ch;
+    }
+    a {
+      color: #a8d8fc;
+      text-underline-offset: 4px;
+    }
+    a:focus-visible {
+      outline: 3px solid #ffd589;
+      outline-offset: 5px;
+    }
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 20px;
+      margin-top: 28px;
+    }
+    nav a {
+      font-size: 14px;
+    }
+    section {
+      scroll-margin-top: 24px;
+      margin-bottom: 56px;
+    }
+    h2 {
+      font-size: 23px;
+      margin: 0 0 14px;
+      font-weight: 500;
+    }
+    .pair {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    figure {
+      margin: 0;
+      background: #243546;
+    }
+    figcaption {
+      padding: 9px 14px;
+    }
+    img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    figure a {
+      display: block;
+    }
+    .top {
+      display: inline-block;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+    footer {
+      border-top: 1px solid #465969;
+      color: #b7c9d8;
+    }
+    footer p {
+      margin-top: 0;
+    }
+    @media (max-width: 700px) {
+      .pair {
+        grid-template-columns: 1fr;
+      }
+      header,
+      main,
+      footer {
+        padding-left: 18px;
+        padding-right: 18px;
+      }
+      nav {
+        gap: 10px 16px;
+      }
+    }
+  </style>
+  <header id="top">
+    <h1>AFTERHOURS<span>Airports, shorelines and streets</span></h1>
+    <p>
+      20 new screenshots compare both airports, all three harbours, two lakes and three
+      street sites. Select an image to open it at full size.
+    </p>
+    <p>
+      City seed 713 · 16 October 2026.
+      <a href="original.html">See the original 42 screenshots</a>.
+    </p>
+    <nav aria-label="Map views">
+      <a href="#northeast-airport">Northeast airport</a
+      ><a href="#south-airport">South airport</a
+      ><a href="#north-harbour">North harbour</a
+      ><a href="#south-harbour">South harbour</a
+      ><a href="#southwest-harbour">Southwest harbour</a
+      ><a href="#lake-shore">Main lake shore</a><a href="#hill-lake">Hill lake</a
+      ><a href="#centre-street-gap">City centre street</a
+      ><a href="#west-street-gap">Western street bend</a
+      ><a href="#south-street-gap">Southern junction</a>
+    </nav>
+  </header>
+  <main>
+    <section id="northeast-airport">
+      <h2>Northeast airport</h2>
+      <p>
+        Terminal, two hangars, control tower, taxiway, parking and runway threshold
+        markings.
+      </p>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="followup/before/northeast-airport.png"
+            ><img
+              src="followup/before/northeast-airport.png"
+              alt="Before: Northeast airport"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="followup/after/northeast-airport.png"
+            ><img
+              src="followup/after/northeast-airport.png"
+              alt="After: Northeast airport"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="south-airport">
+      <h2>South airport</h2>
+      <p>
+        The same services at the second airfield. The runway and approaches stay clear.
+      </p>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="followup/before/south-airport.png"
+            ><img
+              src="followup/before/south-airport.png"
+              alt="Before: South airport"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="followup/after/south-airport.png"
+            ><img
+              src="followup/after/south-airport.png"
+              alt="After: South airport"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="north-harbour">
+      <h2>North harbour</h2>
+      <p>
+        The sea is visible in both captures. The quay was already on the coast; the
+        original gallery omitted the sea.
+      </p>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="followup/before/north-harbour.png"
+            ><img
+              src="followup/before/north-harbour.png"
+              alt="Before: North harbour"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="followup/after/north-harbour.png"
+            ><img
+              src="followup/after/north-harbour.png"
+              alt="After: North harbour"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="south-harbour">
+      <h2>South harbour</h2>
+      <p>The existing quay beside its dredged coastal basin.</p>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="followup/before/south-harbour.png"
+            ><img
+              src="followup/before/south-harbour.png"
+              alt="Before: South harbour"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="followup/after/south-harbour.png"
+            ><img
+              src="followup/after/south-harbour.png"
+              alt="After: South harbour"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="southwest-harbour">
+      <h2>Southwest harbour</h2>
+      <p>The existing quay with the sea visible.</p>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="followup/before/southwest-harbour.png"
+            ><img
+              src="followup/before/southwest-harbour.png"
+              alt="Before: Southwest harbour"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="followup/after/southwest-harbour.png"
+            ><img
+              src="followup/after/southwest-harbour.png"
+              alt="After: Southwest harbour"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="lake-shore">
+      <h2>Main lake shore</h2>
+      <p>The waterline now follows terrain triangles instead of square grid cells.</p>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="followup/before/lake-shore.png"
+            ><img
+              src="followup/before/lake-shore.png"
+              alt="Before: Main lake shore"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="followup/after/lake-shore.png"
+            ><img
+              src="followup/after/lake-shore.png"
+              alt="After: Main lake shore"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="hill-lake">
+      <h2>Hill lake</h2>
+      <p>The same waterline correction at the higher lake.</p>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="followup/before/hill-lake.png"
+            ><img
+              src="followup/before/hill-lake.png"
+              alt="Before: Hill lake"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="followup/after/hill-lake.png"
+            ><img
+              src="followup/after/hill-lake.png"
+              alt="After: Hill lake"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="centre-street-gap">
+      <h2>City centre street</h2>
+      <p>Road mouths now use the exact tangent of the adjoining strip.</p>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="followup/before/centre-street-gap.png"
+            ><img
+              src="followup/before/centre-street-gap.png"
+              alt="Before: City centre street"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="followup/after/centre-street-gap.png"
+            ><img
+              src="followup/after/centre-street-gap.png"
+              alt="After: City centre street"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="west-street-gap">
+      <h2>Western street bend</h2>
+      <p>A connecting junction fills the gap between road strips at a bend.</p>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="followup/before/west-street-gap.png"
+            ><img
+              src="followup/before/west-street-gap.png"
+              alt="Before: Western street bend"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="followup/after/west-street-gap.png"
+            ><img
+              src="followup/after/west-street-gap.png"
+              alt="After: Western street bend"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+    <section id="south-street-gap">
+      <h2>Southern junction</h2>
+      <p>The triangular cut through the sidewalk and asphalt is closed.</p>
+      <div class="pair">
+        <figure>
+          <figcaption>Before</figcaption>
+          <a href="followup/before/south-street-gap.png"
+            ><img
+              src="followup/before/south-street-gap.png"
+              alt="Before: Southern junction"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+        <figure>
+          <figcaption>After</figcaption>
+          <a href="followup/after/south-street-gap.png"
+            ><img
+              src="followup/after/south-street-gap.png"
+              alt="After: Southern junction"
+              width="1280"
+              height="800"
+              loading="lazy"
+          /></a>
+        </figure>
+      </div>
+      <a class="top" href="#top">Back to views</a>
+    </section>
+  </main>
+  <footer>
+    <p>
+      Captured in the shared browser at 1280 × 800 from the game's complete baked city
+      geometry. The sea uses the game's water renderer at a fixed time. Lighting is
+      fixed; dynamic entities, destructible props, shadows and sign text textures are
+      omitted. Pale sign planes are a viewer limitation. These views check static
+      placement, not gameplay or performance.
+    </p>
+    <p>
+      Harbour locations did not change. Earlier screenshots hid the sea, which made the
+      harbours look inland.
+    </p>
+  </footer>
+</html>

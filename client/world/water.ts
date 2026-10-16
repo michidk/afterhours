@@ -1,3 +1,4 @@
+import { InlandWaterRenderer } from "./inland-water.ts";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
@@ -59,7 +60,7 @@ varying float vSea;`;
 
 /**
  * Displaces the sea grid on the GPU with the same swell the server floats bodies on, and
- * shades all water: depth tint, shore and crest foam, ripples and a sky fresnel. Being a
+ * shades the ocean: depth tint, shore and crest foam, ripples and a sky fresnel. Being a
  * StandardMaterial plugin, lights, shadows and fog keep working.
  */
 class WaterSurface extends MaterialPluginBase {
@@ -112,23 +113,29 @@ if (vSea > 0.5) {
 }
 float rippleFade = 1.0 - smoothstep(25.0, 140.0, length(vPositionW - vEyePosition.xyz));
 vec2 rp = vPositionW.xz;
-vec2 ripple = 0.06 * vec2(0.8, 0.6) * cos(dot(rp, vec2(0.8, 0.6)) * 2.1 - waveTime * 3.1)
-  + 0.045 * vec2(-0.5, 0.87) * cos(dot(rp, vec2(-0.5, 0.87)) * 3.3 - waveTime * 3.9)
-  + 0.03 * vec2(0.96, -0.28) * cos(dot(rp, vec2(0.96, -0.28)) * 5.2 - waveTime * 5.0);
-waveSlope += ripple * rippleFade;
+// Broad, stepped ribbons keep the water readable from the game's high camera.
+vec2 drift = vec2(waveTime * 0.32, -waveTime * 0.18);
+float patches = waterNoise((rp + drift) * 0.065);
+float ribbon = sin(dot(rp, vec2(0.32, 0.18)) - waveTime * 1.1 + patches * 3.0);
+waveSlope += vec2(0.035, 0.02) * ribbon * rippleFade;
 normalW = normalize(vec3(-waveSlope.x, 1.0, -waveSlope.y));
-diffuseColor = mix(vec3(0.3, 0.64, 0.6), vec3(0.05, 0.21, 0.3), smoothstep(0.0, 7.0, waterDepth));
+float depthBand = smoothstep(1.2, 1.6, waterDepth) * 0.5
+  + smoothstep(5.0, 5.6, waterDepth) * 0.5;
+diffuseColor = mix(vec3(0.34, 0.76, 0.65), vec3(0.10, 0.39, 0.47), depthBand);
+float fleck = smoothstep(0.86, 0.94, ribbon) * step(0.48, patches);
+diffuseColor = mix(diffuseColor, vec3(0.57, 0.83, 0.74), fleck * 0.45);
 float foamNoise = 0.65 * waterNoise(rp * 0.35 + vec2(waveTime * 0.2, -waveTime * 0.12))
   + 0.35 * waterNoise(rp * 1.3 - vec2(waveTime * 0.3, waveTime * 0.1));
 float shoreFoam = (1.0 - smoothstep(0.0, 1.3, waterDepth))
   * (0.55 + 0.45 * sin(waterDepth * 6.0 - waveTime * 2.2 + foamNoise * 3.0));
 float crestFoam = smoothstep(0.38, 0.6, waveH) * 0.45;
 float foam = clamp(max(shoreFoam, crestFoam) * smoothstep(0.2, 0.75, foamNoise + 0.25), 0.0, 1.0);
-diffuseColor = mix(diffuseColor, vec3(0.93, 0.96, 0.95), foam);`,
+foam = smoothstep(0.22, 0.48, foam);
+diffuseColor = mix(diffuseColor, vec3(0.94, 0.91, 0.75), foam);`,
       CUSTOM_FRAGMENT_BEFORE_FOG: `
 #ifdef FOG
 float fresnel = pow(1.0 - clamp(dot(normalW, viewDirectionW), 0.0, 1.0), 5.0);
-color.rgb = mix(color.rgb, vFogColor, fresnel * 0.7 * (1.0 - foam));
+color.rgb = mix(color.rgb, vFogColor, fresnel * 0.28 * (1.0 - foam));
 #endif`,
     };
   }
@@ -169,6 +176,7 @@ function depthTexture(host: CityScene) {
 export class WaterRenderer {
   private mesh: Mesh;
   private surface: WaterSurface;
+  private inland: InlandWaterRenderer;
   constructor(private host: CityScene) {
     const positions: number[] = [],
       normals: number[] = [],
@@ -193,15 +201,17 @@ export class WaterRenderer {
     this.mesh.position.y = WATER_LEVEL;
     this.mesh.alwaysSelectAsActiveMesh = true;
     this.mesh.receiveShadows = true;
-    // Lakes and rivers share this material, so the plugin shades them too.
+    // The ocean keeps its own material; baked inland meshes use a separate surface.
     const material = host.mat("#478e9c");
-    material.specularColor = new Color3(0.85, 0.8, 0.7);
-    material.specularPower = 160;
+    material.specularColor = new Color3(0.16, 0.22, 0.19);
+    material.specularPower = 32;
     this.surface = new WaterSurface(material, depthTexture(host));
     this.mesh.material = material;
+    this.inland = new InlandWaterRenderer(host);
   }
   update(time: number) {
     this.surface.time = time;
+    this.inland.time = time;
     // Snap to whole cells so vertices never slide through the swell.
     const eye = this.host.camera.position;
     this.mesh.position.x = Math.round(eye.x / CELL) * CELL;

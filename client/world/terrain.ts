@@ -2,7 +2,7 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData";
 import type { CityScene } from "../scene.ts";
 import type { City } from "../../shared/world.ts";
-import { terrainMesh } from "../../shared/terrain.ts";
+import { terrainHeight, terrainMesh } from "../../shared/terrain.ts";
 import { earClip } from "../../shared/polygon.ts";
 
 export function buildTerrain(
@@ -37,12 +37,16 @@ export function buildTerrain(
  * mesh. The terrain hides whatever lies below its banks.
  */
 export function buildInlandWater(
-  host: Pick<CityScene, "scene" | "mat">,
+  host: Pick<CityScene, "scene" | "mat" | "city">,
   water: NonNullable<City["water"]>,
 ) {
   const positions: number[] = [],
-    indices: number[] = [];
-  const vertex = (x: number, y: number, z: number) => positions.push(x, y, z) / 3 - 1;
+    indices: number[] = [],
+    uvs: number[] = [];
+  const vertex = (x: number, y: number, z: number, bank = 2, along = 0) => {
+    uvs.push(bank, along);
+    return positions.push(x, y, z) / 3 - 1;
+  };
   // Wind every triangle like the terrain mesh (counter-clockwise in x/z) so it faces up.
   const tri = (a: number, b: number, c: number) => {
     const p = (i: number) => ({ x: positions[i * 3], z: positions[i * 3 + 2] });
@@ -58,9 +62,38 @@ export function buildInlandWater(
     for (const [a, b, c] of earClip(ring)) tri(ids[a], ids[b], ids[c]);
   }
   for (const river of water.rivers) {
-    const p = river.points,
-      n = p.length / 4;
+    // Sample the channel between source stations so terrain triangles cannot cut
+    // dry wedges through a sloping river's centre.
+    const p: number[] = [];
+    const source = river.points;
+    for (let i = 0; i < source.length; i += 4) {
+      const next = Math.min(i + 4, source.length - 4);
+      const steps =
+        next === i
+          ? 1
+          : Math.max(
+              1,
+              Math.ceil(
+                Math.hypot(source[next] - source[i], source[next + 1] - source[i + 1]) /
+                  1,
+              ),
+            );
+      for (let j = 0; j < steps; j++) {
+        const t = j / steps;
+        const x = source[i] + (source[next] - source[i]) * t;
+        const z = source[i + 1] + (source[next + 1] - source[i + 1]) * t;
+        const y = source[i + 2] + (source[next + 2] - source[i + 2]) * t;
+        p.push(
+          x,
+          z,
+          Math.max(y, terrainHeight(x, z, host.city) + 0.12),
+          source[i + 3] + (source[next + 3] - source[i + 3]) * t,
+        );
+      }
+    }
+    const n = p.length / 4;
     let previous: [number, number] | undefined;
+    let along = 0;
     for (let i = 0; i < n; i++) {
       const j = Math.min(n - 1, i + 1),
         k = Math.max(0, i - 1),
@@ -70,8 +103,25 @@ export function buildInlandWater(
         half = p[i * 4 + 3] / 2;
       const nx = -dz / length,
         nz = dx / length;
-      const left = vertex(p[i * 4] + nx * half, p[i * 4 + 2], p[i * 4 + 1] + nz * half),
-        right = vertex(p[i * 4] - nx * half, p[i * 4 + 2], p[i * 4 + 1] - nz * half);
+      if (i)
+        along += Math.hypot(
+          p[i * 4] - p[(i - 1) * 4],
+          p[i * 4 + 1] - p[(i - 1) * 4 + 1],
+        );
+      const left = vertex(
+          p[i * 4] + nx * half,
+          p[i * 4 + 2],
+          p[i * 4 + 1] + nz * half,
+          -1,
+          along,
+        ),
+        right = vertex(
+          p[i * 4] - nx * half,
+          p[i * 4 + 2],
+          p[i * 4 + 1] - nz * half,
+          1,
+          along,
+        );
       if (previous) {
         tri(previous[0], previous[1], right);
         tri(previous[0], right, left);
@@ -84,7 +134,7 @@ export function buildInlandWater(
     normals: number[] = [];
   VertexData.ComputeNormals(positions, indices, normals);
   const data = new VertexData();
-  Object.assign(data, { positions, indices, normals });
+  Object.assign(data, { positions, indices, normals, uvs });
   data.applyToMesh(mesh);
   mesh.material = host.mat("#478e9c");
   mesh.receiveShadows = true;
