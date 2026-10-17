@@ -399,15 +399,26 @@ export class CityScene {
               "#f1ca6a",
             ).material = this.streetGlow;
       }
-    for (const landmark of city.landmarks)
-      this.sign(
-        landmark.name,
-        landmark.x,
-        ground(landmark.x, landmark.z) + 5,
-        landmark.z - 13,
-        "#467b72",
-        12,
-      );
+    for (const landmark of city.landmarks) {
+      const z = landmark.z - 13;
+      const y = ground(landmark.x, z) + 5;
+      this.sign(landmark.name, landmark.x, y, z, "#467b72", 12);
+      for (const side of [-1, 1]) {
+        const x = landmark.x + side * 5;
+        const foot = ground(x, z);
+        const top = y + 1.5;
+        this.box(
+          "landmark sign post",
+          x,
+          (foot + top) / 2,
+          z + 0.12,
+          0.22,
+          top - foot,
+          0.22,
+          "#46534d",
+        );
+      }
+    }
     // Generated cities stream street polygons per chunk instead (client/world/render.ts).
     if (options.roads !== false) for (const road of city.roads) buildRoad(this, road);
     city.buildings.forEach((b, i) => buildBuilding(this, b, options.index ?? i, r));

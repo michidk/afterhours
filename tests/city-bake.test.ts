@@ -75,6 +75,17 @@ test("baking keeps airports and ground-mounted scenery on elevated terrain", asy
             `${key} is buried below its 30 m terrain`,
           );
     }
+    const signMeshes = chunks.flatMap((c) => c.geometry?.features["landmarks:0"] ?? []);
+    const posts = signMeshes.filter((mesh) => mesh.name.includes("landmark sign post"));
+    assert.ok(posts.length, "landmark sign supports were baked");
+    const postHeights = posts.flatMap((mesh) =>
+      mesh.positions.filter((_, index) => index % 3 === 1),
+    );
+    assert.ok(Math.abs(Math.min(...postHeights) - 30) < 0.01, "posts reach terrain");
+    assert.ok(
+      Math.abs(Math.max(...postHeights) - 36.5) < 0.01,
+      "posts reach panel top",
+    );
     const airport = chunks.find((c) => c.geometry?.airport)?.geometry?.airport;
     assert.ok(airport?.length, "runway and apron were baked");
     for (const mesh of airport)
