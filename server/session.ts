@@ -142,7 +142,7 @@ export class Sessions {
       ws.on("message", (raw) => this.message(ws, c, String(raw)));
       ws.on("close", () => {
         if (c.id) {
-          this.sim.disconnect(c.id);
+          this.sim.inputs.set(c.id, { ...idle(), brake: true });
           this.detached.set(c.token, { id: c.id, expires: Date.now() + 15000 });
         }
         this.clients.delete(ws);
@@ -221,7 +221,7 @@ export class Sessions {
         // A reconnect may beat the old socket's close event under load.
         c.id = active[1].id;
         c.token = m.token!;
-        this.sim.disconnect(c.id);
+        this.sim.inputs.set(c.id, { ...idle(), brake: true });
         active[1].id = undefined;
         active[1].queue = [];
         this.clients.delete(active[0]);

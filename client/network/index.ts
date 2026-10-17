@@ -55,6 +55,8 @@ export class GameNetwork {
   private welcomed = false;
   private authorityPending = false;
   private lastResponse = 0;
+  private stateProgressAt = 0;
+  private stateRequested = false;
   private outgoingBytes = 0;
   private lastSend = 0;
   private outgoingWrites: { end: number; at: number }[] = [];
@@ -113,15 +115,35 @@ export class GameNetwork {
     this.lastSend = this.lastResponse;
     this.outgoingWrites = [];
     let checkedAt = this.lastResponse;
+    let pingAt = this.lastResponse;
     this.heartbeat = setInterval(() => {
       if (this.socket !== socket) return;
       const now = performance.now();
       // A paused event loop must process queued replies before judging the link.
-      if (now - checkedAt > 2000) this.lastResponse = now;
+      if (now - checkedAt > 2000) {
+        this.lastResponse = this.stateProgressAt = now;
+        this.stateRequested = false;
+      }
       checkedAt = now;
       if (now - this.lastResponse >= 5000) this.disconnect(socket);
-      else if (this.welcomed) this.send({ type: "ping" });
-    }, 1000);
+      else if (this.welcomed) {
+        const stale = now - this.stateProgressAt;
+        // Pongs prove transport liveness, not that authority is still arriving.
+        if (stale >= 2000) {
+          this.disconnect(socket);
+          return;
+        }
+        if (stale >= 500 && !this.stateRequested) {
+          this.stateRequested = true;
+          this.resyncs++;
+          this.send({ type: "resync" });
+        }
+        if (now - pingAt >= 1000) {
+          pingAt = now;
+          this.send({ type: "ping" });
+        }
+      }
+    }, 250);
     socket.binaryType = "arraybuffer";
     this.socket.onopen = () => {
       if (this.socket !== socket) return;
@@ -171,6 +193,8 @@ export class GameNetwork {
           return;
         }
         this.welcomed = true;
+        this.stateProgressAt = performance.now();
+        this.stateRequested = false;
         if (!this.send({ type: "ping" })) return;
         this.playerId = m.id;
         this.token = m.token;
@@ -205,6 +229,8 @@ export class GameNetwork {
         const now = performance.now();
         this.snapshotInterval = this.received ? now - this.received : 0;
         this.received = now;
+        this.stateProgressAt = now;
+        this.stateRequested = false;
         this.snapshotTimes.push(now);
         this.snapshotTimes = this.snapshotTimes.filter((at) => at >= now - 1000);
         this.ack = snapshot.ack;

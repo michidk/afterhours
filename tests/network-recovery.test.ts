@@ -17,6 +17,8 @@ for (const reason of [
   "browser stall",
   "draining queue",
   "paused queue",
+  "stalled snapshots",
+  "stalled snapshots with pongs",
 ] as const)
   test(`client recovers from ${reason} without predicting unsent controls`, async (t) => {
     const sim = new Simulation(generateCity());
@@ -64,6 +66,50 @@ for (const reason of [
       const sends = t.mock.method(socket, "send");
       let buffered = 0;
       Object.defineProperty(socket, "bufferedAmount", { get: () => buffered });
+      if (reason === "stalled snapshots" || reason === "stalled snapshots with pongs") {
+        sessions.broadcast();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        const firstFrame = network.frame;
+        assert.ok(firstFrame > 0);
+        clock += 500;
+        const requested = once(peer, "message");
+        t.mock.timers.tick(500);
+        await requested;
+        assert.equal(
+          network.resyncs,
+          1,
+          "request authority before prediction runs out",
+        );
+        assert.equal(
+          [...sessions.clients.values()][0].frame,
+          0,
+          "server accepts resync",
+        );
+        if (reason === "stalled snapshots") {
+          sessions.broadcast();
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          assert.ok(
+            network.frame > firstFrame,
+            "full authority resumes on the same connection",
+          );
+          assert.equal(network.socket, socket);
+          assert.equal(network.stats().prediction, "predicting");
+          return;
+        }
+        for (let i = 0; i < 6; i++) {
+          clock += 250;
+          oldMessage?.call(
+            socket,
+            new MessageEvent("message", {
+              data: JSON.stringify({ type: "pong", timestamp: clock }),
+            }),
+          );
+          t.mock.timers.tick(250);
+        }
+        assert.equal(network.socket, undefined, "pongs cannot hide stalled authority");
+        assert.equal(statuses.at(-1), "reconnecting");
+        return;
+      }
       if (reason === "paused queue") {
         buffered = 1;
         assert.equal(network.send({ type: "ping" }), true);

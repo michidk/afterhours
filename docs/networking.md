@@ -199,7 +199,13 @@ for over two seconds, it grants a fresh response window so queued replies can
 run after shader compilation or tab suspension. Recovery immediately clears provisional
 prediction and pending debug requests; an unsent command is never predicted.
 Callbacks from a superseded socket cannot affect its replacement. The restored
-session starts a fresh sequence history. Browser WebSocket close cannot retract
+session starts a fresh sequence history. Snapshot progress has a separate deadline:
+after 500 ms without an accepted state the client requests a full snapshot, and
+after two seconds it reconnects even if pongs still arrive. A paused browser gets
+the same resume grace before either deadline is enforced. During the server's
+15-second reconnect grace, seats stay assigned and stale controls are replaced
+with idle controls and a parking brake. Expiry removes the player and releases
+the seat. Browser WebSocket close cannot retract
 bytes already handed to the transport; session takeover clears the server's old
 command queue.
 

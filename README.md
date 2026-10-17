@@ -104,6 +104,8 @@ This runs one non-root Node process behind Caddy with HTTPS, WebSockets, health 
 
 ## Current limits
 
+Snapshot delivery is checked separately from ping replies: after 500 ms without advancing authority the client requests a full state, and after two seconds it reconnects. Vehicle seats survive the 15-second reconnect grace period; stale controls are released and the parking brake is applied.
+
 - Graphics are procedural low-poly. There are no interiors, touch controls, accounts, moderation, saves or missions.
 - Cars use shared tire forces, slope gravity and ballistic vertical motion. Terrain contact cannot pull them down cliffs; crests preserve launch momentum. Pitch, roll and suspension are drawn, not simulated: the body settles on the ground under all four wheels, squats, dives and leans with acceleration, follows its flight path off a crest and squashes on landing, and a soft shadow stays on the ground below every car and aircraft. Stacking is not simulated. Building collision remains rectangular. The generator does not yet place ramps or paved surfaces.
 - Vehicles use a planar solver with separate altitude, not full suspension or aerodynamics.

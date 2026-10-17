@@ -170,3 +170,46 @@ test("pings cannot keep an unjoined connection past the handshake deadline", asy
   await closed;
   assert.equal(sessions.clients.size, 0);
 });
+
+for (const takeover of [false, true])
+  test(`session recovery preserves a driver's seat during ${takeover ? "active takeover" : "socket replacement"}`, async (t) => {
+    const { sim, sessions, connect, join } = await fixture(t);
+    const ws = await connect();
+    const welcome = await join(ws);
+    const player = sim.entities.get(welcome.id)!;
+    player.x = player.z = 0;
+    const car = sim.spawn("car", 0, 0);
+    sim.interact(player.id);
+    assert.equal(player.vehicle, car.id);
+    if (!takeover) {
+      const peer = [...sessions.clients.keys()][0];
+      const closed = once(peer, "close");
+      ws.close();
+      await closed;
+      assert.equal(player.vehicle, car.id, "transient disconnect keeps the seat");
+      assert.equal(
+        sim.inputs.get(player.id)?.brake,
+        true,
+        "stale throttle is released",
+      );
+    }
+    const replacement = await connect();
+    const restored = await join(replacement, welcome.token);
+    assert.equal(restored.id, player.id);
+    assert.equal(player.vehicle, car.id, "recovery never ejects the driver");
+    assert.equal(car.driver, player.id);
+    assert.equal(sim.inputs.get(player.id)?.brake, true);
+    const peer = [...sessions.clients.keys()][0];
+    const closed = once(peer, "close");
+    replacement.close();
+    await closed;
+    const expired = Date.now() + 15001;
+    t.mock.method(Date, "now", () => expired);
+    sessions.tick();
+    assert.equal(
+      sim.entities.has(player.id),
+      false,
+      "expired sessions leave the world",
+    );
+    assert.equal(car.driver, undefined, "expired sessions release ownership");
+  });
