@@ -202,7 +202,12 @@ Callbacks from a superseded socket cannot affect its replacement. The restored
 session starts a fresh sequence history. Snapshot progress has a separate deadline:
 after 500 ms without an accepted state the client requests a full snapshot, and
 after two seconds it reconnects even if pongs still arrive. A paused browser gets
-the same resume grace before either deadline is enforced. During the server's
+the same resume grace before either deadline is enforced. The 250 ms heartbeat
+grants that grace when its callback gap exceeds 500 ms; waiting until a gap
+exceeded the two-second snapshot deadline incorrectly disconnected clients after
+shorter stalls when the last snapshot was already old. The networking panel keeps
+the last disconnect cause across reconnects, including WebSocket close codes.
+During the server's
 15-second reconnect grace, seats stay assigned and stale controls are replaced
 with idle controls and a parking brake. Expiry removes the player and releases
 the seat. Browser WebSocket close cannot retract
@@ -262,3 +267,27 @@ Run `bun run bench:prediction` for five local prediction-path samples, or append
 `/scripts/prediction-profile.html` page avoids including GPU rendering in CPU
 measurements. Both are development tooling and are absent from the production
 client bundle.
+
+### Small collision worlds
+
+For at most 64 eligible bodies, collision-pair generation now scans in ID order
+directly. Larger worlds retain the spatial sweep. Both paths emit the same pairs
+in the same order, including the correction margins and vertical cutoff. This
+removes the sweep sort and per-body neighbour lists from small prediction worlds.
+
+[Five alternating Chromium runs](prediction-small-world-profile.json) of the
+same 40-car workload measured a median of 1.535 s before and 1.257 s after for
+120 frames, an 18% reduction. Ranges were 1.456–1.774 s before and 1.226–1.278 s
+after. Every run retained the same motion checksum, 4,680 contact observations,
+and eight pending commands. A separate CPU profile identified pair construction
+and sorting as the largest cost. The shared 12-core host also ran tests and builds.
+The browser tool timed out after seven samples; the remaining three samples ran
+in a subsequent call in the same page. No sample was discarded.
+
+This measures reconciliation, input prediction and render extrapolation in the
+T3 Chromium tab. It excludes Babylon rendering and transport. After-change p95
+remained 34–37 ms in this dense scenario, so this is not a 60 FPS or WAN smoothness
+claim. A 30-second public-server walking probe stayed connected, but did not
+reproduce the reported snapping. The two-client driving probe also stayed
+connected and kept simulation time current, but failed its speed gates after
+cars encountered scenery; it is not a successful driving acceptance run.

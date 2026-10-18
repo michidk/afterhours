@@ -33,6 +33,12 @@ test("sweep includes correction margins, excludes distant bodies, and orders pai
     ["a", "b"],
     ["b", "c"],
   ]);
+  // Crossing the small-world cutoff must preserve the same contacts and solve order.
+  for (let i = 0; i < 64; i++) bodies.push(car(`isolated-${i}`, 1000 + i * 40));
+  assert.deepEqual(ids(bodies.reverse()), [
+    ["a", "b"],
+    ["b", "c"],
+  ]);
 });
 
 test("a contacting pileup resolves identically regardless of snapshot entity order", () => {

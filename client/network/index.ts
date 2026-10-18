@@ -57,6 +57,7 @@ export class GameNetwork {
   private lastResponse = 0;
   private stateProgressAt = 0;
   private stateRequested = false;
+  private lastDisconnect: string | undefined;
   private outgoingBytes = 0;
   private lastSend = 0;
   private outgoingWrites: { end: number; at: number }[] = [];
@@ -120,17 +121,17 @@ export class GameNetwork {
       if (this.socket !== socket) return;
       const now = performance.now();
       // A paused event loop must process queued replies before judging the link.
-      if (now - checkedAt > 2000) {
+      if (now - checkedAt > 500) {
         this.lastResponse = this.stateProgressAt = now;
         this.stateRequested = false;
       }
       checkedAt = now;
-      if (now - this.lastResponse >= 5000) this.disconnect(socket);
+      if (now - this.lastResponse >= 5000) this.disconnect(socket, "No server replies");
       else if (this.welcomed) {
         const stale = now - this.stateProgressAt;
         // Pongs prove transport liveness, not that authority is still arriving.
         if (stale >= 2000) {
-          this.disconnect(socket);
+          this.disconnect(socket, "No snapshots for 2 seconds");
           return;
         }
         if (stale >= 500 && !this.stateRequested) {
@@ -264,13 +265,18 @@ export class GameNetwork {
         this.latency = rtt / 2;
       }
     };
-    socket.onclose = () => this.disconnect(socket);
+    socket.onclose = (event) =>
+      this.disconnect(
+        socket,
+        `Socket closed (${event.code})${event.reason ? `: ${event.reason}` : ""}`,
+      );
     socket.onerror = () => {
       if (this.socket === socket) this.hooks.status("connection error");
     };
   }
-  private disconnect(socket: WebSocket) {
+  private disconnect(socket: WebSocket, reason = "Connection replaced") {
     if (this.socket !== socket) return;
+    if (!this.closed) this.lastDisconnect = reason;
     this.socket = undefined;
     socket.close();
     this.welcomed = false;
@@ -306,7 +312,12 @@ export class GameNetwork {
       socket.bufferedAmount + bytes > 4096 ||
       (oldest !== undefined && now - oldest >= 250)
     ) {
-      this.disconnect(socket);
+      this.disconnect(
+        socket,
+        socket.bufferedAmount + bytes > 4096
+          ? "Send buffer exceeded 4096 bytes"
+          : "Outgoing commands stalled for 250 ms",
+      );
       return false;
     }
     try {
@@ -315,7 +326,7 @@ export class GameNetwork {
       this.outgoingWrites.push({ end: this.outgoingBytes, at: now });
       return true;
     } catch {
-      this.disconnect(socket);
+      this.disconnect(socket, "Socket send failed");
       return false;
     }
   }
@@ -359,6 +370,7 @@ export class GameNetwork {
     const p = this.prediction;
     return {
       connected: this.welcomed && this.socket?.readyState === WebSocket.OPEN,
+      lastDisconnect: this.lastDisconnect,
       rtt: this.rtt,
       jitter: this.jitter,
       snapshotAge: this.received ? Math.max(0, now - this.received) : undefined,

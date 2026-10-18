@@ -169,6 +169,24 @@ export function collisionPairs(entities: Entity[]): [Entity, Entity][] {
   const bodies = entities
     .filter((e) => !e.vehicle && (vehicle(e) || e.health > 0))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  // Prediction has few neighbours; a direct scan avoids sweep/group sorting per substep.
+  if (bodies.length <= 64) {
+    const pairs: [Entity, Entity][] = [];
+    for (let i = 0; i < bodies.length; i++) {
+      const a = bodies[i];
+      for (let j = i + 1; j < bodies.length; j++) {
+        const b = bodies[j];
+        if (
+          Math.abs(a.x - b.x) > 16 ||
+          Math.abs(a.z - b.z) > 16 ||
+          Math.abs(a.y - b.y) > 1.8
+        )
+          continue;
+        pairs.push([a, b]);
+      }
+    }
+    return pairs;
+  }
   const sweep = bodies
     .map((_, i) => i)
     .sort((a, b) => bodies[a].x - bodies[b].x || a - b);

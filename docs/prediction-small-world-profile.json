@@ -1,0 +1,180 @@
+{
+  "baseline": "f4cc921809f4583a618dbe0ebbde3e285c165c73",
+  "scenario": "40 cars; six-command acknowledgement backlog; 30 Hz input; 60 Hz render; 60 warmup frames and 120 measured frames",
+  "environment": "T3 collaborative Chromium on shared 12-core host; tests and builds active; no GPU rendering or live network in this workload",
+  "browser": {
+    "runs": [
+      {
+        "round": 0,
+        "side": "before",
+        "frames": 120,
+        "cars": 40,
+        "contacts": 4680,
+        "checksum": 3858.7630778035277,
+        "pending": 8,
+        "medianMs": 4.899999976158142,
+        "p95Ms": 45,
+        "totalMs": 1576.8999999761581,
+        "stages": {
+          "reconcile": 1023.3000000715256,
+          "input": 239.4000004529953,
+          "render": 313.69999957084656
+        }
+      },
+      {
+        "round": 0,
+        "side": "after",
+        "frames": 120,
+        "cars": 40,
+        "contacts": 4680,
+        "checksum": 3858.7630778035277,
+        "pending": 8,
+        "medianMs": 3.799999952316284,
+        "p95Ms": 35.60000002384186,
+        "totalMs": 1269.6999999284744,
+        "stages": {
+          "reconcile": 833.6999998092651,
+          "input": 183.89999973773956,
+          "render": 251.10000026226044
+        }
+      },
+      {
+        "round": 1,
+        "side": "after",
+        "frames": 120,
+        "cars": 40,
+        "contacts": 4680,
+        "checksum": 3858.7630778035277,
+        "pending": 8,
+        "medianMs": 3.799999952316284,
+        "p95Ms": 36.799999952316284,
+        "totalMs": 1257.2000000476837,
+        "stages": {
+          "reconcile": 824.6000003814697,
+          "input": 186.89999949932098,
+          "render": 245.30000007152557
+        }
+      },
+      {
+        "round": 1,
+        "side": "before",
+        "frames": 120,
+        "cars": 40,
+        "contacts": 4680,
+        "checksum": 3858.7630778035277,
+        "pending": 8,
+        "medianMs": 4.5,
+        "p95Ms": 43.09999990463257,
+        "totalMs": 1531.8000000715256,
+        "stages": {
+          "reconcile": 1015.3000001907349,
+          "input": 219.89999949932098,
+          "render": 296.1000006198883
+        }
+      },
+      {
+        "round": 2,
+        "side": "before",
+        "frames": 120,
+        "cars": 40,
+        "contacts": 4680,
+        "checksum": 3858.7630778035277,
+        "pending": 8,
+        "medianMs": 4.100000023841858,
+        "p95Ms": 39.800000071525574,
+        "totalMs": 1455.6999999284744,
+        "stages": {
+          "reconcile": 967.9999998807907,
+          "input": 209.40000081062317,
+          "render": 277.5999994277954
+        }
+      },
+      {
+        "round": 2,
+        "side": "after",
+        "frames": 120,
+        "cars": 40,
+        "contacts": 4680,
+        "checksum": 3858.7630778035277,
+        "pending": 8,
+        "medianMs": 3.5,
+        "p95Ms": 34.300000071525574,
+        "totalMs": 1225.5,
+        "stages": {
+          "reconcile": 815.0999995470047,
+          "input": 179.20000076293945,
+          "render": 230.69999980926514
+        }
+      },
+      {
+        "round": 3,
+        "side": "after",
+        "frames": 120,
+        "cars": 40,
+        "contacts": 4680,
+        "checksum": 3858.7630778035277,
+        "pending": 8,
+        "medianMs": 3.5,
+        "p95Ms": 34.60000002384186,
+        "totalMs": 1246.299999833107,
+        "stages": {
+          "reconcile": 833.8000000715256,
+          "input": 176.0000001192093,
+          "render": 235.79999959468842
+        }
+      },
+      {
+        "round": 3,
+        "side": "before",
+        "frames": 120,
+        "cars": 40,
+        "contacts": 4680,
+        "checksum": 3858.7630778035277,
+        "pending": 8,
+        "medianMs": 5.200000047683716,
+        "p95Ms": 51.59999990463257,
+        "totalMs": 1774.1000000238419,
+        "stages": {
+          "reconcile": 1131.9000002145767,
+          "input": 286.39999973773956,
+          "render": 355.2000002861023
+        }
+      },
+      {
+        "round": 4,
+        "side": "before",
+        "frames": 120,
+        "cars": 40,
+        "contacts": 4680,
+        "checksum": 3858.7630778035277,
+        "pending": 8,
+        "medianMs": 4.100000023841858,
+        "p95Ms": 42.700000047683716,
+        "totalMs": 1535.0000001192093,
+        "stages": {
+          "reconcile": 1007.7000000476837,
+          "input": 235.6999992132187,
+          "render": 290.90000092983246
+        }
+      },
+      {
+        "round": 4,
+        "side": "after",
+        "frames": 120,
+        "cars": 40,
+        "contacts": 4680,
+        "checksum": 3858.7630778035277,
+        "pending": 8,
+        "medianMs": 3.5,
+        "p95Ms": 37.299999952316284,
+        "totalMs": 1277.5,
+        "stages": {
+          "reconcile": 844.299999833107,
+          "input": 188.19999969005585,
+          "render": 243.900000333786
+        }
+      }
+    ],
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
+  }
+}

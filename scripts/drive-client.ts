@@ -189,7 +189,7 @@ if (model !== "none") {
     throw Error(
       "Spawning a vehicle needs a debug-enabled server (dev, or ALLOW_DEBUG=1)",
     );
-  await debug({ kind: "teleport", x: center.x, z: center.z });
+  await debug({ kind: "teleport", x: center.x, z: center.z, near: true });
   const before = new Set((await debug({ kind: "state" })).entities.map((e) => e.id));
   const spawned = await debug({ kind: "spawn", model: model as "sport" });
   const car = spawned.entities.find((e) => e.model === model && !before.has(e.id));

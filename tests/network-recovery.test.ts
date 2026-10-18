@@ -15,6 +15,7 @@ for (const reason of [
   "age",
   "silent",
   "browser stall",
+  "short browser stall",
   "draining queue",
   "paused queue",
   "stalled snapshots",
@@ -107,6 +108,7 @@ for (const reason of [
           t.mock.timers.tick(250);
         }
         assert.equal(network.socket, undefined, "pongs cannot hide stalled authority");
+        assert.equal(network.stats().lastDisconnect, "No snapshots for 2 seconds");
         assert.equal(statuses.at(-1), "reconnecting");
         return;
       }
@@ -138,8 +140,10 @@ for (const reason of [
         assert.equal(network.socket, socket);
         return;
       }
-      if (reason === "browser stall") {
-        clock += 6000;
+      if (reason === "browser stall" || reason === "short browser stall") {
+        clock += 250;
+        t.mock.timers.tick(250);
+        clock += reason === "browser stall" ? 6000 : 1800;
         t.mock.timers.tick(1000);
         assert.equal(
           network.socket,
@@ -147,6 +151,11 @@ for (const reason of [
           "a stalled event loop must allow queued replies to run",
         );
         assert.equal(network.stats().connected, true);
+        assert.equal(network.stats().lastDisconnect, undefined);
+        sessions.broadcast();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        assert.ok(network.frame > 0, "queued authority can resume on the same socket");
+        assert.equal(network.stats().prediction, "predicting");
         oldMessage?.call(
           socket,
           new MessageEvent("message", {
@@ -163,9 +172,9 @@ for (const reason of [
         peer.removeAllListeners("message");
         // Flush the first pong before measuring a silent peer's deadline.
         await new Promise((resolve) => setTimeout(resolve, 20));
-        for (let second = 0; second < 5; second++) {
-          clock += 1000;
-          t.mock.timers.tick(1000);
+        for (let tick = 0; tick < 20; tick++) {
+          clock += 250;
+          t.mock.timers.tick(250);
         }
       } else {
         buffered = reason === "size" ? 4096 : 1000;
@@ -212,6 +221,15 @@ for (const reason of [
         "discard provisional history immediately",
       );
       assert.equal(network.stats().connected, false);
+      const disconnectReason = network.stats().lastDisconnect;
+      assert.equal(
+        disconnectReason,
+        reason === "size"
+          ? "Send buffer exceeded 4096 bytes"
+          : reason === "age"
+            ? "Outgoing commands stalled for 250 ms"
+            : "No snapshots for 2 seconds",
+      );
       assert.equal(network.send({ type: "reload" }), false);
       assert.equal(statuses.at(-1), "reconnecting");
       const rejoined = new Promise<void>((resolve) => {
@@ -235,6 +253,7 @@ for (const reason of [
       await rejoined;
       assert.equal(network.seq, 0);
       assert.equal(network.stats().connected, true);
+      assert.equal(network.stats().lastDisconnect, disconnectReason);
     } finally {
       network.close();
       for (const peer of sessions.clients.keys()) peer.terminate();
@@ -278,12 +297,12 @@ test("an open socket that never welcomes the client reaches the response deadlin
     const connected = once(sockets, "connection");
     network.connect();
     await connected;
-    for (let second = 0; second < 4; second++) {
-      now += 1000;
-      t.mock.timers.tick(1000);
+    for (let tick = 0; tick < 19; tick++) {
+      now += 250;
+      t.mock.timers.tick(250);
     }
     now = 4999;
-    t.mock.timers.tick(999);
+    t.mock.timers.tick(249);
     assert.ok(network.socket, "wait for the full response deadline");
     now = 5000;
     t.mock.timers.tick(1);

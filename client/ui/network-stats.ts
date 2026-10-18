@@ -6,6 +6,7 @@ export function updateNetworkStats(element: HTMLElement, network: GameNetwork) {
     value === undefined ? "—" : `${Math.round(value)} ms`;
   const rows = [
     ["Connection", s.connected ? "Connected" : "Disconnected"],
+    ["Last disconnect", s.lastDisconnect ?? "None"],
     ["Server ping (RTT)", ms(s.rtt)],
     ["Ping variation", ms(s.jitter)],
     ["Snapshot age / gap", `${ms(s.snapshotAge)} / ${ms(s.snapshotInterval)}`],
