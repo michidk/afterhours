@@ -108,7 +108,7 @@ creating extra players. Its maxima are not the earlier mid-run observations.
 The game is on work2. Connecting to `178.162.254.45:443` while retaining
 `afterhours.k8s.lohr.dev` for Host and TLS server-name verification served the
 same game successfully. A 40-second walking run through that direct ingress
-had a maximum snapshot age of 85 ms and sampled correction below 0.001 m after
+had a maximum snapshot age of 85 ms and sampled correction of about 1 mm after
 five seconds. It used the installed `ws` client with a DNS lookup override;
 HTTP map requests still used normal DNS. A simultaneous ordinary-hostname
 comparison using the same WebSocket library failed to join, so this is not a
