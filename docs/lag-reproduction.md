@@ -29,12 +29,12 @@ The walking comparison was repeated with public and direct clients. In the
 same absolute-time window, excluding public startup:
 
 | Maximum sampled value | Public route | Direct service |
-| --- | ---: | ---: |
-| Position correction | 6.45 m | 0.001 m |
-| Snapshot age | 1,628 ms | 166 ms |
-| Acknowledgement age | 1,995 ms | 311 ms |
-| Pending inputs | 60 | 9 |
-| RTT | 1,397 ms | 48 ms |
+| --------------------- | -----------: | -------------: |
+| Position correction   |       6.45 m |        0.001 m |
+| Snapshot age          |     1,628 ms |         166 ms |
+| Acknowledgement age   |     1,995 ms |         311 ms |
+| Pending inputs        |           60 |              9 |
+| RTT                   |     1,397 ms |          48 ms |
 
 The public repeat ended prematurely at 36.75 seconds with Node v26.11.1
 `InformationalError: socket idle timeout` from Undici's HTTP/2 stream. Its

@@ -5,6 +5,8 @@ export const TUNING = {
   predictionSeconds: 1,
   /** Server input FIFO depth: a 250 ms browser catch-up burst must fit without shedding. */
   inputQueue: 8,
+  /** Continue held movement through brief delivery stalls, then release controls. */
+  inputHoldSeconds: 0.5,
   /**
    * Spare commands the client keeps buffered at the server. The driver never feels
    * this depth (its own body is predicted); it only delays what others see of the

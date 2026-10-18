@@ -113,3 +113,15 @@ test("a helicopter at full speed over a jittery link draws at a steady speed", a
   assert.ok(report.cruise.jerkMax < 0.03, detail);
   assert.equal(report.cruise.backward, 0, detail);
 });
+
+test("driving rides out a 220 ms delivery spike without stopping or shedding the returning batch", async () => {
+  const report = await probeDriving({
+    profile: { base: 40, spread: 30, spike: 220, p: 0.04 },
+    seconds: 15,
+  });
+  const detail = JSON.stringify(report);
+  assert.equal(report.server.dropped, 0, detail);
+  assert.equal(report.client.corrections, 0, detail);
+  assert.equal(report.cruise.surges, 0, detail);
+  assert.equal(report.cruise.dips, 0, detail);
+});

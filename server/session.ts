@@ -258,8 +258,8 @@ export class Sessions {
       c.lastInput = now;
       const { type, seq, timestamp, ...input } = m;
       c.queue.push({ seq, timestamp, input });
-      // A 250 ms browser catch-up burst fits; beyond that the oldest command is shed.
-      if (c.queue.length > TUNING.inputQueue) {
+      // Held slots already ran; their late commands must not crowd out the new FIFO.
+      if (c.queue.length > TUNING.inputQueue + c.speculative) {
         c.queue.shift();
         this.dropped++;
       }
@@ -434,7 +434,7 @@ export class Sessions {
         c.held = applied.input;
         this.sim.inputs.set(c.id, applied.input);
         c.aheadTicks = 0;
-      } else if (now - c.lastInput > 250) {
+      } else if (now - c.lastInput > TUNING.inputHoldSeconds * 1000) {
         // Silence releases controls. Outstanding speculative slots stay owed, so commands
         // delayed this long still fill them instead of being stepped a second time.
         this.sim.inputs.set(c.id, idle());
@@ -447,7 +447,7 @@ export class Sessions {
         this.sim.pausedInputs.add(c.id);
         c.aheadTicks = 0;
         this.frozen++;
-      } else if (c.speculative < TUNING.inputQueue) {
+      } else if (c.speculative < Math.ceil(TUNING.inputHoldSeconds / TUNING.tick)) {
         // The command for this tick is late. Repeat the movement controls, acknowledge
         // the slot in advance and let the command fill it on arrival: the body keeps
         // moving for everyone, and the driver predicted this tick with the same

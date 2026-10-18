@@ -983,7 +983,7 @@
             "pending": 9,
             "queued": 7,
             "prediction": "predicting",
-            "correction": 3.090810786704445e-05,
+            "correction": 3.090810786704445e-5,
             "angle": 0,
             "offset": 0,
             "corrections": 8,

@@ -166,7 +166,7 @@ test("multiplayer authority, delta recovery, input sequences, jitter, reconnects
         Math.abs(a.entities.get(a.welcome.id)!.vz) < 0.1,
     );
     const stopped = a.entities.get(a.welcome.id)!;
-    assert.ok(Math.abs(stopped.vz) < 0.1, "stale held input stops after 250 ms");
+    assert.ok(Math.abs(stopped.vz) < 0.1, "stale held input stops after 500 ms");
     const lastFrame = a.messages.filter((m) => m.type === "state").at(-1).frame;
     a.send({ type: "resync" });
     await a.wait((m) => m.type === "state" && m.full && m.frame > lastFrame);

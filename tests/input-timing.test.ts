@@ -28,7 +28,7 @@ test("the server applies exactly the commands a client sent: bounded bursts, hel
   const address = server.address();
   assert.ok(address && typeof address !== "string");
   const ws = new WebSocket(`ws://127.0.0.1:${address.port}/ws`);
-  // Wall time only decides the 250 ms silence rule; keep it under test control.
+  // Wall time only decides the silence rule; keep it under test control.
   let wall = Date.now();
   t.mock.method(Date, "now", () => wall);
   try {
@@ -175,7 +175,7 @@ test("the server applies exactly the commands a client sent: bounded bursts, hel
     assert.equal(session.ack, 20);
     assert.equal(session.speculative, 1);
     apply(up);
-    for (let seq = 20; seq < 32; seq++) await command(seq);
+    for (let seq = 20; seq < 33; seq++) await command(seq);
     assert.equal(sessions.dropped, 8);
     tick();
     assert.equal(
@@ -208,22 +208,22 @@ test("the server applies exactly the commands a client sent: bounded bursts, hel
       "ack echoes applied browser timestamp",
     );
     assert.equal(snapshot.ack, 28, "wire ack marks the newest applied command");
-    assert.equal(snapshot.queued, 3, "snapshots report the remaining buffer depth");
+    assert.equal(snapshot.queued, 4, "snapshots report the remaining buffer depth");
     const entities = new Map<string, Entity>();
     for (const patch of snapshot.entities) applyPatch(entities, patch);
     prediction.reconcile(entities.get(p.id)!, [...entities.values()], snapshot.ack);
     assert.deepEqual(
       prediction.pending.map((f) => f.seq),
-      [29, 30, 31],
+      [29, 30, 31, 32],
     );
-    for (let i = 0; i < 3; i++) tick();
-    assert.equal(session.ack, 31);
+    for (let i = 0; i < 4; i++) tick();
+    assert.equal(session.ack, 32);
     assert.ok(
       Math.abs(prediction.body!.z - p.z) < 0.002,
       "replay predicts the remaining ticks within wire quantization",
     );
-    // Silence beyond 250 ms releases controls instead of holding them forever.
-    wall += 300;
+    // Silence beyond 500 ms releases controls instead of holding them forever.
+    wall += 600;
     const movingVz = p.vz;
     tick();
     assert.equal(sessions.speculated, 6, "silence idles rather than speculates");
