@@ -83,3 +83,46 @@ Selected raw samples and unmodified run summaries are saved in
 traces and process logs were retained in `/tmp/afterhours-repro/` on the test
 host; those temporary files are not durable repository artifacts. No production
 configuration was changed or service restarted for these tests.
+
+## Deployed recovery fix and remaining route delay
+
+Release `73411f2` was deployed by infrastructure commit `c04c1630`.
+All 411 local tests passed, as did CI verification, real-WebSocket tests,
+browser tests and image publication. The deployment workflow completed
+successfully and the new Pod became ready.
+
+Two concurrent public driving clients each completed 45 seconds with no counted
+corrections, forward lurches or freezes. Snapshot ages still reached 333 ms and
+298 ms after startup. Two concurrent public walking clients completed 40 seconds,
+but still encountered snapshot ages of 680 ms and sampled corrections of 1.87 m
+and 0.80 m after the first five seconds. These are short smoke checks under
+uncontrolled network conditions, not a measured speedup or proof that all lag is
+fixed.
+
+A separate 60-second WebSocket ping comparison returned these maximum RTTs:
+service 81 ms, ingress on work2 93 ms, ingress on main 455 ms, and the ordinary
+hostname 361 ms. The main ingress route remained slower even without movement
+prediction. The test reconnected unjoined sockets every 4.5 seconds to avoid
+creating extra players. Its maxima are not the earlier mid-run observations.
+
+The game is on work2. Connecting to `178.162.254.45:443` while retaining
+`afterhours.k8s.lohr.dev` for Host and TLS server-name verification served the
+same game successfully. A 40-second walking run through that direct ingress
+had a maximum snapshot age of 85 ms and sampled correction below 0.001 m after
+five seconds. It used the installed `ws` client with a DNS lookup override;
+HTTP map requests still used normal DNS. A simultaneous ordinary-hostname
+comparison using the same WebSocket library failed to join, so this is not a
+matched movement comparison. The final HTTP health request also timed out.
+Startup corrections and frame heuristics remain in the full summary.
+
+Public DNS currently returns `130.61.217.172` for the game hostname. The local
+resolver also returned main's tailnet address `100.80.38.88` earlier in these
+tests. A proposed follow-up is a specific DNS record for
+`afterhours.k8s.lohr.dev` pointing to work2 at `178.162.254.45`, with TTL 300,
+and corresponding split-DNS routing. Read the authoritative zone before changing
+it: the public lookup does not distinguish an explicit record from a wildcard.
+The LumaServ credential is absent from this execution environment, so no DNS
+records were changed. This route fix remains outstanding.
+
+Compact results are in [lag-fix-validation.json](lag-fix-validation.json);
+full temporary traces are in `/tmp/afterhours-postfix/`.
