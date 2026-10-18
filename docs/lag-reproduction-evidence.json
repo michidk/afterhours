@@ -1,0 +1,1128 @@
+{
+  "clientCommit": "1043106",
+  "serverCommit": "f4cc921",
+  "injectedLatencyMs": 0,
+  "runs": {
+    "walk-a": {
+      "firstAnalyzedAt": 1792354403585,
+      "lastAt": 1792354438468,
+      "durationSeconds": 39.971452293,
+      "summary": {
+        "frames": 1469,
+        "hitches": 103,
+        "speedErrorP95": 0.114,
+        "speedErrorMax": 0.83,
+        "speedJitterP95": 0.029,
+        "speedJitterMax": 1.02,
+        "verticalWobbleMax": 0.033,
+        "backward": 0,
+        "forwardLurches": 1,
+        "freezes": 7,
+        "maxStep": 0.7370933604239903,
+        "corrections": 12,
+        "correctionsOver1m": 1,
+        "maxCorrection": 1.3396626279449935,
+        "maxPending": 46,
+        "topSpeed": 8.000212809669504
+      },
+      "postWarmupMax": {
+        "correction": 1.3396626279449935,
+        "snapshotAge": 1336.5395040000003,
+        "ackAge": 1463.2385616663087,
+        "pending": 43,
+        "rtt": 1041.6431879999946
+      },
+      "maxFrameGapMs": 138.0473839999995,
+      "missingMapSamples": 0,
+      "peakSamples": [
+        {
+          "type": "sample",
+          "at": 1792354426673,
+          "elapsed": 28.17662923,
+          "stats": {
+            "connected": true,
+            "rtt": 421.9356590000025,
+            "jitter": 136.69963643967614,
+            "snapshotAge": 52.013128999999026,
+            "snapshotInterval": 23.148487999998906,
+            "interpolationDelay": 241.3797499900001,
+            "snapshotsPerSecond": 15,
+            "inputsPerSecond": 30,
+            "seq": 858,
+            "ack": 853,
+            "ackAge": 175.038642666761,
+            "pending": 5,
+            "queued": 1,
+            "prediction": "predicting",
+            "correction": 1.3396626279449935,
+            "angle": 0,
+            "offset": 1.2702463258508483,
+            "corrections": 11,
+            "buffered": 0,
+            "resyncs": 0,
+            "serverTime": 103479.76665334431
+          },
+          "body": {
+            "id": "e16323",
+            "x": -198.125,
+            "y": 23.06,
+            "z": 896.888,
+            "speed": 3.4665175608959493
+          },
+          "mapReady": true,
+          "maxInputLagMs": 118.85874366664393,
+          "maxFrameGapMs": 138.0473839999995,
+          "pose": {
+            "x": -198.37725990998928,
+            "y": 22.85616533716557,
+            "z": 899.4581737768725
+          },
+          "remoteCars": []
+        },
+        {
+          "type": "sample",
+          "at": 1792354434147,
+          "elapsed": 35.650677179999995,
+          "stats": {
+            "connected": true,
+            "rtt": 30.525598000000173,
+            "jitter": 59.905789785773145,
+            "snapshotAge": 1336.5395040000003,
+            "snapshotInterval": 24.744434000000183,
+            "interpolationDelay": 250,
+            "snapshotsPerSecond": 0,
+            "inputsPerSecond": 30,
+            "seq": 1082,
+            "ack": 1039,
+            "ackAge": 1463.2385616663087,
+            "pending": 43,
+            "queued": 2,
+            "prediction": "waiting for acknowledgements",
+            "correction": 0.00022297523393098335,
+            "angle": 0,
+            "offset": 0,
+            "corrections": 11,
+            "buffered": 0,
+            "resyncs": 1,
+            "serverTime": 103485.96665334287
+          },
+          "body": {
+            "id": "e16323",
+            "x": -198.155,
+            "y": 19.677,
+            "z": 938.038,
+            "speed": 8.000212809669504
+          },
+          "mapReady": true,
+          "maxInputLagMs": 118.85874366664393,
+          "maxFrameGapMs": 138.0473839999995,
+          "pose": {
+            "x": -198.9880076649363,
+            "y": 19.515515624821784,
+            "z": 944.1820098770852
+          },
+          "remoteCars": []
+        },
+        {
+          "type": "sample",
+          "at": 1792354434252,
+          "elapsed": 35.756071988,
+          "stats": {
+            "connected": true,
+            "rtt": 1041.6431879999946,
+            "jitter": 297.7087398393285,
+            "snapshotAge": 1.8324680000005173,
+            "snapshotInterval": 0.23396800000045914,
+            "interpolationDelay": 250,
+            "snapshotsPerSecond": 18,
+            "inputsPerSecond": 30,
+            "seq": 1085,
+            "ack": 1059,
+            "ackAge": 899.2147159995948,
+            "pending": 26,
+            "queued": -5,
+            "prediction": "predicting",
+            "correction": 0.26217900729943316,
+            "angle": 0,
+            "offset": 0.26217900729943316,
+            "corrections": 11,
+            "buffered": 0,
+            "resyncs": 1,
+            "serverTime": 103487.16665334259
+          },
+          "body": {
+            "id": "e16323",
+            "x": -198.619,
+            "y": 19.604,
+            "z": 942.768,
+            "speed": 0
+          },
+          "mapReady": true,
+          "maxInputLagMs": 118.85874366664393,
+          "maxFrameGapMs": 138.0473839999995,
+          "pose": {
+            "x": -198.9880076649363,
+            "y": 19.515515624821784,
+            "z": 944.1820000333352
+          },
+          "remoteCars": []
+        }
+      ]
+    },
+    "walk-b": {
+      "firstAnalyzedAt": 1792354404679,
+      "lastAt": 1792354439610,
+      "durationSeconds": 39.976488311000004,
+      "summary": {
+        "frames": 1518,
+        "hitches": 452,
+        "speedErrorP95": 0.536,
+        "speedErrorMax": 32.086,
+        "speedJitterP95": 0.046,
+        "speedJitterMax": 33.506,
+        "verticalWobbleMax": 0.288,
+        "backward": 1,
+        "forwardLurches": 2,
+        "freezes": 99,
+        "maxStep": 0.3183082370273994,
+        "corrections": 19,
+        "correctionsOver1m": 9,
+        "maxCorrection": 5.3253300253670615,
+        "maxPending": 47,
+        "topSpeed": 8
+      },
+      "postWarmupMax": {
+        "correction": 5.3253300253670615,
+        "snapshotAge": 941.9067829999985,
+        "ackAge": 1208.5184863330505,
+        "pending": 45,
+        "rtt": 617.5164990000048
+      },
+      "maxFrameGapMs": 141.84687200000008,
+      "missingMapSamples": 0,
+      "peakSamples": [
+        {
+          "type": "sample",
+          "at": 1792354434390,
+          "elapsed": 34.755623983999996,
+          "stats": {
+            "connected": true,
+            "rtt": 617.5164990000048,
+            "jitter": 212.39790651831456,
+            "snapshotAge": 93.22860200000287,
+            "snapshotInterval": 47.6249220000027,
+            "interpolationDelay": 250,
+            "snapshotsPerSecond": 16,
+            "inputsPerSecond": 36,
+            "seq": 1071,
+            "ack": 1058,
+            "ackAge": 395.3763803329566,
+            "pending": 13,
+            "queued": 2,
+            "prediction": "predicting",
+            "correction": 5.3253300253670615,
+            "angle": 0,
+            "offset": 0,
+            "corrections": 15,
+            "buffered": 0,
+            "resyncs": 1,
+            "serverTime": 103487.4333200092
+          },
+          "body": {
+            "id": "e16324",
+            "x": -197.348,
+            "y": 22.118,
+            "z": 914.35,
+            "speed": 1.3997206864228304
+          },
+          "mapReady": true,
+          "maxInputLagMs": 128.5203366666392,
+          "maxFrameGapMs": 141.84687200000008,
+          "pose": {
+            "x": -197.66917027544136,
+            "y": 21.998947045858024,
+            "z": 917.6240785320094
+          },
+          "remoteCars": []
+        },
+        {
+          "type": "sample",
+          "at": 1792354434160,
+          "elapsed": 34.526105556,
+          "stats": {
+            "connected": true,
+            "rtt": 18.412348999998358,
+            "jitter": 83.49582535775059,
+            "snapshotAge": 941.9067829999985,
+            "snapshotInterval": 0.15126299999974435,
+            "interpolationDelay": 250,
+            "snapshotsPerSecond": 6,
+            "inputsPerSecond": 37,
+            "seq": 1064,
+            "ack": 1019,
+            "ackAge": 1208.5184863330505,
+            "pending": 45,
+            "queued": -5,
+            "prediction": "waiting for acknowledgements",
+            "correction": 0.062356991409285266,
+            "angle": 0,
+            "offset": 0.0016689345773980382,
+            "corrections": 13,
+            "buffered": 250,
+            "resyncs": 1,
+            "serverTime": 103486.36665334277
+          },
+          "body": {
+            "id": "e16324",
+            "x": -197.155,
+            "y": 22.19,
+            "z": 912.375,
+            "speed": 0.6661786547165857
+          },
+          "mapReady": true,
+          "maxInputLagMs": 128.5203366666392,
+          "maxFrameGapMs": 141.84687200000008,
+          "pose": {
+            "x": -197.9286523533954,
+            "y": 21.81678096422583,
+            "z": 920.2623465504354
+          },
+          "remoteCars": []
+        },
+        {
+          "type": "sample",
+          "at": 1792354434273,
+          "elapsed": 34.638590576999995,
+          "stats": {
+            "connected": true,
+            "rtt": 617.5164990000048,
+            "jitter": 212.39790651831456,
+            "snapshotAge": 24.70505000000412,
+            "snapshotInterval": 0.11329099999420578,
+            "interpolationDelay": 250,
+            "snapshotsPerSecond": 15,
+            "inputsPerSecond": 37,
+            "seq": 1068,
+            "ack": 1034,
+            "ackAge": 905.2279063330134,
+            "pending": 34,
+            "queued": -5,
+            "prediction": "waiting for acknowledgements",
+            "correction": 1.850766462099455,
+            "angle": 0,
+            "offset": 1.5367376972174212,
+            "corrections": 14,
+            "buffered": 249,
+            "resyncs": 1,
+            "serverTime": 103487.36665334254
+          },
+          "body": {
+            "id": "e16324",
+            "x": -197.346,
+            "y": 22.119,
+            "z": 914.321,
+            "speed": 0
+          },
+          "mapReady": true,
+          "maxInputLagMs": 128.5203366666392,
+          "maxFrameGapMs": 141.84687200000008,
+          "pose": {
+            "x": -197.95892287514104,
+            "y": 21.777894908783896,
+            "z": 920.570806828441
+          },
+          "remoteCars": []
+        }
+      ]
+    },
+    "car-public": {
+      "firstAnalyzedAt": 1792354536129,
+      "lastAt": 1792354576130,
+      "durationSeconds": 45.047040511999995,
+      "summary": {
+        "frames": 2657,
+        "hitches": 291,
+        "speedErrorP95": 0.243,
+        "speedErrorMax": 2.647,
+        "speedJitterP95": 0.023,
+        "speedJitterMax": 2.944,
+        "verticalWobbleMax": 0,
+        "backward": 0,
+        "forwardLurches": 14,
+        "freezes": 50,
+        "maxStep": 0.7017337381505521,
+        "corrections": 8,
+        "correctionsOver1m": 5,
+        "maxCorrection": 4.015320602008367,
+        "maxPending": 28,
+        "topSpeed": 11.514479048719084
+      },
+      "postWarmupMax": {
+        "correction": 3.563148864576919,
+        "snapshotAge": 491.98675899999944,
+        "ackAge": 698.293689332364,
+        "pending": 17,
+        "rtt": 543.0311549999969
+      },
+      "maxFrameGapMs": 41.0958679999967,
+      "missingMapSamples": 0,
+      "peakSamples": [
+        {
+          "type": "sample",
+          "at": 1792354574189,
+          "elapsed": 43.106828244000006,
+          "stats": {
+            "connected": true,
+            "rtt": 543.0311549999969,
+            "jitter": 132.54200543965095,
+            "snapshotAge": 49.528551999996125,
+            "snapshotInterval": 0.031889999998384155,
+            "interpolationDelay": 250,
+            "snapshotsPerSecond": 13,
+            "inputsPerSecond": 26,
+            "seq": 1345,
+            "ack": 1335,
+            "ackAge": 448.6295849990056,
+            "pending": 10,
+            "queued": -6,
+            "prediction": "predicting",
+            "correction": 3.563148864576919,
+            "angle": 0.638514305084796,
+            "offset": 2.234911022166463,
+            "corrections": 7,
+            "buffered": 0,
+            "resyncs": 1,
+            "serverTime": 103627.23331997664
+          },
+          "body": {
+            "id": "e16337",
+            "x": 290.783,
+            "y": 22.45,
+            "z": 623.965,
+            "speed": 10.89863009740215
+          },
+          "mapReady": true,
+          "maxInputLagMs": 25.361693332750292,
+          "maxFrameGapMs": 41.0958679999967,
+          "pose": {
+            "x": 291.1544982406618,
+            "y": 22.45,
+            "z": 625.4940502620482
+          },
+          "remoteCars": [
+            {
+              "id": "e16340",
+              "x": 326.69147915429716,
+              "y": 22.45,
+              "z": 709.8628984032599
+            }
+          ]
+        },
+        {
+          "type": "sample",
+          "at": 1792354574080,
+          "elapsed": 42.997671219,
+          "stats": {
+            "connected": true,
+            "rtt": 47.49205200000142,
+            "jitter": 11.542972919536105,
+            "snapshotAge": 491.98675899999944,
+            "snapshotInterval": 96.73938800000178,
+            "interpolationDelay": 209.03145835484025,
+            "snapshotsPerSecond": 6,
+            "inputsPerSecond": 27,
+            "seq": 1342,
+            "ack": 1325,
+            "ackAge": 698.293689332364,
+            "pending": 17,
+            "queued": 3,
+            "prediction": "predicting",
+            "correction": 0.000517157701549129,
+            "angle": 0.00024065390823131057,
+            "offset": 0.01927652454719312,
+            "corrections": 6,
+            "buffered": 0,
+            "resyncs": 0,
+            "serverTime": 103626.56665331013
+          },
+          "body": {
+            "id": "e16337",
+            "x": 290.943,
+            "y": 22.45,
+            "z": 616.437,
+            "speed": 11.48181192146954
+          },
+          "mapReady": true,
+          "maxInputLagMs": 25.361693332750292,
+          "maxFrameGapMs": 41.0958679999967,
+          "pose": {
+            "x": 290.84178120577286,
+            "y": 22.45,
+            "z": 623.0034436964879
+          },
+          "remoteCars": [
+            {
+              "id": "e16340",
+              "x": 326.2868,
+              "y": 22.45,
+              "z": 710.5845999999999
+            }
+          ]
+        }
+      ]
+    },
+    "car-direct": {
+      "firstAnalyzedAt": 1792354542403,
+      "lastAt": 1792354582285,
+      "durationSeconds": 44.967463024,
+      "summary": {
+        "frames": 2609,
+        "hitches": 65,
+        "speedErrorP95": 0.064,
+        "speedErrorMax": 0.711,
+        "speedJitterP95": 0.012,
+        "speedJitterMax": 0.755,
+        "verticalWobbleMax": 0,
+        "backward": 0,
+        "forwardLurches": 0,
+        "freezes": 8,
+        "maxStep": 0.4889032668057522,
+        "corrections": 1,
+        "correctionsOver1m": 0,
+        "maxCorrection": 0.7654483982113872,
+        "maxPending": 13,
+        "topSpeed": 11.506272705742683
+      },
+      "postWarmupMax": {
+        "correction": 0.7654483982113872,
+        "snapshotAge": 270.76660199999606,
+        "ackAge": 432.58594933328277,
+        "pending": 12,
+        "rtt": 248.03089599999657
+      },
+      "maxFrameGapMs": 44.719466000002285,
+      "missingMapSamples": 0,
+      "peakSamples": [
+        {
+          "type": "sample",
+          "at": 1792354573474,
+          "elapsed": 36.156570843000004,
+          "stats": {
+            "connected": true,
+            "rtt": 248.03089599999657,
+            "jitter": 66.79033694975053,
+            "snapshotAge": 18.031497000003583,
+            "snapshotInterval": 64.98950199999672,
+            "interpolationDelay": 126.19955979660969,
+            "snapshotsPerSecond": 12,
+            "inputsPerSecond": 29,
+            "seq": 1118,
+            "ack": 1109,
+            "ackAge": 322.1792983332707,
+            "pending": 9,
+            "queued": 6,
+            "prediction": "predicting",
+            "correction": 0.7654483982113872,
+            "angle": 2.2618045754185947,
+            "offset": 0.7654483982113872,
+            "corrections": 1,
+            "buffered": 0,
+            "resyncs": 0,
+            "serverTime": 103626.33331997685
+          },
+          "body": {
+            "id": "e16340",
+            "x": 323.869,
+            "y": 22.45,
+            "z": 713.547,
+            "speed": 11.481789276937631
+          },
+          "mapReady": true,
+          "maxInputLagMs": 24.684947667054075,
+          "maxFrameGapMs": 40.33190999999715,
+          "pose": {
+            "x": 326.6017199740242,
+            "y": 22.45,
+            "z": 710.0135192957799
+          },
+          "remoteCars": [
+            {
+              "id": "e16337",
+              "x": 291.59021020006656,
+              "y": 22.45,
+              "z": 613.9184645147034
+            }
+          ]
+        },
+        {
+          "type": "sample",
+          "at": 1792354573368,
+          "elapsed": 36.050390946,
+          "stats": {
+            "connected": true,
+            "rtt": 21.656287999998312,
+            "jitter": 13.595579933001286,
+            "snapshotAge": 270.76660199999606,
+            "snapshotInterval": 97.5935260000042,
+            "interpolationDelay": 127.85432329999774,
+            "snapshotsPerSecond": 11,
+            "inputsPerSecond": 29,
+            "seq": 1115,
+            "ack": 1103,
+            "ackAge": 432.58594933328277,
+            "pending": 12,
+            "queued": 2,
+            "prediction": "predicting",
+            "correction": 0.0007121692101970418,
+            "angle": 0.0004234032651420504,
+            "offset": 0,
+            "corrections": 0,
+            "buffered": 0,
+            "resyncs": 0,
+            "serverTime": 103626.19998664355
+          },
+          "body": {
+            "id": "e16340",
+            "x": 322.758,
+            "y": 22.45,
+            "z": 714.598,
+            "speed": 11.481552682455453
+          },
+          "mapReady": true,
+          "maxInputLagMs": 24.684947667054075,
+          "maxFrameGapMs": 40.33190999999715,
+          "pose": {
+            "x": 325.92983142747636,
+            "y": 22.45,
+            "z": 711.0506085967252
+          },
+          "remoteCars": [
+            {
+              "id": "e16337",
+              "x": 291.7062,
+              "y": 22.45,
+              "z": 613.4695
+            }
+          ]
+        }
+      ]
+    },
+    "walk-public-repeat": {
+      "firstAnalyzedAt": 1792354623901,
+      "lastAt": 1792354655565,
+      "durationSeconds": 36.75400295,
+      "summary": null,
+      "postWarmupMax": {
+        "correction": 6.4474120793048755,
+        "snapshotAge": 1627.532739999995,
+        "ackAge": 1994.149070333522,
+        "pending": 60,
+        "rtt": 1396.3665590000019
+      },
+      "maxFrameGapMs": 240.8276220000007,
+      "missingMapSamples": 0,
+      "peakSamples": [
+        {
+          "type": "sample",
+          "at": 1792354649559,
+          "elapsed": 30.747994983000005,
+          "stats": {
+            "connected": true,
+            "rtt": 1396.3665590000019,
+            "jitter": 306.5370672700741,
+            "snapshotAge": 65.48589999999967,
+            "snapshotInterval": 0.15559100000245962,
+            "interpolationDelay": 250,
+            "snapshotsPerSecond": 30,
+            "inputsPerSecond": 36,
+            "seq": 961,
+            "ack": 919,
+            "ackAge": 1155.121792666745,
+            "pending": 42,
+            "queued": -3,
+            "prediction": "waiting for acknowledgements",
+            "correction": 6.4474120793048755,
+            "angle": 11.203834042145504,
+            "offset": 0,
+            "corrections": 18,
+            "buffered": 0,
+            "resyncs": 2,
+            "serverTime": 103702.56665329244
+          },
+          "body": {
+            "id": "e16347",
+            "x": -198.205,
+            "y": 23.178,
+            "z": 894.978,
+            "speed": 8.000212809669504
+          },
+          "mapReady": true,
+          "maxInputLagMs": 208.73762866666948,
+          "maxFrameGapMs": 240.8276220000007,
+          "pose": {
+            "x": -198.2278963123919,
+            "y": 22.724302236318405,
+            "z": 900.0120098770851
+          },
+          "remoteCars": []
+        },
+        {
+          "type": "sample",
+          "at": 1792354649106,
+          "elapsed": 30.295323422000003,
+          "stats": {
+            "connected": true,
+            "rtt": 652.6064750000005,
+            "jitter": 160.79606169343162,
+            "snapshotAge": 1627.532739999995,
+            "snapshotInterval": 0.2139690000039991,
+            "interpolationDelay": 250,
+            "snapshotsPerSecond": 0,
+            "inputsPerSecond": 37,
+            "seq": 945,
+            "ack": 872,
+            "ackAge": 1994.149070333522,
+            "pending": 60,
+            "queued": -3,
+            "prediction": "waiting for acknowledgements",
+            "correction": 2.3381339177084985,
+            "angle": 0,
+            "offset": 0.1556294700059219,
+            "corrections": 15,
+            "buffered": 0,
+            "resyncs": 2,
+            "serverTime": 103700.5666532929
+          },
+          "body": {
+            "id": "e16347",
+            "x": -197.861,
+            "y": 22.995,
+            "z": 891.472,
+            "speed": 2.4999359991807792
+          },
+          "mapReady": true,
+          "maxInputLagMs": 208.73762866666948,
+          "maxFrameGapMs": 240.8276220000007,
+          "pose": {
+            "x": -198.6762506398561,
+            "y": 22.815678183628183,
+            "z": 899.7835680664899
+          },
+          "remoteCars": []
+        },
+        {
+          "type": "sample",
+          "at": 1792354648779,
+          "elapsed": 29.968048793,
+          "stats": {
+            "connected": true,
+            "rtt": 652.6064750000005,
+            "jitter": 160.79606169343162,
+            "snapshotAge": 1299.9315999999963,
+            "snapshotInterval": 0.2139690000039991,
+            "interpolationDelay": 250,
+            "snapshotsPerSecond": 0,
+            "inputsPerSecond": 37,
+            "seq": 933,
+            "ack": 872,
+            "ackAge": 1666.5479303335233,
+            "pending": 60,
+            "queued": -3,
+            "prediction": "waiting for acknowledgements",
+            "correction": 2.3381339177084985,
+            "angle": 0,
+            "offset": 0.15562947000644967,
+            "corrections": 15,
+            "buffered": 0,
+            "resyncs": 2,
+            "serverTime": 103700.5666532929
+          },
+          "body": {
+            "id": "e16347",
+            "x": -197.861,
+            "y": 22.995,
+            "z": 891.472,
+            "speed": 2.4999359991807792
+          },
+          "mapReady": true,
+          "maxInputLagMs": 208.73762866666948,
+          "maxFrameGapMs": 240.8276220000007,
+          "pose": {
+            "x": -198.67625064027033,
+            "y": 22.815677882253578,
+            "z": 899.7835680664496
+          },
+          "remoteCars": []
+        },
+        {
+          "type": "sample",
+          "at": 1792354649223,
+          "elapsed": 30.412049416000002,
+          "stats": {
+            "connected": true,
+            "rtt": 1396.3665590000019,
+            "jitter": 306.5370672700741,
+            "snapshotAge": 2.4002000000036787,
+            "snapshotInterval": 0.08688299999630544,
+            "interpolationDelay": 249.99887514500003,
+            "snapshotsPerSecond": 25,
+            "inputsPerSecond": 36,
+            "seq": 949,
+            "ack": 888,
+            "ackAge": 1669.402941000153,
+            "pending": 60,
+            "queued": -3,
+            "prediction": "waiting for acknowledgements",
+            "correction": 1.3526037852971586,
+            "angle": 0,
+            "offset": 6.174832422711835,
+            "corrections": 17,
+            "buffered": 0,
+            "resyncs": 2,
+            "serverTime": 103702.23331995918
+          },
+          "body": {
+            "id": "e16347",
+            "x": -198.068,
+            "y": 23.14,
+            "z": 893.58,
+            "speed": 0
+          },
+          "mapReady": true,
+          "maxInputLagMs": 208.73762866666948,
+          "maxFrameGapMs": 240.8276220000007,
+          "pose": {
+            "x": -198.66982336774402,
+            "y": 22.852569771303425,
+            "z": 899.7187089804162
+          },
+          "remoteCars": []
+        }
+      ]
+    },
+    "walk-direct-repeat": {
+      "firstAnalyzedAt": 1792354621899,
+      "lastAt": 1792354676815,
+      "durationSeconds": 59.964181307000004,
+      "summary": {
+        "frames": 2757,
+        "hitches": 31,
+        "speedErrorP95": 0.043,
+        "speedErrorMax": 0.988,
+        "speedJitterP95": 0.013,
+        "speedJitterMax": 1.153,
+        "verticalWobbleMax": 0.115,
+        "backward": 0,
+        "forwardLurches": 0,
+        "freezes": 4,
+        "maxStep": 0.6167119619182789,
+        "corrections": 8,
+        "correctionsOver1m": 1,
+        "maxCorrection": 1.5229225193685871,
+        "maxPending": 10,
+        "topSpeed": 8.000212809669504
+      },
+      "postWarmupMax": {
+        "correction": 0.0012905035145580432,
+        "snapshotAge": 165.10171900000205,
+        "ackAge": 317.43404933276906,
+        "pending": 9,
+        "rtt": 56.955345000002126
+      },
+      "maxFrameGapMs": 298.068448,
+      "missingMapSamples": 0,
+      "peakSamples": [
+        {
+          "type": "sample",
+          "at": 1792354656749,
+          "elapsed": 39.898987955,
+          "stats": {
+            "connected": true,
+            "rtt": 14.395386999996845,
+            "jitter": 17.573735042713707,
+            "snapshotAge": 25.26328300000023,
+            "snapshotInterval": 60.833827999995265,
+            "interpolationDelay": 107.11962834885344,
+            "snapshotsPerSecond": 15,
+            "inputsPerSecond": 30,
+            "seq": 1205,
+            "ack": 1201,
+            "ackAge": 136.9451826661898,
+            "pending": 4,
+            "queued": 2,
+            "prediction": "predicting",
+            "correction": 0.0012905035145580432,
+            "angle": 0,
+            "offset": 0.00117014419802002,
+            "corrections": 8,
+            "buffered": 0,
+            "resyncs": 0,
+            "serverTime": 103709.83331995741
+          },
+          "body": {
+            "id": "e16346",
+            "x": -198.103,
+            "y": 18.141,
+            "z": 972.963,
+            "speed": 8.000212809669504
+          },
+          "mapReady": true,
+          "maxInputLagMs": 204.847340000003,
+          "maxFrameGapMs": 298.068448,
+          "pose": {
+            "x": -198.20909698334458,
+            "y": 17.94452595178369,
+            "z": 974.0540417940937
+          },
+          "remoteCars": []
+        },
+        {
+          "type": "sample",
+          "at": 1792354641836,
+          "elapsed": 24.985367051,
+          "stats": {
+            "connected": true,
+            "rtt": 13.172999999998865,
+            "jitter": 13.85548305883154,
+            "snapshotAge": 165.10171900000205,
+            "snapshotInterval": 76.16402299999754,
+            "interpolationDelay": 138.01432985999998,
+            "snapshotsPerSecond": 13,
+            "inputsPerSecond": 30,
+            "seq": 757,
+            "ack": 749,
+            "ackAge": 294.0191603337189,
+            "pending": 8,
+            "queued": 2,
+            "prediction": "predicting",
+            "correction": 0.00043584640965454606,
+            "angle": 0,
+            "offset": 0,
+            "corrections": 8,
+            "buffered": 0,
+            "resyncs": 0,
+            "serverTime": 103694.76665329425
+          },
+          "body": {
+            "id": "e16346",
+            "x": -204.861,
+            "y": 24.046,
+            "z": 885.428,
+            "speed": 4.204420649744742
+          },
+          "mapReady": true,
+          "maxInputLagMs": 204.847340000003,
+          "maxFrameGapMs": 298.068448,
+          "pose": {
+            "x": -203.75932262275555,
+            "y": 23.77685105104277,
+            "z": 885.9686471567587
+          },
+          "remoteCars": []
+        },
+        {
+          "type": "sample",
+          "at": 1792354658163,
+          "elapsed": 41.313012883000006,
+          "stats": {
+            "connected": true,
+            "rtt": 6.8021630000002915,
+            "jitter": 15.078607282034419,
+            "snapshotAge": 37.71519499999704,
+            "snapshotInterval": 193.13190800000302,
+            "interpolationDelay": 110.51369379332958,
+            "snapshotsPerSecond": 13,
+            "inputsPerSecond": 30,
+            "seq": 1247,
+            "ack": 1238,
+            "ackAge": 317.43404933276906,
+            "pending": 9,
+            "queued": 2,
+            "prediction": "predicting",
+            "correction": 0.0003986090125801703,
+            "angle": 0,
+            "offset": 0,
+            "corrections": 8,
+            "buffered": 0,
+            "resyncs": 0,
+            "serverTime": 103711.06665329046
+          },
+          "body": {
+            "id": "e16346",
+            "x": -199.066,
+            "y": 15.299,
+            "z": 982.783,
+            "speed": 8.000212809669504
+          },
+          "mapReady": true,
+          "maxInputLagMs": 204.847340000003,
+          "maxFrameGapMs": 298.068448,
+          "pose": {
+            "x": -199.3138984339431,
+            "y": 14.670584033758677,
+            "z": 985.3103437458516
+          },
+          "remoteCars": []
+        },
+        {
+          "type": "sample",
+          "at": 1792354641952,
+          "elapsed": 25.101297256000002,
+          "stats": {
+            "connected": true,
+            "rtt": 13.172999999998865,
+            "jitter": 13.85548305883154,
+            "snapshotAge": 22.482422999997652,
+            "snapshotInterval": 39.70406500000172,
+            "interpolationDelay": 136.719498865,
+            "snapshotsPerSecond": 13,
+            "inputsPerSecond": 30,
+            "seq": 761,
+            "ack": 752,
+            "ackAge": 310.3660633337204,
+            "pending": 9,
+            "queued": 7,
+            "prediction": "predicting",
+            "correction": 3.090810786704445e-05,
+            "angle": 0,
+            "offset": 0,
+            "corrections": 8,
+            "buffered": 0,
+            "resyncs": 0,
+            "serverTime": 103694.86665329423
+          },
+          "body": {
+            "id": "e16346",
+            "x": -204.488,
+            "y": 23.955,
+            "z": 885.616,
+            "speed": 4.171947866404852
+          },
+          "mapReady": true,
+          "maxInputLagMs": 204.847340000003,
+          "maxFrameGapMs": 298.068448,
+          "pose": {
+            "x": -203.35533407978696,
+            "y": 23.677995212233736,
+            "z": 886.1641857887549
+          },
+          "remoteCars": []
+        },
+        {
+          "type": "sample",
+          "at": 1792354674571,
+          "elapsed": 57.720912137000006,
+          "stats": {
+            "connected": true,
+            "rtt": 56.955345000002126,
+            "jitter": 17.236796869521356,
+            "snapshotAge": 19.58998299999803,
+            "snapshotInterval": 64.54915700000129,
+            "interpolationDelay": 115.51951283871313,
+            "snapshotsPerSecond": 14,
+            "inputsPerSecond": 29,
+            "seq": 1738,
+            "ack": 1735,
+            "ackAge": 163.8240116648958,
+            "pending": 3,
+            "queued": 2,
+            "prediction": "predicting",
+            "correction": 0.0005914327901787741,
+            "angle": 0,
+            "offset": 0,
+            "corrections": 8,
+            "buffered": 0,
+            "resyncs": 0,
+            "serverTime": 103727.63331995327
+          },
+          "body": {
+            "id": "e16346",
+            "x": -197.946,
+            "y": 4.853,
+            "z": 1114.683,
+            "speed": 8.000212809669504
+          },
+          "mapReady": true,
+          "maxInputLagMs": 204.847340000003,
+          "maxFrameGapMs": 298.068448,
+          "pose": {
+            "x": -198.03666570493309,
+            "y": 4.719016747628844,
+            "z": 1115.6073438882654
+          },
+          "remoteCars": []
+        }
+      ]
+    }
+  },
+  "initialWalkHealth": {
+    "before": {
+      "ok": true,
+      "version": 8,
+      "time": 103444.93332001909,
+      "tickBudgetMs": 33.333333333333336,
+      "backlogMs": 28.594815999270118,
+      "droppedMs": 8495.58397867355,
+      "heapUsedMB": 144.03387451171875,
+      "heapLimitMB": 2240,
+      "availableMemoryMB": 3255.97265625,
+      "players": 1,
+      "entities": 501,
+      "traffic": {
+        "jamCount": 0,
+        "jammedCars": 0,
+        "honks": 101639,
+        "respawned": 1659,
+        "pendingRespawns": 0
+      },
+      "ticks": 3103348,
+      "late": 347,
+      "inputSpeculated": 1950,
+      "inputMispredicted": 184,
+      "inputFrozen": 2,
+      "catchUpTicks": 6187,
+      "inputDrops": 549,
+      "tickP95Ms": 46.30637399852276,
+      "tickMaxMs": 211.6054919809103,
+      "tickCpuP95Ms": 30.82,
+      "tickCpuMaxMs": 89.21100000000001,
+      "bytesSent": 108634341,
+      "rejectedMessages": 0,
+      "memoryMB": 688
+    },
+    "after-walk": {
+      "ok": true,
+      "version": 8,
+      "time": 103494.16665334096,
+      "tickBudgetMs": 33.333333333333336,
+      "backlogMs": 32.6930366555861,
+      "droppedMs": 8495.58397867355,
+      "heapUsedMB": 141.56546020507812,
+      "heapLimitMB": 2240,
+      "availableMemoryMB": 3255.96875,
+      "players": 0,
+      "entities": 503,
+      "traffic": {
+        "jamCount": 0,
+        "jammedCars": 0,
+        "honks": 101667,
+        "respawned": 1659,
+        "pendingRespawns": 0
+      },
+      "ticks": 3104825,
+      "late": 347,
+      "inputSpeculated": 2183,
+      "inputMispredicted": 208,
+      "inputFrozen": 2,
+      "catchUpTicks": 6208,
+      "inputDrops": 695,
+      "tickP95Ms": 30.066638991236687,
+      "tickMaxMs": 42.52672401070595,
+      "tickCpuP95Ms": 28.889000000000003,
+      "tickCpuMaxMs": 37.653999999999996,
+      "bytesSent": 114631161,
+      "rejectedMessages": 0,
+      "memoryMB": 688
+    }
+  }
+}
