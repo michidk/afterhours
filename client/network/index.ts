@@ -307,15 +307,15 @@ export class GameNetwork {
     const message = JSON.stringify({ timestamp: now, ...data });
     const bytes = new TextEncoder().encode(message).byteLength;
     const oldest = this.outgoingWrites[0]?.at;
-    // A few commands may queue briefly; never retain seconds of stale throttle.
+    // A 500 ms catch-up can enqueue over 4 KiB before the browser drains writes.
     if (
-      socket.bufferedAmount + bytes > 4096 ||
+      socket.bufferedAmount + bytes > 8192 ||
       (oldest !== undefined && now - oldest >= 250)
     ) {
       this.disconnect(
         socket,
-        socket.bufferedAmount + bytes > 4096
-          ? "Send buffer exceeded 4096 bytes"
+        socket.bufferedAmount + bytes > 8192
+          ? "Send buffer exceeded 8192 bytes"
           : "Outgoing commands stalled for 250 ms",
       );
       return false;

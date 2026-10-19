@@ -9,6 +9,7 @@ import { Sessions } from "../server/session.ts";
 import { CityStore } from "../server/city-stream.ts";
 import { generateCity } from "../scripts/city-generator.ts";
 import { idle } from "../shared/world.ts";
+import { InputClock } from "../client/input/clock.ts";
 
 for (const reason of [
   "size",
@@ -18,6 +19,7 @@ for (const reason of [
   "short browser stall",
   "draining queue",
   "paused queue",
+  "catch-up batch",
   "stalled snapshots",
   "stalled snapshots with pongs",
 ] as const)
@@ -64,9 +66,38 @@ for (const reason of [
       const peer = [...sessions.clients.keys()][0];
       const prediction = network.prediction!;
       const input = t.mock.method(prediction, "input");
+      const send = socket.send.bind(socket);
       const sends = t.mock.method(socket, "send");
       let buffered = 0;
       Object.defineProperty(socket, "bufferedAmount", { get: () => buffered });
+      if (reason === "catch-up batch") {
+        sends.mock.mockImplementation((data) => {
+          buffered += Buffer.byteLength(String(data));
+          send(data);
+        });
+        const received: unknown[] = [];
+        peer.on("message", (data) => {
+          const message = JSON.parse(String(data));
+          if (message.type === "input") received.push(message);
+        });
+        clock = 98123.456789;
+        const controls = {
+          ...idle(),
+          aim: Math.PI / 3,
+          moveX: 0.123456789,
+          moveY: 0.987654321,
+        };
+        const schedule = new InputClock();
+        schedule.advance(clock, (at) => network.input(controls, at));
+        buffered = 0;
+        clock += 500;
+        schedule.advance(clock, (at) => network.input(controls, at));
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        assert.equal(network.socket, socket, "one catch-up batch keeps its connection");
+        assert.equal(received.length, 16, "all scheduled controls reach authority");
+        assert.equal(network.stats().lastDisconnect, undefined);
+        return;
+      }
       if (reason === "stalled snapshots" || reason === "stalled snapshots with pongs") {
         sessions.broadcast();
         await new Promise((resolve) => setTimeout(resolve, 20));
@@ -177,7 +208,7 @@ for (const reason of [
           t.mock.timers.tick(250);
         }
       } else {
-        buffered = reason === "size" ? 4096 : 1000;
+        buffered = reason === "size" ? 8192 : 1000;
         if (reason === "age") {
           assert.equal(
             network.send({ type: "ping" }),
@@ -225,7 +256,7 @@ for (const reason of [
       assert.equal(
         disconnectReason,
         reason === "size"
-          ? "Send buffer exceeded 4096 bytes"
+          ? "Send buffer exceeded 8192 bytes"
           : reason === "age"
             ? "Outgoing commands stalled for 250 ms"
             : "No snapshots for 2 seconds",
