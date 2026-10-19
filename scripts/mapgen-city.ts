@@ -25,6 +25,8 @@ import { lakeShorelines } from "../mapgen/shoreline.ts";
 import { packSurfaceChunks } from "../shared/city-pack.ts";
 import { destructibles } from "../shared/destruction.ts";
 import {
+  closeTJunctions,
+  weldCorners,
   drapeOnTerrain,
   edgeHeightAt,
   sinkUnderStreets,
@@ -869,9 +871,19 @@ export function cityFromMap(map: GeneratedMap): City {
       ...polygons.slice(count),
     ];
   const surface = {
-    asphalt: drape(asphalt, network.asphalt),
+    // Feature surfaces (airfields, plazas) join the network here, so one pass gives
+    // every piece the corners that lie on its neighbours' edges.
+    asphalt: closeTJunctions(
+      weldCorners(closeTJunctions(drape(asphalt, network.asphalt))),
+    ),
     // Streets sometimes cross each other's sidewalks; the road wins.
-    sidewalks: drape(sidewalks, network.sidewalks, asphalt.slice(0, network.asphalt)),
+    sidewalks: closeTJunctions(
+      weldCorners(
+        closeTJunctions(
+          drape(sidewalks, network.sidewalks, asphalt.slice(0, network.asphalt)),
+        ),
+      ),
+    ),
     markings: [
       ...(["white", "yellow"] as const).flatMap((color) =>
         drape(

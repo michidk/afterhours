@@ -39,6 +39,14 @@ The stop hook for this audit pointed out that the previous round still listed vi
 - **Kinks and jogs in sidewalk outlines.** Junction corners were laid out along each road's first 8 m, so a road that was still curving at its mouth missed the corner lines by up to 0.8 m and left a sideways step. Junctions are now laid out four times, each time taking every arm's direction towards where its mouth ended up. Mouths missing their corner line by more than 0.4 m fell from 78 to 7 of 756.
 - **Steep sidewalks.** The terrain raise now also acts where less than 30% of a sample's weight sits on free grid corners (down to 15%). Sidewalk area steeper than 35% fell from 570 m² to 395 m² (over 60%: 40 m² to 9 m²); steep asphalt rose from 37 m² to 55 m².
 
+### Follow-up: corridor width, T-junctions
+
+After the coast work the street scans were repeated on the new layout and a fresh sample of 30 sites (18 junctions, 12 mid-road) was photographed.
+
+- **Steep sidewalks.** The flat road corridor reached only 0.25 m past the sidewalk, so on the 8 m terrain grid the nearest outside grid point was already on the bank and the sidewalk tilted with it. The corridor now reaches 4 m past the sidewalk (`stampRoads`). Sidewalk area steeper than 35% fell from 462 m² to 172 m² of 144,636 m² (0.12%), and over 60% from 18 m² to 2 m². A wider corridor (+6 m) cut it further to 133 m² but left the small test map with one building and the seed 932 city without a town hall lot, so it was not kept. The town hall search now relaxes its 5 m unevenness limit to 8 and then 12 m only if no level lot is left; the lot is levelled afterwards anyway.
+- **T-junctions.** Corners lying on another piece's edge, and corners 1.5 to 2.5 cm apart, are now closed on the final layers, which include the airport tiles and other feature surfaces that are not draped. Asphalt T-junctions fell from 28 to 0, and sidewalk ones from 4 to 0.
+- **Coverage.** There are 0 uncovered half-metre cells, 0 sidewalk cells on asphalt and 0 height steps between pieces.
+
 ## Photos
 
 | Site                | Before                                                                    | After                                                                    |
@@ -60,6 +68,7 @@ Retake them with `npx tsx scripts/street-photos.ts data/city-meshes.msgpack docs
 
 ## Remaining
 
-- A few sidewalk strips are still steeper than 35% where the ground drops sharply beside a street (0.27% of sidewalk area).
+- 172 m² of sidewalk (0.12%) is still steeper than 35%, where the ground drops sharply beside a street, and 32 m² of asphalt.
 - A street's cross-slope follows the 8 m terrain grid. Players stand on the ground, 0.1 m below drawn asphalt and 0.25 m below a sidewalk top.
-- Two half-metre cells in the acute merges at (395, -383) and (-817, -259) are not covered by asphalt; neither is visible at 8 m zoom.
+- A few sidewalk outlines have a small kink where a junction corner has no room for a fillet and keeps a sharp corner.
+- Corners that are 3 cm or more apart are not welded. 783 pairs under 3 cm remained before this round's tolerance change; none is a gap.

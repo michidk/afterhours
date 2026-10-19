@@ -1026,7 +1026,10 @@ export function stampRoads(f: HeightField, graph: RoadGraph, geometry: RoadGeome
     weight = new Float32Array(w * h),
     best = new Float32Array(w * h),
     edge = new Float32Array(w * h).fill(Infinity);
-  const shoulder = 1.5 + SIDEWALK * 0.5;
+  // The flat corridor reaches well past the sidewalk: the terrain grid is 8 m, so a
+  // bank that starts at the kerb puts the nearest grid point outside the sidewalk
+  // already on the slope, and the sidewalk tilts with it.
+  const shoulder = SIDEWALK + 4;
   // Where flat corridors overlap, the road whose kerb is nearest sets the height;
   // averaging neighbouring roads at different heights would suit neither.
   const contribute = (i: number, wgt: number, y: number, kerb: number) => {

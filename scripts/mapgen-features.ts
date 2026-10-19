@@ -231,129 +231,132 @@ export function placeTownHall(ctx: FeatureContext): TownHall {
     .filter((r) => r.kind !== "service" && Math.hypot(r.bx - r.ax, r.bz - r.az) > 8)
     .sort((a, b) => dist(a, centre) - dist(b, centre))
     .slice(0, 600);
-  for (const road of candidates)
-    for (const side of [1, -1]) {
-      const length = Math.hypot(road.bx - road.ax, road.bz - road.az),
-        t = { x: (road.bx - road.ax) / length, z: (road.bz - road.az) / length },
-        // Local +v points away from the street.
-        angle = Math.atan2(t.z, t.x) + (side < 0 ? Math.PI : 0),
-        n = { x: -Math.sin(angle), z: Math.cos(angle) },
-        setback = road.width / 2 + SIDEWALK + 1.5 + DEPTH / 2,
-        middle = { x: road.x + n.x * setback, z: road.z + n.z * setback },
-        ring = rotatedRect(middle, LOT, DEPTH, angle);
-      if (!insideWorld(middle, 80) || overlapsTaken(ctx, ring)) continue;
-      // Only the street it faces (its collinear segments) may come near the lot.
-      const sameStreet = (r: Road) => {
-        const l = Math.hypot(r.bx - r.ax, r.bz - r.az) || 1,
-          turn = Math.abs(t.x * (r.bz - r.az) - t.z * (r.bx - r.ax)) / l,
-          offLine = Math.abs(t.x * (r.z - road.z) - t.z * (r.x - road.x));
-        return turn < 0.35 && offLine < 4;
-      };
-      if (
-        nearRoad(
-          ctx.roads.filter((r) => !sameStreet(r)),
-          ring,
-          2,
-        )
-      )
-        continue;
-      const samples = interior(ring);
-      let lo = Infinity,
-        hi = -Infinity,
-        fail = false;
-      for (const p of samples) {
-        const h = groundAt(ctx, p);
-        lo = Math.min(lo, h);
-        hi = Math.max(hi, h);
-        if (ctx.paved(p) || ctx.wet[gridIndex(p)] || h < WATER_LEVEL + 1.5) {
-          fail = true;
-          break;
-        }
-      }
-      if (fail || hi - lo > 5) continue;
-      const f = frame(middle, angle),
-        // Level with the street it faces, so cars roll straight off the kerb.
-        level = round(groundAt(ctx, f.at(0, -DEPTH / 2 - 2)));
-      stampRect(ctx, middle, LOT, DEPTH, angle, level, 16);
-      for (let i = ctx.buildings.length - 1; i >= 0; i--) {
-        const b = ctx.buildings[i];
+  // The lot is levelled afterwards, so ground that is a little uneven will do when no
+  // level lot is left near downtown.
+  for (const slack of [5, 8, 12])
+    for (const road of candidates)
+      for (const side of [1, -1]) {
+        const length = Math.hypot(road.bx - road.ax, road.bz - road.az),
+          t = { x: (road.bx - road.ax) / length, z: (road.bz - road.az) / length },
+          // Local +v points away from the street.
+          angle = Math.atan2(t.z, t.x) + (side < 0 ? Math.PI : 0),
+          n = { x: -Math.sin(angle), z: Math.cos(angle) },
+          setback = road.width / 2 + SIDEWALK + 1.5 + DEPTH / 2,
+          middle = { x: road.x + n.x * setback, z: road.z + n.z * setback },
+          ring = rotatedRect(middle, LOT, DEPTH, angle);
+        if (!insideWorld(middle, 80) || overlapsTaken(ctx, ring)) continue;
+        // Only the street it faces (its collinear segments) may come near the lot.
+        const sameStreet = (r: Road) => {
+          const l = Math.hypot(r.bx - r.ax, r.bz - r.az) || 1,
+            turn = Math.abs(t.x * (r.bz - r.az) - t.z * (r.bx - r.ax)) / l,
+            offLine = Math.abs(t.x * (r.z - road.z) - t.z * (r.x - road.x));
+          return turn < 0.35 && offLine < 4;
+        };
         if (
-          dist(b, middle) < 120 &&
-          convexOverlap(rotatedRect(b, b.w + 4, b.d + 4, b.angle ?? 0), ring)
+          nearRoad(
+            ctx.roads.filter((r) => !sameStreet(r)),
+            ring,
+            2,
+          )
         )
-          ctx.buildings.splice(i, 1);
-      }
-      // Local layout, v from the street (-29) to the back (+29):
-      // car park -29..-9 (two rows of bays either side of a 7 m aisle), plaza -9..-3,
-      // hall -3..25.
-      const PARK = { from: -DEPTH / 2, to: -9 },
-        BAY = 2.8,
-        DEEP = 5.5,
-        gap = 4.5;
-      for (const tile of tiles(f, -LOT / 2, LOT / 2, PARK.from, PARK.to))
-        ctx.asphalt.push(flat(tile, level));
-      for (const tile of tiles(f, -LOT / 2, LOT / 2, PARK.to, -3))
-        ctx.sidewalks.push(flat(tile, level));
-      const parking: Spot[] = [],
-        line = (u: number, v0: number, v1: number) =>
-          ctx.markings.push({
-            color: "white",
-            polygon: flat(
-              [
-                f.at(u - 0.07, v0),
-                f.at(u + 0.07, v0),
-                f.at(u + 0.07, v1),
-                f.at(u - 0.07, v1),
-              ],
-              level,
-            ),
-          });
-      const rows = [
-        // Street-side row nose-in toward the street, leaving an entrance in the middle.
-        { v0: PARK.from + 1, v1: PARK.from + 1 + DEEP, heading: -1, entrance: true },
-        { v0: PARK.to - DEEP, v1: PARK.to, heading: 1, entrance: false },
-      ];
-      for (const row of rows) {
-        const count = Math.floor((LOT - 2) / BAY);
-        const start = -(count * BAY) / 2;
-        for (let k = 0; k <= count; k++) {
-          const u = start + k * BAY;
-          if (row.entrance && Math.abs(u) < gap + BAY / 2) continue;
-          line(u, row.v0, row.v1);
-          if (k === count || (row.entrance && Math.abs(u + BAY / 2) < gap + BAY / 2))
-            continue;
-          const spot = f.at(u + BAY / 2, (row.v0 + row.v1) / 2);
-          parking.push({
-            x: round(spot.x),
-            z: round(spot.z),
-            angle: round(f.facing(row.heading)),
-          });
+          continue;
+        const samples = interior(ring);
+        let lo = Infinity,
+          hi = -Infinity,
+          fail = false;
+        for (const p of samples) {
+          const h = groundAt(ctx, p);
+          lo = Math.min(lo, h);
+          hi = Math.max(hi, h);
+          if (ctx.paved(p) || ctx.wet[gridIndex(p)] || h < WATER_LEVEL + 1.5) {
+            fail = true;
+            break;
+          }
         }
+        if (fail || hi - lo > slack) continue;
+        const f = frame(middle, angle),
+          // Level with the street it faces, so cars roll straight off the kerb.
+          level = round(groundAt(ctx, f.at(0, -DEPTH / 2 - 2)));
+        stampRect(ctx, middle, LOT, DEPTH, angle, level, 16);
+        for (let i = ctx.buildings.length - 1; i >= 0; i--) {
+          const b = ctx.buildings[i];
+          if (
+            dist(b, middle) < 120 &&
+            convexOverlap(rotatedRect(b, b.w + 4, b.d + 4, b.angle ?? 0), ring)
+          )
+            ctx.buildings.splice(i, 1);
+        }
+        // Local layout, v from the street (-29) to the back (+29):
+        // car park -29..-9 (two rows of bays either side of a 7 m aisle), plaza -9..-3,
+        // hall -3..25.
+        const PARK = { from: -DEPTH / 2, to: -9 },
+          BAY = 2.8,
+          DEEP = 5.5,
+          gap = 4.5;
+        for (const tile of tiles(f, -LOT / 2, LOT / 2, PARK.from, PARK.to))
+          ctx.asphalt.push(flat(tile, level));
+        for (const tile of tiles(f, -LOT / 2, LOT / 2, PARK.to, -3))
+          ctx.sidewalks.push(flat(tile, level));
+        const parking: Spot[] = [],
+          line = (u: number, v0: number, v1: number) =>
+            ctx.markings.push({
+              color: "white",
+              polygon: flat(
+                [
+                  f.at(u - 0.07, v0),
+                  f.at(u + 0.07, v0),
+                  f.at(u + 0.07, v1),
+                  f.at(u - 0.07, v1),
+                ],
+                level,
+              ),
+            });
+        const rows = [
+          // Street-side row nose-in toward the street, leaving an entrance in the middle.
+          { v0: PARK.from + 1, v1: PARK.from + 1 + DEEP, heading: -1, entrance: true },
+          { v0: PARK.to - DEEP, v1: PARK.to, heading: 1, entrance: false },
+        ];
+        for (const row of rows) {
+          const count = Math.floor((LOT - 2) / BAY);
+          const start = -(count * BAY) / 2;
+          for (let k = 0; k <= count; k++) {
+            const u = start + k * BAY;
+            if (row.entrance && Math.abs(u) < gap + BAY / 2) continue;
+            line(u, row.v0, row.v1);
+            if (k === count || (row.entrance && Math.abs(u + BAY / 2) < gap + BAY / 2))
+              continue;
+            const spot = f.at(u + BAY / 2, (row.v0 + row.v1) / 2);
+            parking.push({
+              x: round(spot.x),
+              z: round(spot.z),
+              angle: round(f.facing(row.heading)),
+            });
+          }
+        }
+        const hall = f.at(0, 11);
+        ctx.buildings.push({
+          x: round(hall.x),
+          z: round(hall.z),
+          w: 40,
+          d: 28,
+          y: level,
+          h: round(level + 15),
+          angle: round(Math.atan2(Math.sin(angle), Math.cos(angle))),
+          asset: "civic-hall",
+          facing: 0,
+          color: "#d9cfb8",
+          style: 0,
+        });
+        ctx.taken.push(rotatedRect(middle, LOT + 4, DEPTH + 4, angle));
+        const spawn = f.at(0, -6);
+        return {
+          x: round(middle.x),
+          z: round(middle.z),
+          angle: round(angle),
+          spawn: { x: round(spawn.x), z: round(spawn.z) },
+          parking,
+        };
       }
-      const hall = f.at(0, 11);
-      ctx.buildings.push({
-        x: round(hall.x),
-        z: round(hall.z),
-        w: 40,
-        d: 28,
-        y: level,
-        h: round(level + 15),
-        angle: round(Math.atan2(Math.sin(angle), Math.cos(angle))),
-        asset: "civic-hall",
-        facing: 0,
-        color: "#d9cfb8",
-        style: 0,
-      });
-      ctx.taken.push(rotatedRect(middle, LOT + 4, DEPTH + 4, angle));
-      const spawn = f.at(0, -6);
-      return {
-        x: round(middle.x),
-        z: round(middle.z),
-        angle: round(angle),
-        spawn: { x: round(spawn.x), z: round(spawn.z) },
-        parking,
-      };
-    }
   throw Error("No street-facing lot near downtown for the town hall");
 }
 
