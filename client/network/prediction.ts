@@ -105,7 +105,11 @@ export class Prediction {
       this.ownership = authoritative.id;
     }
     this.decayOffset(now);
-    const previous = this.sample(now)?.body;
+    // Compare both histories at one command position, including their extrapolation cap.
+    const sequence = this.lastInput
+      ? this.lastInput.seq + this.presentation(now, false)
+      : undefined;
+    const previous = this.sample(now, undefined, false, sequence)?.body;
     const gap = Math.min(2, Math.max(0, (now - this.lastReconcile) / 1000));
     this.lastReconcile = now;
     const acknowledged = this.pending.find((frame) => frame.seq === ack);
@@ -157,7 +161,7 @@ export class Prediction {
       this.impacts = new Map();
     }
     if (previous) {
-      const next = this.sample(now)!.body,
+      const next = this.sample(now, undefined, false, sequence)!.body,
         dx = previous.x - next.x,
         dz = previous.z - next.z,
         dy = previous.y - next.y;
@@ -274,9 +278,9 @@ export class Prediction {
     this.displayed = { x: pose.x, y: pose.y, z: pose.z, angle: pose.angle };
     return { body: pose, neighbours, contacts, impacts };
   }
-  private sample(now: number, input?: Input, advance = false) {
+  private sample(now: number, input?: Input, advance = false, sequence?: number) {
     if (this.body && !this.missingMap && this.worldReady(this.body)) {
-      const predicted = this.extrapolate(this.body, now, input, advance);
+      const predicted = this.extrapolate(this.body, now, input, advance, sequence);
       if (this.worldReady(predicted.body))
         return { ...predicted, mode: "predicted" as const };
     }
@@ -343,7 +347,13 @@ export class Prediction {
       ),
     );
   }
-  private extrapolate(body: Entity, now: number, input?: Input, advance = false) {
+  private extrapolate(
+    body: Entity,
+    now: number,
+    input?: Input,
+    advance = false,
+    sequence?: number,
+  ) {
     const pose = {
       ...body,
       wheelSkids: body.wheelSkids?.slice(),
@@ -360,7 +370,10 @@ export class Prediction {
     // instead of holding the pose and then lurching when the command arrives.
     this.ahead = Math.min(this.pending.length, MAX_PREDICTION_STEPS) * TUNING.tick;
     if (this.lastInput && !this.suspended) {
-      const partial = this.presentation(now, advance) * TUNING.tick;
+      const partial =
+        (sequence === undefined
+          ? this.presentation(now, advance)
+          : sequence - this.lastInput.seq) * TUNING.tick;
       this.ahead += partial;
       // Behind the newest command (the clock ran slightly slow): step back along the
       // motion; a fraction of a tick, so the straight-line estimate is exact enough.
