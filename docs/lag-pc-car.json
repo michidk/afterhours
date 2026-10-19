@@ -1,0 +1,99 @@
+{
+  "after": {
+    "ai": false,
+    "angle": 0.9909079614178632,
+    "angularVelocity": 0.6576458124295388,
+    "color": "#e86551",
+    "cooldown": 0,
+    "drive": {
+      "brake": false,
+      "steer": 0.5469525469347402,
+      "throttle": 0.14308639910172047
+    },
+    "driver": "e589",
+    "health": 85,
+    "id": "e621",
+    "kind": "car",
+    "lightsOn": true,
+    "maxHealth": 85,
+    "model": "sport",
+    "pitch": 0,
+    "rearGripLoss": 0,
+    "roll": 0,
+    "seats": ["e589", null],
+    "skidding": false,
+    "steering": 0.13494423249336002,
+    "vx": 8.000420410159865,
+    "vy": 0,
+    "vz": 5.062494539118279,
+    "wheelSkids": [false, false, false, false],
+    "x": 296.8531339926395,
+    "y": 22.45,
+    "z": 601.5018443872098
+  },
+  "before": {
+    "x": 292,
+    "z": 590
+  },
+  "frames": [],
+  "profile": {
+    "audio": "enabled",
+    "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+    "durationSeconds": 30.002700000000186,
+    "fps": 164.78516933475885,
+    "frameMaxMs": 20,
+    "frameP95Ms": 6.5,
+    "gpu": {
+      "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x00002786) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "vendor": "Google Inc. (NVIDIA)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)"
+    },
+    "hiddenSeconds": 0,
+    "invalidReasons": [],
+    "network": {
+      "ackAgeMs": {
+        "max": 2127.233333321783,
+        "p95": 1024.4333333219693
+      },
+      "corrections": 7,
+      "disconnectedSamples": 0,
+      "pendingInputs": {
+        "max": 60,
+        "p95": 37
+      },
+      "predictionStates": ["predicting", "waiting for acknowledgements"],
+      "resyncs": 1,
+      "rttMs": {
+        "max": 1761.2000000001865,
+        "p95": 603.1999999997206
+      },
+      "samples": 302,
+      "serverElapsedSeconds": 29.366666666640015,
+      "serverQueue": {
+        "max": 9,
+        "p95": 3
+      },
+      "snapshotAgeMs": {
+        "max": 1976.1999999997208,
+        "p95": 488.29999999981374
+      },
+      "snapshotIntervalMs": {
+        "max": 149.10000000009313,
+        "p95": 95.20000000018626
+      },
+      "visualOffsetMetres": {
+        "max": 1.4291363044056171,
+        "p95": 0.07921506768975105
+      }
+    },
+    "pixelRatio": 1,
+    "samples": 4944,
+    "stagesP95Ms": {
+      "render": 2.5,
+      "ui": 0.8000000002793968,
+      "update": 1.1999999997206032
+    },
+    "valid": true,
+    "viewport": [3147, 1281]
+  }
+}

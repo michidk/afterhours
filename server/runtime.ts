@@ -1,6 +1,6 @@
 import { totalmem } from "node:os";
 import { getHeapStatistics } from "node:v8";
-import { performance } from "node:perf_hooks";
+import { performance, PerformanceObserver } from "node:perf_hooks";
 import { TUNING } from "../shared/catalog.ts";
 import type { Simulation } from "./simulation.ts";
 import type { Sessions } from "./session.ts";
@@ -15,6 +15,10 @@ export class Runtime {
   private cpuSampleAt = 0;
   private cpuSample = process.cpuUsage();
   private cpuPercent = 0;
+  private gcObserver: PerformanceObserver | undefined;
+  private gcTotalMs = 0;
+  private gcPauses: { at: number; durationMs: number }[] = [];
+  private pumpPauses: { at: number; durationMs: number }[] = [];
   droppedMs = 0;
   constructor(
     readonly sim: Simulation,
@@ -34,6 +38,20 @@ export class Runtime {
         : 0;
   }
   start() {
+    if (this.sessions.debug) {
+      this.gcObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          this.gcTotalMs += entry.duration;
+          if (entry.duration < 10) continue;
+          this.gcPauses.push({
+            at: performance.timeOrigin + entry.startTime,
+            durationMs: entry.duration,
+          });
+          if (this.gcPauses.length > 32) this.gcPauses.shift();
+        }
+      });
+      this.gcObserver.observe({ entryTypes: ["gc"] });
+    }
     this.lastPumpAt = performance.now();
     this.cpuSampleAt = this.lastPumpAt;
     this.cpuSample = process.cpuUsage();
@@ -44,6 +62,13 @@ export class Runtime {
     let lastSnapshotTick = this.ticks;
     this.timer = setInterval(() => {
       const now = performance.now();
+      if (this.sessions.debug && now - last > 100) {
+        this.pumpPauses.push({
+          at: performance.timeOrigin + last,
+          durationMs: now - last,
+        });
+        if (this.pumpPauses.length > 32) this.pumpPauses.shift();
+      }
       if (now - this.cpuSampleAt >= 1000) {
         const cpu = process.cpuUsage();
         this.cpuPercent =
@@ -105,6 +130,15 @@ export class Runtime {
     const memory = process.memoryUsage(),
       memoryLimit = Math.min(process.constrainedMemory() || totalmem(), totalmem());
     return {
+      ...(this.sessions.debug
+        ? {
+            runtimePauses: {
+              gcTotalMs: this.gcTotalMs,
+              gc: this.gcPauses.slice(),
+              pump: this.pumpPauses.slice(),
+            },
+          }
+        : {}),
       cpuPercent: this.cpuPercent,
       memoryPercent: (100 * memory.rss) / memoryLimit,
       memoryLimitMB: memoryLimit / 1048576,
@@ -137,6 +171,7 @@ export class Runtime {
   }
   stop() {
     if (this.timer) clearInterval(this.timer);
+    this.gcObserver?.disconnect();
     this.sessions.close();
     this.sim.destruction.dispose();
   }

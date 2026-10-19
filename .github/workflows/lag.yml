@@ -62,6 +62,23 @@ jobs:
           mkdir -p test-results
           target_url=https://afterhours.k8s.lohr.dev
           if [ "$ROUTE" = local ]; then target_url=http://localhost:3000; fi
+          node --input-type=module - "$target_url" > test-results/server-health.jsonl <<'JS' &
+          import { setTimeout } from 'node:timers/promises';
+          const target = new URL('/health', process.argv[2]);
+          while (true) {
+            const at = Date.now();
+            try {
+              const response = await fetch(target, { signal: AbortSignal.timeout(5000) });
+              const health = await response.json();
+              console.log(JSON.stringify({ at, requestMs: Date.now() - at, status: response.status, health }));
+            } catch (error) {
+              console.log(JSON.stringify({ at, requestMs: Date.now() - at, error: String(error) }));
+            }
+            await setTimeout(1000);
+          }
+          JS
+          health_pid=$!
+          trap 'kill "$health_pid" 2>/dev/null || true' EXIT
           node --import tsx scripts/five-client-test.ts \
             --url "$target_url" \
             --seconds "$SECONDS_PER_PHASE" --output test-results/five-client.json
@@ -70,7 +87,7 @@ jobs:
         with:
           name: live-movement-${{ inputs.route }}
           path: |
-            test-results/five-client.json
+            test-results/
             /tmp/afterhours-five-*/*.jsonl
             /tmp/afterhours-five-*/*.jsonl.log
             /tmp/afterhours-server.log

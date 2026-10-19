@@ -183,6 +183,7 @@ test("debug telemetry distinguishes queued simulation time from dropped time", (
     clock = 1000;
     t.mock.timers.tick(5);
     const stats = sessions.diagnostics!();
+    assert.equal(runtime.metrics().runtimePauses?.pump[0].durationMs, 1000);
     assert.equal(stats.late, 1);
     assert.equal(stats.catchUpTicks, 3);
     assert.ok(Math.abs(stats.droppedMs - 733.3333333333334) < 0.001);
@@ -208,6 +209,7 @@ test("resource telemetry reports process CPU per core and RSS against its limit"
     new CityStore(sim.city).manifest,
   );
   const runtime = new Runtime(sim, sessions);
+  sessions.debug = false;
   let clock = 0,
     cpu = 0;
   const memory = process.memoryUsage();
@@ -225,6 +227,7 @@ test("resource telemetry reports process CPU per core and RSS against its limit"
     cpu = 250000;
     t.mock.timers.tick(5);
     const stats = sessions.diagnostics!();
+    assert.equal(runtime.metrics().runtimePauses, undefined);
     assert.equal(stats.cpuPercent, 25);
     assert.equal(stats.memoryPercent, 25);
     assert.equal(stats.memoryLimitMB, 2048);

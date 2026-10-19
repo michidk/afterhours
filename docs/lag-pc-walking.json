@@ -1,0 +1,132 @@
+{
+  "movement": {
+    "after": {
+      "angle": 1.5708,
+      "angularVelocity": 0,
+      "character": {
+        "hair": "crop",
+        "legs": "trousers",
+        "physique": "runner",
+        "skin": "#654432",
+        "top": "jacket"
+      },
+      "color": "#c4664e",
+      "cooldown": 0,
+      "equipped": 0,
+      "health": 80,
+      "id": "e589",
+      "inventory": [
+        {
+          "ammo": 0,
+          "id": "w32",
+          "kind": "fists",
+          "reserve": 0
+        }
+      ],
+      "kind": "player",
+      "maxHealth": 80,
+      "name": "Stranger",
+      "vx": 5.4,
+      "vy": 0,
+      "vz": 0,
+      "weapon": "fists",
+      "x": 452.453,
+      "y": 18.032,
+      "z": 590
+    },
+    "before": {
+      "angle": 0,
+      "angularVelocity": 0,
+      "character": {
+        "hair": "crop",
+        "legs": "trousers",
+        "physique": "runner",
+        "skin": "#654432",
+        "top": "jacket"
+      },
+      "color": "#c4664e",
+      "cooldown": 0,
+      "equipped": 0,
+      "health": 80,
+      "id": "e589",
+      "inventory": [
+        {
+          "ammo": 0,
+          "id": "w32",
+          "kind": "fists",
+          "reserve": 0
+        }
+      ],
+      "kind": "player",
+      "maxHealth": 80,
+      "name": "Stranger",
+      "vx": 0,
+      "vy": 0,
+      "vz": 0,
+      "weapon": "fists",
+      "x": 292,
+      "y": 22.45,
+      "z": 590
+    }
+  },
+  "profile": {
+    "audio": "enabled",
+    "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+    "durationSeconds": 30.005,
+    "fps": 156.2072987835361,
+    "frameMaxMs": 1270,
+    "frameP95Ms": 6.2999999998137355,
+    "gpu": {
+      "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x00002786) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "vendor": "Google Inc. (NVIDIA)",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)"
+    },
+    "hiddenSeconds": 0,
+    "invalidReasons": [],
+    "network": {
+      "ackAgeMs": {
+        "max": 517.6333333377843,
+        "p95": 299.0333333380404
+      },
+      "corrections": 0,
+      "disconnectedSamples": 0,
+      "pendingInputs": {
+        "max": 17,
+        "p95": 8
+      },
+      "predictionStates": ["predicting"],
+      "resyncs": 0,
+      "rttMs": {
+        "max": 158.39999999990687,
+        "p95": 129.10000000009313
+      },
+      "samples": 302,
+      "serverElapsedSeconds": 29.966666666639412,
+      "serverQueue": {
+        "max": 7,
+        "p95": 3
+      },
+      "snapshotAgeMs": {
+        "max": 351,
+        "p95": 103.60000000009312
+      },
+      "snapshotIntervalMs": {
+        "max": 175.89999999990687,
+        "p95": 76.89999999990687
+      },
+      "visualOffsetMetres": {
+        "max": 2.273736754432321e-13,
+        "p95": 0
+      }
+    },
+    "pixelRatio": 1,
+    "samples": 4687,
+    "stagesP95Ms": {
+      "render": 3.5,
+      "ui": 0.8999999999068677,
+      "update": 0.900000000372529
+    },
+    "valid": true,
+    "viewport": [3147, 1281]
+  }
+}
