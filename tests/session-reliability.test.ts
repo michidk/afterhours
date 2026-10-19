@@ -120,6 +120,13 @@ test("transport diagnostics retain writes, congestion and disconnect times", asy
   const ws = await connect();
   const welcome = await join(ws);
   const peer = [...sessions.clients.keys()][0];
+  const socketPeer = sessions.clients.get(peer)?.socketPeer;
+  assert.ok(socketPeer);
+  assert.equal(socketPeer.remoteAddress, "127.0.0.1");
+  assert.equal(typeof socketPeer.remotePort, "number");
+  const address = sessions.wss.address();
+  assert.ok(address && typeof address !== "string");
+  assert.equal(socketPeer.localPort, address.port);
   now = 1100;
   const pong = once(ws, "message");
   ws.send(JSON.stringify({ type: "input", seq: 0, timestamp: 50, ...idle() }));
@@ -146,6 +153,7 @@ test("transport diagnostics retain writes, congestion and disconnect times", asy
         lastSnapshotAt: 1200,
         skippedSnapshots: 1,
         bufferedBytes: 256000,
+        ...socketPeer,
       },
     ],
     closed: [],
@@ -165,6 +173,7 @@ test("transport diagnostics retain writes, congestion and disconnect times", asy
         lastSnapshotAt: 1200,
         skippedSnapshots: 1,
         bufferedBytes: 0,
+        ...socketPeer,
         closedAt: 1400,
       },
     ],

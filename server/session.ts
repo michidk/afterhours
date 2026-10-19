@@ -42,6 +42,11 @@ interface Client {
   frame: number;
   lastSnapshotAt: number;
   skippedSnapshots: number;
+  socketPeer?: {
+    localPort: number | undefined;
+    remotePort: number | undefined;
+    remoteAddress: string | undefined;
+  };
   known: Map<string, Map<string, string | undefined>>;
   view?: { x: number; z: number };
   rosterKey?: string;
@@ -145,6 +150,15 @@ export class Sessions {
         frame: 0,
         lastSnapshotAt: 0,
         skippedSnapshots: 0,
+        ...(this.debug
+          ? {
+              socketPeer: {
+                localPort: req.socket.localPort,
+                remotePort: req.socket.remotePort,
+                remoteAddress: req.socket.remoteAddress,
+              },
+            }
+          : {}),
         known: new Map(),
       };
       this.clients.set(ws, c);
@@ -166,6 +180,7 @@ export class Sessions {
       lastSnapshotAt: c.lastSnapshotAt,
       skippedSnapshots: c.skippedSnapshots,
       bufferedBytes: ws.bufferedAmount,
+      ...c.socketPeer,
     };
   }
   private archiveTransport(ws: WebSocket, c: Client) {

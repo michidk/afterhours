@@ -9,6 +9,7 @@ import { CityStore } from "./city-stream.ts";
 import { loadCityMeshes } from "./city-mesh-loader.ts";
 import { VERSION } from "../shared/version.ts";
 import { regenerateCity } from "./city-regenerate.ts";
+import { readTcpQueues } from "./tcp-queues.ts";
 
 const production = process.argv.includes("--production"),
   port = Number(process.env.PORT || 5173);
@@ -27,6 +28,11 @@ const vite = production
 const server = http.createServer(async (req, res) => {
   if (cityStore.serve(req, res)) return;
   if (req.url === "/health") {
+    const address = server.address();
+    const kernelTransport =
+      sessions.debug && address && typeof address !== "string"
+        ? await readTcpQueues(address.port)
+        : undefined;
     res.setHeader("Content-Type", "application/json");
     res.end(
       JSON.stringify({
@@ -34,6 +40,7 @@ const server = http.createServer(async (req, res) => {
         version: VERSION,
         time: sim.time,
         ...runtime.metrics(),
+        ...(kernelTransport ? { kernelTransport } : {}),
       }),
     );
     return;
