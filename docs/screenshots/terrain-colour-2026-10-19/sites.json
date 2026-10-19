@@ -1,0 +1,48 @@
+[
+  {
+    "name": "downtown",
+    "x": -22,
+    "z": 638,
+    "size": 500,
+    "px": 600
+  },
+  {
+    "name": "west-coast",
+    "x": 816,
+    "z": -920,
+    "size": 300,
+    "px": 600
+  },
+  {
+    "name": "south-spit",
+    "x": -880,
+    "z": -624,
+    "size": 300,
+    "px": 600
+  },
+  {
+    "name": "hill-and-towers",
+    "x": -300,
+    "z": 300,
+    "size": 300,
+    "pitch": 35,
+    "yaw": 200,
+    "px": 600
+  },
+  {
+    "name": "coastal-road",
+    "x": -1100,
+    "z": 200,
+    "size": 300,
+    "px": 600
+  },
+  {
+    "name": "ridge",
+    "x": 900,
+    "z": 600,
+    "size": 300,
+    "pitch": 35,
+    "yaw": 30,
+    "px": 600
+  }
+]
