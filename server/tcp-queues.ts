@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { readSchedulerStats } from "./scheduler-stats.ts";
 
 /** Linux proc addresses stay in their native hex encoding for offline correlation. */
 export function parseTcpQueues(table: string, port: number) {
@@ -43,6 +44,7 @@ export function parseTcpQueues(table: string, port: number) {
 
 export async function readTcpQueues(port: number) {
   const startedAt = Date.now();
+  const schedulerPending = readSchedulerStats();
   const tables = await Promise.all(
     ["/proc/net/tcp", "/proc/net/tcp6"].map(async (path) => {
       try {
@@ -52,5 +54,6 @@ export async function readTcpQueues(port: number) {
       }
     }),
   );
-  return { startedAt, completedAt: Date.now(), tables };
+  const scheduler = await schedulerPending;
+  return { startedAt, completedAt: Date.now(), tables, scheduler };
 }
