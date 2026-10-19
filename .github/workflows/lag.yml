@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       route:
-        description: Route to the production game
+        description: Test a fresh local server or a route to production
         type: choice
-        options: [direct, public]
+        options: [local, direct, public]
         default: direct
       seconds:
         description: Measured seconds for each five-client phase
@@ -33,16 +33,32 @@ jobs:
         with:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
+      - name: Start the checked-out server
+        if: inputs.route == 'local'
+        run: |
+          bun run build
+          ALLOW_DEBUG=1 PORT=3000 bun run start > /tmp/afterhours-server.log 2>&1 &
+          server_pid=$!
+          for attempt in $(seq 1 240); do
+            if curl --fail --silent http://localhost:3000/health > /dev/null; then exit 0; fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then cat /tmp/afterhours-server.log; exit 1; fi
+            sleep 1
+          done
+          cat /tmp/afterhours-server.log
+          exit 1
       - name: Resolve directly to the game node
         if: inputs.route == 'direct'
         run: echo '178.162.254.45 afterhours.k8s.lohr.dev' | sudo tee -a /etc/hosts
       - name: Exercise five people, five cars, then five planes
         env:
           SECONDS_PER_PHASE: ${{ inputs.seconds }}
+          ROUTE: ${{ inputs.route }}
         run: |
           mkdir -p test-results
+          target_url=https://afterhours.k8s.lohr.dev
+          if [ "$ROUTE" = local ]; then target_url=http://localhost:3000; fi
           node --import tsx scripts/five-client-test.ts \
-            --url https://afterhours.k8s.lohr.dev \
+            --url "$target_url" \
             --seconds "$SECONDS_PER_PHASE" --output test-results/five-client.json
       - uses: actions/upload-artifact@v4
         if: always()
@@ -52,3 +68,4 @@ jobs:
             test-results/five-client.json
             /tmp/afterhours-five-*/*.jsonl
             /tmp/afterhours-five-*/*.jsonl.log
+            /tmp/afterhours-server.log
