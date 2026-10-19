@@ -1,0 +1,201 @@
+{
+  "url": "https://afterhours.k8s.lohr.dev",
+  "seconds": 60,
+  "directory": "/tmp/afterhours-five-1qLclj",
+  "environment": {
+    "cores": 4,
+    "load": [0.34, 0.11, 0.04],
+    "node": "v24.21.0"
+  },
+  "phases": [
+    {
+      "name": "people",
+      "clients": [
+        {
+          "failures": [],
+          "samples": 533,
+          "simulationRate": 1.0003059890527657,
+          "maxSnapshotAgeMs": 75.92035300000862,
+          "maxAppliedInputAgeMs": 279.0030090029759,
+          "maxInputLagMs": 6.87030233364203,
+          "maxCorrectionMeters": 0.0011412930950259025,
+          "movingFraction": 1,
+          "airborneFraction": 0
+        },
+        {
+          "failures": [],
+          "samples": 532,
+          "simulationRate": 1.0005794001107926,
+          "maxSnapshotAgeMs": 69.5281959999993,
+          "maxAppliedInputAgeMs": 269.58284066501074,
+          "maxInputLagMs": 7.288751331783715,
+          "maxCorrectionMeters": 0.0011786252814581207,
+          "movingFraction": 1,
+          "airborneFraction": 0
+        },
+        {
+          "failures": [],
+          "samples": 533,
+          "simulationRate": 1.0002225189268434,
+          "maxSnapshotAgeMs": 72.53766899999755,
+          "maxAppliedInputAgeMs": 272.2778146696073,
+          "maxInputLagMs": 7.822522333233792,
+          "maxCorrectionMeters": 0.0012222960496014658,
+          "movingFraction": 1,
+          "airborneFraction": 0
+        },
+        {
+          "failures": [],
+          "samples": 533,
+          "simulationRate": 0.9996552912915979,
+          "maxSnapshotAgeMs": 70.78556200000094,
+          "maxAppliedInputAgeMs": 279.2563826659316,
+          "maxInputLagMs": 6.918134000021382,
+          "maxCorrectionMeters": 0.001187299269666136,
+          "movingFraction": 1,
+          "airborneFraction": 0
+        },
+        {
+          "failures": [],
+          "samples": 533,
+          "simulationRate": 0.9996437795122386,
+          "maxSnapshotAgeMs": 71.51529399999708,
+          "maxAppliedInputAgeMs": 274.62141166642687,
+          "maxInputLagMs": 6.041474999423372,
+          "maxCorrectionMeters": 0.001187439661069229,
+          "movingFraction": 1,
+          "airborneFraction": 0
+        }
+      ]
+    },
+    {
+      "name": "cars",
+      "clients": [
+        {
+          "failures": [],
+          "samples": 533,
+          "simulationRate": 0.9999443238254375,
+          "maxSnapshotAgeMs": 117.92021900000691,
+          "maxAppliedInputAgeMs": 325.47875000433123,
+          "maxInputLagMs": 19.758515000001353,
+          "maxCorrectionMeters": 0.001283775912608594,
+          "movingFraction": 1,
+          "airborneFraction": 0
+        },
+        {
+          "failures": [],
+          "samples": 533,
+          "simulationRate": 1.0001113709894578,
+          "maxSnapshotAgeMs": 73.1088560000062,
+          "maxAppliedInputAgeMs": 280.6409760026145,
+          "maxInputLagMs": 21.982534000002488,
+          "maxCorrectionMeters": 0.0012485683049593655,
+          "movingFraction": 1,
+          "airborneFraction": 0
+        },
+        {
+          "failures": [],
+          "samples": 533,
+          "simulationRate": 0.9998107262672258,
+          "maxSnapshotAgeMs": 73.1678649999958,
+          "maxAppliedInputAgeMs": 285.1598623323225,
+          "maxInputLagMs": 18.912599000002956,
+          "maxCorrectionMeters": 0.0012700144207512859,
+          "movingFraction": 1,
+          "airborneFraction": 0
+        },
+        {
+          "failures": [],
+          "samples": 533,
+          "simulationRate": 1.0001056841506577,
+          "maxSnapshotAgeMs": 68.67739399999846,
+          "maxAppliedInputAgeMs": 273.71662933161133,
+          "maxInputLagMs": 25.079724000119313,
+          "maxCorrectionMeters": 0.0012481262908405667,
+          "movingFraction": 1,
+          "airborneFraction": 0
+        },
+        {
+          "failures": [],
+          "samples": 533,
+          "simulationRate": 1.0001891347768175,
+          "maxSnapshotAgeMs": 75.49429699999746,
+          "maxAppliedInputAgeMs": 278.7130483329238,
+          "maxInputLagMs": 29.783060666608435,
+          "maxCorrectionMeters": 0.0013468230387527508,
+          "movingFraction": 1,
+          "airborneFraction": 0
+        }
+      ]
+    },
+    {
+      "name": "planes",
+      "clients": [
+        {
+          "failures": [
+            "applied input age >400ms",
+            "snapshot age >300ms",
+            "correction >0.3m"
+          ],
+          "samples": 532,
+          "simulationRate": 0.9980239904388022,
+          "maxSnapshotAgeMs": 325.08136700000614,
+          "maxAppliedInputAgeMs": 608.3704720038659,
+          "maxInputLagMs": 22.70689699999639,
+          "maxCorrectionMeters": 1.290566252563411,
+          "movingFraction": 1,
+          "airborneFraction": 1
+        },
+        {
+          "failures": ["applied input age >400ms", "snapshot age >300ms"],
+          "samples": 531,
+          "simulationRate": 0.9981906750301073,
+          "maxSnapshotAgeMs": 429.8746519999986,
+          "maxAppliedInputAgeMs": 705.1324420038873,
+          "maxInputLagMs": 27.240243000007467,
+          "maxCorrectionMeters": 0.11114596455296821,
+          "movingFraction": 1,
+          "airborneFraction": 1
+        },
+        {
+          "failures": [
+            "applied input age >400ms",
+            "snapshot age >300ms",
+            "correction >0.3m",
+            "input resynchronization"
+          ],
+          "samples": 532,
+          "simulationRate": 0.998157333657793,
+          "maxSnapshotAgeMs": 530.8898570000019,
+          "maxAppliedInputAgeMs": 775.8368600021204,
+          "maxInputLagMs": 49.634430999998585,
+          "maxCorrectionMeters": 2.5021960210534453,
+          "movingFraction": 1,
+          "airborneFraction": 1
+        },
+        {
+          "failures": ["applied input age >400ms"],
+          "samples": 530,
+          "simulationRate": 0.9979606165083106,
+          "maxSnapshotAgeMs": 278.5014200000005,
+          "maxAppliedInputAgeMs": 599.098860667611,
+          "maxInputLagMs": 42.82594233215059,
+          "maxCorrectionMeters": 0.06140329693703859,
+          "movingFraction": 1,
+          "airborneFraction": 1
+        },
+        {
+          "failures": ["applied input age >400ms", "snapshot age >300ms"],
+          "samples": 531,
+          "simulationRate": 0.9986743753538695,
+          "maxSnapshotAgeMs": 421.497749999995,
+          "maxAppliedInputAgeMs": 656.3812493318837,
+          "maxInputLagMs": 31.106017999998585,
+          "maxCorrectionMeters": 0.01077669077510091,
+          "movingFraction": 1,
+          "airborneFraction": 1
+        }
+      ]
+    }
+  ]
+}

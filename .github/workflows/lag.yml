@@ -48,7 +48,7 @@ jobs:
           exit 1
       - name: Resolve directly to the game node
         if: inputs.route == 'direct'
-        run: echo '178.162.254.45 afterhours.k8s.lohr.dev' | sudo tee -a /etc/hosts
+        run: echo '130.61.217.172 afterhours.k8s.lohr.dev' | sudo tee -a /etc/hosts
       - name: Exercise five people, five cars, then five planes
         env:
           SECONDS_PER_PHASE: ${{ inputs.seconds }}
