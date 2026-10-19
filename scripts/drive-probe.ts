@@ -46,6 +46,12 @@ export interface ProbeOptions {
   seconds?: number;
   /** Client wakeup period in milliseconds (16 approximates a 60 fps browser). */
   wakeup?: number;
+  /** Deliver snapshot callbacks in the same batches as a stalled browser's timers. */
+  batchIncoming?: boolean;
+  /** Override the driver's incoming delay, leaving its outgoing link unchanged. */
+  snapshotDelay?: number;
+  /** Hold idle before pressing the throttle, in simulated seconds. */
+  startAfter?: number;
   /** Milliseconds added to every server tick period: a slow or fast server clock. */
   serverSlow?: number;
   /** Apply slowdown only during this interval, then return to the normal tick rate. */
@@ -61,6 +67,7 @@ export interface ProbeOptions {
 interface Link {
   outgoing: { at: number; data: Parameters<WebSocket["send"]>[0] }[];
   incoming: { at: number; event: MessageEvent }[];
+  callbacks: { at: number; event: MessageEvent }[];
   send: WebSocket["send"];
   receive: NonNullable<WebSocket["onmessage"]>;
   socket: WebSocket;
@@ -158,6 +165,7 @@ export async function probeDriving(options: ProbeOptions = {}) {
       const entry: Link = {
         outgoing: [],
         incoming: [],
+        callbacks: [],
         send: socket.send.bind(socket),
         receive: socket.onmessage!,
         socket,
@@ -229,6 +237,7 @@ export async function probeDriving(options: ProbeOptions = {}) {
     let maxPending = 0;
     let suspendedFrames = 0;
     const limit = VEHICLES[model].speed;
+    let held = options.startAfter === undefined;
     for (now = 0; now <= seconds * 1000; now++) {
       if (now > 0) mock.timers.tick(1);
       if (now % wakeup === 0) {
@@ -236,17 +245,26 @@ export async function probeDriving(options: ProbeOptions = {}) {
         if (driver.prediction?.status === "waiting for acknowledgements")
           suspendedFrames++;
       }
-      if (now % wakeup === 0)
+      if (now % wakeup === 0) {
+        if (!held && now >= (options.startAfter ?? 0) * 1000) {
+          // Match main.ts: finish old slots, change controls, send the next slot early.
+          clock.advance(now, (timestamp) => driver.input(idle(), timestamp));
+          held = true;
+          clock.transition(now, (timestamp) =>
+            driver.input({ ...idle(), up: true }, timestamp),
+          );
+        }
         clock.advance(now, (timestamp) =>
           driver.input(
             {
               ...idle(),
-              up: true,
+              up: held,
               right: options.steerFrom !== undefined && now >= options.steerFrom * 1000,
             },
             timestamp,
           ),
         );
+      }
       for (const entry of links)
         while (entry.outgoing[0]?.at <= now) {
           const delivered = once(entry.peer, "message");
@@ -268,9 +286,19 @@ export async function probeDriving(options: ProbeOptions = {}) {
         if (tick % 2 === 0) await broadcast();
         tick++;
       }
-      for (const entry of links)
-        while (entry.incoming[0]?.at <= now)
-          entry.receive.call(entry.socket, entry.incoming.shift()!.event);
+      for (const [i, entry] of links.entries()) {
+        if (options.batchIncoming && i === 0 && now % wakeup !== 0) continue;
+        // The browser test's delay timer starts only once its message callback runs.
+        while (entry.incoming[0]?.at <= now) {
+          const packet = entry.incoming.shift()!;
+          entry.callbacks.push({
+            at: now + (i === 0 ? (options.snapshotDelay ?? 0) : 0),
+            event: packet.event,
+          });
+        }
+        while (entry.callbacks[0]?.at <= now)
+          entry.receive.call(entry.socket, entry.callbacks.shift()!.event);
+      }
       if (now % 16 === 0) {
         const pose = driver.renderEntities(now).find((e) => e.id === car.id)!;
         const seen = observer.renderEntities(now).find((e) => e.id === car.id);

@@ -136,3 +136,20 @@ for (const wakeup of [280, 400])
     assert.equal(report.cruise.backward, 0, detail);
     assert.ok(Math.abs(report.cruise.meanStep - 0.832) < 0.02, detail);
   });
+
+test("acceleration does not rewind when browser input and snapshots arrive in batches", async () => {
+  const report = await probeDriving({
+    profile: "none",
+    model: "sedan",
+    wakeup: 280,
+    batchIncoming: true,
+    snapshotDelay: 150,
+    startAfter: 5,
+    seconds: 12,
+  });
+  const detail = JSON.stringify(report);
+  assert.equal(report.server.mispredicted, 0, detail);
+  assert.equal(report.server.dropped, 0, detail);
+  assert.equal(report.client.corrections, 0, detail);
+  assert.ok(report.finalAuthorityZ > 170, detail);
+});

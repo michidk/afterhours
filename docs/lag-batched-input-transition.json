@@ -1,0 +1,150 @@
+{
+  "options": {
+    "profile": "none",
+    "model": "sedan",
+    "wakeup": 280,
+    "batchIncoming": true,
+    "snapshotDelay": 150,
+    "startAfter": 5,
+    "seconds": 12
+  },
+  "before": {
+    "profile": "none",
+    "model": "sedan",
+    "wakeup": 280,
+    "serverSlow": 0,
+    "regulate": true,
+    "timerFirings": 24,
+    "ticks": 361,
+    "inputsSent": 353,
+    "applied": 360,
+    "server": {
+      "dryTicks": 310,
+      "speculated": 312,
+      "mispredicted": 1,
+      "frozen": 1,
+      "maxAhead": 33,
+      "dropped": 0,
+      "queueDepthMean": 1,
+      "queueDepthMax": 9
+    },
+    "client": {
+      "maxPending": 11,
+      "suspendedFrames": 0,
+      "corrections": 1,
+      "correctionsOver1m": 0,
+      "maxCorrection": 0.891,
+      "maxOffset": 0.921
+    },
+    "cruise": {
+      "speed": 42,
+      "expectedStep": 0.672,
+      "frames": 0,
+      "meanStep": 0,
+      "maxStep": 0,
+      "minStep": 0,
+      "backward": 0,
+      "surges": 0,
+      "dips": 0,
+      "jerkMean": 0,
+      "jerkP95": 0,
+      "jerkMax": 0,
+      "hitches": 0,
+      "verticalMean": 0,
+      "verticalMax": 0
+    },
+    "remote": {
+      "frames": 0,
+      "meanStep": 0,
+      "maxStep": 0,
+      "minStep": 0,
+      "backward": 0,
+      "surges": 0,
+      "dips": 0,
+      "jerkMean": 0,
+      "jerkP95": 0,
+      "jerkMax": 0,
+      "hitches": 0,
+      "verticalMean": 0,
+      "verticalMax": 0
+    },
+    "finalAuthorityZ": 167,
+    "brokenProps": [],
+    "trace": [
+      {
+        "at": 5600,
+        "correction": 0.891,
+        "ack": 157,
+        "nextSeq": 169,
+        "pending": [158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168],
+        "speculative": 0,
+        "queued": 1,
+        "offset": 0.891
+      }
+    ]
+  },
+  "after": {
+    "profile": "none",
+    "model": "sedan",
+    "wakeup": 280,
+    "serverSlow": 0,
+    "regulate": true,
+    "timerFirings": 24,
+    "ticks": 361,
+    "inputsSent": 355,
+    "applied": 360,
+    "server": {
+      "dryTicks": 270,
+      "speculated": 272,
+      "mispredicted": 0,
+      "frozen": 1,
+      "maxAhead": 33,
+      "dropped": 0,
+      "queueDepthMean": 1.17,
+      "queueDepthMax": 10
+    },
+    "client": {
+      "maxPending": 12,
+      "suspendedFrames": 0,
+      "corrections": 0,
+      "correctionsOver1m": 0,
+      "maxCorrection": 0,
+      "maxOffset": 0
+    },
+    "cruise": {
+      "speed": 42,
+      "expectedStep": 0.672,
+      "frames": 18,
+      "meanStep": 0.6222053411909833,
+      "maxStep": 8.988,
+      "minStep": 0,
+      "backward": 0,
+      "surges": 1,
+      "dips": 14,
+      "jerkMean": 1.0574,
+      "jerkP95": 8.9877,
+      "jerkMax": 8.9877,
+      "hitches": 4,
+      "verticalMean": 0,
+      "verticalMax": 0
+    },
+    "remote": {
+      "frames": 18,
+      "meanStep": 0.6717957240399828,
+      "maxStep": 0.673,
+      "minStep": 0.671,
+      "backward": 0,
+      "surges": 0,
+      "dips": 0,
+      "jerkMean": 0.0005,
+      "jerkP95": 0.0021,
+      "jerkMax": 0.0021,
+      "hitches": 0,
+      "verticalMean": 0,
+      "verticalMax": 0
+    },
+    "finalAuthorityZ": 176.8,
+    "brokenProps": [],
+    "trace": []
+  }
+}

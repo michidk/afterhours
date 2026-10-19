@@ -25,6 +25,14 @@ export class InputClock {
       send(timestamp);
     }
   }
+  /** Send the next slot early on a control change, without adding a slot. */
+  transition(now: number, send: (timestamp: number) => void) {
+    if (this.next === undefined) return;
+    if (this.next > now && this.next <= now + this.period + 1e-6) {
+      this.next += this.period;
+      send(now);
+    }
+  }
   /**
    * Phase-lock the schedule to the server's buffer: a dry queue means the server
    * ran held controls, a deep queue means commands wait. Keep small adjustments

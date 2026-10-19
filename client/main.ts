@@ -255,6 +255,7 @@ window.addEventListener("keydown", (event) => {
   pumpInput();
   controls.press(event.code);
   if (event.repeat) return;
+  pumpInput(performance.now(), true);
   if (event.code === "KeyM") {
     audio.ui();
     cityMap?.setOpen(!cityMap.open);
@@ -296,6 +297,7 @@ window.addEventListener("keydown", (event) => {
 window.addEventListener("keyup", (e) => {
   pumpInput();
   keys.delete(e.code);
+  pumpInput(performance.now(), true);
 });
 window.addEventListener("blur", () => {
   controls.clear();
@@ -393,8 +395,10 @@ canvas.addEventListener("pointerdown", (event) => {
       !scene.debugCamera.active &&
       !inspecting() &&
       event.button === 0
-    )
+    ) {
       controls.click();
+      pumpInput(performance.now(), true);
+    }
   }
 });
 canvas.addEventListener("contextmenu", (event) => {
@@ -413,9 +417,10 @@ canvas.addEventListener(
 window.addEventListener("pointerup", () => {
   pumpInput();
   controls.mouseDown = false;
+  pumpInput(performance.now(), true);
 });
 const inputClock = new InputClock();
-function pumpInput(now = performance.now()) {
+function pumpInput(now = performance.now(), transition = false) {
   if (!joined || document.hidden) {
     inputClock.reset();
     return;
@@ -428,7 +433,7 @@ function pumpInput(now = performance.now()) {
     point && position && !p?.vehicle
       ? Math.atan2(point.x - position.x, point.z - position.z)
       : undefined;
-  inputClock.advance(now, (timestamp) => {
+  const send = (timestamp: number) => {
     const input = controls.sample();
     handleGamepadActions();
     network?.input(
@@ -439,7 +444,9 @@ function pumpInput(now = performance.now()) {
         : automation?.input || input,
       timestamp,
     );
-  });
+  };
+  inputClock.advance(now, send);
+  if (transition) inputClock.transition(now, send);
 }
 setInterval(pumpInput, 1000 / 30);
 setInterval(() => {

@@ -26,3 +26,24 @@ test("a suspended tab discards clock debt and overlapping wakeups send no duplic
   clock.advance(2010, send);
   assert.deepEqual(timestamps, [0, 2000, 2010]);
 });
+
+test("control changes send promptly without creating extra simulation slots", () => {
+  const clock = new InputClock();
+  const timestamps: number[] = [];
+  const send = (timestamp: number) => timestamps.push(timestamp);
+  clock.advance(0, send);
+  clock.advance(10, send);
+  clock.transition(10, send);
+  assert.deepEqual(timestamps, [0, 10]);
+  clock.advance(40, send);
+  assert.deepEqual(timestamps, [0, 10], "the early command consumed the next slot");
+  // Repeated presses/releases can borrow at most the next tick, not speed up time.
+  for (let now = 41; now <= 3000; now++) {
+    clock.advance(now, send);
+    clock.transition(now, send);
+  }
+  assert.equal(timestamps.length, 92);
+  clock.reset();
+  clock.transition(4000, send);
+  assert.equal(timestamps.length, 92, "a reset clock cannot send before joining");
+});
