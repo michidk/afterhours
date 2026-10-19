@@ -1,0 +1,330 @@
+{
+  "model": "scout",
+  "samples": [
+    {
+      "kind": "input",
+      "wall": 49554.29999999999,
+      "server": 348.9999999998469,
+      "frame": 5235,
+      "seq": 918,
+      "authority": 593.316,
+      "displayed": 593.316,
+      "pending": 12,
+      "prediction": {
+        "status": "predicting",
+        "authorityReady": true,
+        "bodyReady": true,
+        "z": 593.3161934412408,
+        "offset": 0,
+        "correction": 0
+      }
+    },
+    {
+      "kind": "render",
+      "wall": 49558.90000000002,
+      "server": 348.9999999998469,
+      "frame": 5235,
+      "seq": 918,
+      "authority": 593.316,
+      "displayed": 593.3161993419981,
+      "pending": 12,
+      "prediction": {
+        "status": "predicting",
+        "authorityReady": true,
+        "bodyReady": true,
+        "z": 593.3161934412408,
+        "offset": 0,
+        "correction": 0
+      }
+    },
+    {
+      "kind": "render",
+      "wall": 49828.5,
+      "server": 349.26666666651334,
+      "frame": 5239,
+      "seq": 927,
+      "authority": 593.316,
+      "displayed": 593.4137267322229,
+      "pending": 13,
+      "prediction": {
+        "status": "predicting",
+        "authorityReady": true,
+        "bodyReady": true,
+        "z": 593.4040038048731,
+        "offset": 0,
+        "correction": 0
+      }
+    },
+    {
+      "kind": "render",
+      "wall": 50100.600000000035,
+      "server": 349.7999999998462,
+      "frame": 5247,
+      "seq": 935,
+      "authority": 593.364,
+      "displayed": 593.3809875217794,
+      "pending": 6,
+      "prediction": {
+        "status": "predicting",
+        "authorityReady": true,
+        "bodyReady": true,
+        "z": 593.5309076448626,
+        "offset": -0.17375825377814635,
+        "correction": 0.17375825377814635
+      }
+    },
+    {
+      "kind": "render",
+      "wall": 50372.5,
+      "server": 350.0666666665126,
+      "frame": 5251,
+      "seq": 943,
+      "authority": 593.62,
+      "displayed": 594.0401500011021,
+      "pending": 6,
+      "prediction": {
+        "status": "predicting",
+        "authorityReady": true,
+        "bodyReady": true,
+        "z": 594.001198830198,
+        "offset": -0.018882775775923646,
+        "correction": 0.0004334136849593051
+      }
+    },
+    {
+      "kind": "render",
+      "wall": 50634.600000000035,
+      "server": 350.33333333317904,
+      "frame": 5255,
+      "seq": 951,
+      "authority": 594.167,
+      "displayed": 594.162723262277,
+      "pending": 6,
+      "prediction": {
+        "status": "predicting",
+        "authorityReady": true,
+        "bodyReady": true,
+        "z": 594.7795915443904,
+        "offset": -0.688020342300882,
+        "correction": 0.6843417722277536
+      }
+    },
+    {
+      "kind": "render",
+      "wall": 50905.29999999999,
+      "server": 350.59999999984547,
+      "frame": 5259,
+      "seq": 959,
+      "authority": 594.898,
+      "displayed": 595.9500039227664,
+      "pending": 7,
+      "prediction": {
+        "status": "predicting",
+        "authorityReady": true,
+        "bodyReady": true,
+        "z": 595.8601237451802,
+        "offset": -0.014449034398736212,
+        "correction": 0.0004141712572618417
+      }
+    },
+    {
+      "kind": "render",
+      "wall": 51171.29999999999,
+      "server": 350.8666666665119,
+      "frame": 5263,
+      "seq": 967,
+      "authority": 596.016,
+      "displayed": 596.232107894566,
+      "pending": 7,
+      "prediction": {
+        "status": "predicting",
+        "authorityReady": true,
+        "bodyReady": true,
+        "z": 597.2257742679885,
+        "offset": -1.1364746067027156,
+        "correction": 1.178693218319836
+      }
+    },
+    {
+      "kind": "render",
+      "wall": 51436.600000000035,
+      "server": 351.1333333331783,
+      "frame": 5267,
+      "seq": 975,
+      "authority": 597.415,
+      "displayed": 597.598408297809,
+      "pending": 7,
+      "prediction": {
+        "status": "predicting",
+        "authorityReady": true,
+        "bodyReady": true,
+        "z": 598.8518703813386,
+        "offset": -1.4027226436972036,
+        "correction": 1.3929451195274396
+      }
+    },
+    {
+      "kind": "render",
+      "wall": 51702.600000000035,
+      "server": 351.39999999984474,
+      "frame": 5271,
+      "seq": 983,
+      "authority": 599.073,
+      "displayed": 600.8671156375764,
+      "pending": 7,
+      "prediction": {
+        "status": "predicting",
+        "authorityReady": true,
+        "bodyReady": true,
+        "z": 600.7161027769428,
+        "offset": -0.012322050631364895,
+        "correction": 0.0006386349568856531
+      }
+    },
+    {
+      "kind": "render",
+      "wall": 51973.100000000035,
+      "server": 351.66666666651116,
+      "frame": 5275,
+      "seq": 991,
+      "authority": 600.716,
+      "displayed": 601.2132120012141,
+      "pending": 8,
+      "prediction": {
+        "status": "predicting",
+        "authorityReady": true,
+        "bodyReady": true,
+        "z": 602.7940755022946,
+        "offset": -1.789130133508313,
+        "correction": 1.7867899312176405
+      }
+    },
+    {
+      "kind": "render",
+      "wall": 52240.20000000001,
+      "server": 351.9333333331776,
+      "frame": 5279,
+      "seq": 999,
+      "authority": 602.794,
+      "displayed": 605.2666133264885,
+      "pending": 8,
+      "prediction": {
+        "status": "predicting",
+        "authorityReady": true,
+        "bodyReady": true,
+        "z": 605.0652346440296,
+        "offset": -0.014805493295314389,
+        "correction": 0.00020402903612648515
+      }
+    },
+    {
+      "kind": "render",
+      "wall": 52505.5,
+      "server": 352.199999999844,
+      "frame": 5283,
+      "seq": 1007,
+      "authority": 605.065,
+      "displayed": 605.6571273562196,
+      "pending": 8,
+      "prediction": {
+        "status": "predicting",
+        "authorityReady": true,
+        "bodyReady": true,
+        "z": 607.5103442246293,
+        "offset": -2.0732706338248583,
+        "correction": 2.0704009260261955
+      }
+    },
+    {
+      "kind": "render",
+      "wall": 52767.5,
+      "server": 352.46666666651043,
+      "frame": 5287,
+      "seq": 1015,
+      "authority": 607.511,
+      "displayed": 610.3003873395089,
+      "pending": 8,
+      "prediction": {
+        "status": "predicting",
+        "authorityReady": true,
+        "bodyReady": true,
+        "z": 610.1129783782998,
+        "offset": -0.01860737042053895,
+        "correction": 0.0007059035835936811
+      }
+    },
+    {
+      "kind": "render",
+      "wall": 53053.600000000035,
+      "server": 352.73333333317686,
+      "frame": 5291,
+      "seq": 1024,
+      "authority": 609.779,
+      "displayed": 613.2852288816849,
+      "pending": 10,
+      "prediction": {
+        "status": "predicting",
+        "authorityReady": true,
+        "bodyReady": true,
+        "z": 613.207095221342,
+        "offset": -0.002398972804723902,
+        "correction": 0.0007284021781970296
+      }
+    },
+    {
+      "kind": "render",
+      "wall": 53325.40000000002,
+      "server": 353.2666666665097,
+      "frame": 5299,
+      "seq": 1032,
+      "authority": 615.36,
+      "displayed": 616.2282810482479,
+      "pending": 2,
+      "prediction": {
+        "status": "predicting",
+        "authorityReady": true,
+        "bodyReady": true,
+        "z": 616.0920904079752,
+        "offset": 0,
+        "correction": 0.0006716761633924762
+      }
+    },
+    {
+      "kind": "render",
+      "wall": 53671.100000000035,
+      "server": 353.3333333331763,
+      "frame": 5300,
+      "seq": 1040,
+      "authority": 616.092,
+      "displayed": 616.8277755512661,
+      "pending": 8,
+      "prediction": {
+        "status": "predicting",
+        "authorityReady": true,
+        "bodyReady": true,
+        "z": 619.0887787442592,
+        "offset": -2.394477739175727,
+        "correction": 2.394477739175727
+      }
+    },
+    {
+      "kind": "input",
+      "wall": 53934.40000000002,
+      "server": 353.3333333331763,
+      "frame": 5300,
+      "seq": 1051,
+      "authority": 616.092,
+      "displayed": 616.8277755512661,
+      "pending": 19,
+      "prediction": {
+        "status": "predicting",
+        "authorityReady": true,
+        "bodyReady": true,
+        "z": 623.3719665171676,
+        "offset": -2.394477739175727,
+        "correction": 2.394477739175727
+      }
+    }
+  ],
+  "errors": []
+}
