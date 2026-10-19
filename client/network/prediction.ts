@@ -123,6 +123,16 @@ export class Prediction {
       this.lastInput = this.suspended
         ? undefined
         : (replay.at(-1) ?? acknowledged ?? this.lastInput);
+      // Held slots move authority beyond the newest command; anchor presentation to
+      // that slot too, or extrapolation adds its movement a second time.
+      if (this.lastInput && this.lastInput.seq < ack)
+        this.lastInput = {
+          ...this.lastInput,
+          seq: ack,
+          timestamp:
+            this.lastInput.timestamp +
+            (ack - this.lastInput.seq) * this.lastInput.interval,
+        };
       for (const frame of replay) {
         if (!this.worldReady(this.body)) break;
         predictStep(
@@ -326,7 +336,11 @@ export class Prediction {
     if (advance) this.presented = next;
     return Math.max(
       -PRESENTATION.snap,
-      Math.min(PRESENTATION.snap, next.seq - last.seq),
+      Math.min(
+        // With no future commands, authority continues held controls between snapshots.
+        this.pending.length ? PRESENTATION.snap : TUNING.inputHoldSeconds / TUNING.tick,
+        next.seq - last.seq,
+      ),
     );
   }
   private extrapolate(body: Entity, now: number, input?: Input, advance = false) {
