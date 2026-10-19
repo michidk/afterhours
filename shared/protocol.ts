@@ -151,6 +151,8 @@ export interface Snapshot {
   day: number;
   dayRate?: number;
   ack: number;
+  /** Last slot simulated after input silence released controls; unsent slots may be skipped. */
+  idleAck?: number;
   ackTimestamp?: number;
   /**
    * Commands still buffered for this client after the tick, minus slots the server ran

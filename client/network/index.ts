@@ -235,6 +235,7 @@ export class GameNetwork {
         this.snapshotTimes.push(now);
         this.snapshotTimes = this.snapshotTimes.filter((at) => at >= now - 1000);
         this.ack = snapshot.ack;
+        this.seq = Math.max(this.seq, (snapshot.idleAck ?? -1) + 1);
         this.ackTimestamp = snapshot.ackTimestamp;
         this.queued = snapshot.queued;
         this.clock?.feedback(snapshot.queued);

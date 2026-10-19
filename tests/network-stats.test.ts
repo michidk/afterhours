@@ -131,12 +131,37 @@ test("network diagnostics measure real RTT, timestamped inputs and applied ackno
     network.renderEntities();
     assert.equal(reconcile.mock.callCount(), 1, "unchanged authority needs no replay");
     await snapshot();
+    const idleReceived = once(peer, "message");
     network.input(idle());
     assert.equal(
       reconcile.mock.callCount(),
       2,
       "input consumes authority even without rendering",
     );
+    await idleReceived;
+    let silenceWall = Date.now() + 600;
+    t.mock.method(Date, "now", () => silenceWall);
+    for (let i = 0; i < 90; i++) {
+      silenceWall += 1000 / 30;
+      sessions.tick();
+      sim.tick(1 / 30);
+    }
+    const unsentSeq = network.seq;
+    await snapshot();
+    const heldAck = network.ack;
+    assert.ok(heldAck >= unsentSeq, "authority ran slots while the client was quiet");
+    const resumed = once(peer, "message");
+    network.input({ ...idle(), up: true });
+    await resumed;
+    assert.equal(
+      received.filter((m) => m.type === "input").at(-1)?.seq,
+      heldAck + 1,
+      "resume at the first unsimulated slot instead of sending obsolete movement",
+    );
+    sessions.tick();
+    const session = sessions.clients.get(peer)!;
+    assert.equal(session.ack, heldAck + 1, "resumed input runs on the next tick");
+    assert.equal(session.speculative, 0, "unsent old slots do not delay resumed input");
     network.close();
     assert.equal(network.stats().connected, false);
   } finally {

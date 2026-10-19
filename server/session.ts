@@ -22,7 +22,7 @@ interface Client {
   id?: string;
   token: string;
   queue: InputFrame[];
-  /** Ticks simulated on held controls and acknowledged in advance, awaiting their commands. */
+  /** Ticks simulated without their commands, awaiting late frames. */
   speculative: number;
   /** Consecutive ticks that ran on held controls; a long run means the client's clock lags. */
   aheadTicks: number;
@@ -31,6 +31,7 @@ interface Client {
   /** Commands buffered after the last tick minus slots owed, reported so the client keeps spares. */
   queued: number;
   ack: number;
+  idleAck: number;
   ackTimestamp?: number;
   lastSeq: number;
   connectedAt: number;
@@ -140,6 +141,7 @@ export class Sessions {
         held: idle(),
         queued: 0,
         ack: -1,
+        idleAck: -1,
         lastSeq: -1,
         connectedAt: Date.now(),
         last: Date.now(),
@@ -306,6 +308,9 @@ export class Sessions {
         this.rejected++;
         return;
       }
+      // A resumed sender can skip slots that authority already simulated.
+      const skipped = Math.max(0, Math.min(c.ack, m.seq - 1) - c.lastSeq);
+      c.speculative = Math.max(0, c.speculative - skipped);
       c.lastSeq = m.seq;
       c.lastInput = now;
       const { type, seq, timestamp, ...input } = m;
@@ -487,11 +492,16 @@ export class Sessions {
         this.sim.inputs.set(c.id, applied.input);
         c.aheadTicks = 0;
       } else if (now - c.lastInput > TUNING.inputHoldSeconds * 1000) {
-        // Silence releases controls. Outstanding speculative slots stay owed, so commands
-        // delayed this long still fill them instead of being stepped a second time.
+        // Coasting still advances physics, so acknowledge its slot like held movement.
         this.sim.inputs.set(c.id, idle());
         c.held = idle();
         c.aheadTicks = 0;
+        if (c.lastSeq >= 0) {
+          c.speculative++;
+          c.ack++;
+          c.idleAck = c.ack;
+          c.ackTimestamp = (c.ackTimestamp ?? 0) + TUNING.tick * 1000;
+        }
       } else if (c.aheadTicks >= 30) {
         // A client whose clock never catches up would keep every tick on held controls,
         // turning each control change into a correction. Skip one tick so its commands
@@ -615,6 +625,7 @@ export class Sessions {
         day: this.sim.day,
         dayRate: this.sim.dayRate,
         ack: c.ack,
+        idleAck: c.idleAck,
         ackTimestamp: c.ackTimestamp,
         queued: c.queued,
         entities,
