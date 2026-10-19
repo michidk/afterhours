@@ -1,0 +1,801 @@
+[
+  {
+    "trace": "cars-1.jsonl",
+    "clientAt": 1792435737841,
+    "clientSnapshotAgeMs": 306.5399199999956,
+    "clientAppliedInputAgeMs": 546.9798390018259,
+    "clientTimerDelayMs": 9.11611099987931,
+    "healthRequestAt": 1792435737721,
+    "healthRequestMs": 35,
+    "serverAt": 1792435737754,
+    "serverPeer": {
+      "playerId": "e532",
+      "lastInputAt": 1792435737722,
+      "lastSnapshotAt": 1792435737738,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "cars-1.jsonl",
+    "clientAt": 1792435737953,
+    "clientSnapshotAgeMs": 418.2489900000073,
+    "clientAppliedInputAgeMs": 658.6889090018376,
+    "clientTimerDelayMs": 9.11611099987931,
+    "healthRequestAt": 1792435737971,
+    "healthRequestMs": 9,
+    "serverAt": 1792435737978,
+    "serverPeer": {
+      "playerId": "e532",
+      "lastInputAt": 1792435737971,
+      "lastSnapshotAt": 1792435737939,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "cars-2.jsonl",
+    "clientAt": 1792435737853,
+    "clientSnapshotAgeMs": 318.278376000002,
+    "clientAppliedInputAgeMs": 553.3679589995736,
+    "clientTimerDelayMs": 7.432302998335217,
+    "healthRequestAt": 1792435737721,
+    "healthRequestMs": 35,
+    "serverAt": 1792435737754,
+    "serverPeer": {
+      "playerId": "e534",
+      "lastInputAt": 1792435737722,
+      "lastSnapshotAt": 1792435737738,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "cars-4.jsonl",
+    "clientAt": 1792435737944,
+    "clientSnapshotAgeMs": 408.927377,
+    "clientAppliedInputAgeMs": 639.4129873327838,
+    "clientTimerDelayMs": 6.6290736666633165,
+    "healthRequestAt": 1792435737971,
+    "healthRequestMs": 9,
+    "serverAt": 1792435737978,
+    "serverPeer": {
+      "playerId": "e547",
+      "lastInputAt": 1792435737953,
+      "lastSnapshotAt": 1792435737941,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "cars-4.jsonl",
+    "clientAt": 1792435765784,
+    "clientSnapshotAgeMs": 319.01518499999656,
+    "clientAppliedInputAgeMs": 590.4252713327005,
+    "clientTimerDelayMs": 6.6290736666633165,
+    "healthRequestAt": 1792435765798,
+    "healthRequestMs": 19,
+    "serverAt": 1792435765815,
+    "serverPeer": {
+      "playerId": "e547",
+      "lastInputAt": 1792435765810,
+      "lastSnapshotAt": 1792435765793,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "cars-4.jsonl",
+    "clientAt": 1792435783870,
+    "clientSnapshotAgeMs": 328.78955499999574,
+    "clientAppliedInputAgeMs": 566.80135433533,
+    "clientTimerDelayMs": 6.6290736666633165,
+    "healthRequestAt": 1792435783588,
+    "healthRequestMs": 167,
+    "serverAt": 1792435783687,
+    "serverPeer": {
+      "playerId": "e547",
+      "lastInputAt": 1792435783509,
+      "lastSnapshotAt": 1792435783686,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-1.jsonl",
+    "clientAt": 1792435614100,
+    "clientSnapshotAgeMs": 385.7923379999993,
+    "clientAppliedInputAgeMs": 672.5534670060151,
+    "clientTimerDelayMs": 5.9711093364603585,
+    "healthRequestAt": 1792435614186,
+    "healthRequestMs": 20,
+    "serverAt": 1792435614203,
+    "serverPeer": {
+      "playerId": "e496",
+      "lastInputAt": 1792435614102,
+      "lastSnapshotAt": 1792435614200,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-1.jsonl",
+    "clientAt": 1792435614554,
+    "clientSnapshotAgeMs": 397.7516479999904,
+    "clientAppliedInputAgeMs": 660.057102339415,
+    "clientTimerDelayMs": 5.9711093364603585,
+    "healthRequestAt": 1792435614436,
+    "healthRequestMs": 13,
+    "serverAt": 1792435614446,
+    "serverPeer": {
+      "playerId": "e496",
+      "lastInputAt": 1792435614444,
+      "lastSnapshotAt": 1792435614413,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-1.jsonl",
+    "clientAt": 1792435637763,
+    "clientSnapshotAgeMs": 303.7358669999812,
+    "clientAppliedInputAgeMs": 502.97215533745475,
+    "clientTimerDelayMs": 15.526241006344208,
+    "healthRequestAt": 1792435637735,
+    "healthRequestMs": 223,
+    "serverAt": 1792435637933,
+    "serverPeer": {
+      "playerId": "e496",
+      "lastInputAt": 1792435637841,
+      "lastSnapshotAt": 1792435637931,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-1.jsonl",
+    "clientAt": 1792435637877,
+    "clientSnapshotAgeMs": 417.4785470000061,
+    "clientAppliedInputAgeMs": 616.7148353374796,
+    "clientTimerDelayMs": 15.526241006344208,
+    "healthRequestAt": 1792435637735,
+    "healthRequestMs": 223,
+    "serverAt": 1792435637933,
+    "serverPeer": {
+      "playerId": "e496",
+      "lastInputAt": 1792435637841,
+      "lastSnapshotAt": 1792435637931,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-1.jsonl",
+    "clientAt": 1792435637990,
+    "clientSnapshotAgeMs": 530.5222169999906,
+    "clientAppliedInputAgeMs": 729.7585053374642,
+    "clientTimerDelayMs": 15.526241006344208,
+    "healthRequestAt": 1792435637986,
+    "healthRequestMs": 180,
+    "serverAt": 1792435638149,
+    "serverPeer": {
+      "playerId": "e496",
+      "lastInputAt": 1792435637841,
+      "lastSnapshotAt": 1792435638141,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-1.jsonl",
+    "clientAt": 1792435638103,
+    "clientSnapshotAgeMs": 643.4672989999817,
+    "clientAppliedInputAgeMs": 842.7035873374552,
+    "clientTimerDelayMs": 15.526241006344208,
+    "healthRequestAt": 1792435637986,
+    "healthRequestMs": 180,
+    "serverAt": 1792435638149,
+    "serverPeer": {
+      "playerId": "e496",
+      "lastInputAt": 1792435637841,
+      "lastSnapshotAt": 1792435638141,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-1.jsonl",
+    "clientAt": 1792435638557,
+    "clientSnapshotAgeMs": 341.4249579999887,
+    "clientAppliedInputAgeMs": 963.6418176706939,
+    "clientTimerDelayMs": 15.526241006344208,
+    "healthRequestAt": 1792435638486,
+    "healthRequestMs": 132,
+    "serverAt": 1792435638599,
+    "serverPeer": {
+      "playerId": "e496",
+      "lastInputAt": 1792435637841,
+      "lastSnapshotAt": 1792435638596,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-1.jsonl",
+    "clientAt": 1792435638670,
+    "clientSnapshotAgeMs": 454.76927699998487,
+    "clientAppliedInputAgeMs": 1076.98613667069,
+    "clientTimerDelayMs": 15.526241006344208,
+    "healthRequestAt": 1792435638736,
+    "healthRequestMs": 47,
+    "serverAt": 1792435638774,
+    "serverPeer": {
+      "playerId": "e496",
+      "lastInputAt": 1792435638773,
+      "lastSnapshotAt": 1792435638729,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-3.jsonl",
+    "clientAt": 1792435614017,
+    "clientSnapshotAgeMs": 302.26188700000057,
+    "clientAppliedInputAgeMs": 602.8538183341443,
+    "clientTimerDelayMs": 6.35677166635287,
+    "healthRequestAt": 1792435613935,
+    "healthRequestMs": 42,
+    "serverAt": 1792435613973,
+    "serverPeer": {
+      "playerId": "e502",
+      "lastInputAt": 1792435613646,
+      "lastSnapshotAt": 1792435613943,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-3.jsonl",
+    "clientAt": 1792435614129,
+    "clientSnapshotAgeMs": 414.98438700000406,
+    "clientAppliedInputAgeMs": 715.5763183341478,
+    "clientTimerDelayMs": 6.35677166635287,
+    "healthRequestAt": 1792435614186,
+    "healthRequestMs": 20,
+    "serverAt": 1792435614203,
+    "serverPeer": {
+      "playerId": "e502",
+      "lastInputAt": 1792435614090,
+      "lastSnapshotAt": 1792435614200,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-3.jsonl",
+    "clientAt": 1792435614468,
+    "clientSnapshotAgeMs": 311.4144270000106,
+    "clientAppliedInputAgeMs": 563.7074826675525,
+    "clientTimerDelayMs": 6.35677166635287,
+    "healthRequestAt": 1792435614436,
+    "healthRequestMs": 13,
+    "serverAt": 1792435614446,
+    "serverPeer": {
+      "playerId": "e502",
+      "lastInputAt": 1792435614441,
+      "lastSnapshotAt": 1792435614414,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-3.jsonl",
+    "clientAt": 1792435637869,
+    "clientSnapshotAgeMs": 408.2709380000015,
+    "clientAppliedInputAgeMs": 615.2346260042686,
+    "clientTimerDelayMs": 6.35677166635287,
+    "healthRequestAt": 1792435637735,
+    "healthRequestMs": 223,
+    "serverAt": 1792435637933,
+    "serverPeer": {
+      "playerId": "e502",
+      "lastInputAt": 1792435637840,
+      "lastSnapshotAt": 1792435637932,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-3.jsonl",
+    "clientAt": 1792435637984,
+    "clientSnapshotAgeMs": 523.4642809999932,
+    "clientAppliedInputAgeMs": 730.4279690042604,
+    "clientTimerDelayMs": 6.35677166635287,
+    "healthRequestAt": 1792435637986,
+    "healthRequestMs": 180,
+    "serverAt": 1792435638149,
+    "serverPeer": {
+      "playerId": "e502",
+      "lastInputAt": 1792435637840,
+      "lastSnapshotAt": 1792435638142,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-3.jsonl",
+    "clientAt": 1792435638084,
+    "clientSnapshotAgeMs": 623.750457999995,
+    "clientAppliedInputAgeMs": 830.7141460042621,
+    "clientTimerDelayMs": 6.35677166635287,
+    "healthRequestAt": 1792435637986,
+    "healthRequestMs": 180,
+    "serverAt": 1792435638149,
+    "serverPeer": {
+      "playerId": "e502",
+      "lastInputAt": 1792435637840,
+      "lastSnapshotAt": 1792435638142,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-3.jsonl",
+    "clientAt": 1792435638197,
+    "clientSnapshotAgeMs": 736.2027939999971,
+    "clientAppliedInputAgeMs": 943.1664820042643,
+    "clientTimerDelayMs": 6.35677166635287,
+    "healthRequestAt": 1792435638236,
+    "healthRequestMs": 140,
+    "serverAt": 1792435638360,
+    "serverPeer": {
+      "playerId": "e502",
+      "lastInputAt": 1792435637840,
+      "lastSnapshotAt": 1792435638358,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-3.jsonl",
+    "clientAt": 1792435638650,
+    "clientSnapshotAgeMs": 402.25281600000744,
+    "clientAppliedInputAgeMs": 1063.5016913376603,
+    "clientTimerDelayMs": 6.35677166635287,
+    "healthRequestAt": 1792435638486,
+    "healthRequestMs": 132,
+    "serverAt": 1792435638599,
+    "serverPeer": {
+      "playerId": "e502",
+      "lastInputAt": 1792435637840,
+      "lastSnapshotAt": 1792435638596,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-4.jsonl",
+    "clientAt": 1792435614106,
+    "clientSnapshotAgeMs": 391.5491589999874,
+    "clientAppliedInputAgeMs": 678.6990446653654,
+    "clientTimerDelayMs": 6.2434186652099015,
+    "healthRequestAt": 1792435614186,
+    "healthRequestMs": 20,
+    "serverAt": 1792435614203,
+    "serverPeer": {
+      "playerId": "e503",
+      "lastInputAt": 1792435614101,
+      "lastSnapshotAt": 1792435614200,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-4.jsonl",
+    "clientAt": 1792435637765,
+    "clientSnapshotAgeMs": 305.9588999999978,
+    "clientAppliedInputAgeMs": 509.071355002161,
+    "clientTimerDelayMs": 6.289629666964174,
+    "healthRequestAt": 1792435637735,
+    "healthRequestMs": 223,
+    "serverAt": 1792435637933,
+    "serverPeer": {
+      "playerId": "e503",
+      "lastInputAt": 1792435637840,
+      "lastSnapshotAt": 1792435637932,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-4.jsonl",
+    "clientAt": 1792435637877,
+    "clientSnapshotAgeMs": 417.4625139999989,
+    "clientAppliedInputAgeMs": 620.5749690021621,
+    "clientTimerDelayMs": 6.289629666964174,
+    "healthRequestAt": 1792435637735,
+    "healthRequestMs": 223,
+    "serverAt": 1792435637933,
+    "serverPeer": {
+      "playerId": "e503",
+      "lastInputAt": 1792435637840,
+      "lastSnapshotAt": 1792435637932,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-4.jsonl",
+    "clientAt": 1792435637990,
+    "clientSnapshotAgeMs": 530.2319540000026,
+    "clientAppliedInputAgeMs": 733.3444090021658,
+    "clientTimerDelayMs": 6.289629666964174,
+    "healthRequestAt": 1792435637986,
+    "healthRequestMs": 180,
+    "serverAt": 1792435638149,
+    "serverPeer": {
+      "playerId": "e503",
+      "lastInputAt": 1792435637840,
+      "lastSnapshotAt": 1792435638142,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-4.jsonl",
+    "clientAt": 1792435638104,
+    "clientSnapshotAgeMs": 644.9600899999932,
+    "clientAppliedInputAgeMs": 848.0725450021564,
+    "clientTimerDelayMs": 6.289629666964174,
+    "healthRequestAt": 1792435637986,
+    "healthRequestMs": 180,
+    "serverAt": 1792435638149,
+    "serverPeer": {
+      "playerId": "e503",
+      "lastInputAt": 1792435637840,
+      "lastSnapshotAt": 1792435638142,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-4.jsonl",
+    "clientAt": 1792435638219,
+    "clientSnapshotAgeMs": 759.2754200000054,
+    "clientAppliedInputAgeMs": 962.3878750021686,
+    "clientTimerDelayMs": 6.289629666964174,
+    "healthRequestAt": 1792435638236,
+    "healthRequestMs": 140,
+    "serverAt": 1792435638360,
+    "serverPeer": {
+      "playerId": "e503",
+      "lastInputAt": 1792435637840,
+      "lastSnapshotAt": 1792435638358,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-4.jsonl",
+    "clientAt": 1792435638562,
+    "clientSnapshotAgeMs": 314.8843599999964,
+    "clientAppliedInputAgeMs": 972.7841833355487,
+    "clientTimerDelayMs": 6.289629666964174,
+    "healthRequestAt": 1792435638486,
+    "healthRequestMs": 132,
+    "serverAt": 1792435638599,
+    "serverPeer": {
+      "playerId": "e503",
+      "lastInputAt": 1792435637840,
+      "lastSnapshotAt": 1792435638597,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-4.jsonl",
+    "clientAt": 1792435638674,
+    "clientSnapshotAgeMs": 427.5501660000009,
+    "clientAppliedInputAgeMs": 1085.4499893355533,
+    "clientTimerDelayMs": 6.289629666964174,
+    "healthRequestAt": 1792435638736,
+    "healthRequestMs": 47,
+    "serverAt": 1792435638774,
+    "serverPeer": {
+      "playerId": "e503",
+      "lastInputAt": 1792435638773,
+      "lastSnapshotAt": 1792435638730,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-4.jsonl",
+    "clientAt": 1792435641404,
+    "clientSnapshotAgeMs": 300.104554000005,
+    "clientAppliedInputAgeMs": 579.2879670026741,
+    "clientTimerDelayMs": 6.289629666964174,
+    "healthRequestAt": 1792435641241,
+    "healthRequestMs": 177,
+    "serverAt": 1792435641401,
+    "serverPeer": {
+      "playerId": "e503",
+      "lastInputAt": 1792435641398,
+      "lastSnapshotAt": 1792435641396,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-5.jsonl",
+    "clientAt": 1792435614084,
+    "clientSnapshotAgeMs": 368.92383600000176,
+    "clientAppliedInputAgeMs": 663.1864736654315,
+    "clientTimerDelayMs": 6.355043332237983,
+    "healthRequestAt": 1792435614186,
+    "healthRequestMs": 20,
+    "serverAt": 1792435614203,
+    "serverPeer": {
+      "playerId": "e505",
+      "lastInputAt": 1792435614090,
+      "lastSnapshotAt": 1792435614202,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-5.jsonl",
+    "clientAt": 1792435614537,
+    "clientSnapshotAgeMs": 379.78633800000534,
+    "clientAppliedInputAgeMs": 649.7979009987321,
+    "clientTimerDelayMs": 6.355043332237983,
+    "healthRequestAt": 1792435614436,
+    "healthRequestMs": 13,
+    "serverAt": 1792435614446,
+    "serverPeer": {
+      "playerId": "e505",
+      "lastInputAt": 1792435614443,
+      "lastSnapshotAt": 1792435614414,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-5.jsonl",
+    "clientAt": 1792435637789,
+    "clientSnapshotAgeMs": 327.8409410000022,
+    "clientAppliedInputAgeMs": 531.6376890001702,
+    "clientTimerDelayMs": 6.355043332237983,
+    "healthRequestAt": 1792435637735,
+    "healthRequestMs": 223,
+    "serverAt": 1792435637933,
+    "serverPeer": {
+      "playerId": "e505",
+      "lastInputAt": 1792435637840,
+      "lastSnapshotAt": 1792435637932,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-5.jsonl",
+    "clientAt": 1792435637904,
+    "clientSnapshotAgeMs": 442.56566799999564,
+    "clientAppliedInputAgeMs": 646.3624160001636,
+    "clientTimerDelayMs": 6.355043332237983,
+    "healthRequestAt": 1792435637735,
+    "healthRequestMs": 223,
+    "serverAt": 1792435637933,
+    "serverPeer": {
+      "playerId": "e505",
+      "lastInputAt": 1792435637840,
+      "lastSnapshotAt": 1792435637932,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-5.jsonl",
+    "clientAt": 1792435638018,
+    "clientSnapshotAgeMs": 557.2248620000028,
+    "clientAppliedInputAgeMs": 761.0216100001708,
+    "clientTimerDelayMs": 6.355043332237983,
+    "healthRequestAt": 1792435637986,
+    "healthRequestMs": 180,
+    "serverAt": 1792435638149,
+    "serverPeer": {
+      "playerId": "e505",
+      "lastInputAt": 1792435637840,
+      "lastSnapshotAt": 1792435638142,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-5.jsonl",
+    "clientAt": 1792435638131,
+    "clientSnapshotAgeMs": 669.8897350000043,
+    "clientAppliedInputAgeMs": 873.6864830001723,
+    "clientTimerDelayMs": 6.355043332237983,
+    "healthRequestAt": 1792435637986,
+    "healthRequestMs": 180,
+    "serverAt": 1792435638149,
+    "serverPeer": {
+      "playerId": "e505",
+      "lastInputAt": 1792435637840,
+      "lastSnapshotAt": 1792435638142,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-5.jsonl",
+    "clientAt": 1792435638243,
+    "clientSnapshotAgeMs": 782.332647999996,
+    "clientAppliedInputAgeMs": 986.129396000164,
+    "clientTimerDelayMs": 6.355043332237983,
+    "healthRequestAt": 1792435638236,
+    "healthRequestMs": 140,
+    "serverAt": 1792435638360,
+    "serverPeer": {
+      "playerId": "e505",
+      "lastInputAt": 1792435637840,
+      "lastSnapshotAt": 1792435638358,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-5.jsonl",
+    "clientAt": 1792435638584,
+    "clientSnapshotAgeMs": 337.14012500000536,
+    "clientAppliedInputAgeMs": 993.6798013335647,
+    "clientTimerDelayMs": 6.355043332237983,
+    "healthRequestAt": 1792435638486,
+    "healthRequestMs": 132,
+    "serverAt": 1792435638599,
+    "serverPeer": {
+      "playerId": "e505",
+      "lastInputAt": 1792435637840,
+      "lastSnapshotAt": 1792435638597,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-5.jsonl",
+    "clientAt": 1792435638697,
+    "clientSnapshotAgeMs": 450.0024839999969,
+    "clientAppliedInputAgeMs": 1106.5421603335562,
+    "clientTimerDelayMs": 6.355043332237983,
+    "healthRequestAt": 1792435638736,
+    "healthRequestMs": 47,
+    "serverAt": 1792435638774,
+    "serverPeer": {
+      "playerId": "e505",
+      "lastInputAt": 1792435638773,
+      "lastSnapshotAt": 1792435638730,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "people-5.jsonl",
+    "clientAt": 1792435641417,
+    "clientSnapshotAgeMs": 312.63884299999336,
+    "clientAppliedInputAgeMs": 596.0930396673502,
+    "clientTimerDelayMs": 6.355043332237983,
+    "healthRequestAt": 1792435641241,
+    "healthRequestMs": 177,
+    "serverAt": 1792435641401,
+    "serverPeer": {
+      "playerId": "e505",
+      "lastInputAt": 1792435641398,
+      "lastSnapshotAt": 1792435641397,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "planes-1.jsonl",
+    "clientAt": 1792435883753,
+    "clientSnapshotAgeMs": 301.67436800000723,
+    "clientAppliedInputAgeMs": 582.7232300013857,
+    "clientTimerDelayMs": 9.984399000008125,
+    "healthRequestAt": 1792435883600,
+    "healthRequestMs": 209,
+    "serverAt": 1792435883807,
+    "serverPeer": {
+      "playerId": "e577",
+      "lastInputAt": 1792435883800,
+      "lastSnapshotAt": 1792435883788,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "planes-1.jsonl",
+    "clientAt": 1792435930759,
+    "clientSnapshotAgeMs": 363.84869699997944,
+    "clientAppliedInputAgeMs": 602.7554630063823,
+    "clientTimerDelayMs": 22.001390999997966,
+    "healthRequestAt": 1792435930700,
+    "healthRequestMs": 90,
+    "serverAt": 1792435930786,
+    "serverPeer": {
+      "playerId": "e577",
+      "lastInputAt": 1792435930651,
+      "lastSnapshotAt": 1792435930777,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "planes-1.jsonl",
+    "clientAt": 1792435930871,
+    "clientSnapshotAgeMs": 475.37457999997423,
+    "clientAppliedInputAgeMs": 714.2813460063771,
+    "clientTimerDelayMs": 22.001390999997966,
+    "healthRequestAt": 1792435930950,
+    "healthRequestMs": 31,
+    "serverAt": 1792435930979,
+    "serverPeer": {
+      "playerId": "e577",
+      "lastInputAt": 1792435930947,
+      "lastSnapshotAt": 1792435930945,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "planes-1.jsonl",
+    "clientAt": 1792435930985,
+    "clientSnapshotAgeMs": 588.0041239999991,
+    "clientAppliedInputAgeMs": 826.910890006402,
+    "clientTimerDelayMs": 22.001390999997966,
+    "healthRequestAt": 1792435930950,
+    "healthRequestMs": 31,
+    "serverAt": 1792435930979,
+    "serverPeer": {
+      "playerId": "e577",
+      "lastInputAt": 1792435930947,
+      "lastSnapshotAt": 1792435930945,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "planes-2.jsonl",
+    "clientAt": 1792435930777,
+    "clientSnapshotAgeMs": 380.71222599998873,
+    "clientAppliedInputAgeMs": 610.9128156725346,
+    "clientTimerDelayMs": 23.522725000002538,
+    "healthRequestAt": 1792435930700,
+    "healthRequestMs": 90,
+    "serverAt": 1792435930786,
+    "serverPeer": {
+      "playerId": "e583",
+      "lastInputAt": 1792435930778,
+      "lastSnapshotAt": 1792435930777,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  },
+  {
+    "trace": "planes-2.jsonl",
+    "clientAt": 1792435930889,
+    "clientSnapshotAgeMs": 493.06071999999403,
+    "clientAppliedInputAgeMs": 723.2613096725399,
+    "clientTimerDelayMs": 23.522725000002538,
+    "healthRequestAt": 1792435930950,
+    "healthRequestMs": 31,
+    "serverAt": 1792435930979,
+    "serverPeer": {
+      "playerId": "e583",
+      "lastInputAt": 1792435930778,
+      "lastSnapshotAt": 1792435930945,
+      "skippedSnapshots": 0,
+      "bufferedBytes": 0
+    }
+  }
+]
