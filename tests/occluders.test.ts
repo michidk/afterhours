@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { segmentHitsBox, segmentHitsBuilding } from "../client/world/occluders.ts";
+import {
+  playerSightRadius,
+  segmentHitsBox,
+  segmentHitsBuilding,
+} from "../client/world/occluders.ts";
 
 const min = { x: 0, y: 0, z: 0 },
   max = { x: 10, y: 10, z: 10 };
@@ -126,20 +130,41 @@ test("rotated footprints are tested as rectangles, not their larger axis-aligned
 });
 
 test("early fade margin catches side and roof edges before the center is blocked", () => {
-  for (const [y, z] of [[15, 11.4], [31.4, 0]]) {
+  for (const [y, z] of [
+    [15, 11.4],
+    [31.4, 0],
+  ]) {
     const camera = { x: 30, y, z },
       player = { x: -30, y, z };
     assert.equal(segmentHitsBuilding(camera, player, tower, 0.35), false);
     assert.equal(segmentHitsBuilding(camera, player, tower, 1.5), true);
   }
   assert.equal(
-    segmentHitsBuilding(
-      { x: -30, y: 15, z: 0 },
-      { x: -12, y: 1, z: 0 },
-      tower,
-      1.5,
-    ),
+    segmentHitsBuilding({ x: -30, y: 15, z: 0 }, { x: -12, y: 1, z: 0 }, tower, 1.5),
     false,
     "a building two metres beside the player stays solid",
+  );
+});
+
+test("player clearance covers a quarter of the viewport height and grows with zoom", () => {
+  const player = { x: 0, y: 0, z: 0 };
+  assert.ok(
+    Math.abs(playerSightRadius({ x: 0, y: 0, z: 40 }, player, Math.PI / 2) - 20) <
+      1e-10,
+  );
+  assert.ok(
+    Math.abs(playerSightRadius({ x: 0, y: 0, z: 80 }, player, Math.PI / 2) - 40) <
+      1e-10,
+  );
+  const radius = playerSightRadius({ x: 0, y: 30, z: 40 }, player, 0.72);
+  assert.ok(radius > 9 && radius < 10);
+  assert.equal(
+    segmentHitsBuilding(
+      { x: 30, y: 15, z: 18 },
+      { x: -30, y: 1, z: 18 },
+      tower,
+      radius,
+    ),
+    true,
   );
 });

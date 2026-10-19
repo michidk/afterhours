@@ -1,7 +1,7 @@
 import { airportsOf } from "../../shared/world.ts";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { segmentHitsBuilding, type Footprint } from "./occluders.ts";
+import { playerSightRadius, segmentHitsBuilding, type Footprint } from "./occluders.ts";
 import {
   STATIC_FIELDS,
   emptyCity,
@@ -24,10 +24,8 @@ export type GeometryOptions = {
   index?: number;
 };
 type Group = { meshes: Mesh[]; dispose(): void };
-/** The sight line ends at the player's torso, and is as thick as a person is wide. */
+/** End the sight line at the player's torso. */
 const SIGHT_HEIGHT = 1;
-// Start fading before the player silhouette reaches a wall or roof edge.
-const SIGHT_PAD = 1.5;
 
 /** Reference-count by stable feature IDs so objects crossing chunk seams are drawn once. */
 export class CityRenderer {
@@ -139,18 +137,24 @@ export class CityRenderer {
     }
   }
   /**
-   * Dither buildings within 1.5 m of the sight line so the fade leads occlusion.
+   * Keep a quarter-screen-height clearance around the player before occlusion.
    * Buildings outside that margin stay solid; a camera inside a building fades it too.
    */
-  fadeOccluders(camera: Vector3, target: Vector3, dt: number, follow = true) {
+  fadeOccluders(
+    camera: Vector3,
+    target: Vector3,
+    dt: number,
+    verticalFov: number,
+    follow = true,
+  ) {
     const eye = { x: camera.x, y: camera.y, z: camera.z },
       body = { x: target.x, y: target.y + SIGHT_HEIGHT, z: target.z },
+      radius = playerSightRadius(eye, body, verticalFov),
       blend = 1 - Math.exp(-dt * 10);
     for (const [key, group] of this.features) {
       const building = this.footprints.get(key);
       if (!building) continue;
-      const goal =
-        follow && segmentHitsBuilding(eye, body, building, SIGHT_PAD) ? 0 : 1;
+      const goal = follow && segmentHitsBuilding(eye, body, building, radius) ? 0 : 1;
       for (const mesh of group.meshes)
         mesh.visibility =
           Math.abs(goal - mesh.visibility) < 0.01

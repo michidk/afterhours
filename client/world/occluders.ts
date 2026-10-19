@@ -1,4 +1,13 @@
 type P = { x: number; y: number; z: number };
+
+/** A quarter-screen-height clearance radius at the player's depth. */
+export function playerSightRadius(camera: P, player: P, verticalFov: number) {
+  return (
+    Math.hypot(camera.x - player.x, camera.y - player.y, camera.z - player.z) *
+    Math.tan(verticalFov / 2) *
+    0.5
+  );
+}
 /** Does segment a→b pass within `pad` of the axis-aligned box [min, max]? (slab test) */
 export function segmentHitsBox(a: P, b: P, min: P, max: P, pad = 0) {
   let t0 = 0,
