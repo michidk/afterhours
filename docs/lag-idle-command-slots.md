@@ -34,7 +34,10 @@ acknowledgements. A resumed browser skips unsent slots through that coasting slo
 and the server removes abandoned slots in that sequence gap from its outstanding
 count. This prevents a long silent period from trapping fresh controls behind
 commands the browser never sent. Protocol 10 requires a refresh so client and
-server use the same recovery semantics. Server authority, damage, ownership and
+server use the same recovery semantics. Coasting acknowledges logical slots but
+does not refresh the input timestamp. Late frames extrapolate timestamps only
+through held-control slots, so idle time cannot hide stale input from the lag
+gate. Server authority, damage, ownership and
 the maximum work granted by a command burst are unchanged.
 
 The focused wire regressions initially failed with 3.769782 m car and 3.492588 m

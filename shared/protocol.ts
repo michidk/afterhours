@@ -153,6 +153,7 @@ export interface Snapshot {
   ack: number;
   /** Last slot simulated after input silence released controls; unsent slots may be skipped. */
   idleAck?: number;
+  /** Applied or held command time; silent coasting must not refresh stale input. */
   ackTimestamp?: number;
   /**
    * Commands still buffered for this client after the tick, minus slots the server ran

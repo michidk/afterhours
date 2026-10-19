@@ -478,7 +478,8 @@ export class Sessions {
         // The slot was acknowledged when it ran, so filling it never lowers the ack;
         // a sequence gap left by shedding moves the slots still owed up past it.
         c.ack = Math.max(c.ack, frame.seq + c.speculative);
-        c.ackTimestamp = frame.timestamp + c.speculative * TUNING.tick * 1000;
+        const heldSlots = Math.min(c.speculative, Math.max(0, c.ack - c.idleAck));
+        c.ackTimestamp = frame.timestamp + heldSlots * TUNING.tick * 1000;
         if (!sameControls(c.held, frame.input)) this.mispredicted++;
         c.held = frame.input;
         this.sim.inputs.set(c.id, frame.input);
@@ -500,7 +501,6 @@ export class Sessions {
           c.speculative++;
           c.ack++;
           c.idleAck = c.ack;
-          c.ackTimestamp = (c.ackTimestamp ?? 0) + TUNING.tick * 1000;
         }
       } else if (c.aheadTicks >= 30) {
         // A client whose clock never catches up would keep every tick on held controls,

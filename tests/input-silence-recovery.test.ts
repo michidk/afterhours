@@ -89,12 +89,22 @@ for (const kind of ["car", "plane"] as const)
       );
       assert.equal(snapshot.ack, 3, "each coasting tick consumes one command slot");
       assert.equal(snapshot.idleAck, 3, "the wire identifies silent coasting slots");
+      assert.equal(snapshot.ackTimestamp, 0, "coasting cannot make stale input fresh");
       assert.ok(body.vz < 40, "silence still releases controls and permits coasting");
 
-      // A resumed client can abandon unsent slots without a second wait to fill them.
-      await send({ type: "input", seq: 4, timestamp: 700, ...idle(), up: true });
+      await send({ type: "input", seq: 1, timestamp: TUNING.tick * 1000, ...idle() });
       tick();
-      assert.equal(session.ack, 4, "the first resumed command runs on the next tick");
+      assert.equal(session.ack, 4, "late input fills its coasting slot once");
+      assert.equal(
+        session.ackTimestamp,
+        2 * TUNING.tick * 1000,
+        "late input gains only the new held tick, not past coasting time",
+      );
+
+      // A resumed client can abandon unsent slots without a second wait to fill them.
+      await send({ type: "input", seq: 5, timestamp: 700, ...idle(), up: true });
+      tick();
+      assert.equal(session.ack, 5, "the first resumed command runs on the next tick");
       assert.equal(session.speculative, 0, "abandoned slots cannot trap fresh input");
       assert.equal(sim.inputs.get(player.id)?.up, true);
     } finally {
