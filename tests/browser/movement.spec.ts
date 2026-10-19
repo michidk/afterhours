@@ -50,6 +50,7 @@ declare global {
   interface Window {
     afterhoursDebug?: AgentInterface;
     movementSamples: MovementSample[];
+    predictionReplay: { city: object; initial: object; events: unknown[] };
     movementStages: Record<
       | "prediction"
       | "reconcile"
@@ -549,6 +550,48 @@ for (const model of ["sedan", "scout"] as const) {
       await d.scene.scene.whenReadyAsync();
       await d.settle();
       window.movementSamples = [];
+      const prediction = d.network.prediction!;
+      const replay = (window.predictionReplay = {
+        city: structuredClone(prediction.city),
+        initial: structuredClone(
+          Object.fromEntries(
+            Object.entries(prediction).filter(
+              ([key, value]) => key !== "city" && typeof value !== "function",
+            ),
+          ),
+        ),
+        events: [] as unknown[],
+      });
+      const reconcile = prediction.reconcile.bind(prediction);
+      prediction.reconcile = (...args) => {
+        replay.events.push({
+          method: "reconcile",
+          at: performance.now(),
+          args: structuredClone(args),
+        });
+        return reconcile(...args);
+      };
+      const input = prediction.input.bind(prediction);
+      prediction.input = (...args) => {
+        replay.events.push({
+          method: "input",
+          at: performance.now(),
+          args: structuredClone(args),
+        });
+        return input(...args);
+      };
+      const render = prediction.render.bind(prediction);
+      prediction.render = (...args) => {
+        const at = performance.now();
+        const result = render(...args);
+        replay.events.push({
+          method: "render",
+          at,
+          args: structuredClone(args),
+          expected: result && { x: result.body.x, y: result.body.y, z: result.body.z },
+        });
+        return result;
+      };
       let held = false;
       const sample = (kind: MovementSample["kind"]) => {
         if (!held) return;
@@ -596,6 +639,23 @@ for (const model of ["sedan", "scout"] as const) {
     await writeFile(path, JSON.stringify({ model, samples, errors }, null, 2));
     await testInfo.attach("vehicle movement", {
       path,
+      contentType: "application/json",
+    });
+    const replayPath = testInfo.outputPath("prediction-replay.json");
+    await writeFile(
+      replayPath,
+      await page.evaluate(() =>
+        JSON.stringify(window.predictionReplay, (_key, value: unknown) =>
+          value instanceof Map
+            ? { $map: [...value] }
+            : value instanceof Set
+              ? { $set: [...value] }
+              : value,
+        ),
+      ),
+    );
+    await testInfo.attach("prediction replay", {
+      path: replayPath,
       contentType: "application/json",
     });
     expect(errors).toEqual([]);

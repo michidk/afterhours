@@ -20,7 +20,8 @@ export default defineConfig({
       : "node --import tsx server/index.ts --production",
     env: { PORT: "4175", ALLOW_DEBUG: "1", ...reuseCityEnv() },
     url: "http://127.0.0.1:4175/health",
-    timeout: 60_000,
+    // Docker regenerates and bakes its city; match production's startup allowance.
+    timeout: process.env.BROWSER_DOCKER_IMAGE ? 600_000 : 60_000,
     reuseExistingServer: false,
   },
 });
