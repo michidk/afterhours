@@ -92,7 +92,7 @@ for (const delay of [0, 150, 360]) {
       assert.equal(receivedMap, mapId, "prediction uses the server's saved city");
     }
     const [walker, observer] = clients;
-    await observer.debug({ kind: "teleport", x: origin.x + 8, z: origin.z });
+    await observer.debug({ kind: "teleport", x: origin.x - 8, z: origin.z });
     await walker.debug({ kind: "teleport", x: origin.x, z: origin.z });
     await until(() => observer.entities.has(walker.playerId), "observer sees walker");
     for (const client of clients) {
