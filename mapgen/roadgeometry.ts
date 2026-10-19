@@ -163,7 +163,10 @@ export function smoothCentrelines(graph: RoadGraph) {
 interface Arm {
   e: RoadEdge;
   atStart: boolean;
+  /** Where the corners are laid out: the chord towards the mouth. */
   dir: Point;
+  /** The road's own heading as it leaves the node, which decides whether it bends. */
+  heading: Point;
   hw: number;
   ang: number;
   cutL: number;
@@ -204,6 +207,8 @@ const signedAngle = (a: Point, b: Point) =>
 const CROSSING_BAND = 16;
 /** Lane markings stop this far from a crossed band end, just past the stop line. */
 const MARKED_END = 5;
+/** Arms closer than this angle (radians) are one road splitting, not a crossing. */
+const SPLIT = 0.7;
 /** Crosswalk centre measured from the band end; the zebra spans 1.0–3.6 m. */
 const CROSSING_AT = 2.3;
 /** Walkways run just outside the middle of the sidewalk, clear of kerbside lamps. */
@@ -212,7 +217,7 @@ const WALK = SIDEWALK / 2 + 0.35;
 const continuation = (arms: Arm[]) =>
   arms.length === 2 &&
   arms[0].e.width === arms[1].e.width &&
-  Math.abs(signedAngle(arms[0].dir, mul(arms[1].dir, -1))) < 1e-4;
+  Math.abs(signedAngle(arms[0].heading, mul(arms[1].heading, -1))) < 1e-4;
 const culDeSacRadius = (arm: Arm) =>
   arm.hw + (arm.e.kind === "street" || arm.e.kind === "lane" ? 4.5 : 2);
 
@@ -226,6 +231,22 @@ const culDeSacRadius = (arm: Arm) =>
  * crosswalks, form the pedestrian network.
  */
 export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
+  // The first layout learns how far back each junction cuts its arms; the second
+  // takes every arm's direction towards where its mouth ended up, so the corners'
+  // straight lines meet a curving road at its mouth instead of missing it sideways.
+  let geometry = layoutRoadGeometry(graph);
+  for (let pass = 0; pass < PASSES; pass++) {
+    const trims = geometry.trims;
+    geometry = layoutRoadGeometry(
+      graph,
+      graph.edges.flatMap((e) => trims[e.id]),
+    );
+  }
+  return geometry;
+}
+/** Layouts after the first; each moves the cuts less (78 mouths missing by 0.4 m, then 29, 15, 7). */
+const PASSES = 3;
+function layoutRoadGeometry(graph: RoadGraph, cuts?: number[]): RoadGeometry {
   const junctions: RoadGeometry["junctions"] = [],
     sidewalks: RoadGeometry["sidewalks"] = [],
     markings: RoadGeometry["markings"] = [];
@@ -235,11 +256,19 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
   const departing = (edgeId: number, atStart: boolean): Arm => {
     const e = graph.edges[edgeId];
     const pts = atStart ? e.points : [...e.points].reverse();
-    const dir = norm(sub(pts[Math.min(2, pts.length - 1)], pts[0]));
+    // The corners are laid out along straight lines from the node, so the direction
+    // is the chord to about where the mouth will sit: a road that is still curving
+    // then crosses those lines at its mouth instead of missing them sideways.
+    const reach = Math.min(
+      0.45 * polylineLength(pts),
+      cuts?.[edgeId * 2 + (atStart ? 0 : 1)] ?? 8,
+    );
+    const dir = norm(sub(pointAt(pts, Math.max(reach, 4)), pts[0]));
     return {
       e,
       atStart,
       dir,
+      heading: norm(sub(pts[Math.min(2, pts.length - 1)], pts[0])),
       hw: e.width / 2,
       ang: Math.atan2(dir.z, dir.x),
       cutL: 0,
@@ -295,6 +324,17 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
     if (total > room)
       for (const { arm, need } of arms) arm.limit = (room * need) / total;
   }
+  /**
+   * Whether another arm leaves the node within SPLIT of this band's end. A zebra
+   * crossing there would cut through the neighbouring band's own crossing.
+   */
+  const splits = (e: RoadEdge, node: number) => {
+    const arm = armsAt[node].find((a) => a.e === e && a.atStart === (e.a === node));
+    return (
+      !!arm &&
+      armsAt[node].some((o) => o !== arm && dot(o.dir, arm.dir) > Math.cos(SPLIT))
+    );
+  };
   const bandSide = (arm: Arm, armLeft: boolean): WalkEnd => ({
     edge: arm.e.id,
     atStart: arm.atStart,
@@ -542,7 +582,10 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
     });
     const length = polylineLength(pts),
       crossing = (node: number) =>
-        junctionNodes.has(node) && !e.bridge && length >= CROSSING_BAND;
+        junctionNodes.has(node) &&
+        !e.bridge &&
+        length >= CROSSING_BAND &&
+        !splits(e, node);
     paintMarkings(e, pts, crossing, markings);
     // Walkways: stations along the band, with crosswalk stations near crossed ends.
     const stations = new Set<number>([0, length]);

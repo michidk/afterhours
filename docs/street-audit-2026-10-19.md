@@ -31,6 +31,14 @@ A sweep of the whole island (16 overview tiles, then 24 random street sites and 
 - **Sidewalks lying on asphalt.** At acute merges, the sidewalk strips of a side street ran across the main road, and junctions had sidewalk stubs poking into the asphalt. 463 half-metre cells of sidewalk lay on asphalt at the start of the day. While draping, asphalt is now cut out of the sidewalks (the `avoid` argument of `drapeOnTerrain`), and small shards left stranded by the cut are dropped. The count is now 0. A first version of the cut skipped some asphalt triangles because of a separating-axis test that treated a repeated corner as a separating line. A unit test caught that.
 - **Hairline cracks in asphalt.** Pieces cut from differently rounded source polygons met a centimetre apart. Corners within 1.5 cm of each other are now welded, and centimetre rounding is the same for every piece. A raster check for gaps then found 2 uncovered half-metre cells citywide, both in the acute merges and neither visible when zoomed to 8 m.
 
+### Follow-up: junction mouths and crosswalks
+
+The stop hook for this audit pointed out that the previous round still listed visible defects. Three of them are now fixed.
+
+- **Bent zebra stripes.** Where two roads leave a junction within 40 degrees of each other, each band's crosswalk cut through its neighbour's. Those arms now get no crosswalk (`SPLIT` in `mapgen/roadgeometry.ts`). A unit test covers both a right-angle junction and a near-coincident pair.
+- **Kinks and jogs in sidewalk outlines.** Junction corners were laid out along each road's first 8 m, so a road that was still curving at its mouth missed the corner lines by up to 0.8 m and left a sideways step. Junctions are now laid out four times, each time taking every arm's direction towards where its mouth ended up. Mouths missing their corner line by more than 0.4 m fell from 78 to 7 of 756.
+- **Steep sidewalks.** The terrain raise now also acts where less than 30% of a sample's weight sits on free grid corners (down to 15%). Sidewalk area steeper than 35% fell from 570 m² to 395 m² (over 60%: 40 m² to 9 m²); steep asphalt rose from 37 m² to 55 m².
+
 ## Photos
 
 | Site                | Before                                                                    | After                                                                    |
@@ -52,9 +60,6 @@ Retake them with `npx tsx scripts/street-photos.ts data/city-meshes.msgpack docs
 
 ## Remaining
 
-Small cosmetic irregularities remain. None is a crack, a floating street or a surface lying on another:
-
-- Crosswalk stripes bend where two roads merge at a very acute angle, and a stop line can overlap a zebra there (for example at -816, -264).
-- A few sidewalk outlines have slight kinks or notches at junction corners and on tight S-bends.
-- About 0.4% of sidewalk area is steeper than 35% where the ground drops sharply beside a street.
+- A few sidewalk strips are still steeper than 35% where the ground drops sharply beside a street (0.27% of sidewalk area).
 - A street's cross-slope follows the 8 m terrain grid. Players stand on the ground, 0.1 m below drawn asphalt and 0.25 m below a sidewalk top.
+- Two half-metre cells in the acute merges at (395, -383) and (-817, -259) are not covered by asphalt; neither is visible at 8 m zoom.

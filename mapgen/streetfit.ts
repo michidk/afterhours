@@ -230,7 +230,7 @@ export function sinkUnderStreets(
         continue;
       }
       const deficit = -excess - SAG;
-      if (pass >= RAISE || deficit <= 0 || free < 0.3) continue;
+      if (pass >= RAISE || deficit <= 0 || free < 0.15) continue;
       sag = Math.max(sag, deficit);
       for (let m = 0; m < 3; m++) {
         const v = corners[c + m];
