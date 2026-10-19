@@ -285,3 +285,83 @@ Use `--url https://afterhours.k8s.lohr.dev` to target a deployed debug-enabled s
 The output includes a JSON report and per-client JSONL samples in a unique temporary directory. `--output /tmp/report.json` selects the report path. Samples include applied-input age, RTT, pending inputs, server queue, prediction status, corrections, map readiness, position, speed and input scheduler lateness. Health snapshots capture server timing and input drops at each phase boundary. Missing samples, missing cars/maps, disconnections, stale applied inputs, suspended prediction and a stalled load generator produce a nonzero exit status. Corrections are reported rather than universally forbidden because cars can collide with each other and scenery. This is a network and prediction test; it does not measure browser rendering.
 
 The `distant` deterministic profile (`bun run probe:drive -- --profile distant --seconds 20 --server-slow 8`) covers 150–225 ms one-way latency plus occasional 200 ms spikes. On the existing pacing controller it exposes queue overflow and repeated corrections that the LAN/shorter WAN cases miss. The new probe is diagnostic coverage; adding it does not resolve that controller failure or provision server CPU capacity. Compare production clients against the deployed gameplay revision, since different movement code invalidates correction comparisons.
+
+## Five people, five cars, five planes
+
+Run one sequential acceptance scenario against an explicitly named debug-enabled
+server:
+
+```sh
+bun run test:five-clients -- --url https://afterhours.k8s.lohr.dev --seconds 180
+```
+
+Each phase uses five independent Node processes running the real client network,
+input clock, prediction and streamed collision map. Debug setup is serialized so
+clients cannot claim the same newly spawned vehicle. A barrier starts all five
+actors together. Ten seconds allow acceleration and natural plane takeoff; then
+all five must sustain movement for the requested duration. The default measures
+three minutes per phase. The routes currently target seed 713's airport; another
+map needs new clear staging points. Setup failures invalidate the phase.
+
+The command exits nonzero for any failed client or phase. Fixed limits reject
+snapshot age over 300 ms, applied input age over 400 ms, corrections over 0.3 m,
+prediction suspension, reconnects, missing maps/ownership, resynchronization and
+simulation slower than 90% of wall time. A slow link does not relax these limits.
+These are acceptance limits for this investigation, not perceptual guarantees.
+
+At least eight samples per second, no sampling gap over 300 ms, a completed
+summary and a successful child exit are required. At least 90% of measured samples
+must show movement above 2 m/s on foot, 5 m/s in cars, or 19 m/s in planes. Planes
+must also stay at least 5 m above terrain in 90% of samples. A stalled generator,
+crashed client, missing output or taxiing plane cannot count as a pass. Connection
+failures during acceleration also fail; startup placement corrections are excluded.
+
+`--phase people|cars|planes` reruns one phase when diagnosing a failed setup; omit
+it for the required sequential test. Planes climb straight before turning and
+then maintain terrain clearance.
+
+The command prints an artifact directory containing raw JSONL traces, each child's
+stdout/stderr and a report. `--output` selects the report path. It attempts later
+phases even if an earlier phase fails. It spawns vehicles on the target, so use a
+debug-enabled server intended for testing. Debug tools remain opt-in.
+
+This tests authoritative movement and the client's prediction poses, without
+Babylon rendering or a user's browser/GPU. A passing result would still need a
+rendered browser check before claiming the visible lag is gone. The shorter
+`probe:multiplayer` remains a diagnostic one/two/one comparison, not this acceptance
+gate.
+
+### Production result, 2026-10-19
+
+One full sequential run used the public URL above with no injected delay and
+180 measured seconds per phase. All five walking clients and all five drivers
+sustained movement. Every client failed the latency/correction gate. The original
+plane route turned too early toward airport warehouses, so that phase also failed
+sustained-flight checks and is not valid evidence of five sustained flights.
+
+After correcting the pilot to climb straight before turning and follow terrain
+clearance, a separate five-plane rerun also measured 180 seconds. All five took
+off; four sustained flight. Client 3 lost ownership around 29.6 seconds, before
+its first recorded reconnect, then its plane disappeared. That loss remains
+unexplained and failed the test. Do not attribute it to latency without more
+investigation.
+
+| Phase                        | Worst applied-input age | Worst snapshot age | Clients failing |
+| ---------------------------- | ----------------------: | -----------------: | --------------: |
+| Five people                  |                3,866 ms |           3,722 ms |             5/5 |
+| Five cars                    |                3,893 ms |           3,686 ms |             5/5 |
+| Five planes, corrected pilot |                3,973 ms |           3,741 ms |             5/5 |
+
+These ages include outages during reconnects, not just successful packet delivery.
+Client input-loop delays remained below the 250 ms generator limit in these runs,
+though some telemetry sample gaps exceeded 300 ms and also failed acceptance.
+The host was shared, so this is a reproduction, not an isolated capacity benchmark.
+Production still ran gameplay commit `73411f2`; no gameplay fix was deployed by
+this test work. Both commands exited 1.
+
+[The report and selected raw samples](five-client-validation.json) preserve both
+attempts, including the failed flight setup. Full traces and child logs are also
+archived locally at `.codex/lag-evidence/five-client-2026-10-19.tar.gz`. The screenshot
+regression in `tests/movement-acceptance.test.ts` rejects the previously missed
+778 ms applied-input age and 2.058 m correction, along with incomplete runs,
+reconnects, suspended prediction and stationary vehicles. Lag remains unresolved.

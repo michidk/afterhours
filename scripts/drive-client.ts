@@ -9,7 +9,7 @@ import { setTimeout as pause } from "node:timers/promises";
 import { GameNetwork } from "../client/network/index.ts";
 import { InputClock } from "../client/input/clock.ts";
 import { OrderedDelay } from "./ordered-delay.ts";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync } from "node:fs";
 import { CityStream } from "../client/world/stream.ts";
 import {
   mapManifestSchema,
@@ -19,6 +19,7 @@ import {
 import { unpackHeights } from "../shared/city-pack.ts";
 import { TERRAIN_SIDE } from "../shared/terrain.ts";
 import { idle, spawnOrigin, type Input } from "../shared/world.ts";
+import { debugCommandSchema } from "../shared/debug.ts";
 import { VEHICLES } from "../shared/catalog.ts";
 import { CAR, clamp, wrap } from "../shared/physics/vehicle.ts";
 import { groundLevel, isWater } from "../shared/water.ts";
@@ -48,9 +49,14 @@ if (
   throw Error(
     "Durations and speed must be positive; link delays nonnegative; spike-rate in [0, 1]",
   );
-const kind = model === "none" ? "none" : VEHICLES[model as keyof typeof VEHICLES]?.kind;
-if (kind !== "none" && kind !== "car" && kind !== "helicopter")
-  throw Error(`--model must be a car or helicopter model or "none", got ${model}`);
+const spawnCommand =
+  model === "none" ? undefined : debugCommandSchema.parse({ kind: "spawn", model });
+const vehicleModel = spawnCommand?.kind === "spawn" ? spawnCommand.model : undefined;
+const kind = vehicleModel ? VEHICLES[vehicleModel].kind : "none";
+if (kind !== "none" && kind !== "car" && kind !== "helicopter" && kind !== "plane")
+  throw Error(
+    `--model must be a car, plane or helicopter model or "none", got ${model}`,
+  );
 /** A helicopter climbs first, then flies straight; only the cruise is measured. */
 const flying = kind === "helicopter",
   climbSeconds = 4,
@@ -106,6 +112,7 @@ const center = {
   x: Number(arg("x", String(origin.x))),
   z: Number(arg("z", String(origin.z))),
 };
+await stream.prepare(spawnOrigin(city));
 await stream.prepare(center);
 const mapId = map.mapId;
 Object.defineProperty(globalThis, "location", {
@@ -116,6 +123,7 @@ let seed = 97;
 const rand = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
 const oneWay = () => delay + rand() * jitter + (rand() < spikeRate ? spike : 0);
 
+let recording = false;
 let serverMap = "",
   debugAllowed = false;
 const network = new GameNetwork(
@@ -127,7 +135,12 @@ const network = new GameNetwork(
     state() {},
     chat() {},
     status(state) {
-      console.error(`[status] ${state}`);
+      console.error(`[status] ${state}: ${network.stats().lastDisconnect ?? ""}`);
+      if (recording && output)
+        appendFileSync(
+          output,
+          JSON.stringify({ type: "status", at: Date.now(), state }) + "\n",
+        );
     },
   },
   name,
@@ -166,8 +179,27 @@ socket.send = (data) => {
 };
 socket.onmessage = (event) => {
   incomingAt = Math.max(incomingAt, performance.now() + oneWay());
-  incoming.schedule(incomingAt, () => receive.call(socket, event));
+  incoming.schedule(incomingAt, () => {
+    receive.call(socket, event);
+    recordCorrection();
+  });
 };
+
+let recordedCorrection: object | undefined;
+function recordCorrection() {
+  const correction = network.prediction?.lastCorrection;
+  if (correction === recordedCorrection) return;
+  recordedCorrection = correction;
+  if (recording && output && correction && correction.distance > 0.3)
+    appendFileSync(
+      output,
+      JSON.stringify({
+        type: "correction",
+        at: Date.now(),
+        distance: correction.distance,
+      }) + "\n",
+    );
+}
 
 let control: Input = idle();
 let maxInputLag = 0;
@@ -176,6 +208,7 @@ const pump = setInterval(() => {
   clock.advance(now, (timestamp) => {
     maxInputLag = Math.max(maxInputLag, now - timestamp);
     network.input(control, timestamp);
+    recordCorrection();
   });
 }, 5);
 // The server rate-limits debug commands to one per 100 ms.
@@ -184,14 +217,17 @@ const debug: typeof network.debug = async (command) => {
   return network.debug(command);
 };
 let bodyId = network.playerId;
-if (model !== "none") {
+if (arg("gate", "") && debugAllowed)
+  await debug({ kind: "teleport", x: center.x, z: center.z, near: true });
+await stream.prepare(network.prediction!.body!);
+if (spawnCommand) {
   if (!debugAllowed)
     throw Error(
       "Spawning a vehicle needs a debug-enabled server (dev, or ALLOW_DEBUG=1)",
     );
   await debug({ kind: "teleport", x: center.x, z: center.z, near: true });
   const before = new Set((await debug({ kind: "state" })).entities.map((e) => e.id));
-  const spawned = await debug({ kind: "spawn", model: model as "sport" });
+  const spawned = await debug(spawnCommand);
   const car = spawned.entities.find((e) => e.model === model && !before.has(e.id));
   if (!car) throw Error("spawn produced no car");
   await debug({ kind: "teleport", x: car.x + 3, z: car.z });
@@ -205,7 +241,17 @@ if (model !== "none") {
 // Setup teleports are hard resets; measure only the drive.
 await pause(300);
 network.prediction!.corrections = 0;
-const limit = model === "none" ? 8 : VEHICLES[model as keyof typeof VEHICLES].speed;
+const gate = arg("gate", "");
+if (gate) {
+  await stream.prepare(network.prediction!.body!);
+  appendFileSync(
+    output,
+    JSON.stringify({ type: "ready", at: Date.now(), bodyId }) + "\n",
+  );
+  await until(() => existsSync(gate), "all five clients ready", 180000);
+}
+recording = true;
+const limit = vehicleModel ? VEHICLES[vehicleModel].speed : 8;
 maxInputLag = 0;
 const started = performance.now();
 // Proportional steering (as a gamepad would send) around the airfield centre keeps a
@@ -225,13 +271,15 @@ const steer = (t: number): Partial<Input> => {
     z: turnCenter.z + Math.cos(angle + lookahead) * radius,
   };
   const heading = Math.atan2(target.x - body.x, target.z - body.z);
+  if (kind === "none")
+    return { up: false, moveX: Math.sin(heading), moveY: Math.cos(heading) };
   return {
     moveX: clamp(
       wrap(heading - body.angle) * 1.5 - (body.angularVelocity ?? 0) * 0.3,
       -1,
       1,
     ),
-    moveY: clamp((targetSpeed - speed) * 0.3, -0.5, 1),
+    moveY: kind === "plane" ? 1 : clamp((targetSpeed - speed) * 0.3, -0.5, 1),
   };
 };
 const summary = {
@@ -271,6 +319,7 @@ const sampler = setInterval(() => {
   const controlled = network.prediction?.body;
   if (controlled) stream.setView(controlled, controlled);
   const rendered = network.renderEntities(now);
+  recordCorrection();
   const pose = rendered.find((e) => e.id === bodyId);
   const p = network.prediction;
   if (now - lastSample >= 100) {
@@ -291,6 +340,8 @@ const sampler = setInterval(() => {
             y: body.y,
             z: body.z,
             speed: Math.hypot(body.vx, body.vz),
+            clearance: body.y - groundLevel(body.x, body.z, city),
+            owned: body.id === network.playerId || body.driver === network.playerId,
           },
           mapReady: body ? stream.ready(body) : false,
           maxInputLagMs: maxInputLag,
@@ -379,6 +430,7 @@ let finished = false;
 const finish = async () => {
   if (finished) return;
   finished = true;
+  const completed = performance.now() - started >= seconds * 1000;
   clearInterval(pump);
   clearInterval(sampler);
   clearInterval(reporter);
@@ -408,7 +460,13 @@ const finish = async () => {
   if (output)
     appendFileSync(
       output,
-      JSON.stringify({ type: "summary", at: Date.now(), summary, health }) + "\n",
+      JSON.stringify({
+        type: "summary",
+        at: Date.now(),
+        completed,
+        summary,
+        health,
+      }) + "\n",
     );
   console.log(
     JSON.stringify(
@@ -430,12 +488,24 @@ const finish = async () => {
   process.exit(0);
 };
 process.on("SIGINT", () => void finish());
+let takeoffComplete = false;
 while (performance.now() - started < seconds * 1000) {
   const t = (performance.now() - started) / 1000;
-  control = flying
-    ? // Climb clear of the roofs, then full speed straight ahead (north).
-      { ...idle(), up: t >= climbSeconds, ascend: t < climbSeconds }
-    : { ...idle(), up: true, sprint: model === "none", ...steer(t) };
+  const body = network.prediction?.body;
+  const clearance = body ? body.y - groundLevel(body.x, body.z, city) : 0;
+  if (clearance > 40) takeoffComplete = true;
+  control =
+    kind === "plane"
+      ? {
+          ...idle(),
+          moveY: 1,
+          ...(takeoffComplete ? steer(t) : {}),
+          ascend: clearance < 60,
+        }
+      : flying
+        ? // Climb clear of the roofs, then full speed straight ahead (north).
+          { ...idle(), up: t >= climbSeconds, ascend: t < climbSeconds }
+        : { ...idle(), up: true, sprint: model === "none", ...steer(t) };
   await pause(50);
 }
 await finish();

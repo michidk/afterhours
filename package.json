@@ -32,7 +32,8 @@
     "debug": "tsx scripts/debug.ts",
     "test:traffic": "tsx scripts/traffic-scenario.ts",
     "bench:prediction": "tsx scripts/prediction-profile.ts",
-    "probe:multiplayer": "tsx scripts/multiplayer-probe.ts"
+    "probe:multiplayer": "tsx scripts/multiplayer-probe.ts",
+    "test:five-clients": "tsx scripts/five-client-test.ts"
   },
   "dependencies": {
     "@babylonjs/core": "^8.0.0",
