@@ -69,7 +69,7 @@ Retake them with `npx tsx scripts/street-photos.ts data/city-meshes.msgpack docs
 ## Remaining
 
 - A street shorter than its two junction mouths plus a metre was drawn as a straight chord from its midpoint to the far mouth, which left a wedge uncovered beside the junction ring (seed 2741, near 650.75, 87). A band under a metre long now stays between its mouths. Seeds 713 and 2741 have no uncovered surface cell left that is wider than a raster shrink margin.
-- 172 m² of sidewalk (0.12%) is still steeper than 35%, where the ground drops sharply beside a street, and 32 m² of asphalt.
+- Street grade is now 10% (was 14%). Steeper than 35% on seed 713: 111 m² of sidewalk and 19 m² of asphalt; on seed 2741: 273 m² and 32 m².
 - A street's cross-slope follows the 8 m terrain grid. Players stand on the ground, 0.1 m below drawn asphalt and 0.25 m below a sidewalk top.
 - A few sidewalk outlines have a small kink where a junction corner has no room for a fillet and keeps a sharp corner.
 - Corners that are 3 cm or more apart are not welded. 783 pairs under 3 cm remained before this round's tolerance change; none is a gap.
@@ -78,8 +78,19 @@ Retake them with `npx tsx scripts/street-photos.ts data/city-meshes.msgpack docs
 
 After the short-band fix, [the former hole at 650, 87 on seed 2741](screenshots/street-audit-2026-10-19/final/fix-650-87.png), a [junction whose arms leave at 0°](screenshots/street-audit-2026-10-19/final/n793.png) and an [oblique shot of the steepest cul-de-sac rims on seed 713](screenshots/street-audit-2026-10-19/final/st1.png) were photographed. The first two show continuous asphalt and sidewalk with no gap or overlap. The steep sidewalk is spread over 61 clusters of at most 18 m² (37–58%), on cul-de-sac rims and street edges where the ground drops; the surface stays attached to the terrain with concrete below. Sharp sidewalk corners at junctions with no room for a fillet remain, and are visible as small angular tips.
 
-## Why the remaining steepness stays
+## Street grade and the remaining steepness
 
-- **Steep asphalt (32 m² on 713, 10 clusters).** Almost all of it is the rim of a dead-end turning circle that sits within about 30 m of another street at a different height. At (-443, 864) two dead ends 27 m apart are 2.8 m apart in height, so the 8 m terrain grid has one cell column that must climb 3 m (about 40%). The street fit already lets the nearest kerb set each grid point's height; only a different node height could change this, and node heights are fixed by the profile solver before the terrain is fitted.
-- **Steep sidewalk.** Same cause at street edges beside real drops; each of the 61 clusters on 713 is at most 18 m².
-- **Corner tips.** Zoomed in, they are jogs of 0.1 m or less where a corner arc meets a mouth on a short band (edge 214 on seed 2741 is 0.95 m long between two mouths). Eight damped layout passes did not change the picture, so the experiment was reverted.
+Most steep surface is mid-street, not at turning circles (seed 713: 22 of 32 m² of asphalt and 95 of 172 m² of sidewalk; seed 2741: 32 of 32 and 250 of 273). Tracing one cell showed the cause: `stampRoads` sets a grid vertex to the road height, then `sinkUnderStreets` lowers it by 1.1 m, because the street descends about 12% and turns just beyond that vertex, so one 8 m terrain triangle spans parts of the road at different heights. Lowering the vertex tilts the surface above it.
+
+The lever is the street grade limit in `solveProfiles`, which was 14%. Seed 713 / seed 2741, m² steeper than 35%:
+
+| Street grade | Asphalt 713 | Sidewalk 713 | Asphalt 2741 | Sidewalk 2741 |
+| ------------ | ----------- | ------------ | ------------ | ------------- |
+| 14% (before) | 32          | 172          | 128          | 337           |
+| 12%          | 24          | 138          | -            | -             |
+| 10% (now)    | 19          | 111          | 32           | 273           |
+| 7%           | 120         | 176          | -            | -             |
+
+At 7% the road can no longer follow the ground and cuts against it, so 10% is kept. A wider terrace on deep cuts and fills changed little (asphalt 30, sidewalk 160 on 713) and was dropped. Eight damped layout passes did not change the corner jogs, which are 0.1 m or less beside a 0.95 m band, and were also dropped.
+
+What is left is a sidewalk's outer edge on a real drop, such as a highway beside a sea cliff, and a faint tilt along some bends.

@@ -900,8 +900,7 @@ export function solveProfiles(
   trims: [number, number][] = graph.edges.map(() => [0, 0]),
 ) {
   const terrainAt = (p: Point) => Math.max(0.6, sample(f, p.x, p.z));
-  const maxGrade = (kind: string) =>
-    kind === "highway" ? 0.07 : kind === "avenue" ? 0.1 : 0.14;
+  const maxGrade = (kind: string) => (kind === "highway" ? 0.07 : 0.1);
   for (const n of graph.nodes) {
     let sum = 0,
       count = 0;
