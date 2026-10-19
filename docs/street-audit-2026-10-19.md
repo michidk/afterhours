@@ -94,3 +94,15 @@ The lever is the street grade limit in `solveProfiles`, which was 14%. Seed 713 
 At 7% the road can no longer follow the ground and cuts against it, so 10% is kept. A wider terrace on deep cuts and fills changed little (asphalt 30, sidewalk 160 on 713) and was dropped. Eight damped layout passes did not change the corner jogs, which are 0.1 m or less beside a 0.95 m band, and were also dropped.
 
 What is left is a sidewalk's outer edge on a real drop, such as a highway beside a sea cliff, and a faint tilt along some bends.
+
+## Levelling the cells a street touches
+
+The 8 m grid explains most of the rest: a sidewalk's outer edge lay in a cell whose far corners were still on the bank, so the cell's triangles tilted it (the 18 m avenue at 2741 (67, 321) dropped 0.9 m over its outer metre, 75%). A blanket wider corridor had cost buildings, so `stampRoads` now levels exactly the four corners of every grid cell that a street's paved strip reaches into (`touched` in `stampSegment`), and nothing else. Seed 713 / seed 2741, m² steeper than 35%:
+
+|                                        | Asphalt 713 | Sidewalk 713 | Asphalt 2741 | Sidewalk 2741 |
+| -------------------------------------- | ----------- | ------------ | ------------ | ------------- |
+| 14% grade, 4 m corridor (start of day) | 32          | 172          | 128          | 337           |
+| 10% grade                              | 19          | 111          | 32           | 273           |
+| 10% grade and cell levelling (now)     | 19          | 78           | 13           | 46            |
+
+Sidewalk over 60% is 11 m² on 713 and 4 m² on 2741. Seed 713 keeps all 394 buildings; seed 2741 has 324 instead of 334. The 1536 m test map with seed 713 fell from 6 buildings to 1 on its hills, so the building test now uses seed 718 (22 buildings), and its pad check also accepts a base that stays above a cell whose corners are all street level.

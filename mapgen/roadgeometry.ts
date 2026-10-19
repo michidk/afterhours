@@ -1076,6 +1076,29 @@ export function stampRoads(f: HeightField, graph: RoadGraph, geometry: RoadGeome
       );
     const ab = sub(b, a),
       l2 = ab.x * ab.x + ab.z * ab.z || 1;
+    // A grid cell the paved strip reaches into puts all four corners on the street's
+    // level: one corner left on the bank would tilt the sidewalk across that cell.
+    const paved = hw + SIDEWALK,
+      samples = Math.ceil(Math.sqrt(l2)) + 1;
+    const touched = (gx: number, gz: number) => {
+      for (const cz of [gz - 1, gz])
+        for (const cx of [gx - 1, gx]) {
+          const lx = cx * f.cell - f.size / 2,
+            lz = cz * f.cell - f.size / 2;
+          for (let s = 0; s <= samples; s++) {
+            const qx = a.x + (ab.x * s) / samples,
+              qz = a.z + (ab.z * s) / samples;
+            if (
+              Math.hypot(
+                Math.max(lx - qx, 0, qx - lx - f.cell),
+                Math.max(lz - qz, 0, qz - lz - f.cell),
+              ) <= paved
+            )
+              return true;
+          }
+        }
+      return false;
+    };
     for (let z = z0; z <= z1; z++)
       for (let x = x0; x <= x1; x++) {
         const px = x * f.cell - f.size / 2,
@@ -1091,9 +1114,10 @@ export function stampRoads(f: HeightField, graph: RoadGraph, geometry: RoadGeome
           i = z * w + x,
           depth = y - original[i];
         const bank = Math.min(16, Math.max(3, 2.2 * Math.abs(depth)));
-        const flat = hw + shoulder;
-        if (d > flat + bank) continue;
-        const wgt = d <= flat ? 1 : 1 - smoothstep(0, 1, (d - flat) / bank);
+        const flat = hw + shoulder,
+          level = d <= flat || (d <= paved + 2 * f.cell && touched(x, z));
+        if (!level && d > flat + bank) continue;
+        const wgt = level ? 1 : 1 - smoothstep(0, 1, (d - flat) / bank);
         contribute(i, wgt, y, d - kerb);
       }
   };
