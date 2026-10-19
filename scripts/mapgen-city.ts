@@ -24,7 +24,12 @@ import { sample } from "../mapgen/field.ts";
 import { lakeShorelines } from "../mapgen/shoreline.ts";
 import { packSurfaceChunks } from "../shared/city-pack.ts";
 import { destructibles } from "../shared/destruction.ts";
-import { drapeOnTerrain, edgeHeightAt, sinkUnderStreets } from "../mapgen/streetfit.ts";
+import {
+  drapeOnTerrain,
+  edgeHeightAt,
+  sinkUnderStreets,
+  snapCm,
+} from "../mapgen/streetfit.ts";
 import {
   compass,
   dressAirport,
@@ -857,15 +862,16 @@ export function cityFromMap(map: GeneratedMap): City {
       ),
     ) > 2e-4;
   const grid = { heights, side: TERRAIN_SIDE, step: TERRAIN_STEP, half: LIMIT },
-    drape = (polygons: number[][], count: number) => [
-      ...drapeOnTerrain(polygons.slice(0, count), grid)
-        .map((flat) => flat.map(round))
+    drape = (polygons: number[][], count: number, avoid: number[][] = []) => [
+      ...drapeOnTerrain(polygons.slice(0, count), grid, avoid)
+        .map((flat) => flat.map(snapCm))
         .filter(usable3),
       ...polygons.slice(count),
     ];
   const surface = {
     asphalt: drape(asphalt, network.asphalt),
-    sidewalks: drape(sidewalks, network.sidewalks),
+    // Streets sometimes cross each other's sidewalks; the road wins.
+    sidewalks: drape(sidewalks, network.sidewalks, asphalt.slice(0, network.asphalt)),
     markings: [
       ...(["white", "yellow"] as const).flatMap((color) =>
         drape(

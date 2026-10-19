@@ -24,6 +24,13 @@ Physics follows the terrain, so after the first pass a player at a street edge c
 
 The city artifact grew from 2.5 MB to 4.2 MB over both passes, and the baked meshes from 21.1 MB to 26.9 MB.
 
+### Follow-up: sidewalks across roads, and hairline cracks
+
+A sweep of the whole island (16 overview tiles, then 24 random street sites and 36 junctions) found two more defects.
+
+- **Sidewalks lying on asphalt.** At acute merges, the sidewalk strips of a side street ran across the main road, and junctions had sidewalk stubs poking into the asphalt. 463 half-metre cells of sidewalk lay on asphalt at the start of the day. While draping, asphalt is now cut out of the sidewalks (the `avoid` argument of `drapeOnTerrain`), and small shards left stranded by the cut are dropped. The count is now 0. A first version of the cut skipped some asphalt triangles because of a separating-axis test that treated a repeated corner as a separating line. A unit test caught that.
+- **Hairline cracks in asphalt.** Pieces cut from differently rounded source polygons met a centimetre apart. Corners within 1.5 cm of each other are now welded, and centimetre rounding is the same for every piece. A raster check for gaps then found 2 uncovered half-metre cells citywide, both in the acute merges and neither visible when zoomed to 8 m.
+
 ## Photos
 
 | Site                | Before                                                                    | After                                                                    |
@@ -38,9 +45,16 @@ The city artifact grew from 2.5 MB to 4.2 MB over both passes, and the baked mes
 | Downtown, top       | [View](screenshots/street-audit-2026-10-19/before/downtown-top.png)       | [View](screenshots/street-audit-2026-10-19/after/downtown-top.png)       |
 | Hairpin, top        | [View](screenshots/street-audit-2026-10-19/before/hairpin-top.png)        | [View](screenshots/street-audit-2026-10-19/after/hairpin-top.png)        |
 | Hairpin, oblique    | [View](screenshots/street-audit-2026-10-19/before/hairpin-oblique.png)    | [View](screenshots/street-audit-2026-10-19/after/hairpin-oblique.png)    |
+| Y-merge, top        | [View](screenshots/street-audit-2026-10-19/before/merge-top.png)          | [View](screenshots/street-audit-2026-10-19/after/merge-top.png)          |
+| Junction stub, top  | [View](screenshots/street-audit-2026-10-19/before/junction-stub-top.png)  | [View](screenshots/street-audit-2026-10-19/after/junction-stub-top.png)  |
 
 Retake them with `npx tsx scripts/street-photos.ts data/city-meshes.msgpack docs/screenshots/street-audit-2026-10-19/sites.json <out-dir>`.
 
 ## Remaining
 
-A street's cross-slope now follows the 8 m terrain grid, so a street across a steep side slope tilts with it. Players stand on the ground, 0.1 m below drawn asphalt and 0.25 m below a sidewalk top. Within a piece, corners rounded to whole centimetres can leave slivers under 7 mm wide.
+Small cosmetic irregularities remain. None is a crack, a floating street or a surface lying on another:
+
+- Crosswalk stripes bend where two roads merge at a very acute angle, and a stop line can overlap a zebra there (for example at -816, -264).
+- A few sidewalk outlines have slight kinks or notches at junction corners and on tight S-bends.
+- About 0.4% of sidewalk area is steeper than 35% where the ground drops sharply beside a street.
+- A street's cross-slope follows the 8 m terrain grid. Players stand on the ground, 0.1 m below drawn asphalt and 0.25 m below a sidewalk top.

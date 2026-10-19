@@ -70,5 +70,17 @@
     "size": 40,
     "pitch": 40,
     "yaw": 300
+  },
+  {
+    "name": "merge-top",
+    "x": -816,
+    "z": -264,
+    "size": 40
+  },
+  {
+    "name": "junction-stub-top",
+    "x": 414,
+    "z": -576,
+    "size": 40
   }
 ]

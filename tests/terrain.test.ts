@@ -309,3 +309,43 @@ test("draped streets lie on the terrain triangles and keep their area", () => {
     "the street's area is kept",
   );
 });
+
+test("sidewalks are cut away where asphalt lies, and neighbouring pieces share corners", () => {
+  const grid = { heights: new Array(9).fill(2), side: 3, step: 8, half: 8 };
+  const area = (pieces: number[][]) =>
+    pieces.reduce((total, p) => {
+      let a = 0;
+      for (let i = 0; i < p.length; i += 3) {
+        const j = (i + 3) % p.length;
+        a += p[i] * p[j + 2] - p[j] * p[i + 2];
+      }
+      return total + Math.abs(a) / 2;
+    }, 0);
+  // A 4 x 12 m sidewalk across a 6 x 6 m patch of asphalt: 4 x 6 m of it is covered.
+  const walk = [-2, 2, -6, 2, 2, -6, 2, 2, 6, -2, 2, 6],
+    road = [-6, 2, -3, 6, 2, -3, 6, 2, 3, -6, 2, 3];
+  assert.ok(Math.abs(area(drapeOnTerrain([walk], grid)) - 48) < 1e-6);
+  const cut = drapeOnTerrain([walk], grid, [road]);
+  assert.ok(
+    Math.abs(area(cut) - 24) < 1e-6,
+    "the covered part of the sidewalk is left out",
+  );
+  for (const piece of cut)
+    for (let i = 0; i < piece.length; i += 3)
+      assert.ok(
+        Math.abs(piece[i + 2]) >= 3 - 1e-9 || Math.abs(piece[i]) >= 6,
+        "no sidewalk corner lies inside the road",
+      );
+  // Two strips whose shared corner differs by a centimetre are welded into one corner.
+  const left = [0, 2, 0, 4, 2, 0, 4, 2, 4, 0, 2, 4],
+    right = [4.01, 2, 0, 8, 2, 0, 8, 2, 4, 4.01, 2, 4, 4, 2, 4];
+  const corners = new Set(
+    drapeOnTerrain([left, right], grid).flatMap((p) =>
+      Array.from({ length: p.length / 3 }, (_, i) => `${p[i * 3]},${p[i * 3 + 2]}`),
+    ),
+  );
+  assert.ok(
+    !corners.has("4.01,0") && !corners.has("4.01,4"),
+    "the 1 cm offset is welded away",
+  );
+});

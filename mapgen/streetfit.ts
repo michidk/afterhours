@@ -247,11 +247,40 @@ export function sinkUnderStreets(
  * draped this way is exactly the ground that people and vehicles move on, so it
  * can neither float over a dip between grid points nor be crossed by the terrain.
  * Convex polygons are clipped whole, others per ear-clipped triangle; neighbouring
- * pieces in one terrain triangle are then merged while they stay simple.
+ * pieces in one terrain triangle are then merged while they stay simple. Ground
+ * covered by any `avoid` polygon is left out, so a sidewalk never lies on asphalt.
  */
-export function drapeOnTerrain(polygons: number[][], grid: TerrainGrid): number[][] {
+export function drapeOnTerrain(
+  polygons: number[][],
+  grid: TerrainGrid,
+  avoid: number[][] = [],
+): number[][] {
   const groups = new Map<number, number[][]>(),
     { step, side, half, heights: h } = grid;
+  // Triangles to leave out, in grid-cell units, listed under each cell they touch.
+  const avoided = new Map<number, Point[][]>();
+  for (const flat of avoid) {
+    const points: Point[] = [];
+    for (let i = 0; i < flat.length; i += 3)
+      points.push({ x: (flat[i] + half) / step, z: (flat[i + 2] + half) / step });
+    for (const t of earClip(points)) {
+      const tri = t.map((i) => points[i]);
+      for (
+        let iz = Math.max(0, Math.floor(Math.min(...tri.map((q) => q.z))));
+        iz <= Math.min(side - 2, Math.floor(Math.max(...tri.map((q) => q.z))));
+        iz++
+      )
+        for (
+          let ix = Math.max(0, Math.floor(Math.min(...tri.map((q) => q.x))));
+          ix <= Math.min(side - 2, Math.floor(Math.max(...tri.map((q) => q.x))));
+          ix++
+        ) {
+          const k = iz * side + ix;
+          if (avoided.has(k)) avoided.get(k)!.push(tri);
+          else avoided.set(k, [tri]);
+        }
+    }
+  }
   for (const flat of polygons) {
     const points: Point[] = [];
     for (let i = 0; i < flat.length; i += 3)
@@ -283,13 +312,6 @@ export function drapeOnTerrain(polygons: number[][], grid: TerrainGrid): number[
                 ]
               : [(q: Point) => q.x, (q: Point) => q.z, (q: Point) => 1 - q.x - q.z])
               piece = clip(piece, inside);
-            // A corner on a grid point is cut by several lines and comes out repeated.
-            piece = piece.filter((q, k) => {
-              const r = piece[(k + 1) % piece.length];
-              return Math.hypot((r.x - q.x) * step, (r.z - q.z) * step) > 1e-6;
-            });
-            if (piece.length < 3 || Math.abs(signedArea(piece)) * step * step < 1e-4)
-              continue;
             const i = iz * side + ix,
               y = (q: Point) =>
                 upper
@@ -297,35 +319,121 @@ export function drapeOnTerrain(polygons: number[][], grid: TerrainGrid): number[
                     (1 - q.x) * (h[i + side] - h[i + side + 1]) +
                     (1 - q.z) * (h[i + 1] - h[i + side + 1])
                   : h[i] + q.x * (h[i + 1] - h[i]) + q.z * (h[i + side] - h[i]);
-            // Counter-clockwise in x, z, so pieces sharing an edge run it oppositely.
-            if (signedArea(piece) < 0) piece.reverse();
-            const id = i * 2 + +upper,
-              flat = piece.flatMap((q) => [
-                (q.x + ix) * step - half,
-                y(q),
-                (q.z + iz) * step - half,
-              ]);
-            if (groups.has(id)) groups.get(id)!.push(flat);
-            else groups.set(id, [flat]);
+            let pieces = [piece];
+            for (const t of avoided.get(i) ?? []) {
+              pieces = pieces.flatMap((p) =>
+                subtractTriangle(
+                  p,
+                  t.map((q) => ({ x: q.x - ix, z: q.z - iz })),
+                ),
+              );
+              if (!pieces.length) break;
+            }
+            for (let sub of pieces) {
+              // A corner on a grid point is cut by several lines and comes out repeated.
+              sub = sub.filter((q, k) => {
+                const r = sub[(k + 1) % sub.length];
+                return Math.hypot((r.x - q.x) * step, (r.z - q.z) * step) > 1e-6;
+              });
+              // Pieces left beside an avoided triangle can be hairline slivers.
+              if (
+                sub.length < 3 ||
+                Math.abs(signedArea(sub)) * step * step < (avoided.has(i) ? 2e-3 : 1e-4)
+              )
+                continue;
+              // Counter-clockwise in x, z, so pieces sharing an edge run it oppositely.
+              if (signedArea(sub) < 0) sub.reverse();
+              const id = i * 2 + +upper,
+                flat = sub.flatMap((q) => [
+                  (q.x + ix) * step - half,
+                  y(q),
+                  (q.z + iz) * step - half,
+                ]);
+              if (groups.has(id)) groups.get(id)!.push(flat);
+              else groups.set(id, [flat]);
+            }
           }
     }
   }
-  const rings = [...groups.values()].flatMap(mergePieces);
+  let rings = [...groups.values()].flatMap(mergePieces);
+  if (avoid.length) {
+    // Cutting asphalt out can strand small shards that touch nothing else.
+    const holders = new Map<string, number>();
+    for (const ring of rings)
+      for (let i = 0; i < ring.length; i += 3) {
+        const key = cornerKey(ring, i);
+        holders.set(key, (holders.get(key) ?? 0) + 1);
+      }
+    rings = rings.filter((ring) => {
+      let area = 0,
+        shared = false;
+      for (let i = 0; i < ring.length; i += 3) {
+        const j = (i + 3) % ring.length;
+        area += ring[i] * ring[j + 2] - ring[j] * ring[i + 2];
+        shared ||= holders.get(cornerKey(ring, i))! > 1;
+      }
+      return shared || Math.abs(area) / 2 > 1.5;
+    });
+  }
   // A corner can go only where every ring holding it runs straight through it:
   // dropping it anywhere else would leave a T-junction that opens once rounded.
   const needed = new Set<string>();
   for (const ring of rings)
     eachCorner(ring, (key, straight) => straight || needed.add(key));
   return closeTJunctions(
-    rings.map((ring) => {
-      const out: number[] = [];
-      eachCorner(
-        ring,
-        (key, _, i) => needed.has(key) && out.push(...ring.slice(i, i + 3)),
-      );
-      return out;
-    }),
+    weldCorners(
+      rings.map((ring) => {
+        const out: number[] = [];
+        eachCorner(
+          ring,
+          (key, _, i) => needed.has(key) && out.push(...ring.slice(i, i + 3)),
+        );
+        return out;
+      }),
+    ),
   );
+}
+/**
+ * Moves corners lying within 1.5 cm of an earlier one onto it. Pieces cut from
+ * differently rounded source polygons meet a centimetre apart, which would leave
+ * a hairline crack through which the terrain shows.
+ */
+function weldCorners(rings: number[][]) {
+  const TOLERANCE = 0.015,
+    CELL = 0.02,
+    seen = new Map<string, number[][]>();
+  const cell = (v: number) => Math.floor(v / CELL);
+  return rings.flatMap((ring) => {
+    const out: number[] = [];
+    for (let i = 0; i < ring.length; i += 3) {
+      const cx = cell(ring[i]),
+        cz = cell(ring[i + 2]);
+      let at: number[] | undefined;
+      for (let dx = -1; dx <= 1 && !at; dx++)
+        for (let dz = -1; dz <= 1 && !at; dz++)
+          at = seen
+            .get(`${cx + dx},${cz + dz}`)
+            ?.find((c) => Math.hypot(c[0] - ring[i], c[1] - ring[i + 2]) <= TOLERANCE);
+      const x = at?.[0] ?? ring[i],
+        z = at?.[1] ?? ring[i + 2];
+      if (!at) {
+        const key = `${cx},${cz}`;
+        if (seen.has(key)) seen.get(key)!.push([x, z]);
+        else seen.set(key, [[x, z]]);
+      }
+      // Corners welded together leave a zero-length edge.
+      if (out.length >= 3 && out[out.length - 3] === x && out[out.length - 1] === z)
+        continue;
+      out.push(x, ring[i + 1], z);
+    }
+    if (
+      out.length >= 6 &&
+      out[0] === out[out.length - 3] &&
+      out[2] === out[out.length - 1]
+    )
+      out.length -= 3;
+    return out.length >= 9 ? [out] : [];
+  });
 }
 /**
  * Adds every corner that lies on another ring's edge to that edge, so neighbouring
@@ -425,8 +533,14 @@ function mergePieces(pieces: number[][]) {
   }
   return pieces;
 }
+/**
+ * Whole centimetres, rounded the same way for every piece: a corner lying exactly
+ * on a half centimetre would otherwise round either way depending on float noise,
+ * and neighbouring pieces would end up a centimetre apart.
+ */
+export const snapCm = (v: number) => Math.round(v * 100 + 1e-4) / 100 + 0;
 const cornerKey = (flat: number[], i: number) =>
-  `${Math.round(flat[i] * 100)},${Math.round(flat[i + 2] * 100)}`;
+  `${Math.round(snapCm(flat[i]) * 100)},${Math.round(snapCm(flat[i + 2]) * 100)}`;
 /** Visits each corner (flat index `i`) with whether its ring runs straight through it. */
 function eachCorner(
   flat: number[],
@@ -442,6 +556,60 @@ function eachCorner(
         (flat[b + 2] - flat[a + 2]) * (flat[c] - flat[b]);
     visit(cornerKey(flat, b), Math.abs(turn) < 1e-6, b);
   }
+}
+/** Separating-axis test: whether two convex polygons share no area. */
+function apart(a: Point[], b: Point[]) {
+  const EPS = 1e-9;
+  for (const [p, q] of [
+    [a, b],
+    [b, a],
+  ])
+    for (let i = 0; i < p.length; i++) {
+      const u = p[i],
+        v = p[(i + 1) % p.length],
+        length = Math.hypot(v.z - u.z, u.x - v.x);
+      // A repeated corner has no direction, so it cannot separate anything.
+      if (length < 1e-12) continue;
+      const nx = (v.z - u.z) / length,
+        nz = (u.x - v.x) / length;
+      let lo = Infinity,
+        hi = -Infinity,
+        lo2 = Infinity,
+        hi2 = -Infinity;
+      for (const w of p) {
+        const d = nx * w.x + nz * w.z;
+        lo = Math.min(lo, d);
+        hi = Math.max(hi, d);
+      }
+      for (const w of q) {
+        const d = nx * w.x + nz * w.z;
+        lo2 = Math.min(lo2, d);
+        hi2 = Math.max(hi2, d);
+      }
+      if (hi < lo2 + EPS || hi2 < lo + EPS) return true;
+    }
+  return false;
+}
+/** The part of a polygon outside a triangle, as convex pieces (the polygon must be convex). */
+function subtractTriangle(polygon: Point[], tri: Point[]): Point[][] {
+  const edge = (a: Point, b: Point, q: Point) =>
+    (b.x - a.x) * (q.z - a.z) - (b.z - a.z) * (q.x - a.x);
+  const centre = {
+    x: (tri[0].x + tri[1].x + tri[2].x) / 3,
+    z: (tri[0].z + tri[1].z + tri[2].z) / 3,
+  };
+  const sign = Math.sign(edge(tri[0], tri[1], centre));
+  if (!sign || apart(polygon, tri)) return [polygon];
+  const out: Point[][] = [];
+  let rest = polygon;
+  for (let k = 0; k < 3 && rest.length >= 3; k++) {
+    const a = tri[k],
+      b = tri[(k + 1) % 3];
+    const outside = clip(rest, (q) => -sign * edge(a, b, q));
+    if (outside.length >= 3) out.push(outside);
+    rest = clip(rest, (q) => sign * edge(a, b, q));
+  }
+  return out;
 }
 /** Sutherland–Hodgman: the part of a polygon where `inside` is non-negative. */
 function clip(polygon: Point[], inside: (p: Point) => number) {
