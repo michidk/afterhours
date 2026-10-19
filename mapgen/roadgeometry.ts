@@ -844,7 +844,9 @@ export function offsetPolyline(points: Point[], halfWidth: number) {
 }
 export function trimPolyline(points: Point[], startCut: number, endCut: number) {
   const total = points.reduce((s, p, i) => (i ? s + dist(points[i - 1], p) : 0), 0);
-  if (startCut + endCut >= total - 1) {
+  // A band shorter than a metre still sits between its two mouths; only crossed
+  // mouths collapse it, otherwise its square ends miss the junction rings' mouths.
+  if (startCut + endCut >= total - 0.1) {
     const a = pointAt(points, Math.min(startCut, total / 2 - 0.5)),
       b = pointAt(points, Math.max(total - endCut, total / 2 + 0.5));
     return [a, b];

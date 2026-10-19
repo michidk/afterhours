@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildRoadGeometry } from "../mapgen/roadgeometry.ts";
+import { buildRoadGeometry, trimPolyline } from "../mapgen/roadgeometry.ts";
 import type { Point, RoadGraph } from "../mapgen/types.ts";
 
 /** A street junction at the origin whose arms leave at the given headings (degrees). */
@@ -52,4 +52,18 @@ test("two arms that nearly coincide get no crosswalk, so none cuts through the o
   assert.equal(a, 0, "the first of the pair has no crosswalk");
   assert.equal(b, 0, "the second of the pair has no crosswalk");
   assert.ok(c > 0, "the arm on its own keeps its crosswalk");
+});
+
+test("a band under a metre long stays between its two mouths", () => {
+  const line = [
+    { x: 0, z: 0 },
+    { x: 30, z: 0 },
+    { x: 47.4, z: 0 },
+  ];
+  // 34.08 + 12.37 leaves 0.95 m of a 47.4 m street.
+  const [a, b] = trimPolyline(line, 34.08, 12.37);
+  assert.ok(
+    Math.abs(a.x - 34.08) < 1e-6 && Math.abs(b.x - 35.03) < 1e-6,
+    `${a.x} ${b.x}`,
+  );
 });

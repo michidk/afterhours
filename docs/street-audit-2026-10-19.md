@@ -68,6 +68,7 @@ Retake them with `npx tsx scripts/street-photos.ts data/city-meshes.msgpack docs
 
 ## Remaining
 
+- A street shorter than its two junction mouths plus a metre was drawn as a straight chord from its midpoint to the far mouth, which left a wedge uncovered beside the junction ring (seed 2741, near 650.75, 87). A band under a metre long now stays between its mouths. Seeds 713 and 2741 have no uncovered surface cell left that is wider than a raster shrink margin.
 - 172 m² of sidewalk (0.12%) is still steeper than 35%, where the ground drops sharply beside a street, and 32 m² of asphalt.
 - A street's cross-slope follows the 8 m terrain grid. Players stand on the ground, 0.1 m below drawn asphalt and 0.25 m below a sidewalk top.
 - A few sidewalk outlines have a small kink where a junction corner has no room for a fillet and keeps a sharp corner.
