@@ -1006,7 +1006,15 @@ export class Simulation {
             const p = this.entities.get(e.driver);
             if (p) this.exit(p, e);
           }
-        } else if (e.kind === "plane") flyPlane(e, input, dt, this.city);
+        } else if (e.kind === "plane") {
+          e.planeInput = {
+            moveX: inputX(input),
+            moveY: inputY(input),
+            ascend: input.ascend,
+            descend: input.descend,
+          };
+          flyPlane(e, input, dt, this.city);
+        }
         const speed = Math.hypot(e.vx, e.vz),
           limit = e.model ? VEHICLES[e.model].speed : 52;
         if (vehicle(e) && speed > limit) {

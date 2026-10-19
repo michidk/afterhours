@@ -78,6 +78,64 @@ test("last authoritative braking and steering predict a driven three-car collisi
   }
 });
 
+test("last authoritative aircraft controls predict a turning midair collision", () => {
+  const city = generateCity();
+  city.buildings = [];
+  city.props = [];
+  const sim = new Simulation(city);
+  sim.entities.clear();
+  const planes = [0, 8].map((z, i) => {
+    const plane = sim.spawn("plane", 0, z, undefined, "plane");
+    plane.driver = `pilot-${i}`;
+    plane.y = 40;
+    plane.vz = i === 0 ? 40 : 20;
+    plane.health = plane.maxHealth = 1000000;
+    sim.inputs.set(plane.driver, {
+      ...idle(),
+      up: true,
+      right: i === 1,
+      ascend: i === 1,
+    });
+    return plane;
+  });
+  try {
+    sim.tick(1 / 30);
+    const snapshots = structuredClone(planes);
+    const saved = structuredClone(snapshots);
+    const predicted = structuredClone(planes[0]);
+    const shadows = predictionWorld(predicted, snapshots);
+    const contacts = new Set([predicted.id]);
+    for (let i = 0; i < 10; i++) {
+      sim.tick(1 / 30);
+      predictStep(
+        predicted,
+        { ...idle(), up: true },
+        city,
+        snapshots,
+        1 / 30,
+        shadows,
+        contacts,
+      );
+    }
+    assert.ok(contacts.has(planes[1].id), "the scenario produces a midair contact");
+    for (const actual of planes) {
+      const replay =
+        actual.id === predicted.id
+          ? predicted
+          : shadows.find((e) => e.id === actual.id);
+      assert.ok(replay);
+      for (const key of ["x", "y", "z", "vx", "vy", "vz", "angle"] as const)
+        assert.ok(
+          Math.abs(actual[key] - replay[key]) < 0.001,
+          `${actual.id} ${key}: ${actual[key]} != ${replay[key]}`,
+        );
+    }
+    assert.deepEqual(snapshots, saved, "prediction leaves authority untouched");
+  } finally {
+    sim.destruction.dispose();
+  }
+});
+
 test("a 250 ms runtime stall catches up the entire collision world in fixed ticks", (t) => {
   const { sim, cars } = drivingWorld();
   const expected = drivingWorld();

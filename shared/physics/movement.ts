@@ -211,6 +211,14 @@ export function predictStep(
         (!b.driver && !b.ai ? { throttle: 0, steer: 0, brake: false } : undefined);
       if (b.kind === "car" && b.flooded !== undefined) driftFlooded(b, h);
       else if (b.kind === "car" && drive) carForces(b, drive, h, carGrounded(b, city));
+      else if (b.kind === "plane" && b.planeInput) {
+        if (
+          !b.driver &&
+          (b.y > groundLevel(b.x, b.z, city) + 0.2 || b.flight === "falling")
+        )
+          fallAircraft(b, city, h);
+        else flyPlane(b, { ...idle(), ...b.planeInput }, h, city);
+      }
       if (watercraft(b.kind) && drive) watercraftForces(b, drive, h, city);
       const speed = Math.hypot(b.vx, b.vz),
         limit = b.model ? VEHICLES[b.model].speed : 52;
@@ -222,7 +230,8 @@ export function predictStep(
       b.z += b.vz * h;
       if (vehicle(b)) b.angle = wrap(b.angle + (b.angularVelocity || 0) * h);
       if (b.kind === "car") carAltitude(b, previous, city, h);
-      else b.y = Math.max(surfaceLevel(b.x, b.z, city), b.y + b.vy * h);
+      else if (b.kind !== "plane" || !b.planeInput)
+        b.y = Math.max(surfaceLevel(b.x, b.z, city), b.y + b.vy * h);
     }
     resolveMovementContacts(bodies, city, contacts, impacts);
   }

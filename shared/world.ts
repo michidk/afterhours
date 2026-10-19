@@ -76,6 +76,8 @@ export interface Entity {
   steering?: number;
   /** Last driving forces applied by authority, held during remote prediction. */
   drive?: Drive;
+  /** Last authoritative plane controls, held while predicting nearby aircraft. */
+  planeInput?: Pick<Input, "moveX" | "moveY" | "ascend" | "descend">;
   rearGripLoss?: number;
   skidding?: boolean;
   wheelSkids?: boolean[];

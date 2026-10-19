@@ -251,6 +251,8 @@ window.addEventListener("keydown", (event) => {
     )
   )
     event.preventDefault();
+  // Finish overdue slots with the controls held before this event.
+  pumpInput();
   controls.press(event.code);
   if (event.repeat) return;
   if (event.code === "KeyM") {
@@ -291,7 +293,10 @@ window.addEventListener("keydown", (event) => {
     $("#help").classList.add("hidden");
   }
 });
-window.addEventListener("keyup", (e) => keys.delete(e.code));
+window.addEventListener("keyup", (e) => {
+  pumpInput();
+  keys.delete(e.code);
+});
 window.addEventListener("blur", () => {
   controls.clear();
   automation?.stop();
@@ -381,6 +386,7 @@ canvas.addEventListener("pointermove", (e) => {
 });
 canvas.addEventListener("pointerdown", (event) => {
   if (joined) {
+    pumpInput();
     audio.unlock();
     if (
       !cityMap?.open &&
@@ -404,7 +410,10 @@ canvas.addEventListener(
   },
   { passive: false },
 );
-window.addEventListener("pointerup", () => (controls.mouseDown = false));
+window.addEventListener("pointerup", () => {
+  pumpInput();
+  controls.mouseDown = false;
+});
 const inputClock = new InputClock();
 function pumpInput(now = performance.now()) {
   if (!joined || document.hidden) {
