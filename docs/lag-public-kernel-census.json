@@ -1,0 +1,102 @@
+{
+  "healthRecords": 1313,
+  "usableHealthRecords": 1013,
+  "observationErrors": {
+    "slow observations": 300
+  },
+  "perClient": [
+    {
+      "client": "cars-1.jsonl",
+      "failed timing samples": 1,
+      "unpaired": 1
+    },
+    {
+      "client": "cars-2.jsonl",
+      "failed timing samples": 3,
+      "paired": 1,
+      "with game kernel send queue": 0,
+      "with timeout retries": 0,
+      "with stale app write": 0,
+      "unpaired": 2
+    },
+    {
+      "client": "cars-3.jsonl",
+      "failed timing samples": 12,
+      "unpaired": 11,
+      "paired": 1,
+      "with game kernel send queue": 0,
+      "with timeout retries": 0,
+      "with stale app write": 0
+    },
+    {
+      "client": "cars-4.jsonl",
+      "failed timing samples": 11,
+      "unpaired": 11
+    },
+    {
+      "client": "cars-5.jsonl",
+      "failed timing samples": 3,
+      "unpaired": 2,
+      "paired": 1,
+      "with game kernel send queue": 0,
+      "with timeout retries": 0,
+      "with stale app write": 0
+    },
+    {
+      "client": "people-1.jsonl",
+      "failed timing samples": 3,
+      "unpaired": 3
+    },
+    {
+      "client": "people-2.jsonl",
+      "failed timing samples": 6,
+      "unpaired": 6
+    },
+    {
+      "client": "people-3.jsonl",
+      "failed timing samples": 10,
+      "unpaired": 10
+    },
+    {
+      "client": "people-4.jsonl",
+      "failed timing samples": 3,
+      "unpaired": 3
+    },
+    {
+      "client": "people-5.jsonl",
+      "failed timing samples": 8,
+      "unpaired": 8
+    },
+    {
+      "client": "planes-1.jsonl",
+      "failed timing samples": 2,
+      "unpaired": 1,
+      "paired": 1,
+      "with game kernel send queue": 1,
+      "with timeout retries": 0,
+      "with stale app write": 0
+    },
+    {
+      "client": "planes-2.jsonl"
+    },
+    {
+      "client": "planes-3.jsonl",
+      "failed timing samples": 1,
+      "paired": 1,
+      "with game kernel send queue": 1,
+      "with timeout retries": 0,
+      "with stale app write": 0
+    },
+    {
+      "client": "planes-4.jsonl"
+    },
+    {
+      "client": "planes-5.jsonl",
+      "failed timing samples": 1,
+      "paired": 1,
+      "with game kernel send queue": 1,
+      "with timeout retries": 0,
+      "with stale app write": 0
+    }
+  ]
+}
