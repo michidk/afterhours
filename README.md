@@ -45,6 +45,8 @@ Network and movement checks: `bun run test:network` (real WebSockets with delay 
 
 Local steering responds between network command ticks. Prop impacts predict the car's passage, including props dented by earlier hits, and throw the struck prop at once; when the server's debris arrives it takes over by sliding into place rather than snapping. Damage and pickups still wait for the server. Other drivers' and AI cars' future turns cannot be predicted exactly, so shared crashes can still need corrections. See [fast driving and shared collisions](docs/networking.md#fast-driving-and-shared-collisions).
 
+Body collision height checks use the snapshot's millimeter position grid so rounding cannot drop an otherwise shared contact at the 1.8 m height boundary.
+
 Standard gamepads use the left stick to move and steer, LT/RT to reverse/accelerate, A to brake or sprint, X to attack, Y to enter/exit, LB/RB to descend/ascend, B to reload, and the D-pad for inventory slots. View opens the map, Menu opens help, and the left stick click toggles the jetpack.
 
 The debug Server stats window shows process CPU usage, where 100% is one core, and process memory as a percentage of the container or host memory limit. Tick CPU measures the simulation budget separately; JS heap usage also includes a percentage of its own limit.

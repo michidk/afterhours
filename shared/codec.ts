@@ -1,11 +1,11 @@
 import { encode, decode } from "@msgpack/msgpack";
 import type { Snapshot } from "./protocol.ts";
-import type { Entity } from "./world.ts";
+import { POSITION_SCALE, type Entity } from "./world.ts";
 export type EntityPatch = { [P in keyof Entity]?: Entity[P] | null } & { id: string };
 const scales = {
-  x: 1000,
-  y: 1000,
-  z: 1000,
+  x: POSITION_SCALE,
+  y: POSITION_SCALE,
+  z: POSITION_SCALE,
   vx: 1000,
   vy: 1000,
   vz: 1000,

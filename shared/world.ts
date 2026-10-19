@@ -5,6 +5,7 @@ import type { BuildingAssetId } from "./assets/buildings/index.ts";
 export const BLOCK = 64;
 import type { VehicleModel, WeaponItem, WeaponKind } from "./catalog.ts";
 export const LIMIT = 1536;
+export const POSITION_SCALE = 1000;
 export interface Road {
   /** Segment centre (also the streaming index position). Endpoints form the street graph. */
   x: number;

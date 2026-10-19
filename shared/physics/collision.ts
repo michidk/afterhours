@@ -1,4 +1,4 @@
-import type { Entity, Building } from "../world.ts";
+import { POSITION_SCALE, type Entity, type Building } from "../world.ts";
 import { DEFAULT_MODELS, VEHICLES } from "../catalog.ts";
 export const vehicle = (e: Entity) => e.kind !== "player" && e.kind !== "pedestrian";
 export function shape(e: Entity) {
@@ -164,6 +164,14 @@ export function insideBuilding(b: Building, x: number, z: number, pad = 0) {
   return Math.abs(u) < b.w / 2 + pad && Math.abs(v) < b.d / 2 + pad;
 }
 
+function separatedHeights(a: Entity, b: Entity) {
+  // Contact eligibility must survive the position rounding used in snapshots.
+  return (
+    Math.abs(Math.round(a.y * POSITION_SCALE) - Math.round(b.y * POSITION_SCALE)) >
+    1.8 * POSITION_SCALE
+  );
+}
+
 /** Stable pair order for authority and replay, with 6 m of contact-correction margin. */
 export function collisionPairs(entities: Entity[]): [Entity, Entity][] {
   const bodies = entities
@@ -179,7 +187,7 @@ export function collisionPairs(entities: Entity[]): [Entity, Entity][] {
         if (
           Math.abs(a.x - b.x) > 16 ||
           Math.abs(a.z - b.z) > 16 ||
-          Math.abs(a.y - b.y) > 1.8
+          separatedHeights(a, b)
         )
           continue;
         pairs.push([a, b]);
@@ -198,7 +206,7 @@ export function collisionPairs(entities: Entity[]): [Entity, Entity][] {
       const bi = sweep[j],
         b = bodies[bi];
       if (b.x - a.x > 16) break;
-      if (Math.abs(a.z - b.z) > 16 || Math.abs(a.y - b.y) > 1.8) continue;
+      if (Math.abs(a.z - b.z) > 16 || separatedHeights(a, b)) continue;
       neighbours[Math.min(ai, bi)].push(Math.max(ai, bi));
     }
   }
