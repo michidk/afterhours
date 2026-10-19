@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { InputClock } from "../client/input/clock.ts";
 
-for (const interval of [16, 33, 50, 80]) {
+for (const interval of [16, 33, 50, 80, 280, 400]) {
   test(`input clock preserves 30 Hz movement with ${interval} ms wakeups`, () => {
     const clock = new InputClock();
     const timestamps: number[] = [];

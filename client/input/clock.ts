@@ -14,7 +14,11 @@ export class InputClock {
     this.rateAdjustment = 0;
   }
   advance(now: number, send: (timestamp: number) => void) {
-    if (this.next === undefined || now - this.next > 250) this.next = now;
+    if (this.next === undefined || now - this.next > TUNING.inputHoldSeconds * 1000)
+      this.next = now;
+    // A stale dry-buffer report must not accelerate a whole long-frame batch.
+    if (now - this.next > (TUNING.inputQueue - 1) * TUNING.tick * 1000)
+      this.period = Math.max(this.period, TUNING.tick * 1000);
     while (this.next <= now + 1e-6) {
       const timestamp = this.next;
       this.next += this.period;

@@ -125,3 +125,14 @@ test("driving rides out a 220 ms delivery spike without stopping or shedding the
   assert.equal(report.cruise.surges, 0, detail);
   assert.equal(report.cruise.dips, 0, detail);
 });
+
+for (const wakeup of [280, 400])
+  test(`held driving keeps real-time speed through ${wakeup} ms input wakeups`, async () => {
+    const report = await probeDriving({ profile: "lan", seconds: 10, wakeup });
+    const detail = JSON.stringify(report);
+    assert.ok(report.inputsSent >= 290, detail);
+    assert.equal(report.server.dropped, 0, detail);
+    assert.equal(report.server.frozen, 0, detail);
+    assert.equal(report.cruise.backward, 0, detail);
+    assert.ok(Math.abs(report.cruise.meanStep - 0.832) < 0.02, detail);
+  });

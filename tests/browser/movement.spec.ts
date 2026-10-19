@@ -29,7 +29,7 @@ const freezeLimitMs = process.env.CI ? Infinity : 250;
 
 /**
  * Wait until the city around the player has streamed in. Building freshly streamed
- * chunks with software WebGL stretches frames past the input clock's 250 ms
+ * chunks with software WebGL stretches frames past the input clock's 500 ms
  * catch-up limit, so a hold measured while a new area loads sends too few commands.
  */
 async function waitForStreamedCity(page: import("@playwright/test").Page) {
