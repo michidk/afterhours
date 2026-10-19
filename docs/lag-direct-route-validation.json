@@ -4,11 +4,7 @@
   "directory": "/tmp/afterhours-five-bMqzIn",
   "environment": {
     "cores": 9,
-    "load": [
-      8.89,
-      9.12,
-      6.82
-    ],
+    "load": [8.89, 9.12, 6.82],
     "node": "v26.11.1"
   },
   "phases": [
@@ -27,10 +23,7 @@
           "airborneFraction": 0
         },
         {
-          "failures": [
-            "correction >0.3m",
-            "did not sustain movement"
-          ],
+          "failures": ["correction >0.3m", "did not sustain movement"],
           "samples": 1597,
           "simulationRate": 0.9999314351580129,
           "maxSnapshotAgeMs": 134.18287599999167,
@@ -95,10 +88,7 @@
           "airborneFraction": 0
         },
         {
-          "failures": [
-            "correction >0.3m",
-            "did not sustain movement"
-          ],
+          "failures": ["correction >0.3m", "did not sustain movement"],
           "samples": 1605,
           "simulationRate": 1.0002520084243494,
           "maxSnapshotAgeMs": 145.45282700000098,
@@ -147,10 +137,7 @@
       "name": "planes",
       "clients": [
         {
-          "failures": [
-            "did not sustain movement",
-            "did not sustain flight"
-          ],
+          "failures": ["did not sustain movement", "did not sustain flight"],
           "samples": 1604,
           "simulationRate": 0.9998573746877863,
           "maxSnapshotAgeMs": 134.6452019999997,

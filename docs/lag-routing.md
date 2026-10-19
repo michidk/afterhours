@@ -46,11 +46,11 @@ hostname and TLS validation. `ss` confirmed sockets to that address. The game-no
 ingress had completed its restart before this run. This was not a test of updated
 public DNS. One short debug observer joined during cars to inspect obstructions.
 
-| Phase | Passing clients | Worst snapshot age | Worst applied-input age | Worst correction |
-| --- | ---: | ---: | ---: | ---: |
-| People | 3/5 | 327 ms | 473 ms | 0.80 m |
-| Cars | 4/5 | 161 ms | 326 ms | 0.33 m |
-| Planes | 0/5 | 422 ms | 604 ms | 9.44 m |
+| Phase  | Passing clients | Worst snapshot age | Worst applied-input age | Worst correction |
+| ------ | --------------: | -----------------: | ----------------------: | ---------------: |
+| People |             3/5 |             327 ms |                  473 ms |           0.80 m |
+| Cars   |             4/5 |             161 ms |                  326 ms |           0.33 m |
+| Planes |             0/5 |             422 ms |                  604 ms |           9.44 m |
 
 Every phase measured 180 seconds. The command exited 1. One walker and car were
 obstructed near planes e10609/e10612, left by the earlier failed plane setup.
