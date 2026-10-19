@@ -29,3 +29,13 @@ python3 scripts/capture-movement-transport.py \
 ```
 
 Run from an installed checkout with Node 24, Python 3, and `ss`. The capture adds observer load and is diagnostic; client timer delays remain part of the unchanged acceptance report.
+
+## Synchronized public capture
+
+The first complete run of the capture script used deployed source `dfc1926` against public main, from the VibePod on work2. It ran from `1792437110255` to `1792437543079`, with sixty measured seconds in each phase, and exited 1. [All fifteen client results](lag-public-tcp-five.json) failed the unchanged gates. Maximum snapshot age was 520 ms, applied-input age 635 ms, and correction 2.502 m. Generator timer delays stayed below 115 ms. All clients sustained movement and all planes sustained flight. Simulation ran at approximately real time.
+
+At `1792437267872`, three of five walking connections had receive gaps above 400 ms while two continued receiving. The client TCP captures showed no increase in retransmitted bytes or out-of-order receive counters during that interval. Nearby health samples still recorded fresh server writes for the stalled clients. This pattern is compatible with a shared proxy or server-side transport delay, but does not establish it. Accepted writes and empty application buffers do not reveal the game's kernel send queues.
+
+A separate compression diagnostic alternated five Brotli and five identity rounds, three downloads of the same 1,802,129-byte bundle each round, alongside five WebSocket ping connections. Every download returned 200 with the full decoded payload and the expected content encoding. Neither setting eliminated latency spikes. Probe timer gaps reached 335 ms, so this experiment is inconclusive for attributing latency to nginx compression. No compression or network configuration was changed.
+
+The next diagnostic must distinguish game-side kernel buffering from nginx and downstream buffering. Server snapshot-write timestamps alone cannot make that distinction.
