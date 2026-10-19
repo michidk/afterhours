@@ -174,38 +174,23 @@ export function cityFromMap(map: GeneratedMap): City {
     sidewalks: number[][] = [],
     markings: RoadSurface["markings"] = [];
   const usable = (points: Point[]) => points.length >= 3 && points.length <= 1000;
-  // Strips along an edge (bands, kerb-side sidewalks, solid lines) are cut into
-  // pieces of at most STRIP metres so each polygon fits one streaming chunk.
-  const STRIP = 16;
+  // Strips along an edge (bands, kerb-side sidewalks, solid lines) are cut into one
+  // quad per centreline step. A longer sloped piece would be ear-clipped into chords
+  // that cut across its height profile, leaving cracks and fins against neighbours.
   const pieces = (left: Point[], right: Point[]) => {
     if (left.length !== right.length || left.length < 2)
       return [[...left, ...[...right].reverse()]];
     const out: Point[][] = [];
-    let start = 0,
-      run = 0;
-    for (let i = 1; i < left.length; i++) {
-      run += dist(left[i - 1], left[i]);
-      if (run >= STRIP || i === left.length - 1) {
-        const piece = [
-          ...left.slice(start, i + 1),
-          ...right.slice(start, i + 1).reverse(),
-        ];
-        if (!selfIntersects(piece)) out.push(piece);
-        else
-          // On the tightest bends the two edges can cross; fall back to one quad per
-          // step, each ordered around its middle so none renders folded.
-          for (let k = start + 1; k <= i; k++) {
-            const quad = [left[k - 1], left[k], right[k], right[k - 1]],
-              c = mul(quad.reduce(add, { x: 0, z: 0 }), 0.25);
-            quad.sort(
-              (a, b) =>
-                Math.atan2(a.z - c.z, a.x - c.x) - Math.atan2(b.z - c.z, b.x - c.x),
-            );
-            if (area(quad) > 0.01) out.push(quad);
-          }
-        start = i;
-        run = 0;
+    for (let k = 1; k < left.length; k++) {
+      const quad = [left[k - 1], left[k], right[k], right[k - 1]];
+      // On the tightest bends the two edges can cross; order it around its middle.
+      if (selfIntersects(quad)) {
+        const c = mul(quad.reduce(add, { x: 0, z: 0 }), 0.25);
+        quad.sort(
+          (a, b) => Math.atan2(a.z - c.z, a.x - c.x) - Math.atan2(b.z - c.z, b.x - c.x),
+        );
       }
+      if (area(quad) > 0.01) out.push(quad);
     }
     return out;
   };

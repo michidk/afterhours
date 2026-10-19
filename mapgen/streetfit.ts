@@ -188,30 +188,55 @@ export function sinkUnderStreets(
       }
   }
   for (let v = 0; v < heights.length; v++) floor[v] = Math.min(floor[v], heights[v]);
-  for (let pass = 0; pass < 400; pass++) {
-    let worst = 0;
+  // Ground falling away beside a street is pulled up by its free corners (beside the
+  // street, not under it or a pad) until it lies at most SAG below the surface;
+  // concrete under the street hides the rest. Sinking always wins: raising stops
+  // after RAISE passes, and a far corner with little weight is left to the concrete
+  // because it would have to rise steeply and would push through other streets.
+  const SAG = 0.35,
+    RAISE = 200;
+  for (let pass = 0; pass < RAISE + 400; pass++) {
+    let worst = 0,
+      sag = 0;
     for (let k = 0; k < limits.length; k++) {
       const c = k * 3;
       let h = 0,
-        norm = 0;
+        norm = 0,
+        free = 0,
+        freeNorm = 0;
       for (let m = 0; m < 3; m++) {
-        const v = corners[c + m];
-        h += weights[c + m] * heights[v];
-        if (heights[v] > floor[v]) norm += give[v] * weights[c + m] ** 2;
+        const v = corners[c + m],
+          w = weights[c + m];
+        h += w * heights[v];
+        if (heights[v] > floor[v]) norm += give[v] * w ** 2;
+        if (give[v] === 1) {
+          free += w;
+          freeNorm += w ** 2;
+        }
       }
       const excess = h - limits[k];
-      if (excess <= 0 || norm <= 0) continue;
-      worst = Math.max(worst, excess);
+      if (excess > 0) {
+        if (norm <= 0) continue;
+        worst = Math.max(worst, excess);
+        for (let m = 0; m < 3; m++) {
+          const v = corners[c + m];
+          if (heights[v] > floor[v])
+            heights[v] = Math.max(
+              floor[v],
+              heights[v] - (give[v] * weights[c + m] * excess) / norm,
+            );
+        }
+        continue;
+      }
+      const deficit = -excess - SAG;
+      if (pass >= RAISE || deficit <= 0 || free < 0.3) continue;
+      sag = Math.max(sag, deficit);
       for (let m = 0; m < 3; m++) {
         const v = corners[c + m];
-        if (heights[v] > floor[v])
-          heights[v] = Math.max(
-            floor[v],
-            heights[v] - (give[v] * weights[c + m] * excess) / norm,
-          );
+        if (give[v] === 1) heights[v] += (weights[c + m] * deficit) / freeNorm;
       }
     }
-    if (worst < 0.002) break;
+    if (worst < 0.002 && (pass >= RAISE || sag < 0.01)) break;
   }
 }
 

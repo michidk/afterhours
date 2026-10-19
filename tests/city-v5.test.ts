@@ -138,7 +138,13 @@ test("generated artifact validates, packs compactly and places everything on lan
         x += polygon[v];
         z += polygon[v + 2];
       }
-      const n = polygon.length / 3;
+      const n = polygon.length / 3,
+        ys = polygon.filter((_, v) => v % 3 === 1);
+      // Ear clipping a longer sloped strip makes chords across its profile.
+      assert.ok(
+        n <= 4 || Math.max(...ys) - Math.min(...ys) < 0.25,
+        "sloped street pieces are single quads",
+      );
       assert.ok(x / n >= origin.x - 0.01 && x / n < origin.x + PACK_CHUNK_SIZE + 0.01);
       assert.ok(z / n >= origin.z - 0.01 && z / n < origin.z + PACK_CHUNK_SIZE + 0.01);
       for (let v = 0; v < polygon.length; v += 3)

@@ -1,0 +1,60 @@
+[
+  {
+    "name": "junction-mouth-top",
+    "x": -779,
+    "z": -54,
+    "size": 40
+  },
+  {
+    "name": "junction-pair-top",
+    "x": -800,
+    "z": -21,
+    "size": 120
+  },
+  {
+    "name": "hillside-oblique",
+    "x": -157,
+    "z": 978,
+    "size": 60,
+    "pitch": 35,
+    "yaw": 30
+  },
+  {
+    "name": "embankment-oblique",
+    "x": -812,
+    "z": 573,
+    "size": 60,
+    "pitch": 35,
+    "yaw": 200
+  },
+  {
+    "name": "junction-oblique",
+    "x": -800,
+    "z": -21,
+    "size": 70,
+    "pitch": 40,
+    "yaw": 120
+  },
+  {
+    "name": "beach-lane-oblique",
+    "x": -906,
+    "z": -680,
+    "size": 60,
+    "pitch": 35,
+    "yaw": 135
+  },
+  {
+    "name": "racetrack-oblique",
+    "x": 830,
+    "z": 735,
+    "size": 60,
+    "pitch": 40,
+    "yaw": 20
+  },
+  {
+    "name": "downtown-top",
+    "x": -22,
+    "z": 638,
+    "size": 250
+  }
+]

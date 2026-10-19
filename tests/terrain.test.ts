@@ -15,6 +15,7 @@ import {
 } from "../shared/water.ts";
 import { LIMIT, idle, type Entity } from "../shared/world.ts";
 import { Simulation } from "../server/simulation.ts";
+import { sinkUnderStreets } from "../mapgen/streetfit.ts";
 import {
   carAltitude,
   carForces,
@@ -225,4 +226,37 @@ test("parked cars and stopped drivers off the throttle hold their place on a hil
     }
     assert.ok(Math.hypot(car.x - start.x, car.z - start.z) < 0.05);
   }
+});
+
+test("street fit pulls a valley up under a street without lifting it through", () => {
+  // A 5 x 5 grid, 8 m apart; the column under an 8 m wide street carries its
+  // height and the ground either side lies 5 m lower.
+  const side = 5,
+    heights = Array.from({ length: side * side }, (_, i) => (i % side === 2 ? 5 : 0));
+  const grid = { heights, side, step: 8, half: 16 },
+    street = [-4, 5, -16, 4, 5, -16, 4, 5, 16, -4, 5, 16];
+  sinkUnderStreets(grid, [{ polygons: [street], top: 0.1 }], []);
+  // The game's triangle split, on this small grid.
+  const at = (x: number, z: number) => {
+    const gx = (x + 16) / 8,
+      gz = (z + 16) / 8,
+      ix = Math.min(side - 2, Math.floor(gx)),
+      iz = Math.min(side - 2, Math.floor(gz)),
+      u = gx - ix,
+      v = gz - iz,
+      i = iz * side + ix;
+    return u + v <= 1
+      ? heights[i] +
+          u * (heights[i + 1] - heights[i]) +
+          v * (heights[i + side] - heights[i])
+      : heights[i + side + 1] +
+          (1 - u) * (heights[i + side] - heights[i + side + 1]) +
+          (1 - v) * (heights[i + 1] - heights[i + side + 1]);
+  };
+  for (const z of [-12, 0, 12])
+    for (const x of [-4, 0, 4]) {
+      assert.ok(at(x, z) <= 5.1 - 0.05, "ground stays under the surface");
+      assert.ok(at(x, z) >= 5.1 - 0.5, "ground stays close below the surface");
+    }
+  assert.equal(heights[0], 0, "ground away from the street is untouched");
 });

@@ -631,17 +631,21 @@ export function placeRacetrack(
   const PIECE = TILE / STEP;
   for (let i = 0; i < n; i += PIECE) {
     const to = Math.min(i + PIECE, n);
-    ctx.asphalt.push(strip(i, to, -TRACK_WIDTH / 2, TRACK_WIDTH / 2));
-    for (const side of [-1, 1])
-      ctx.markings.push({
-        color: "white",
-        polygon: strip(
-          i,
-          to,
-          side * (TRACK_WIDTH / 2 - 0.5),
-          side * (TRACK_WIDTH / 2 - 0.8),
-        ),
-      });
+    // One quad per sample: a longer sloped strip would be ear-clipped into chords
+    // that cut across the profile and crack against its neighbours.
+    for (let k = i; k < to; k++) {
+      ctx.asphalt.push(strip(k, k + 1, -TRACK_WIDTH / 2, TRACK_WIDTH / 2));
+      for (const side of [-1, 1])
+        ctx.markings.push({
+          color: "white",
+          polygon: strip(
+            k,
+            k + 1,
+            side * (TRACK_WIDTH / 2 - 0.5),
+            side * (TRACK_WIDTH / 2 - 0.8),
+          ),
+        });
+    }
     ctx.taken.push([
       offset(i % n, -CORE - 6),
       offset(to % n, -CORE - 6),
