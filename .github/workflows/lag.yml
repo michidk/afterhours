@@ -6,7 +6,7 @@ on:
       route:
         description: Test a fresh local server or a route to production
         type: choice
-        options: [local, direct, public]
+        options: [local, direct, public, work2-ingress]
         default: direct
       seconds:
         description: Measured seconds for each five-client phase
@@ -46,9 +46,14 @@ jobs:
           done
           cat /tmp/afterhours-server.log
           exit 1
-      - name: Resolve directly to the game node
-        if: inputs.route == 'direct'
-        run: echo '130.61.217.172 afterhours.k8s.lohr.dev' | sudo tee -a /etc/hosts
+      - name: Resolve the requested ingress
+        if: inputs.route == 'direct' || inputs.route == 'work2-ingress'
+        env:
+          ROUTE: ${{ inputs.route }}
+        run: |
+          ingress_ip=130.61.217.172
+          if [ "$ROUTE" = work2-ingress ]; then ingress_ip=178.162.254.45; fi
+          echo "$ingress_ip afterhours.k8s.lohr.dev" | sudo tee -a /etc/hosts
       - name: Exercise five people, five cars, then five planes
         env:
           SECONDS_PER_PHASE: ${{ inputs.seconds }}
