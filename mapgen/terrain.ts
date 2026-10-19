@@ -1,4 +1,4 @@
-import { blur, createField, cellSlope } from "./field.ts";
+import { blur, createField, distanceTransform } from "./field.ts";
 import { Noise, derive, smoothstep, lerp, clamp, type Rng } from "./random.ts";
 import type { HeightField } from "./types.ts";
 
@@ -293,22 +293,38 @@ export function keepMainIsland(f: HeightField, seaLevel = 0) {
       data[i] = seaLevel - 0.6 - (data[i] - seaLevel) * 0.1;
 }
 
-/** Beaches on gentle shores, a slightly steeper lip on exposed ones, and a sea shelf. */
+/** Beach slope above the waterline, and the shelf below it, as rise per metre. */
+const BEACH = 0.06,
+  SHELF = 0.1;
+/** The beach profile holds out to this distance (m) from the coast, then eases back into the land. */
+const COAST_HOLD = 20,
+  COAST_REACH = 60;
+/**
+ * A smooth coastline with one beach profile along all of it. A plateau of near-level
+ * cells otherwise ends in a cell-aligned cliff, and the waterline traces the
+ * staircase. Instead, the signed distance to the coast (positive on land) is
+ * blurred, which turns the contour into a clean curve while the field stays a true
+ * distance everywhere. That distance sets a beach ramp on the land side and a
+ * shelf on the sea side, blended into the original terrain beyond COAST_REACH. The
+ * contour itself sits exactly at sea level.
+ */
 export function shapeCoast(f: HeightField, seaLevel = 0) {
-  const { w, h, data } = f,
-    before = Float32Array.from(data);
-  for (let z = 1; z < h - 1; z++)
-    for (let x = 1; x < w - 1; x++) {
-      const i = z * w + x,
-        hgt = before[i];
-      if (hgt <= seaLevel - 6 || hgt > seaLevel + 4) continue;
-      const s = cellSlope({ ...f, data: before }, x, z);
-      if (hgt > seaLevel && hgt < seaLevel + 3 && s < 0.09) {
-        // Beach: a gentle ramp from the waterline up to the back of the beach.
-        const t = (hgt - seaLevel) / 3;
-        data[i] = seaLevel + 0.35 + 2.2 * t * t;
-      } else if (hgt <= seaLevel && hgt > seaLevel - 6 && s < 0.12) {
-        data[i] = Math.max(hgt, seaLevel - 1.4 - 2.5 * ((seaLevel - hgt) / 6));
-      }
-    }
+  const { w, h, data, cell } = f,
+    sea = new Uint8Array(w * h),
+    land = new Uint8Array(w * h);
+  for (let i = 0; i < data.length; i++) (data[i] > seaLevel ? land : sea)[i] = 1;
+  // Distances run between cell centres, so the coast lies half a cell closer.
+  const toSea = distanceTransform(sea, w, h),
+    toLand = distanceTransform(land, w, h),
+    signed = new Float32Array(w * h);
+  for (let i = 0; i < signed.length; i++)
+    signed[i] = (land[i] ? toSea[i] - 0.5 : -(toLand[i] - 0.5)) * cell;
+  const smooth = blur(signed, w, h, 2, 2);
+  for (let i = 0; i < data.length; i++) {
+    const metres = smooth[i],
+      weight = 1 - smoothstep(COAST_HOLD, COAST_REACH, Math.abs(metres));
+    if (weight <= 0) continue;
+    const profile = seaLevel + (metres > 0 ? BEACH : SHELF) * metres;
+    data[i] = lerp(data[i], profile, weight);
+  }
 }

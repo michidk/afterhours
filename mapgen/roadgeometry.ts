@@ -916,7 +916,8 @@ export function solveProfiles(
   const free = graph.edges.map((e) => {
     const length = polylineLength(e.points),
       [t0, t1] = trims[e.id];
-    return Math.max(1, length - Math.min(length, t0 + t1));
+    // Steps under half a metre are ignored by the grade checks, so that is the floor.
+    return Math.max(0.5, length - Math.min(length, t0 + t1));
   });
   for (let pass = 0; pass < 200; pass++) {
     let worst = 0;
@@ -989,21 +990,29 @@ export function solveProfiles(
           5;
     pin(smooth);
     const limit = maxGrade(e.kind);
-    for (let pass = 0; pass < 6; pass++) {
+    // Sweep both ways until no step exceeds the limit: re-pinning the plateaus after
+    // each sweep can otherwise leave a steeper step beside them.
+    for (let pass = 0; pass < 60; pass++) {
+      let clamped = false;
       for (let i = 1; i < n; i++) {
         const d = along[i] - along[i - 1] || 1,
           delta = smooth[i] - smooth[i - 1];
-        if (Math.abs(delta) > limit * d)
+        if (Math.abs(delta) > limit * d) {
           smooth[i] = smooth[i - 1] + Math.sign(delta) * limit * d;
+          clamped = true;
+        }
       }
       pin(smooth);
       for (let i = n - 2; i >= 0; i--) {
         const d = along[i + 1] - along[i] || 1,
           delta = smooth[i] - smooth[i + 1];
-        if (Math.abs(delta) > limit * d)
+        if (Math.abs(delta) > limit * d) {
           smooth[i] = smooth[i + 1] + Math.sign(delta) * limit * d;
+          clamped = true;
+        }
       }
       pin(smooth);
+      if (!clamped) break;
     }
     e.heights = smooth;
   }

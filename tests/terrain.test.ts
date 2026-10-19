@@ -16,6 +16,8 @@ import {
 import { LIMIT, idle, type Entity } from "../shared/world.ts";
 import { Simulation } from "../server/simulation.ts";
 import { drapeOnTerrain, sinkUnderStreets } from "../mapgen/streetfit.ts";
+import { createField } from "../mapgen/field.ts";
+import { shapeCoast } from "../mapgen/terrain.ts";
 import {
   carAltitude,
   carForces,
@@ -349,3 +351,43 @@ test("sidewalks are cut away where asphalt lies, and neighbouring pieces share c
     "the 1 cm offset is welded away",
   );
 });
+
+test("coast shaping turns a stepped plateau edge into a smooth beach at sea level", () => {
+  // Level land 0.3 m above the sea whose edge zigzags by a cell, then a drop into deep water.
+  const f = createField(512, 8),
+    edge = (z: number) => 24 + (z % 4 < 2 ? 0 : 1) + (z % 7 === 0 ? 1 : 0);
+  for (let z = 0; z < f.h; z++)
+    for (let x = 0; x < f.w; x++) f.data[z * f.w + x] = x <= edge(z) ? 0.3 : -6;
+  const far = f.data[32 * f.w + 2];
+  shapeCoast(f);
+  // Where each row crosses sea level, found by interpolation.
+  const crossings: number[] = [];
+  for (let z = 8; z < f.h - 8; z++) {
+    let found: number | undefined;
+    for (let x = 1; x < f.w - 1; x++) {
+      const a = f.data[z * f.w + x],
+        b = f.data[z * f.w + x + 1];
+      if (a > 0 && b <= 0) {
+        assert.equal(found, undefined, "each row crosses sea level exactly once");
+        found = x + a / (a - b);
+      }
+    }
+    assert.ok(found !== undefined, "each row has a coast");
+    crossings.push(found);
+  }
+  const mean = crossings.reduce((a, b) => a + b) / crossings.length;
+  assert.ok(
+    Math.max(...crossings.map((c) => Math.abs(c - mean))) < 0.35,
+    "the waterline no longer follows the cell staircase",
+  );
+  const z = 32,
+    row = (x: number) => f.data[z * f.w + x];
+  const at = Math.floor(mean);
+  assert.ok(
+    Math.abs((row(at) - row(at + 1)) / 8 - (BEACH_SLOPE + SHELF_SLOPE) / 2) < 0.06,
+    "a gentle slope crosses the waterline",
+  );
+  assert.equal(f.data[32 * f.w + 2], far, "land far from the coast is untouched");
+});
+const BEACH_SLOPE = 0.06,
+  SHELF_SLOPE = 0.1;

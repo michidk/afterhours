@@ -202,8 +202,17 @@ test("blocks, lots and buildings respect roads and each other", () => {
   for (const b of map.buildings) {
     assert.ok(b.h >= 4 && b.h <= 200);
     assert.ok(b.y >= 0.8, "pads sit above sea level");
+    // Pads are stamped onto grid points. Where a road corridor runs through the same
+    // cell its points keep the road's profile, so the cell centre can sit lower than
+    // the pad; at least one corner of the cell must carry the pad itself.
+    const f = map.shaped,
+      gx = Math.floor((b.x + f.size / 2) / f.cell),
+      gz = Math.floor((b.z + f.size / 2) / f.cell);
+    const corners = [0, 1].flatMap((dz) =>
+      [0, 1].map((dx) => f.data[(gz + dz) * f.w + gx + dx]),
+    );
     assert.ok(
-      Math.abs(sample(map.shaped, b.x, b.z) - b.y) < 0.8,
+      Math.min(...corners.map((h) => Math.abs(h - b.y))) < 0.8,
       "pad stamped into terrain",
     );
   }

@@ -1,0 +1,98 @@
+[
+  {
+    "name": "northwest-beach-top",
+    "x": 272,
+    "z": -1216,
+    "size": 150,
+    "px": 700
+  },
+  {
+    "name": "northwest-beach-oblique",
+    "x": 272,
+    "z": -1216,
+    "size": 90,
+    "pitch": 30,
+    "yaw": 200,
+    "px": 700
+  },
+  {
+    "name": "west-spit-top",
+    "x": -880,
+    "z": -624,
+    "size": 150,
+    "px": 700
+  },
+  {
+    "name": "west-spit-oblique",
+    "x": -880,
+    "z": -624,
+    "size": 90,
+    "pitch": 30,
+    "yaw": 200,
+    "px": 700
+  },
+  {
+    "name": "east-cove-top",
+    "x": 816,
+    "z": -920,
+    "size": 150,
+    "px": 700
+  },
+  {
+    "name": "east-cove-oblique",
+    "x": 816,
+    "z": -920,
+    "size": 90,
+    "pitch": 30,
+    "yaw": 200,
+    "px": 700
+  },
+  {
+    "name": "southeast-shore-top",
+    "x": 1128,
+    "z": -328,
+    "size": 150,
+    "px": 700
+  },
+  {
+    "name": "southeast-shore-oblique",
+    "x": 1128,
+    "z": -328,
+    "size": 90,
+    "pitch": 30,
+    "yaw": 200,
+    "px": 700
+  },
+  {
+    "name": "south-bay-top",
+    "x": -520,
+    "z": 264,
+    "size": 150,
+    "px": 700
+  },
+  {
+    "name": "south-bay-oblique",
+    "x": -520,
+    "z": 264,
+    "size": 90,
+    "pitch": 30,
+    "yaw": 200,
+    "px": 700
+  },
+  {
+    "name": "far-east-top",
+    "x": 1328,
+    "z": -32,
+    "size": 150,
+    "px": 700
+  },
+  {
+    "name": "far-east-oblique",
+    "x": 1328,
+    "z": -32,
+    "size": 90,
+    "pitch": 30,
+    "yaw": 200,
+    "px": 700
+  }
+]

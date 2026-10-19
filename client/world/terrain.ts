@@ -4,6 +4,28 @@ import type { CityScene } from "../scene.ts";
 import type { City } from "../../shared/world.ts";
 import { terrainHeight, terrainMesh } from "../../shared/terrain.ts";
 import { earClip } from "../../shared/polygon.ts";
+import { WATER_LEVEL } from "../../shared/water.ts";
+
+const SAND = [0.78, 0.72, 0.53],
+  WET_SAND = [0.62, 0.58, 0.42],
+  GRASS = [0.49, 0.61, 0.39],
+  ROCK = [0.48, 0.51, 0.43];
+const mix = (a: number[], b: number[], t: number) =>
+  a.map((v, i) => v + (b[i] - v) * t);
+const ease = (a: number, b: number, v: number) => {
+  const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+/**
+ * Vertex colour by height above the waterline. Colours blend smoothly across the
+ * triangles, so a gradient (wet sand, dry sand, grass) gives a soft beach where a
+ * single height threshold would draw a sawtooth along the cell edges.
+ */
+function groundColour(h: number) {
+  const above = h - WATER_LEVEL;
+  const beach = mix(WET_SAND, SAND, ease(-0.2, 0.5, above));
+  return mix(mix(beach, GRASS, ease(0.5, 1.8, above)), ROCK, ease(90, 110, h));
+}
 
 export function buildTerrain(
   host: Pick<CityScene, "scene" | "mat">,
@@ -16,11 +38,7 @@ export function buildTerrain(
   // Babylon renders clockwise faces; the physics mesh uses counterclockwise faces.
   indices.reverse();
   VertexData.ComputeNormals(positions, indices, normals);
-  for (const h of terrain.heights) {
-    const color =
-      h < -0.1 ? [0.78, 0.72, 0.53] : h > 100 ? [0.48, 0.51, 0.43] : [0.49, 0.61, 0.39];
-    colors.push(...color, 1);
-  }
+  for (const h of terrain.heights) colors.push(...groundColour(h), 1);
   const data = new VertexData();
   Object.assign(data, { positions, indices, normals, colors });
   data.applyToMesh(mesh);

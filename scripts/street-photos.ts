@@ -167,7 +167,9 @@ for (const s of sites) {
       }
       const lit =
         0.45 + 0.55 * Math.max(0, (nx * sun[0] + ny * sun[1] + nz * sun[2]) / nl / sl);
-      const col = C ? [C[a * 4], C[a * 4 + 1], C[a * 4 + 2]] : base;
+      const colour = (v: number) => (C ? [C[v * 4], C[v * 4 + 1], C[v * 4 + 2]] : base),
+        [ca, cb, cc] = [a, b, c].map(colour),
+        sea = m.name === "island terrain";
       for (let y = minY; y <= maxY; y++)
         for (let x = minX; x <= maxX; x++) {
           const px = x + 0.5,
@@ -181,6 +183,19 @@ for (const s of sites) {
             k = y * W + x;
           if (d >= depth[k]) continue;
           depth[k] = d;
+          // Vertex colours interpolate across the triangle, as in the game.
+          const col = [0, 1, 2].map((j) => w0 * ca[j] + w1 * cb[j] + w2 * cc[j]);
+          if (sea) {
+            // Terrain below the waterline shows through the sea, tinted by its depth.
+            const y = w0 * P[a * 3 + 1] + w1 * P[b * 3 + 1] + w2 * P[c * 3 + 1],
+              depth = -1.1 - y;
+            if (depth > 0) {
+              const t = Math.min(1, 0.45 + depth / 12);
+              col[0] = col[0] * (1 - t) + 0.1 * t;
+              col[1] = col[1] * (1 - t) + 0.42 * t;
+              col[2] = col[2] * (1 - t) + 0.5 * t;
+            }
+          }
           for (let j = 0; j < 3; j++)
             rgb[k * 3 + j] = Math.min(255, col[j] * lit * 255);
         }

@@ -438,6 +438,8 @@ export function placeRacetrack(
   rng: Rng = derive(ctx.map.options.seed, "racetrack"),
 ): Racetrack {
   const STEP = 2;
+  /** Track ground stays this far above the sea. Beaches shelve gently, so the old 1.5 m margin was a band tens of metres wide. */
+  const DRY = WATER_LEVEL + 0.8;
   /** One closed candidate loop inside an RX by RZ oval around `site`. */
   const layout = (site: Point, RX: number, RZ: number) => {
     const count = 9 + Math.floor(rng() * 5),
@@ -469,7 +471,7 @@ export function placeRacetrack(
       const h = groundAt(ctx, p);
       if (
         !insideWorld(p, 40) ||
-        h < WATER_LEVEL + 1.5 ||
+        h < DRY ||
         ctx.wet[gridIndex(p)] ||
         ctx.paved(p) ||
         ctx.taken.some((ring) => pointInPolygon(p, ring))
@@ -522,7 +524,7 @@ export function placeRacetrack(
             const p = { x: x + dx, z: z + dz },
               h = groundAt(ctx, p);
             total++;
-            if (h < WATER_LEVEL + 1.5 || ctx.wet[gridIndex(p)]) continue;
+            if (h < DRY || ctx.wet[gridIndex(p)]) continue;
             dry++;
             lo = Math.min(lo, h);
             hi = Math.max(hi, h);
@@ -722,7 +724,9 @@ export function placeHarbours(ctx: FeatureContext, count = 3): Harbour[] {
       if (gl < 1e-3) continue;
       const sea = { x: -g.x / gl, z: -g.z / gl },
         // The quay line runs across the seaward direction; local +v points out to sea.
-        angle = Math.atan2(-sea.x, sea.z),
+        // Quays run along the terrain grid: a vertical wall on a diagonal line would
+        // step with every cell, and a straight face is what a quay looks like anyway.
+        angle = Math.round(Math.atan2(-sea.x, sea.z) / (Math.PI / 2)) * (Math.PI / 2),
         f = frame(p, angle);
       let ok = true,
         depth = 0;
@@ -731,7 +735,8 @@ export function placeHarbours(ctx: FeatureContext, count = 3): Harbour[] {
           const q = f.at(u, v),
             d = WATER_LEVEL - groundAt(ctx, q);
           // Open sea only: lakes stand above the sea level and are masked as wet.
-          if (d < 1.2 || ctx.wet[gridIndex(q)]) ok = false;
+          // The basin is dredged to four metres, so a gently shelving coast will do.
+          if (d < 0.5 || ctx.wet[gridIndex(q)]) ok = false;
           depth += d;
         }
         for (const v of [-4, -14, -APRON + 2]) {
@@ -780,8 +785,11 @@ export function placeHarbours(ctx: FeatureContext, count = 3): Harbour[] {
   return chosen.map((c, index) => {
     const f = frame(c.at, c.angle);
     // Apron flat at quay level; basin dredged to at least four metres.
-    stampRect(ctx, f.at(0, -APRON / 2), QUAY, APRON, c.angle, level, 10);
-    // The dig leaves the quay's own grid ring alone and never raises the seabed.
+    stampRect(ctx, f.at(0, -APRON / 2), QUAY, APRON, c.angle, level, 24);
+    // The dig leaves the quay's own grid ring alone and never raises the seabed. Only
+    // the corridor in front of the quay cuts into land; beside it, ground stays a
+    // beach and only water is deepened, so the basin does not carve a staircase
+    // of vertical walls into the shore.
     stampRect(
       ctx,
       f.at(0, BASIN / 2 + 8),
@@ -789,8 +797,15 @@ export function placeHarbours(ctx: FeatureContext, count = 3): Harbour[] {
       BASIN,
       c.angle,
       WATER_LEVEL - 4,
-      6,
-      (p, current) => current > WATER_LEVEL - 4 && f.local(p).v > 6,
+      12,
+      (p, current) => {
+        const { u, v } = f.local(p);
+        return (
+          current > WATER_LEVEL - 4 &&
+          v > 6 &&
+          (Math.abs(u) <= QUAY / 2 || current <= WATER_LEVEL)
+        );
+      },
     );
     for (const tile of tiles(f, -QUAY / 2, QUAY / 2, -16, 5))
       ctx.sidewalks.push(flat(tile, level));
