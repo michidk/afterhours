@@ -77,6 +77,8 @@ export class Sessions {
   dropped = 0;
   debug: boolean;
   diagnostics?: () => ServerDiagnostics;
+  /** World ticks owed by the runtime, whose inputs must survive until catch-up. */
+  pendingTicks = () => 0;
   wss: WebSocketServer;
   constructor(
     server: Server,
@@ -259,7 +261,7 @@ export class Sessions {
       const { type, seq, timestamp, ...input } = m;
       c.queue.push({ seq, timestamp, input });
       // Held slots already ran; their late commands must not crowd out the new FIFO.
-      if (c.queue.length > TUNING.inputQueue + c.speculative) {
+      if (c.queue.length > TUNING.inputQueue + c.speculative + this.pendingTicks()) {
         c.queue.shift();
         this.dropped++;
       }

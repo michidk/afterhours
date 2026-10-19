@@ -23,6 +23,8 @@ import { debugCommandSchema } from "../shared/debug.ts";
 import { VEHICLES } from "../shared/catalog.ts";
 import { CAR, clamp, wrap } from "../shared/physics/vehicle.ts";
 import { groundLevel, isWater } from "../shared/water.ts";
+import { Worker } from "node:worker_threads";
+import { ChunkDecoder, type ChunkReply } from "../client/world/chunk-decoder.ts";
 
 const arg = (name: string, fallback: string) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -82,10 +84,15 @@ if (map.hasWater)
   map.water = cityWaterSchema.parse(
     await (await request(`/city/water/${map.mapId}`)).json(),
   );
+const chunkWorker = new Worker(new URL("./chunk-worker.mjs", import.meta.url));
+const decoder = new ChunkDecoder((request) => chunkWorker.postMessage(request));
+chunkWorker.on("message", (reply: ChunkReply) => decoder.receive(reply));
+chunkWorker.on("error", (error) => decoder.fail(error));
 const stream = new CityStream(
   map,
   () => {},
   (path, options) => fetch(new URL(String(path), url), options),
+  decoder.decode,
 );
 const city = stream.city;
 const radius = Number(arg("radius", "50"));
@@ -203,8 +210,11 @@ function recordCorrection() {
 
 let control: Input = idle();
 let maxInputLag = 0;
+let lastPump = performance.now();
 const pump = setInterval(() => {
   const now = performance.now();
+  maxInputLag = Math.max(maxInputLag, now - lastPump - 5);
+  lastPump = now;
   clock.advance(now, (timestamp) => {
     maxInputLag = Math.max(maxInputLag, now - timestamp);
     network.input(control, timestamp);
@@ -461,6 +471,7 @@ const finish = async () => {
   outgoing.clear();
   incoming.clear();
   network.close();
+  await chunkWorker.terminate();
   if (output)
     appendFileSync(
       output,

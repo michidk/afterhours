@@ -2,7 +2,7 @@ import { z } from "zod";
 import { citySchema } from "./city-schema.ts";
 import { packedSurfaceSchema } from "./city-pack.ts";
 import { LIMIT, type City } from "./world.ts";
-import { chunkGeometrySchema } from "./city-mesh.ts";
+import { chunkGeometrySchema, type ChunkGeometry } from "./city-mesh.ts";
 
 export const CITY_CHUNK_SIZE = 128;
 export const STATIC_FIELDS = [
@@ -70,7 +70,9 @@ export const cityChunkSchema = z.object({
   /** Street polygons whose centroid lies in this chunk (generated cities). */
   surface: packedSurfaceSchema.optional(),
 });
-export type CityChunk = z.infer<typeof cityChunkSchema>;
+export type CityChunk = Omit<z.infer<typeof cityChunkSchema>, "geometry"> & {
+  geometry?: ChunkGeometry;
+};
 /** The manifest plus the height grid and water fetched alongside it. */
 export type ClientMap = MapManifest & {
   terrain?: City["terrain"];

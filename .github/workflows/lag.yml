@@ -1,0 +1,54 @@
+name: Live movement acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      route:
+        description: Route to the production game
+        type: choice
+        options: [direct, public]
+        default: direct
+      seconds:
+        description: Measured seconds for each five-client phase
+        type: string
+        default: "60"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-movement-acceptance
+  cancel-in-progress: false
+
+jobs:
+  movement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - name: Resolve directly to the game node
+        if: inputs.route == 'direct'
+        run: echo '178.162.254.45 afterhours.k8s.lohr.dev' | sudo tee -a /etc/hosts
+      - name: Exercise five people, five cars, then five planes
+        env:
+          SECONDS_PER_PHASE: ${{ inputs.seconds }}
+        run: |
+          mkdir -p test-results
+          node --import tsx scripts/five-client-test.ts \
+            --url https://afterhours.k8s.lohr.dev \
+            --seconds "$SECONDS_PER_PHASE" --output test-results/five-client.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-movement-${{ inputs.route }}
+          path: |
+            test-results/five-client.json
+            /tmp/afterhours-five-*/*.jsonl
+            /tmp/afterhours-five-*/*.jsonl.log

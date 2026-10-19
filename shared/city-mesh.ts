@@ -34,11 +34,27 @@ export const staticMeshSchema = z
       context.addIssue({ code: "custom", message: "Invalid static vertex buffers" });
   });
 export const meshGroupSchema = z.array(staticMeshSchema).max(500);
-export type MeshGroup = z.infer<typeof meshGroupSchema>;
+type SavedMesh = z.infer<typeof staticMeshSchema>;
+/** Validated meshes may own transferred GPU buffers instead of boxed JSON numbers. */
+export type MeshGroup = (Omit<
+  SavedMesh,
+  "positions" | "normals" | "indices" | "uvs" | "colors"
+> & {
+  positions: number[] | Float32Array;
+  normals: number[] | Float32Array;
+  indices: number[] | Uint32Array;
+  uvs?: number[] | Float32Array;
+  colors?: number[] | Float32Array;
+})[];
 export const chunkGeometrySchema = z.object({
   version: z.literal(1),
   features: z.record(z.string(), meshGroupSchema),
   fixtures: z.record(z.string(), meshGroupSchema),
   airport: meshGroupSchema.optional(),
 });
-export type ChunkGeometry = z.infer<typeof chunkGeometrySchema>;
+export type ChunkGeometry = {
+  version: 1;
+  features: Record<string, MeshGroup>;
+  fixtures: Record<string, MeshGroup>;
+  airport?: MeshGroup;
+};

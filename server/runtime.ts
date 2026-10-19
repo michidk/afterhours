@@ -21,6 +21,17 @@ export class Runtime {
     readonly sessions: Sessions,
   ) {
     sessions.diagnostics = () => this.metrics();
+    sessions.pendingTicks = () =>
+      this.timer
+        ? Math.min(
+            TUNING.inputQueue,
+            Math.floor(
+              (this.backlogMs + Math.max(0, performance.now() - this.lastPumpAt)) /
+                (TUNING.tick * 1000) +
+                1e-6,
+            ),
+          )
+        : 0;
   }
   start() {
     this.lastPumpAt = performance.now();

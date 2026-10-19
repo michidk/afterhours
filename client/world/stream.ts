@@ -1,14 +1,15 @@
 import {
   chunksAround,
-  cityChunkSchema,
   emptyCity,
   STATIC_FIELDS,
   CITY_CHUNK_SIZE,
   type CityChunk,
   type ClientMap,
+  type StaticField,
 } from "../../shared/city-stream.ts";
 import { spawnOrigin } from "../../shared/world.ts";
 import { TUNING } from "../../shared/catalog.ts";
+import { createChunkDecoder } from "./chunk-loader.ts";
 
 // Cover snapshot neighbours and their local physics queries before predicting.
 export const COLLISION_RADIUS = TUNING.interestRadius + 32;
@@ -23,11 +24,13 @@ export class CityStream {
   private visible = new Set<string>();
   private pending = new Map<string, AbortController>();
   private retries = new Map<string, number>();
+  private fieldIds = new Map<StaticField, number[]>();
   error = "";
   constructor(
     readonly map: ClientMap,
     private changed: (chunks: CityChunk[]) => void,
     private download: typeof fetch = (...args) => fetch(...args),
+    private decode = createChunkDecoder(),
   ) {
     this.city = emptyCity(map);
   }
@@ -62,26 +65,29 @@ export class CityStream {
       if (!wanted.has(key)) this.retries.delete(key);
     if (changed) this.publish();
     else if (visibilityChanged) this.changed(this.renderChunks());
-    const order = [...wanted].sort((a, b) => {
-      const distance = (key: string) => {
-        const [x, z] = key.split(",").map(Number);
-        return Math.hypot(
-          (x + 0.5) * this.map.chunkSize - (player?.x ?? camera.x),
-          (z + 0.5) * this.map.chunkSize - (player?.z ?? camera.z),
-        );
-      };
-      const priority = (key: string) =>
-        required.has(key) ? 0 : visible.has(key) ? 1 : 2;
-      return priority(a) - priority(b) || distance(a) - distance(b);
-    });
-    for (const key of order) {
-      if (this.pending.size >= 4) break;
-      if (
-        this.chunks.has(key) ||
-        this.pending.has(key) ||
-        (this.retries.get(key) ?? 0) > Date.now()
+    if (this.pending.size >= 4) return;
+    const now = Date.now();
+    const order = [...wanted]
+      .filter(
+        (key) =>
+          !this.chunks.has(key) &&
+          !this.pending.has(key) &&
+          (this.retries.get(key) ?? 0) <= now,
       )
-        continue;
+      .map((key) => {
+        const [x, z] = key.split(",").map(Number);
+        return {
+          key,
+          priority: required.has(key) ? 0 : visible.has(key) ? 1 : 2,
+          distance: Math.hypot(
+            (x + 0.5) * this.map.chunkSize - (player?.x ?? camera.x),
+            (z + 0.5) * this.map.chunkSize - (player?.z ?? camera.z),
+          ),
+        };
+      })
+      .sort((a, b) => a.priority - b.priority || a.distance - b.distance);
+    for (const { key } of order) {
+      if (this.pending.size >= 4) break;
       void this.load(key);
     }
   }
@@ -113,7 +119,7 @@ export class CityStream {
             ? "The server map changed. Refresh to reconnect."
             : `Neighborhood download failed (${response.status})`,
         );
-      const chunk = cityChunkSchema.parse(await response.json());
+      const chunk = await this.decode(await response.text());
       if (chunk.mapId !== this.map.mapId || chunk.key !== key)
         throw Error("Map chunk identity mismatch");
       if (controller.signal.aborted || !this.wanted.has(key)) return;
@@ -136,9 +142,20 @@ export class CityStream {
       const values = new Map<number, unknown>();
       for (const chunk of chunks)
         for (const entry of chunk[field]) values.set(entry.id, entry.value);
-      // Replace array identities so shared static-geometry caches invalidate.
+      const entries = [...values].sort((a, b) => a[0] - b[0]);
+      const previous = this.fieldIds.get(field);
+      if (
+        previous?.length === entries.length &&
+        entries.every(([id], i) => id === previous[i])
+      )
+        continue;
+      this.fieldIds.set(
+        field,
+        entries.map(([id]) => id),
+      );
+      // Immutable map IDs let seam-only loads keep the collision caches intact.
       Object.assign(this.city, {
-        [field]: [...values].sort((a, b) => a[0] - b[0]).map((entry) => entry[1]),
+        [field]: entries.map((entry) => entry[1]),
       });
     }
     this.changed(this.renderChunks());

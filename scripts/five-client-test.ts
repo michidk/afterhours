@@ -12,6 +12,7 @@ const { values } = parseArgs({
     seconds: { type: "string", default: "180" },
     output: { type: "string" },
     phase: { type: "string" },
+    profile: { type: "boolean", default: false },
   },
 });
 if (!values.url) throw Error("--url must explicitly name a debug-enabled test target");
@@ -50,6 +51,7 @@ for (const phase of phases.filter((phase) => !values.phase || phase === values.p
     const child = spawn(
       process.execPath,
       [
+        ...(values.profile ? ["--cpu-prof", "--cpu-prof-dir", directory] : []),
         "--import",
         "tsx",
         "scripts/drive-client.ts",

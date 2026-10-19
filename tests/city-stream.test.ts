@@ -35,6 +35,43 @@ const fixture = () => {
   return city;
 };
 const settle = () => new Promise((r) => setTimeout(r, 5));
+test("loading and evicting seam duplicates preserves the collision geometry", async () => {
+  const store = new CityStore(fixture());
+  const stream = new CityStream(
+    store.manifest,
+    () => {},
+    async (url) => {
+      const parts = String(url).split("/");
+      return new Response(
+        JSON.stringify(store.chunks.get(`${parts.at(-2)},${parts.at(-1)}`)),
+      );
+    },
+  );
+  stream.setView(undefined, { x: 64, z: 20 }, 1);
+  await settle();
+  const buildings = stream.city.buildings;
+  assert.equal(buildings.length, 1);
+  stream.setView(undefined, { x: 128, z: 20 }, 1);
+  await settle();
+  assert.equal(stream.chunks.size, 2);
+  assert.equal(
+    stream.city.buildings,
+    buildings,
+    "a duplicate does not rebuild colliders",
+  );
+  stream.setView(undefined, { x: 180, z: 20 }, 1);
+  await settle();
+  assert.equal(stream.chunks.size, 1);
+  assert.equal(
+    stream.city.buildings,
+    buildings,
+    "evicting one seam copy keeps colliders",
+  );
+  stream.setView(undefined, { x: 650, z: 650 }, 1);
+  await settle();
+  assert.notEqual(stream.city.buildings, buildings);
+  assert.equal(stream.city.buildings[0].x, 650);
+});
 test("startup and moving views render buildings over 400 m ahead", async () => {
   const city = fixture();
   city.buildings[1].x = 450;
