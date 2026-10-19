@@ -124,3 +124,22 @@ test("rotated footprints are tested as rectangles, not their larger axis-aligned
     "a line through its middle is still blocked",
   );
 });
+
+test("early fade margin catches side and roof edges before the center is blocked", () => {
+  for (const [y, z] of [[15, 11.4], [31.4, 0]]) {
+    const camera = { x: 30, y, z },
+      player = { x: -30, y, z };
+    assert.equal(segmentHitsBuilding(camera, player, tower, 0.35), false);
+    assert.equal(segmentHitsBuilding(camera, player, tower, 1.5), true);
+  }
+  assert.equal(
+    segmentHitsBuilding(
+      { x: -30, y: 15, z: 0 },
+      { x: -12, y: 1, z: 0 },
+      tower,
+      1.5,
+    ),
+    false,
+    "a building two metres beside the player stays solid",
+  );
+});

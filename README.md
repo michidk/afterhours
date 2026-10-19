@@ -58,7 +58,7 @@ The debug Server stats window shows process CPU usage, where 100% is one core, a
 - **Destruction:** palms, lamps, signs and hydrants can be knocked over or destroyed, then restore. See [destruction](docs/destruction.md).
 - **Weapon crates:** wooden crates stand at the kerb of about one in three street segments away from junctions. Two punches (or any weapon, crash or blast) break one open and drop a random weapon with a full magazine and full reserve; the crate comes back after 90 seconds.
 - **Characters:** three builds (Runner, Regular, Tank) with customizable appearance, saved on the device.
-- **Camera:** the follow camera dithers a building out only while that building is between the camera and the player, or the camera is inside it. A building beside you stays solid. Free and fly debug cameras keep all buildings solid for map inspection. The fade is a screen-door pattern, not transparency, so shadows and depth stay intact.
+- **Camera:** the follow camera dithers a building out when it comes within 1.5 m of the sight line to the player, starting before it covers the player, or when the camera is inside it. Buildings beyond that margin stay solid. Free and fly debug cameras keep all buildings solid for map inspection. The fade is a screen-door pattern, not transparency, so shadows and depth stay intact.
 - **Atmosphere:** day/night lighting and 149 CC0 sound clips ([credits](public/audio/CREDITS.md), [audio notes](docs/audio.md)). Sounds are local: engines, tyres, fire and footsteps fade out within about 30 m, aircraft and horns within 45 m, gunfire within 55 m and explosions within 75 m, and another player's inventory or life-state cues are never heard.
 
 ## The city

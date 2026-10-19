@@ -26,7 +26,8 @@ export type GeometryOptions = {
 type Group = { meshes: Mesh[]; dispose(): void };
 /** The sight line ends at the player's torso, and is as thick as a person is wide. */
 const SIGHT_HEIGHT = 1;
-const SIGHT_PAD = 0.35;
+// Start fading before the player silhouette reaches a wall or roof edge.
+const SIGHT_PAD = 1.5;
 
 /** Reference-count by stable feature IDs so objects crossing chunk seams are drawn once. */
 export class CityRenderer {
@@ -138,9 +139,8 @@ export class CityRenderer {
     }
   }
   /**
-   * Dither out only the buildings the camera's line of sight to the player really crosses.
-   * Standing beside a wall, or having a tower nearby, leaves it solid; the building fades
-   * when it is between the camera and the player, or when the camera is inside it.
+   * Dither buildings within 1.5 m of the sight line so the fade leads occlusion.
+   * Buildings outside that margin stay solid; a camera inside a building fades it too.
    */
   fadeOccluders(camera: Vector3, target: Vector3, dt: number, follow = true) {
     const eye = { x: camera.x, y: camera.y, z: camera.z },
