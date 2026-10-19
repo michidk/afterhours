@@ -8,6 +8,39 @@ export function playerSightRadius(camera: P, player: P, verticalFov: number) {
     0.5
   );
 }
+/** Rays end on the player's view plane, so buildings beyond the player stay solid. */
+export function playerSightTargets(camera: P, player: P, radius: number): P[] {
+  const dx = player.x - camera.x,
+    dy = player.y - camera.y,
+    dz = player.z - camera.z,
+    length = Math.hypot(dx, dy, dz);
+  if (length < 1e-9) return [player];
+  const horizontal = Math.hypot(dx, dz),
+    right =
+      horizontal > 1e-9
+        ? { x: dz / horizontal, y: 0, z: -dx / horizontal }
+        : { x: 1, y: 0, z: 0 },
+    up = {
+      x: (dy * right.z - dz * right.y) / length,
+      y: (dz * right.x - dx * right.z) / length,
+      z: (dx * right.y - dy * right.x) / length,
+    },
+    targets = [player];
+  for (const ring of [0.5, 1]) {
+    for (let i = 0; i < 16; i++) {
+      const angle = (i * Math.PI) / 8,
+        x = Math.cos(angle) * radius * ring,
+        y = Math.sin(angle) * radius * ring;
+      targets.push({
+        x: player.x + right.x * x + up.x * y,
+        y: player.y + right.y * x + up.y * y,
+        z: player.z + right.z * x + up.z * y,
+      });
+    }
+  }
+  return targets;
+}
+
 /** Does segment a→b pass within `pad` of the axis-aligned box [min, max]? (slab test) */
 export function segmentHitsBox(a: P, b: P, min: P, max: P, pad = 0) {
   let t0 = 0,

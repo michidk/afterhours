@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  playerSightTargets,
   playerSightRadius,
   segmentHitsBox,
   segmentHitsBuilding,
@@ -165,6 +166,29 @@ test("player clearance covers a quarter of the viewport height and grows with zo
       tower,
       radius,
     ),
+    true,
+  );
+});
+
+test("wide clearance never reaches buildings beyond the player", () => {
+  const camera = { x: 0, y: 20, z: 30 },
+    player = { x: 0, y: 1, z: 0 },
+    targets = playerSightTargets(camera, player, 10),
+    beyond = { x: 0, z: -8, w: 8, d: 4, y: 0, h: 2 },
+    blocking = { x: 0, z: 10, w: 8, d: 4, y: 0, h: 20 },
+    beside = { x: 8, z: 10, w: 4, d: 4, y: 0, h: 20 };
+  assert.equal(segmentHitsBuilding(camera, player, beyond, 10), true);
+  assert.equal(
+    targets.some((p) => segmentHitsBuilding(camera, p, beyond)),
+    false,
+  );
+  assert.equal(
+    targets.some((p) => segmentHitsBuilding(camera, p, blocking)),
+    true,
+  );
+  assert.equal(segmentHitsBuilding(camera, player, beside), false);
+  assert.equal(
+    targets.some((p) => segmentHitsBuilding(camera, p, beside)),
     true,
   );
 });

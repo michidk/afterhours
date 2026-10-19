@@ -1,7 +1,12 @@
 import { airportsOf } from "../../shared/world.ts";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { playerSightRadius, segmentHitsBuilding, type Footprint } from "./occluders.ts";
+import {
+  playerSightRadius,
+  playerSightTargets,
+  segmentHitsBuilding,
+  type Footprint,
+} from "./occluders.ts";
 import {
   STATIC_FIELDS,
   emptyCity,
@@ -150,11 +155,15 @@ export class CityRenderer {
     const eye = { x: camera.x, y: camera.y, z: camera.z },
       body = { x: target.x, y: target.y + SIGHT_HEIGHT, z: target.z },
       radius = playerSightRadius(eye, body, verticalFov),
+      targets = playerSightTargets(eye, body, radius),
       blend = 1 - Math.exp(-dt * 10);
     for (const [key, group] of this.features) {
       const building = this.footprints.get(key);
       if (!building) continue;
-      const goal = follow && segmentHitsBuilding(eye, body, building, radius) ? 0 : 1;
+      const goal =
+        follow && targets.some((point) => segmentHitsBuilding(eye, point, building))
+          ? 0
+          : 1;
       for (const mesh of group.meshes)
         mesh.visibility =
           Math.abs(goal - mesh.visibility) < 0.01
