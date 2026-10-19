@@ -132,6 +132,7 @@ export class Runtime {
     return {
       ...(this.sessions.debug
         ? {
+            transport: this.sessions.transportStats(),
             runtimePauses: {
               gcTotalMs: this.gcTotalMs,
               gc: this.gcPauses.slice(),

@@ -228,6 +228,7 @@ test("resource telemetry reports process CPU per core and RSS against its limit"
     t.mock.timers.tick(5);
     const stats = sessions.diagnostics!();
     assert.equal(runtime.metrics().runtimePauses, undefined);
+    assert.equal(runtime.metrics().transport, undefined);
     assert.equal(stats.cpuPercent, 25);
     assert.equal(stats.memoryPercent, 25);
     assert.equal(stats.memoryLimitMB, 2048);

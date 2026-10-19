@@ -10,6 +10,7 @@ import { generateCity } from "../scripts/city-generator.ts";
 import { VERSION, type Welcome } from "../shared/protocol.ts";
 import { TUNING } from "../shared/catalog.ts";
 import { decodeSnapshot } from "../shared/codec.ts";
+import { idle } from "../shared/world.ts";
 
 async function fixture(t: TestContext) {
   const sim = new Simulation(generateCity());
@@ -109,6 +110,65 @@ test("congestion retries destruction and preserves the last delivered snapshot b
   assert.deepEqual(reliable[0].brokenProps, ["prop:0"]);
   assert.equal(reliable[1].full, true);
   assert.equal(reliable[1].base, 0);
+});
+
+test("transport diagnostics retain writes, congestion and disconnect times", async (t) => {
+  const { sessions, connect, join } = await fixture(t);
+  sessions.debug = true;
+  let now = 1000;
+  t.mock.method(Date, "now", () => now);
+  const ws = await connect();
+  const welcome = await join(ws);
+  const peer = [...sessions.clients.keys()][0];
+  now = 1100;
+  const pong = once(ws, "message");
+  ws.send(JSON.stringify({ type: "input", seq: 0, timestamp: 50, ...idle() }));
+  ws.send(JSON.stringify({ type: "ping", timestamp: 51 }));
+  await pong;
+  now = 1200;
+  const state = new Promise<void>((resolve) =>
+    ws.on("message", (_, binary) => {
+      if (binary) resolve();
+    }),
+  );
+  sessions.broadcast();
+  await state;
+  let buffered = 256000;
+  Object.defineProperty(peer, "bufferedAmount", { get: () => buffered });
+  now = 1300;
+  sessions.broadcast();
+  assert.deepEqual(sessions.transportStats(), {
+    at: 1300,
+    clients: [
+      {
+        playerId: welcome.id,
+        lastInputAt: 1100,
+        lastSnapshotAt: 1200,
+        skippedSnapshots: 1,
+        bufferedBytes: 256000,
+      },
+    ],
+    closed: [],
+  });
+  buffered = 0;
+  now = 1400;
+  const closed = once(peer, "close");
+  ws.close();
+  await closed;
+  assert.deepEqual(sessions.transportStats(), {
+    at: 1400,
+    clients: [],
+    closed: [
+      {
+        playerId: welcome.id,
+        lastInputAt: 1100,
+        lastSnapshotAt: 1200,
+        skippedSnapshots: 1,
+        bufferedBytes: 0,
+        closedAt: 1400,
+      },
+    ],
+  });
 });
 
 test("a full city restores an active session while rejecting a new player", async (t) => {

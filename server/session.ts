@@ -40,6 +40,8 @@ interface Client {
   window: number;
   actions: Map<string, number>;
   frame: number;
+  lastSnapshotAt: number;
+  skippedSnapshots: number;
   known: Map<string, Map<string, string | undefined>>;
   view?: { x: number; z: number };
   rosterKey?: string;
@@ -75,6 +77,9 @@ export class Sessions {
   frozen = 0;
   /** Commands shed because a client's FIFO overflowed. */
   dropped = 0;
+  private closedTransport: (ReturnType<Sessions["transportSample"]> & {
+    closedAt: number;
+  })[] = [];
   debug: boolean;
   diagnostics?: () => ServerDiagnostics;
   /** World ticks owed by the runtime, whose inputs must survive until catch-up. */
@@ -138,11 +143,14 @@ export class Sessions {
         window: Date.now(),
         actions: new Map(),
         frame: 0,
+        lastSnapshotAt: 0,
+        skippedSnapshots: 0,
         known: new Map(),
       };
       this.clients.set(ws, c);
       ws.on("message", (raw) => this.message(ws, c, String(raw)));
       ws.on("close", () => {
+        this.archiveTransport(ws, c);
         if (c.id) {
           this.sim.inputs.set(c.id, { ...idle(), brake: true });
           this.detached.set(c.token, { id: c.id, expires: Date.now() + 15000 });
@@ -150,6 +158,32 @@ export class Sessions {
         this.clients.delete(ws);
       });
     });
+  }
+  private transportSample(ws: WebSocket, c: Client, playerId: string) {
+    return {
+      playerId,
+      lastInputAt: c.lastInput,
+      lastSnapshotAt: c.lastSnapshotAt,
+      skippedSnapshots: c.skippedSnapshots,
+      bufferedBytes: ws.bufferedAmount,
+    };
+  }
+  private archiveTransport(ws: WebSocket, c: Client) {
+    if (!this.debug || !c.id) return;
+    this.closedTransport.push({
+      ...this.transportSample(ws, c, c.id),
+      closedAt: Date.now(),
+    });
+    if (this.closedTransport.length > 32) this.closedTransport.shift();
+  }
+  transportStats() {
+    return {
+      at: Date.now(),
+      clients: [...this.clients].flatMap(([ws, c]) =>
+        c.id ? [this.transportSample(ws, c, c.id)] : [],
+      ),
+      closed: this.closedTransport.slice(),
+    };
   }
   send(ws: WebSocket, data: object) {
     if (ws.readyState !== WebSocket.OPEN || ws.bufferedAmount >= 256_000) return false;
@@ -224,6 +258,7 @@ export class Sessions {
         c.id = active[1].id;
         c.token = m.token!;
         this.sim.inputs.set(c.id, { ...idle(), brake: true });
+        this.archiveTransport(active[0], active[1]);
         active[1].id = undefined;
         active[1].queue = [];
         this.clients.delete(active[0]);
@@ -593,6 +628,10 @@ export class Sessions {
           c.known = known;
           c.frame = this.frames;
         }
+      }
+      if (this.debug) {
+        if (c.frame === this.frames) c.lastSnapshotAt = Date.now();
+        else c.skippedSnapshots++;
       }
     }
   }
