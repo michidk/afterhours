@@ -58,7 +58,7 @@ const panels = [
   [
     "server",
     "Server stats",
-    `<p id="server-status" role="status">Waiting for server…</p><dl id="server-stats"></dl><p>CPU is simulation-thread time per tick (p95 over up to 600 ticks). RSS includes native physics memory. Available memory respects process constraints; heap limit is the JavaScript ceiling. Catch-up and dropped time are totals since startup.</p>`,
+    `<p id="server-status" role="status">Waiting for server…</p><dl id="server-stats"></dl><p>Process CPU averages the last second; 100% is one CPU core. Tick CPU is simulation-thread time per tick (p95 over up to 600 ticks). Memory is process RSS against the container or host limit and includes native physics memory. Available memory respects process constraints; heap limit is the JavaScript ceiling. Catch-up and dropped time are totals since startup.</p>`,
   ],
   [
     "inspector",
@@ -180,6 +180,11 @@ export function mountDebugWindows() {
 
 export function updateServerStats(element: HTMLElement, stats: ServerDiagnostics) {
   const rows = [
+    ["Process CPU usage", `${stats.cpuPercent.toFixed(1)}%`],
+    [
+      "Memory usage / limit",
+      `${stats.memoryPercent.toFixed(1)}% (${stats.memoryMB} / ${stats.memoryLimitMB.toFixed(0)} MiB)`,
+    ],
     ["Tick budget", `${stats.tickBudgetMs.toFixed(1)} ms`],
     [
       "Tick CPU p95 / budget",
@@ -198,7 +203,7 @@ export function updateServerStats(element: HTMLElement, stats: ServerDiagnostics
     ["Process RSS", `${stats.memoryMB} MiB`],
     [
       "JS heap / limit",
-      `${stats.heapUsedMB.toFixed(0)} / ${stats.heapLimitMB.toFixed(0)} MiB`,
+      `${stats.heapUsedMB.toFixed(0)} / ${stats.heapLimitMB.toFixed(0)} MiB (${((100 * stats.heapUsedMB) / stats.heapLimitMB).toFixed(1)}%)`,
     ],
     ["Available memory", `${stats.availableMemoryMB.toFixed(0)} MiB`],
     ["Players / entities", `${stats.players} / ${stats.entities}`],

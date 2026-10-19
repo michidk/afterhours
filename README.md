@@ -47,6 +47,8 @@ Local steering responds between network command ticks. Prop impacts predict the 
 
 Standard gamepads use the left stick to move and steer, LT/RT to reverse/accelerate, A to brake or sprint, X to attack, Y to enter/exit, LB/RB to descend/ascend, B to reload, and the D-pad for inventory slots. View opens the map, Menu opens help, and the left stick click toggles the jetpack.
 
+The debug Server stats window shows process CPU usage, where 100% is one core, and process memory as a percentage of the container or host memory limit. Tick CPU measures the simulation budget separately; JS heap usage also includes a percentage of its own limit.
+
 ## What is in the city
 
 - **Vehicles:** cars, helicopters, planes, boats and jet skis with shared multi-seat rides, plus jetpacks and parachutes. Taking the driver seat of a car makes its AI driver and AI passengers get out; human passengers stay aboard. Headlights are automatic: they are on in the dark while a person or the AI is driving a car, and off for parked, wrecked or flooded cars; there is no key for them.

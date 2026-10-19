@@ -1,0 +1,239 @@
+{
+  "url": "https://afterhours.k8s.lohr.dev",
+  "seconds": 60,
+  "directory": "/tmp/afterhours-five-8C0mkY",
+  "environment": {
+    "cores": 9,
+    "load": [17.09, 14.95, 9.72],
+    "node": "v26.11.1"
+  },
+  "phases": [
+    {
+      "name": "people",
+      "clients": [
+        {
+          "failures": [],
+          "samples": 538,
+          "simulationRate": 1.00012807853001,
+          "maxSnapshotAgeMs": 196.72105799999554,
+          "maxAppliedInputAgeMs": 316.84140333812684,
+          "maxInputLagMs": 171.54796167148743,
+          "maxCorrectionMeters": 0.033265291462315334,
+          "movingFraction": 0.9758364312267658,
+          "airborneFraction": 0
+        },
+        {
+          "failures": [],
+          "samples": 539,
+          "simulationRate": 1.0003733981943506,
+          "maxSnapshotAgeMs": 86.72869299999729,
+          "maxAppliedInputAgeMs": 229.1690260014584,
+          "maxInputLagMs": 35.674493666803755,
+          "maxCorrectionMeters": 0.0012227814867573972,
+          "movingFraction": 0.9758812615955473,
+          "airborneFraction": 0
+        },
+        {
+          "failures": [],
+          "samples": 543,
+          "simulationRate": 1.0008841140679294,
+          "maxSnapshotAgeMs": 79.18701599999622,
+          "maxAppliedInputAgeMs": 213.81366600196634,
+          "maxInputLagMs": 34.4321063333482,
+          "maxCorrectionMeters": 0.00129273236575111,
+          "movingFraction": 0.9686924493554327,
+          "airborneFraction": 0
+        },
+        {
+          "failures": [],
+          "samples": 542,
+          "simulationRate": 0.9999276219326196,
+          "maxSnapshotAgeMs": 90.1855579999974,
+          "maxAppliedInputAgeMs": 233.12457366543822,
+          "maxInputLagMs": 32.7430313333316,
+          "maxCorrectionMeters": 0.01327048215455738,
+          "movingFraction": 0.974169741697417,
+          "airborneFraction": 0
+        },
+        {
+          "failures": [],
+          "samples": 541,
+          "simulationRate": 1.0003674135083578,
+          "maxSnapshotAgeMs": 94.15416099999857,
+          "maxAppliedInputAgeMs": 244.10657133172208,
+          "maxInputLagMs": 46.89883999842277,
+          "maxCorrectionMeters": 0.001235340060253116,
+          "movingFraction": 1,
+          "airborneFraction": 0
+        }
+      ]
+    },
+    {
+      "name": "cars",
+      "clients": [
+        {
+          "failures": [
+            "correction >0.3m",
+            "sample gap >300ms",
+            "snapshot age >300ms",
+            "applied input age >400ms"
+          ],
+          "samples": 541,
+          "simulationRate": 0.9999443235798876,
+          "maxSnapshotAgeMs": 367.33990300000005,
+          "maxAppliedInputAgeMs": 482.2478783380793,
+          "maxInputLagMs": 149.23945133501547,
+          "maxCorrectionMeters": 1.9024334038115782,
+          "movingFraction": 1,
+          "airborneFraction": 0
+        },
+        {
+          "failures": ["correction >0.3m"],
+          "samples": 542,
+          "simulationRate": 0.9993719184168851,
+          "maxSnapshotAgeMs": 196.84429799999634,
+          "maxAppliedInputAgeMs": 373.0064850006456,
+          "maxInputLagMs": 112.39347099988663,
+          "maxCorrectionMeters": 0.31687244305191553,
+          "movingFraction": 1,
+          "airborneFraction": 0
+        },
+        {
+          "failures": ["correction >0.3m"],
+          "samples": 541,
+          "simulationRate": 0.9991432733523794,
+          "maxSnapshotAgeMs": 217.1951540000009,
+          "maxAppliedInputAgeMs": 379.8991286659584,
+          "maxInputLagMs": 122.49463866501173,
+          "maxCorrectionMeters": 0.3182276613373103,
+          "movingFraction": 0.9852125693160814,
+          "airborneFraction": 0
+        },
+        {
+          "failures": ["correction >0.3m"],
+          "samples": 541,
+          "simulationRate": 0.9999610257850954,
+          "maxSnapshotAgeMs": 162.20621000000392,
+          "maxAppliedInputAgeMs": 385.5359099982452,
+          "maxInputLagMs": 103.12824033245124,
+          "maxCorrectionMeters": 0.31745987443073126,
+          "movingFraction": 1,
+          "airborneFraction": 0
+        },
+        {
+          "failures": [],
+          "samples": 544,
+          "simulationRate": 1.0000501695081145,
+          "maxSnapshotAgeMs": 173.31509799999913,
+          "maxAppliedInputAgeMs": 352.95483199892624,
+          "maxInputLagMs": 88.17694633261272,
+          "maxCorrectionMeters": 0.0011723883757133223,
+          "movingFraction": 1,
+          "airborneFraction": 0
+        }
+      ]
+    },
+    {
+      "name": "planes",
+      "clients": [
+        {
+          "failures": [
+            "missing samples",
+            "applied input age >400ms",
+            "map or controlled body missing",
+            "sample gap >300ms",
+            "did not sustain movement",
+            "did not sustain flight"
+          ],
+          "samples": 474,
+          "simulationRate": 0.9984741664063476,
+          "maxSnapshotAgeMs": 246.25966799999878,
+          "maxAppliedInputAgeMs": 958.1770023354329,
+          "maxInputLagMs": 229.8145770009287,
+          "maxCorrectionMeters": 0.2999999999999545,
+          "movingFraction": 0,
+          "airborneFraction": 0
+        },
+        {
+          "failures": [
+            "missing samples",
+            "map or controlled body missing",
+            "applied input age >400ms",
+            "sample gap >300ms",
+            "snapshot age >300ms",
+            "did not sustain movement",
+            "did not sustain flight"
+          ],
+          "samples": 477,
+          "simulationRate": 0.9983880771175215,
+          "maxSnapshotAgeMs": 392.8568419999938,
+          "maxAppliedInputAgeMs": 911.4422366708459,
+          "maxInputLagMs": 244.2734393342107,
+          "maxCorrectionMeters": 0.11709476914643129,
+          "movingFraction": 0,
+          "airborneFraction": 0
+        },
+        {
+          "failures": [
+            "applied input age >400ms",
+            "correction >0.3m",
+            "sample gap >300ms",
+            "snapshot age >300ms",
+            "input resynchronization"
+          ],
+          "samples": 499,
+          "simulationRate": 0.9942447240991458,
+          "maxSnapshotAgeMs": 506.67471300000034,
+          "maxAppliedInputAgeMs": 1092.564895334057,
+          "maxInputLagMs": 244.68503199990664,
+          "maxCorrectionMeters": 19.980833243272276,
+          "movingFraction": 1,
+          "airborneFraction": 1
+        },
+        {
+          "failures": [
+            "applied input age >400ms",
+            "sample gap >300ms",
+            "map or controlled body missing",
+            "correction >0.3m",
+            "prediction suspended",
+            "snapshot age >300ms",
+            "did not sustain movement",
+            "did not sustain flight"
+          ],
+          "samples": 524,
+          "simulationRate": 0.9970700620429538,
+          "maxSnapshotAgeMs": 498.06048100000044,
+          "maxAppliedInputAgeMs": 662.4741819994888,
+          "maxInputLagMs": 242.38229399947159,
+          "maxCorrectionMeters": 545.472512869347,
+          "movingFraction": 0,
+          "airborneFraction": 0
+        },
+        {
+          "failures": [
+            "applied input age >400ms",
+            "correction >0.3m",
+            "sample gap >300ms",
+            "snapshot age >300ms"
+          ],
+          "samples": 499,
+          "simulationRate": 0.994100146567161,
+          "maxSnapshotAgeMs": 758.8990479999993,
+          "maxAppliedInputAgeMs": 976.1895046663049,
+          "maxInputLagMs": 232.10085333331517,
+          "maxCorrectionMeters": 19.748158981508023,
+          "movingFraction": 1,
+          "airborneFraction": 1
+        }
+      ]
+    }
+  ],
+  "routeAddress": "178.162.254.45",
+  "notes": [
+    "One run per phase, five independent clients, 10s warmup and 60s measured.",
+    "Hostname and TLS validation retained; temporary Node DNS preload selected the direct public address.",
+    "Test machine was busy with other builds and the local test suite; client scheduling delays are included in each result.",
+    "Three plane clients did not sustain flight. Their corrections include failed-flight or respawn effects; use the two sustained-flight clients to assess flight snapping."
+  ]
+}

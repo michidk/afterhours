@@ -1,3 +1,4 @@
+import { totalmem } from "node:os";
 import { getHeapStatistics } from "node:v8";
 import { performance } from "node:perf_hooks";
 import { TUNING } from "../shared/catalog.ts";
@@ -11,6 +12,9 @@ export class Runtime {
   catchUpTicks = 0;
   backlogMs = 0;
   private lastPumpAt = 0;
+  private cpuSampleAt = 0;
+  private cpuSample = process.cpuUsage();
+  private cpuPercent = 0;
   droppedMs = 0;
   constructor(
     readonly sim: Simulation,
@@ -20,6 +24,8 @@ export class Runtime {
   }
   start() {
     this.lastPumpAt = performance.now();
+    this.cpuSampleAt = this.lastPumpAt;
+    this.cpuSample = process.cpuUsage();
     let last = this.lastPumpAt,
       accumulator = 0;
     const snapshotInterval = TUNING.tick * 2000;
@@ -27,6 +33,15 @@ export class Runtime {
     let lastSnapshotTick = this.ticks;
     this.timer = setInterval(() => {
       const now = performance.now();
+      if (now - this.cpuSampleAt >= 1000) {
+        const cpu = process.cpuUsage();
+        this.cpuPercent =
+          (100 *
+            (cpu.user + cpu.system - this.cpuSample.user - this.cpuSample.system)) /
+          ((now - this.cpuSampleAt) * 1000);
+        this.cpuSample = cpu;
+        this.cpuSampleAt = now;
+      }
       accumulator += Math.max(0, (now - last) / 1000);
       const maxBacklog = TUNING.inputQueue * TUNING.tick;
       if (accumulator > maxBacklog) {
@@ -76,13 +91,18 @@ export class Runtime {
   metrics() {
     const wall = this.samples.map((s) => s.wallMs).sort((a, b) => a - b),
       cpu = this.samples.map((s) => s.cpuMs).sort((a, b) => a - b);
+    const memory = process.memoryUsage(),
+      memoryLimit = Math.min(process.constrainedMemory() || totalmem(), totalmem());
     return {
+      cpuPercent: this.cpuPercent,
+      memoryPercent: (100 * memory.rss) / memoryLimit,
+      memoryLimitMB: memoryLimit / 1048576,
       tickBudgetMs: TUNING.tick * 1000,
       backlogMs:
         this.backlogMs +
         (this.timer ? Math.max(0, performance.now() - this.lastPumpAt) : 0),
       droppedMs: this.droppedMs,
-      heapUsedMB: process.memoryUsage().heapUsed / 1048576,
+      heapUsedMB: memory.heapUsed / 1048576,
       heapLimitMB: getHeapStatistics().heap_size_limit / 1048576,
       availableMemoryMB: process.availableMemory() / 1048576,
       players: this.sessions.clients.size,
@@ -101,7 +121,7 @@ export class Runtime {
       tickCpuMaxMs: cpu.at(-1) || 0,
       bytesSent: this.sessions.bytes,
       rejectedMessages: this.sessions.rejected,
-      memoryMB: Math.round(process.memoryUsage().rss / 1048576),
+      memoryMB: Math.round(memory.rss / 1048576),
     };
   }
   stop() {

@@ -81,6 +81,9 @@ export interface DebugResult {
 }
 
 export interface ServerDiagnostics {
+  cpuPercent: number;
+  memoryPercent: number;
+  memoryLimitMB: number;
   tickBudgetMs: number;
   tickCpuP95Ms: number;
   tickP95Ms: number;

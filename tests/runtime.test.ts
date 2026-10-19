@@ -198,3 +198,46 @@ test("debug telemetry distinguishes queued simulation time from dropped time", (
     runtime.stop();
   }
 });
+
+test("resource telemetry reports process CPU per core and RSS against its limit", (t) => {
+  const sim = new Simulation(generateCity());
+  const sessions = new Sessions(
+    createServer(),
+    sim,
+    false,
+    new CityStore(sim.city).manifest,
+  );
+  const runtime = new Runtime(sim, sessions);
+  let clock = 0,
+    cpu = 0;
+  const memory = process.memoryUsage();
+  t.mock.method(performance, "now", () => clock);
+  t.mock.method(process, "cpuUsage", () => ({ user: cpu, system: 0 }));
+  t.mock.method(process, "memoryUsage", () => ({ ...memory, rss: 512 * 1048576 }));
+  t.mock.method(process, "constrainedMemory", () => 2 * 1024 * 1048576);
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  t.mock.method(sim, "tick", () => {});
+  t.mock.method(sessions, "tick", () => {});
+  t.mock.method(sessions, "broadcast", () => {});
+  try {
+    runtime.start();
+    clock = 1000;
+    cpu = 250000;
+    t.mock.timers.tick(5);
+    const stats = sessions.diagnostics!();
+    assert.equal(stats.cpuPercent, 25);
+    assert.equal(stats.memoryPercent, 25);
+    assert.equal(stats.memoryLimitMB, 2048);
+    assert.equal(runtime.metrics().cpuPercent, 25, "reads do not reset the CPU sample");
+    clock = 2000;
+    cpu = 1500000;
+    t.mock.timers.tick(5);
+    assert.equal(
+      runtime.metrics().cpuPercent,
+      125,
+      "multiple threads can exceed one core",
+    );
+  } finally {
+    runtime.stop();
+  }
+});
