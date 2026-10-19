@@ -5,6 +5,7 @@ import {
   mul,
   pointInPolygon,
   selfIntersects,
+  signedArea,
 } from "./geom.ts";
 import { earClip } from "../shared/polygon.ts";
 import type { Point, RoadEdge, RoadGeometry, RoadGraph } from "./types.ts";
@@ -238,6 +239,238 @@ export function sinkUnderStreets(
     }
     if (worst < 0.002 && (pass >= RAISE || sag < 0.01)) break;
   }
+}
+
+/**
+ * Flat [x, y, z, ...] polygons cut along the terrain mesh's triangles, as pieces
+ * that each lie in one of them with every corner at the terrain height. A street
+ * draped this way is exactly the ground that people and vehicles move on, so it
+ * can neither float over a dip between grid points nor be crossed by the terrain.
+ * Convex polygons are clipped whole, others per ear-clipped triangle; neighbouring
+ * pieces in one terrain triangle are then merged while they stay simple.
+ */
+export function drapeOnTerrain(polygons: number[][], grid: TerrainGrid): number[][] {
+  const groups = new Map<number, number[][]>(),
+    { step, side, half, heights: h } = grid;
+  for (const flat of polygons) {
+    const points: Point[] = [];
+    for (let i = 0; i < flat.length; i += 3)
+      points.push({ x: flat[i], z: flat[i + 2] });
+    const parts = convex(points)
+      ? [points]
+      : earClip(points).map((t) => t.map((i) => points[i]));
+    for (const part of parts) {
+      const xs = part.map((p) => (p.x + half) / step),
+        zs = part.map((p) => (p.z + half) / step);
+      const x0 = Math.max(0, Math.floor(Math.min(...xs))),
+        x1 = Math.min(side - 2, Math.floor(Math.max(...xs))),
+        z0 = Math.max(0, Math.floor(Math.min(...zs))),
+        z1 = Math.min(side - 2, Math.floor(Math.max(...zs)));
+      for (let iz = z0; iz <= z1; iz++)
+        for (let ix = x0; ix <= x1; ix++)
+          for (const upper of [false, true]) {
+            // Same triangle split as shared/terrain.ts, in cell units u, v.
+            const toCell = (p: Point) => ({
+              x: (p.x + half) / step - ix,
+              z: (p.z + half) / step - iz,
+            });
+            let piece = part.map(toCell);
+            for (const inside of upper
+              ? [
+                  (q: Point) => 1 - q.x,
+                  (q: Point) => 1 - q.z,
+                  (q: Point) => q.x + q.z - 1,
+                ]
+              : [(q: Point) => q.x, (q: Point) => q.z, (q: Point) => 1 - q.x - q.z])
+              piece = clip(piece, inside);
+            // A corner on a grid point is cut by several lines and comes out repeated.
+            piece = piece.filter((q, k) => {
+              const r = piece[(k + 1) % piece.length];
+              return Math.hypot((r.x - q.x) * step, (r.z - q.z) * step) > 1e-6;
+            });
+            if (piece.length < 3 || Math.abs(signedArea(piece)) * step * step < 1e-4)
+              continue;
+            const i = iz * side + ix,
+              y = (q: Point) =>
+                upper
+                  ? h[i + side + 1] +
+                    (1 - q.x) * (h[i + side] - h[i + side + 1]) +
+                    (1 - q.z) * (h[i + 1] - h[i + side + 1])
+                  : h[i] + q.x * (h[i + 1] - h[i]) + q.z * (h[i + side] - h[i]);
+            // Counter-clockwise in x, z, so pieces sharing an edge run it oppositely.
+            if (signedArea(piece) < 0) piece.reverse();
+            const id = i * 2 + +upper,
+              flat = piece.flatMap((q) => [
+                (q.x + ix) * step - half,
+                y(q),
+                (q.z + iz) * step - half,
+              ]);
+            if (groups.has(id)) groups.get(id)!.push(flat);
+            else groups.set(id, [flat]);
+          }
+    }
+  }
+  const rings = [...groups.values()].flatMap(mergePieces);
+  // A corner can go only where every ring holding it runs straight through it:
+  // dropping it anywhere else would leave a T-junction that opens once rounded.
+  const needed = new Set<string>();
+  for (const ring of rings)
+    eachCorner(ring, (key, straight) => straight || needed.add(key));
+  return closeTJunctions(
+    rings.map((ring) => {
+      const out: number[] = [];
+      eachCorner(
+        ring,
+        (key, _, i) => needed.has(key) && out.push(...ring.slice(i, i + 3)),
+      );
+      return out;
+    }),
+  );
+}
+/**
+ * Adds every corner that lies on another ring's edge to that edge, so neighbouring
+ * pieces share all their vertices and no hairline crack can open between them.
+ */
+function closeTJunctions(rings: number[][]) {
+  const CELL = 2,
+    corners = new Map<string, number[][]>();
+  const cellKey = (x: number, z: number) =>
+    `${Math.floor(x / CELL)},${Math.floor(z / CELL)}`;
+  for (const ring of rings)
+    for (let i = 0; i < ring.length; i += 3) {
+      const k = cellKey(ring[i], ring[i + 2]),
+        corner = ring.slice(i, i + 3);
+      if (corners.has(k)) corners.get(k)!.push(corner);
+      else corners.set(k, [corner]);
+    }
+  return rings.map((ring) => {
+    const n = ring.length / 3,
+      out: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const a = ring.slice(i * 3, i * 3 + 3),
+        b = ring.slice(((i + 1) % n) * 3, ((i + 1) % n) * 3 + 3),
+        ux = b[0] - a[0],
+        uz = b[2] - a[2],
+        length = Math.hypot(ux, uz);
+      out.push(...a);
+      if (length < 0.02) continue;
+      const found = new Map<string, { t: number; corner: number[] }>();
+      for (
+        let cx = Math.floor(Math.min(a[0], b[0]) / CELL);
+        cx <= Math.floor(Math.max(a[0], b[0]) / CELL);
+        cx++
+      )
+        for (
+          let cz = Math.floor(Math.min(a[2], b[2]) / CELL);
+          cz <= Math.floor(Math.max(a[2], b[2]) / CELL);
+          cz++
+        )
+          for (const c of corners.get(`${cx},${cz}`) ?? []) {
+            const t = ((c[0] - a[0]) * ux + (c[2] - a[2]) * uz) / length ** 2;
+            if (t * length < 0.01 || (1 - t) * length < 0.01) continue;
+            if (Math.abs((c[0] - a[0]) * uz - (c[2] - a[2]) * ux) / length > 0.01)
+              continue;
+            found.set(cornerKey(c, 0), { t, corner: c });
+          }
+      for (const { corner } of [...found.values()].sort((p, q) => p.t - q.t))
+        out.push(...corner);
+    }
+    return out;
+  });
+}
+/** Greedily joins coplanar pieces across shared edges while the union stays simple. */
+function mergePieces(pieces: number[][]) {
+  const key = (f: number[], i: number) =>
+    `${Math.round(f[i * 3] * 100)},${Math.round(f[i * 3 + 2] * 100)}`;
+  const union = (a: number[], b: number[]) => {
+    const n = a.length / 3,
+      m = b.length / 3;
+    for (let i = 0; i < n; i++)
+      for (let j = 0; j < m; j++) {
+        if (key(a, i) !== key(b, (j + 1) % m) || key(a, (i + 1) % n) !== key(b, j))
+          continue;
+        // a from its edge end q round to p, then b's corners strictly between p and q.
+        const out: number[] = [];
+        for (let k = 1; k <= n; k++)
+          out.push(...a.slice(((i + k) % n) * 3, ((i + k) % n) * 3 + 3));
+        for (let k = 2; k < m; k++)
+          out.push(...b.slice(((j + k) % m) * 3, ((j + k) % m) * 3 + 3));
+        const ring = out;
+        if (ring.length < 9) return undefined;
+        const points: Point[] = [];
+        for (let k = 0; k < ring.length; k += 3)
+          points.push({ x: ring[k], z: ring[k + 2] });
+        // Coplanar, so any simple polygon triangulates exactly; a corner visited
+        // twice would pinch it.
+        const keys = new Set(
+          points.map((q) => `${Math.round(q.x * 100)},${Math.round(q.z * 100)}`),
+        );
+        return keys.size === points.length && !selfIntersects(points)
+          ? ring
+          : undefined;
+      }
+    return undefined;
+  };
+  for (let merged = true; merged;) {
+    merged = false;
+    search: for (let a = 0; a < pieces.length; a++)
+      for (let b = a + 1; b < pieces.length; b++) {
+        const joined = union(pieces[a], pieces[b]);
+        if (!joined) continue;
+        pieces[a] = joined;
+        pieces.splice(b, 1);
+        merged = true;
+        break search;
+      }
+  }
+  return pieces;
+}
+const cornerKey = (flat: number[], i: number) =>
+  `${Math.round(flat[i] * 100)},${Math.round(flat[i + 2] * 100)}`;
+/** Visits each corner (flat index `i`) with whether its ring runs straight through it. */
+function eachCorner(
+  flat: number[],
+  visit: (key: string, straight: boolean, i: number) => unknown,
+) {
+  const n = flat.length / 3;
+  for (let k = 0; k < n; k++) {
+    const a = ((k + n - 1) % n) * 3,
+      b = k * 3,
+      c = ((k + 1) % n) * 3,
+      turn =
+        (flat[b] - flat[a]) * (flat[c + 2] - flat[b + 2]) -
+        (flat[b + 2] - flat[a + 2]) * (flat[c] - flat[b]);
+    visit(cornerKey(flat, b), Math.abs(turn) < 1e-6, b);
+  }
+}
+/** Sutherland–Hodgman: the part of a polygon where `inside` is non-negative. */
+function clip(polygon: Point[], inside: (p: Point) => number) {
+  const out: Point[] = [];
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i],
+      b = polygon[(i + 1) % polygon.length],
+      da = inside(a),
+      db = inside(b);
+    if (da >= 0) out.push(a);
+    if (da >= 0 !== db >= 0) {
+      const t = da / (da - db);
+      out.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
+    }
+  }
+  return out;
+}
+function convex(polygon: Point[]) {
+  let sign = 0;
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i],
+      b = polygon[(i + 1) % polygon.length],
+      c = polygon[(i + 2) % polygon.length],
+      turn = (b.x - a.x) * (c.z - b.z) - (b.z - a.z) * (c.x - b.x);
+    if (Math.abs(turn) < 1e-9) continue;
+    if (sign && Math.sign(turn) !== sign) return false;
+    sign = Math.sign(turn);
+  }
+  return true;
 }
 
 /**

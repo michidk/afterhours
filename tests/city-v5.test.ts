@@ -138,13 +138,43 @@ test("generated artifact validates, packs compactly and places everything on lan
         x += polygon[v];
         z += polygon[v + 2];
       }
-      const n = polygon.length / 3,
-        ys = polygon.filter((_, v) => v % 3 === 1);
-      // Ear clipping a longer sloped strip makes chords across its profile.
-      assert.ok(
-        n <= 4 || Math.max(...ys) - Math.min(...ys) < 0.25,
-        "sloped street pieces are single quads",
-      );
+      const n = polygon.length / 3;
+      // Ear clipping a polygon that is not planar makes chords across its profile.
+      // Its plane runs through the three corners spanning the most ground.
+      let a = 0,
+        b = 1,
+        c = 2,
+        spread = 0;
+      for (let i = 0; i < n; i++)
+        for (let j = i + 1; j < n; j++)
+          for (let k = j + 1; k < n; k++) {
+            const s = Math.abs(
+              (polygon[j * 3] - polygon[i * 3]) *
+                (polygon[k * 3 + 2] - polygon[i * 3 + 2]) -
+                (polygon[j * 3 + 2] - polygon[i * 3 + 2]) *
+                  (polygon[k * 3] - polygon[i * 3]),
+            );
+            if (s > spread) [a, b, c, spread] = [i, j, k, s];
+          }
+      const [pa, pb, pc] = [a, b, c].map((i) => polygon.slice(i * 3, i * 3 + 3)),
+        u = pb.map((v, i) => v - pa[i]),
+        w = pc.map((v, i) => v - pa[i]),
+        normal = [
+          u[1] * w[2] - u[2] * w[1],
+          u[2] * w[0] - u[0] * w[2],
+          u[0] * w[1] - u[1] * w[0],
+        ];
+      if (n > 3 && spread > 0.01)
+        for (let v = 0; v < polygon.length; v += 3)
+          assert.ok(
+            Math.abs(
+              ((polygon[v] - pa[0]) * normal[0] +
+                (polygon[v + 1] - pa[1]) * normal[1] +
+                (polygon[v + 2] - pa[2]) * normal[2]) /
+                normal[1],
+            ) < 0.15,
+            `street pieces are planar near ${polygon[0]}, ${polygon[2]}`,
+          );
       assert.ok(x / n >= origin.x - 0.01 && x / n < origin.x + PACK_CHUNK_SIZE + 0.01);
       assert.ok(z / n >= origin.z - 0.01 && z / n < origin.z + PACK_CHUNK_SIZE + 0.01);
       for (let v = 0; v < polygon.length; v += 3)

@@ -15,7 +15,7 @@ import {
 } from "../shared/water.ts";
 import { LIMIT, idle, type Entity } from "../shared/world.ts";
 import { Simulation } from "../server/simulation.ts";
-import { sinkUnderStreets } from "../mapgen/streetfit.ts";
+import { drapeOnTerrain, sinkUnderStreets } from "../mapgen/streetfit.ts";
 import {
   carAltitude,
   carForces,
@@ -259,4 +259,53 @@ test("street fit pulls a valley up under a street without lifting it through", (
       assert.ok(at(x, z) >= 5.1 - 0.5, "ground stays close below the surface");
     }
   assert.equal(heights[0], 0, "ground away from the street is untouched");
+});
+
+test("draped streets lie on the terrain triangles and keep their area", () => {
+  // A 4 x 4 grid of uneven heights and an L-shaped street crossing several cells.
+  const side = 4,
+    heights = [0, 1, 3, 2, 1, 4, 2, 0, 2, 1, 5, 3, 0, 2, 1, 4];
+  const grid = { heights, side, step: 8, half: 12 },
+    street = [-10, 9, -10, 10, 9, -10, 10, 9, -4, -4, 9, -4, -4, 9, 10, -10, 9, 10];
+  const pieces = drapeOnTerrain([street], grid);
+  const at = (x: number, z: number) => {
+    const gx = (x + 12) / 8,
+      gz = (z + 12) / 8,
+      ix = Math.min(side - 2, Math.floor(gx)),
+      iz = Math.min(side - 2, Math.floor(gz)),
+      u = gx - ix,
+      v = gz - iz,
+      i = iz * side + ix;
+    return u + v <= 1
+      ? heights[i] +
+          u * (heights[i + 1] - heights[i]) +
+          v * (heights[i + side] - heights[i])
+      : heights[i + side + 1] +
+          (1 - u) * (heights[i + side] - heights[i + side + 1]) +
+          (1 - v) * (heights[i + 1] - heights[i + side + 1]);
+  };
+  let area = 0;
+  for (const piece of pieces) {
+    const n = piece.length / 3;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      area += piece[i * 3] * piece[j * 3 + 2] - piece[j * 3] * piece[i * 3 + 2];
+      assert.ok(
+        Math.abs(piece[i * 3 + 1] - at(piece[i * 3], piece[i * 3 + 2])) < 1e-9,
+        "every corner is at the terrain height",
+      );
+    }
+    // Inside one terrain triangle: the centroid lies on the same plane as the corners.
+    const c = [0, 1, 2].map(
+      (k) => piece.filter((_, i) => i % 3 === k).reduce((a, b) => a + b) / n,
+    );
+    assert.ok(
+      Math.abs(c[1] - at(c[0], c[2])) < 1e-9,
+      "each piece is planar on the terrain",
+    );
+  }
+  assert.ok(
+    Math.abs(Math.abs(area) / 2 - (20 * 6 + 6 * 14)) < 1e-6,
+    "the street's area is kept",
+  );
 });

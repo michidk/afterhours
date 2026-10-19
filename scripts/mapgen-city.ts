@@ -24,7 +24,7 @@ import { sample } from "../mapgen/field.ts";
 import { lakeShorelines } from "../mapgen/shoreline.ts";
 import { packSurfaceChunks } from "../shared/city-pack.ts";
 import { destructibles } from "../shared/destruction.ts";
-import { edgeHeightAt, sinkUnderStreets } from "../mapgen/streetfit.ts";
+import { drapeOnTerrain, edgeHeightAt, sinkUnderStreets } from "../mapgen/streetfit.ts";
 import {
   compass,
   dressAirport,
@@ -326,6 +326,12 @@ export function cityFromMap(map: GeneratedMap): City {
     }
     return { ring, x0, x1, z0, z1 };
   });
+  // Feature surfaces (plazas, quays, the racetrack) follow below at their own levels.
+  const network = {
+    asphalt: asphalt.length,
+    sidewalks: sidewalks.length,
+    markings: markings.length,
+  };
   const features: FeatureContext = {
     map,
     heights,
@@ -834,12 +840,51 @@ export function cityFromMap(map: GeneratedMap): City {
       props.splice(i, 1);
   }
 
+  // Street network surfaces lie on the finished terrain, which the street fit
+  // shaped to their profiles, so they are drawn exactly where people walk.
+  // Rounding to centimetres can collapse a sliver piece.
+  const usable3 = (flat: number[]) =>
+    flat.length >= 9 &&
+    Math.abs(
+      flat.reduce(
+        (sum, _, i) =>
+          i % 3
+            ? sum
+            : sum +
+              flat[i] * flat[(i + 5) % flat.length] -
+              flat[(i + 3) % flat.length] * flat[i + 2],
+        0,
+      ),
+    ) > 2e-4;
+  const grid = { heights, side: TERRAIN_SIDE, step: TERRAIN_STEP, half: LIMIT },
+    drape = (polygons: number[][], count: number) => [
+      ...drapeOnTerrain(polygons.slice(0, count), grid)
+        .map((flat) => flat.map(round))
+        .filter(usable3),
+      ...polygons.slice(count),
+    ];
+  const surface = {
+    asphalt: drape(asphalt, network.asphalt),
+    sidewalks: drape(sidewalks, network.sidewalks),
+    markings: [
+      ...(["white", "yellow"] as const).flatMap((color) =>
+        drape(
+          markings
+            .slice(0, network.markings)
+            .filter((m) => m.color === color)
+            .map((m) => m.polygon),
+          Infinity,
+        ).map((polygon) => ({ color, polygon })),
+      ),
+      ...markings.slice(network.markings),
+    ],
+  };
   return {
     seed: map.options.seed,
     terrain: { heights },
     centre,
     spawn: { ...townHall.spawn },
-    surface: packSurfaceChunks({ asphalt, sidewalks, markings }),
+    surface: packSurfaceChunks(surface),
     walkways,
     water,
     roads,

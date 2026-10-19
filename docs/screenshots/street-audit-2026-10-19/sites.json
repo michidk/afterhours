@@ -56,5 +56,19 @@
     "x": -22,
     "z": 638,
     "size": 250
+  },
+  {
+    "name": "hairpin-top",
+    "x": -755,
+    "z": -57,
+    "size": 30
+  },
+  {
+    "name": "hairpin-oblique",
+    "x": -755,
+    "z": -57,
+    "size": 40,
+    "pitch": 40,
+    "yaw": 300
   }
 ]

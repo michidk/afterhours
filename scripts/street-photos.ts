@@ -175,7 +175,8 @@ for (const s of sites) {
           const w0 = ((B[0] - px) * (Cc[1] - py) - (B[1] - py) * (Cc[0] - px)) / area;
           const w1 = ((Cc[0] - px) * (A[1] - py) - (Cc[1] - py) * (A[0] - px)) / area;
           const w2 = 1 - w0 - w1;
-          if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+          // A little slack so pixels on an edge shared by two triangles are never dropped.
+          if (w0 < -1e-6 || w1 < -1e-6 || w2 < -1e-6) continue;
           const d = w0 * A[2] + w1 * B[2] + w2 * Cc[2],
             k = y * W + x;
           if (d >= depth[k]) continue;

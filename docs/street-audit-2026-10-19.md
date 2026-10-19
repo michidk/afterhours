@@ -1,6 +1,6 @@
 # Street geometry audit, 19 October 2026
 
-Seed 713 streets were photographed from above and at an angle, before and after the fixes below. The photos are rendered offline from the baked vertex buffers that the game streams (`scripts/street-photos.ts`, sites in [sites.json](screenshots/street-audit-2026-10-19/sites.json)). They use flat sun shading, with no shadows, sea or dynamic entities. The shared browser could not stream and render the whole map fast enough for a full review.
+Seed 713 streets were photographed from above and at an angle, before (the artifact at the start of the day) and after the fixes below. The photos are rendered offline from the baked vertex buffers that the game streams (`scripts/street-photos.ts`, sites in [sites.json](screenshots/street-audit-2026-10-19/sites.json)). They use flat sun shading, with no shadows, sea or dynamic entities. The shared browser could not stream and render the whole map fast enough for a full review.
 
 ## Defects found
 
@@ -13,7 +13,16 @@ Seed 713 streets were photographed from above and at an angle, before and after 
 - The street fit also raises the free grid corners beside a street, so the ground lies at most 0.35 m below the surface (`mapgen/streetfit.ts`). Sinking still wins: no terrain rises through a street. Street vertices standing more than 1 m above the ground fell from 778 to 275, and the worst gap from 3.95 m to 2.26 m.
 - Every exposed street edge now stands on a concrete wall that reaches 0.4 m below the lowest ground along it (`client/models/surface.ts`). Edges shared by two street polygons get no wall.
 
-The city artifact grew from 2.5 MB to 2.8 MB, and the baked meshes from 21.1 MB to 22.0 MB.
+### Follow-up: streets draped on the terrain
+
+Physics follows the terrain, so after the first pass a player at a street edge could still stand up to 0.35 m below the drawn surface. Hairpins tighter than their road's half-width also looked faceted, because the inner edge met at one point. Street generation now drapes the network's asphalt, sidewalks and markings onto the finished terrain (`drapeOnTerrain` in `mapgen/streetfit.ts`). Each polygon is cut along the terrain mesh's triangles. Coplanar pieces within a triangle are merged, and every corner takes the terrain height. The street fit still shapes the grid to each street's profile first, so draped streets keep their grades.
+
+- Every street-network corner, and every interior sample, lies within 1 cm of the terrain. The few corners off the terrain are all in plazas, quays, airfields and the racetrack, which keep their own levels.
+- There are no height steps between pieces and no T-junctions in the sidewalks. A corner on another piece's edge is added to that edge. Of 26 asphalt T-junctions, 24 are in the airport's own tiles, compared with 39 asphalt and 157 sidewalk T-junctions before. Paved area matches the undraped streets to within 2 m² of 628,000 m².
+- People and vehicles now move on the drawn surface. Asphalt is drawn 0.1 m above the ground and sidewalks a 0.15 m kerb higher, the same everywhere. The hairpin fans are gone.
+- The concrete walls remain for curb faces and for feature surfaces.
+
+The city artifact grew from 2.5 MB to 4.2 MB over both passes, and the baked meshes from 21.1 MB to 26.9 MB.
 
 ## Photos
 
@@ -27,9 +36,11 @@ The city artifact grew from 2.5 MB to 2.8 MB, and the baked meshes from 21.1 MB 
 | Beach lane, oblique | [View](screenshots/street-audit-2026-10-19/before/beach-lane-oblique.png) | [View](screenshots/street-audit-2026-10-19/after/beach-lane-oblique.png) |
 | Racetrack, oblique  | [View](screenshots/street-audit-2026-10-19/before/racetrack-oblique.png)  | [View](screenshots/street-audit-2026-10-19/after/racetrack-oblique.png)  |
 | Downtown, top       | [View](screenshots/street-audit-2026-10-19/before/downtown-top.png)       | [View](screenshots/street-audit-2026-10-19/after/downtown-top.png)       |
+| Hairpin, top        | [View](screenshots/street-audit-2026-10-19/before/hairpin-top.png)        | [View](screenshots/street-audit-2026-10-19/after/hairpin-top.png)        |
+| Hairpin, oblique    | [View](screenshots/street-audit-2026-10-19/before/hairpin-oblique.png)    | [View](screenshots/street-audit-2026-10-19/after/hairpin-oblique.png)    |
 
 Retake them with `npx tsx scripts/street-photos.ts data/city-meshes.msgpack docs/screenshots/street-audit-2026-10-19/sites.json <out-dir>`.
 
 ## Remaining
 
-Hairpins tighter than their road's half-width still look faceted: the inner edge meets at one point and the fan of quads around it tilts. Fixing that needs a minimum curve radius when roads are laid out. Physics still follows the terrain, so a player at a street edge can stand up to 0.35 m below the drawn surface, more where the 275 remaining high vertices are.
+A street's cross-slope now follows the 8 m terrain grid, so a street across a steep side slope tilts with it. Players stand on the ground, 0.1 m below drawn asphalt and 0.25 m below a sidewalk top. Within a piece, corners rounded to whole centimetres can leave slivers under 7 mm wide.
