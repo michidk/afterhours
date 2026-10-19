@@ -77,3 +77,9 @@ Retake them with `npx tsx scripts/street-photos.ts data/city-meshes.msgpack docs
 ## Final visual check
 
 After the short-band fix, [the former hole at 650, 87 on seed 2741](screenshots/street-audit-2026-10-19/final/fix-650-87.png), a [junction whose arms leave at 0°](screenshots/street-audit-2026-10-19/final/n793.png) and an [oblique shot of the steepest cul-de-sac rims on seed 713](screenshots/street-audit-2026-10-19/final/st1.png) were photographed. The first two show continuous asphalt and sidewalk with no gap or overlap. The steep sidewalk is spread over 61 clusters of at most 18 m² (37–58%), on cul-de-sac rims and street edges where the ground drops; the surface stays attached to the terrain with concrete below. Sharp sidewalk corners at junctions with no room for a fillet remain, and are visible as small angular tips.
+
+## Why the remaining steepness stays
+
+- **Steep asphalt (32 m² on 713, 10 clusters).** Almost all of it is the rim of a dead-end turning circle that sits within about 30 m of another street at a different height. At (-443, 864) two dead ends 27 m apart are 2.8 m apart in height, so the 8 m terrain grid has one cell column that must climb 3 m (about 40%). The street fit already lets the nearest kerb set each grid point's height; only a different node height could change this, and node heights are fixed by the profile solver before the terrain is fitted.
+- **Steep sidewalk.** Same cause at street edges beside real drops; each of the 61 clusters on 713 is at most 18 m².
+- **Corner tips.** Zoomed in, they are jogs of 0.1 m or less where a corner arc meets a mouth on a short band (edge 214 on seed 2741 is 0.95 m long between two mouths). Eight damped layout passes did not change the picture, so the experiment was reverted.
