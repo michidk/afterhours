@@ -73,3 +73,7 @@ Retake them with `npx tsx scripts/street-photos.ts data/city-meshes.msgpack docs
 - A street's cross-slope follows the 8 m terrain grid. Players stand on the ground, 0.1 m below drawn asphalt and 0.25 m below a sidewalk top.
 - A few sidewalk outlines have a small kink where a junction corner has no room for a fillet and keeps a sharp corner.
 - Corners that are 3 cm or more apart are not welded. 783 pairs under 3 cm remained before this round's tolerance change; none is a gap.
+
+## Final visual check
+
+After the short-band fix, [the former hole at 650, 87 on seed 2741](screenshots/street-audit-2026-10-19/final/fix-650-87.png), a [junction whose arms leave at 0°](screenshots/street-audit-2026-10-19/final/n793.png) and an [oblique shot of the steepest cul-de-sac rims on seed 713](screenshots/street-audit-2026-10-19/final/st1.png) were photographed. The first two show continuous asphalt and sidewalk with no gap or overlap. The steep sidewalk is spread over 61 clusters of at most 18 m² (37–58%), on cul-de-sac rims and street edges where the ground drops; the surface stays attached to the terrain with concrete below. Sharp sidewalk corners at junctions with no room for a fillet remain, and are visible as small angular tips.
