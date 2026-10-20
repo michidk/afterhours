@@ -145,3 +145,7 @@ Seed 713 / seed 2741, m² steeper than 35%, and buildings:
 | Now                | 0           | 8            | 0            | 2             | 377 / 319            |
 
 Asphalt over 20% fell from 933 to 537 m² (713) and from 535 to 81 m² (2741); sidewalk over 20% from 560 to 103 m² and from 675 to 296 m². Both islands have no genuinely uncovered surface cell. Buildings are 4% fewer than at the start of the day (394 and 334) because bends now claim more room.
+
+## Decision: keep the 8 m terrain grid
+
+What is left is about 10 m² of steep sidewalk (8 m² on seed 713, 2 m² on seed 2741, 0.006% of street area) and no steep asphalt. Each sliver is two terraces at different heights within one 8 m cell: a dead end 17 m from a higher street (713, (-200, 1024): 7.7 m against 12.7 m across one cell), or a bridge approach where the embankment must raise grid points beside the street (713 (-591, -417), 2741 (152, -656)). Keeping the embankment off the grid points a street is levelled on was tried and made the approaches worse (steep asphalt 57 m² on 713 and 51 m² on 2741, one spot at 104%), so it was reverted. Only a finer terrain grid removes these. A 4 m grid would quadruple the terrain download (169 KB gzipped now) and client vertices and roughly quadruple city generation on every server boot, so it was put to the project owner, who chose to keep 8 m.
