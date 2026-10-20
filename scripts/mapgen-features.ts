@@ -762,7 +762,9 @@ export function placeHarbours(ctx: FeatureContext, count = 3): Harbour[] {
         angle,
       );
       if (overlapsTaken(ctx, footprint) || overlapsBuilding(ctx, footprint)) continue;
-      if (nearRoad(ctx.roads, rotatedRect(f.at(0, -APRON / 2), QUAY, APRON, angle), 3))
+      // The apron's terrain eases out over 24 m, so a street any closer would be left
+      // on a steep cut beside the quay.
+      if (nearRoad(ctx.roads, rotatedRect(f.at(0, -APRON / 2), QUAY, APRON, angle), 26))
         continue;
       // Near a street is better (people can drive there); deeper water is better.
       let road = Infinity;
