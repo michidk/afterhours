@@ -398,10 +398,9 @@ export function drapeOnTerrain(
  * differently rounded source polygons meet a few centimetres apart, which would
  * leave a hairline crack through which the terrain shows. 8 cm opened a hole.
  */
-export function weldCorners(rings: number[][]) {
+export function weldCorners(rings: number[][], seen = new Map<string, number[][]>()) {
   const TOLERANCE = 0.05,
-    CELL = 0.05,
-    seen = new Map<string, number[][]>();
+    CELL = 0.05;
   const cell = (v: number) => Math.floor(v / CELL);
   return rings.flatMap((ring) => {
     const out: number[] = [];
@@ -476,7 +475,7 @@ export function closeTJunctions(rings: number[][]) {
           for (const c of corners.get(`${cx},${cz}`) ?? []) {
             const t = ((c[0] - a[0]) * ux + (c[2] - a[2]) * uz) / length ** 2;
             if (t * length < 0.01 || (1 - t) * length < 0.01) continue;
-            if (Math.abs((c[0] - a[0]) * uz - (c[2] - a[2]) * ux) / length > 0.06)
+            if (Math.abs((c[0] - a[0]) * uz - (c[2] - a[2]) * ux) / length > 0.09)
               continue;
             found.set(cornerKey(c, 0), { t, corner: c });
           }
@@ -485,6 +484,27 @@ export function closeTJunctions(rings: number[][]) {
     }
     return out;
   });
+}
+/**
+ * Closes T-junctions and welds corners across several layers at once (asphalt and
+ * sidewalks), so pieces that share an edge on different layers meet exactly too.
+ * Each layer keeps its own rings, in order.
+ */
+export function sealSurfaces(layers: number[][][]) {
+  const split = (rings: number[][], counts: number[]) => {
+    let at = 0;
+    return counts.map((n) => rings.slice(at, (at += n)));
+  };
+  const closed = split(
+    closeTJunctions(layers.flat()),
+    layers.map((layer) => layer.length),
+  );
+  const seen = new Map<string, number[][]>(),
+    welded = closed.map((layer) => weldCorners(layer, seen));
+  return split(
+    closeTJunctions(welded.flat()),
+    welded.map((layer) => layer.length),
+  );
 }
 /** Greedily joins coplanar pieces across shared edges while the union stays simple. */
 function mergePieces(pieces: number[][]) {

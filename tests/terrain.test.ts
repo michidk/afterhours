@@ -18,6 +18,7 @@ import { Simulation } from "../server/simulation.ts";
 import {
   closeTJunctions,
   drapeOnTerrain,
+  sealSurfaces,
   sinkUnderStreets,
   weldCorners,
 } from "../mapgen/streetfit.ts";
@@ -420,4 +421,13 @@ test("corners a few centimetres apart are welded and a T-junction that wide is c
     [4.04, 0, 1, 7, 0, 1, 7, 0, 3, 4.04, 0, 3],
   ]);
   assert.ok(left.length > 12, "the neighbour's corners were added to the edge");
+});
+
+test("a corner shared by asphalt and a sidewalk is one point on both layers", () => {
+  const asphalt = [[0, 0, 0, 4, 0, 0, 4, 0, 4, 0, 0, 4]],
+    // The sidewalk starts 3 cm off the asphalt's right edge.
+    sidewalk = [[4.03, 0, 0, 7, 0, 0, 7, 0, 4, 4.03, 0, 4]];
+  const [[a], [s]] = sealSurfaces([asphalt, sidewalk]);
+  assert.equal(a[3], s[0], "their shared corner is the same x");
+  assert.equal(a[5], s[2], "and the same z");
 });
