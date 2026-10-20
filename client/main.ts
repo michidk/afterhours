@@ -724,7 +724,6 @@ async function boot() {
         scene.camera.position,
         scene.target,
         dt,
-        scene.camera.fov,
         !scene.debugCamera.active,
       );
       streamClock += dt;

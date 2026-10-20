@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   playerSightTargets,
-  playerSightRadius,
   segmentHitsBox,
   segmentHitsBuilding,
 } from "../client/world/occluders.ts";
@@ -147,29 +146,6 @@ test("early fade margin catches side and roof edges before the center is blocked
   );
 });
 
-test("player clearance covers a quarter of the viewport height and grows with zoom", () => {
-  const player = { x: 0, y: 0, z: 0 };
-  assert.ok(
-    Math.abs(playerSightRadius({ x: 0, y: 0, z: 40 }, player, Math.PI / 2) - 20) <
-      1e-10,
-  );
-  assert.ok(
-    Math.abs(playerSightRadius({ x: 0, y: 0, z: 80 }, player, Math.PI / 2) - 40) <
-      1e-10,
-  );
-  const radius = playerSightRadius({ x: 0, y: 30, z: 40 }, player, 0.72);
-  assert.ok(radius > 9 && radius < 10);
-  assert.equal(
-    segmentHitsBuilding(
-      { x: 30, y: 15, z: 18 },
-      { x: -30, y: 1, z: 18 },
-      tower,
-      radius,
-    ),
-    true,
-  );
-});
-
 test("wide clearance never reaches buildings beyond the player", () => {
   const camera = { x: 0, y: 20, z: 30 },
     player = { x: 0, y: 1, z: 0 },
@@ -189,6 +165,29 @@ test("wide clearance never reaches buildings beyond the player", () => {
   assert.equal(segmentHitsBuilding(camera, player, beside), false);
   assert.equal(
     targets.some((p) => segmentHitsBuilding(camera, p, beside)),
+    true,
+  );
+});
+
+test("a nearby building outside the silhouette stays solid", () => {
+  const camera = { x: 0, y: 20, z: 30 },
+    player = { x: 0, y: 1, z: 0 },
+    beside = { x: 8, z: 10, w: 4, d: 4, y: 0, h: 20 },
+    grazing = { x: 2.3, z: 2, w: 4, d: 2, y: 0, h: 20 },
+    targets = playerSightTargets(camera, player, 0.8);
+  assert.equal(
+    playerSightTargets(camera, player, 10).some((p) =>
+      segmentHitsBuilding(camera, p, beside),
+    ),
+    true,
+  );
+  assert.equal(
+    targets.some((p) => segmentHitsBuilding(camera, p, beside)),
+    false,
+  );
+  assert.equal(segmentHitsBuilding(camera, player, grazing), false);
+  assert.equal(
+    targets.some((p) => segmentHitsBuilding(camera, p, grazing)),
     true,
   );
 });

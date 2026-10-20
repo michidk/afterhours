@@ -132,17 +132,17 @@ test("buildings fade only when the camera's line to the player crosses them", ()
     assert.ok(tower && other && tower !== other);
     const settle = (camera: Vector3, target: Vector3, frames = 40, follow = true) => {
       for (let i = 0; i < frames; i++)
-        renderer.fadeOccluders(camera, target, 1 / 30, 0.72, follow);
+        renderer.fadeOccluders(camera, target, 1 / 30, follow);
     };
     // Standing 4 m from the tower's west wall with the camera behind on the same side.
     settle(new Vector3(10, 12, 40), new Vector3(26, 0, 40));
     assert.equal(tower.visibility, 1, "a building beside the player stays solid");
-    // Fade ahead of occlusion when the player hugs the wall.
+    // A nearby wall outside the silhouette does not obstruct the player.
     settle(new Vector3(28, 14, 70), new Vector3(28, 0, 40));
     assert.equal(
       tower.visibility,
-      0,
-      "the clearance fades a wall before it blocks the center",
+      1,
+      "a wall outside the player silhouette stays solid",
     );
     assert.equal(other.visibility, 1, "an unrelated building never fades");
     // Camera on the far side of the tower: it is in the way, so it dithers out.
@@ -163,12 +163,7 @@ test("buildings fade only when the camera's line to the player crosses them", ()
     settle(new Vector3(10, 12, 40), new Vector3(26, 0, 40));
     assert.equal(tower.visibility, 1, "an unobstructed building fades back in");
     // Partway through a fade the dither is gradual, not a pop.
-    renderer.fadeOccluders(
-      new Vector3(70, 12, 40),
-      new Vector3(26, 0, 40),
-      1 / 30,
-      0.72,
-    );
+    renderer.fadeOccluders(new Vector3(70, 12, 40), new Vector3(26, 0, 40), 1 / 30);
     assert.ok(tower.visibility < 1 && tower.visibility > 0.5, `${tower.visibility}`);
   } finally {
     scene.dispose();

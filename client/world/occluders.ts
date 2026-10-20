@@ -1,13 +1,5 @@
 type P = { x: number; y: number; z: number };
 
-/** A quarter-screen-height clearance radius at the player's depth. */
-export function playerSightRadius(camera: P, player: P, verticalFov: number) {
-  return (
-    Math.hypot(camera.x - player.x, camera.y - player.y, camera.z - player.z) *
-    Math.tan(verticalFov / 2) *
-    0.5
-  );
-}
 /** Rays end on the player's view plane, so buildings beyond the player stay solid. */
 export function playerSightTargets(camera: P, player: P, radius: number): P[] {
   const dx = player.x - camera.x,

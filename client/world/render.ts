@@ -2,7 +2,6 @@ import { airportsOf } from "../../shared/world.ts";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import {
-  playerSightRadius,
   playerSightTargets,
   segmentHitsBuilding,
   type Footprint,
@@ -142,20 +141,13 @@ export class CityRenderer {
     }
   }
   /**
-   * Keep a quarter-screen-height clearance around the player before occlusion.
+   * Fade only when a building overlaps the player silhouette.
    * Buildings outside that margin stay solid; a camera inside a building fades it too.
    */
-  fadeOccluders(
-    camera: Vector3,
-    target: Vector3,
-    dt: number,
-    verticalFov: number,
-    follow = true,
-  ) {
+  fadeOccluders(camera: Vector3, target: Vector3, dt: number, follow = true) {
     const eye = { x: camera.x, y: camera.y, z: camera.z },
       body = { x: target.x, y: target.y + SIGHT_HEIGHT, z: target.z },
-      radius = playerSightRadius(eye, body, verticalFov),
-      targets = playerSightTargets(eye, body, radius),
+      targets = playerSightTargets(eye, body, 0.8),
       blend = 1 - Math.exp(-dt * 10);
     for (const [key, group] of this.features) {
       const building = this.footprints.get(key);
