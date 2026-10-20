@@ -625,7 +625,21 @@ export function generateRoads(
       graph.edges.filter((e) => e.alive).length,
     );
   progress?.("cleanup");
-  graph.cleanup({ minEdge: 12, minStub: 45, debug: input.debug });
+  // Connectors keep to the same ground streets may be traced over.
+  const canBuild = (a: Point, b: Point) => {
+    const steps = Math.ceil(dist(a, b) / 4);
+    for (let i = 1; i < steps; i++) {
+      const p = lerpPoint(a, b, i / steps);
+      if (!isLand(p) || waterDistance(p) < 12 || slopeAt(p) > 0.16) return false;
+    }
+    return true;
+  };
+  graph.cleanup({
+    minEdge: 12,
+    minStub: 65,
+    join: { reach: 110, canBuild },
+    debug: input.debug,
+  });
   graph.bridgeRivers(hydro.rivers);
   if (input.debug)
     console.error("after cleanup", graph.edges.filter((e) => e.alive).length);

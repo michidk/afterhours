@@ -292,18 +292,25 @@ export class GraphBuilder {
     return dist(this.nodes[e.a], this.nodes[e.b]);
   }
   /**
-   * Collapse tiny edges, drop shallow arms and sliver blocks, settle dead ends that
-   * stop beside another road, prune stubs, and keep one component. Each step can
+   * Collapse tiny edges, drop shallow arms and sliver blocks, join dead ends to a
+   * road ahead, settle dead ends that stop beside another road, prune stubs, and keep one component. Each step can
    * expose work for another, so the steps repeat until the graph is stable.
    */
-  cleanup(options: { minEdge: number; minStub: number; debug?: boolean }) {
-    const stats = { merged: 0, angle: 0, slivers: 0, ends: 0, stubs: 0 };
+  cleanup(options: {
+    minEdge: number;
+    minStub: number;
+    join?: { reach: number; canBuild: (a: Point, b: Point) => boolean };
+    debug?: boolean;
+  }) {
+    const stats = { merged: 0, angle: 0, slivers: 0, joined: 0, ends: 0, stubs: 0 };
     const total = () => Object.values(stats).reduce((s, v) => s + v, 0);
     for (let round = 0; round < 6; round++) {
       const before = total();
       this.mergeClose(options.minEdge, stats);
       this.dropShallowArms(stats);
       this.dropSlivers(stats);
+      if (options.join)
+        stats.joined += this.joinDeadEnds(options.join.reach, options.join.canBuild);
       this.settleDeadEnds(stats, true);
       this.pruneStubs(options.minStub, stats);
       if (total() === before) break;
@@ -577,6 +584,52 @@ export class GraphBuilder {
       }
       if (!changed) break;
     }
+  }
+  /**
+   * Joins dead ends to a road up to `reach` ahead: straight on first, then the
+   * nearest point within 60° of the heading. `canBuild` vetoes connectors over
+   * water or steep ground; ends with no valid connector stay as they are.
+   */
+  joinDeadEnds(reach: number, canBuild: (a: Point, b: Point) => boolean) {
+    let joined = 0;
+    for (const n of this.nodes) {
+      if (!n.alive || n.edges.size !== 1) continue;
+      const e = this.edges[[...n.edges][0]];
+      if (e.bridge) continue;
+      const o = this.nodes[this.other(e, n.id)],
+        dir = sub(n, o),
+        l = Math.hypot(dir.x, dir.z) || 1,
+        targets = [{ x: n.x + (dir.x / l) * reach, z: n.z + (dir.z / l) * reach }],
+        ahead: { point: Point; d: number }[] = [];
+      for (const id of this.edgesNear(n.x, n.z, n.x, n.z, reach)) {
+        const f = this.edges[id];
+        if (f.a === n.id || f.b === n.id || f.a === o.id || f.b === o.id || f.bridge)
+          continue;
+        const { point } = closestOnSegment(n, this.nodes[f.a], this.nodes[f.b]),
+          d = dist(n, point);
+        if (
+          d > 1 &&
+          d <= reach &&
+          (point.x - n.x) * dir.x + (point.z - n.z) * dir.z > d * l * 0.5
+        )
+          ahead.push({ point, d });
+      }
+      targets.push(...ahead.sort((p, q) => p.d - q.d).map((t) => t.point));
+      for (const target of targets) {
+        const result = this.insert(n.id, target, e.kind, { snap: 8 });
+        if (!result || result.node === o.id) continue;
+        const end = this.nodes[result.node];
+        // Only a connector that lands on the network and stays buildable is kept.
+        if (end.edges.size >= 2 && canBuild(n, end)) {
+          joined++;
+          break;
+        }
+        for (const id of [...n.edges])
+          if (this.other(this.edges[id], n.id) === end.id) this.removeEdge(id);
+        if (end.edges.size === 0) end.alive = false;
+      }
+    }
+    return joined;
   }
   /** Segments that pass over a river channel become bridges. */
   bridgeRivers(rivers: { points: Point[]; widths: number[] }[]) {

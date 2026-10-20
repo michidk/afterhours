@@ -5,6 +5,7 @@ import { fillDepressions, flowAccumulation } from "../mapgen/hydrology.ts";
 import { createField, sample } from "../mapgen/field.ts";
 import { insetPolygon, pointInPolygon, signedArea } from "../mapgen/geom.ts";
 import { buildRoadGeometry } from "../mapgen/roadgeometry.ts";
+import { GraphBuilder } from "../mapgen/graph.ts";
 import type { RoadGraph } from "../mapgen/types.ts";
 
 const SMALL = { seed: 713, size: 1536, cell: 8 };
@@ -237,4 +238,29 @@ test("polygon inset shrinks a counter-clockwise ring inward", () => {
   assert.ok(pointInPolygon({ x: 50, z: 50 }, inner));
   assert.ok(!pointInPolygon({ x: 5, z: 5 }, inner));
   assert.ok(insetPolygon(square, 60) === undefined, "over-inset collapses");
+});
+
+test("dead ends join a road ahead only where the connector can be built", () => {
+  const build = () => {
+    const g = new GraphBuilder();
+    // A cross street, and a stub pointing at it from 60 m away.
+    g.addEdge(g.addNode(0, -100), g.addNode(0, 100), "street", false);
+    g.addEdge(g.addNode(-120, 0), g.addNode(-60, 0), "street", false);
+    return g;
+  };
+  const open = build();
+  assert.equal(
+    open.joinDeadEnds(110, () => true),
+    1,
+  );
+  assert.equal(open.toRoadGraph().nodes.filter((n) => n.edges.length === 1).length, 3);
+  const blocked = build();
+  assert.equal(
+    blocked.joinDeadEnds(110, () => false),
+    0,
+  );
+  assert.equal(
+    blocked.toRoadGraph().nodes.filter((n) => n.edges.length === 1).length,
+    4,
+  );
 });
