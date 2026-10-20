@@ -437,20 +437,24 @@ export function weldCorners(rings: number[][], seen = new Map<string, number[][]
 /**
  * Adds every corner that lies on another ring's edge to that edge, so neighbouring
  * pieces share all their vertices and no hairline crack can open between them.
+ * With `layers` (one number per ring, higher lies higher), a corner only goes into
+ * edges of its own layer or a lower one: a higher piece's edge pulled over a lower
+ * piece would show as a wedge, while a lower edge pulled under it stays hidden.
  */
-export function closeTJunctions(rings: number[][]) {
+export function closeTJunctions(rings: number[][], layers?: number[]) {
   const CELL = 2,
-    corners = new Map<string, number[][]>();
+    corners = new Map<string, { corner: number[]; layer: number }[]>();
   const cellKey = (x: number, z: number) =>
     `${Math.floor(x / CELL)},${Math.floor(z / CELL)}`;
-  for (const ring of rings)
+  rings.forEach((ring, r) => {
     for (let i = 0; i < ring.length; i += 3) {
       const k = cellKey(ring[i], ring[i + 2]),
-        corner = ring.slice(i, i + 3);
-      if (corners.has(k)) corners.get(k)!.push(corner);
-      else corners.set(k, [corner]);
+        entry = { corner: ring.slice(i, i + 3), layer: layers?.[r] ?? 0 };
+      if (corners.has(k)) corners.get(k)!.push(entry);
+      else corners.set(k, [entry]);
     }
-  return rings.map((ring) => {
+  });
+  return rings.map((ring, r) => {
     const n = ring.length / 3,
       out: number[] = [];
     for (let i = 0; i < n; i++) {
@@ -472,7 +476,8 @@ export function closeTJunctions(rings: number[][]) {
           cz <= Math.floor(Math.max(a[2], b[2]) / CELL);
           cz++
         )
-          for (const c of corners.get(`${cx},${cz}`) ?? []) {
+          for (const { corner: c, layer } of corners.get(`${cx},${cz}`) ?? []) {
+            if (layer < (layers?.[r] ?? 0)) continue;
             const t = ((c[0] - a[0]) * ux + (c[2] - a[2]) * uz) / length ** 2;
             if (t * length < 0.01 || (1 - t) * length < 0.01) continue;
             if (Math.abs((c[0] - a[0]) * uz - (c[2] - a[2]) * ux) / length > 0.09)
@@ -495,14 +500,16 @@ export function sealSurfaces(layers: number[][][]) {
     let at = 0;
     return counts.map((n) => rings.slice(at, (at += n)));
   };
+  const tags = (list: number[][][]) =>
+    list.flatMap((layer, index) => layer.map(() => index));
   const closed = split(
-    closeTJunctions(layers.flat()),
+    closeTJunctions(layers.flat(), tags(layers)),
     layers.map((layer) => layer.length),
   );
   const seen = new Map<string, number[][]>(),
     welded = closed.map((layer) => weldCorners(layer, seen));
   return split(
-    closeTJunctions(welded.flat()),
+    closeTJunctions(welded.flat(), tags(welded)),
     welded.map((layer) => layer.length),
   );
 }

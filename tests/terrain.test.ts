@@ -431,3 +431,12 @@ test("a corner shared by asphalt and a sidewalk is one point on both layers", ()
   assert.equal(a[3], s[0], "their shared corner is the same x");
   assert.equal(a[5], s[2], "and the same z");
 });
+
+test("a sidewalk corner joins the asphalt's edge, never the other way round", () => {
+  const asphalt = [[0, 0, 0, 4, 0, 0, 4, 0, 4, 0, 0, 4]],
+    // A triangle whose corner (4.07, 2) is 7 cm off the asphalt's right edge.
+    sidewalk = [[4.07, 0, 2, 7, 0, 0, 7, 0, 4]];
+  const [[a], [s]] = sealSurfaces([asphalt, sidewalk]);
+  assert.equal(a.length, 15, "the asphalt edge gained the sidewalk's corner");
+  assert.equal(s.length, 9, "the sidewalk kept its three corners");
+});
