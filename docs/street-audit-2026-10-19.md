@@ -106,3 +106,9 @@ The 8 m grid explains most of the rest: a sidewalk's outer edge lay in a cell wh
 | 10% grade and cell levelling (now)     | 19          | 78           | 13           | 46            |
 
 Sidewalk over 60% is 11 m² on 713 and 4 m² on 2741. Seed 713 keeps all 394 buildings; seed 2741 has 324 instead of 334. The 1536 m test map with seed 713 fell from 6 buildings to 1 on its hills, so the building test now uses seed 718 (22 buildings), and its pad check also accepts a base that stays above a cell whose corners are all street level.
+
+## Facing dead ends
+
+The biggest cluster left on seed 713 was two dead-end turning circles 27 m apart whose node heights differed by 2.8 m: nothing joins them, so the profile solver never related their heights, and the single 8 m terrain cell between their flat plateaus had to climb the whole difference. `solveProfiles` now also keeps nodes that are within 50 m of each other but not joined by a road within 1 m of one another, in the same relaxation loop as the grade limits. Seed 713 went from 19 to 9 m² of steep asphalt and from 78 to 36 m² of steep sidewalk (none over 60%); seed 2741 is unchanged at 13 and 46 m². Seed 713 has 393 buildings (394 before), seed 2741 has 323 (334 at the start of the day).
+
+What remains on 2741 is mostly a 23 m² sidewalk cluster at (1071, 208) peaking at 48%, and a few slivers a few tenths of a metre across where a sidewalk's outer corner meets a lowered grid vertex (for example (961, -224) at 112%, 3 m²).

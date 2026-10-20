@@ -888,6 +888,10 @@ export function densifyCentrelines(graph: RoadGraph) {
   }
 }
 
+/** Unconnected nodes this close keep their heights within NEIGHBOUR_STEP of each other. */
+const NEIGHBOUR = 50,
+  NEIGHBOUR_STEP = 1;
+
 /**
  * Longitudinal profiles: node heights pinned to smoothed terrain, edge profiles low-pass
  * filtered and grade-limited from both ends, bridges straight between abutments. The
@@ -920,8 +924,32 @@ export function solveProfiles(
     // Steps under half a metre are ignored by the grade checks, so that is the floor.
     return Math.max(0.5, length - Math.min(length, t0 + t1));
   });
+  // Plateaus of nodes that no road joins can still sit a few metres apart, such as
+  // two dead ends facing each other: the one 8 m terrain cell between them would have
+  // to climb the whole difference and tilt the streets on it.
+  const joined = new Set(graph.edges.map((e) => e.a * graph.nodes.length + e.b));
+  const close: [number, number][] = [];
+  for (const a of graph.nodes)
+    for (const b of graph.nodes)
+      if (
+        a.id < b.id &&
+        dist(a, b) < NEIGHBOUR &&
+        !joined.has(a.id * graph.nodes.length + b.id) &&
+        !joined.has(b.id * graph.nodes.length + a.id)
+      )
+        close.push([a.id, b.id]);
   for (let pass = 0; pass < 200; pass++) {
     let worst = 0;
+    for (const [i, j] of close) {
+      const a = graph.nodes[i],
+        b = graph.nodes[j],
+        excess = Math.abs(a.y - b.y) - NEIGHBOUR_STEP;
+      if (excess <= 0) continue;
+      worst = Math.max(worst, excess);
+      const step = (Math.sign(a.y - b.y) * excess) / 2;
+      a.y -= step;
+      b.y += step;
+    }
     for (const e of graph.edges) {
       if (e.bridge || e.a === e.b) continue;
       const a = graph.nodes[e.a],
