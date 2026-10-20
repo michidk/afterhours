@@ -253,6 +253,8 @@ function layoutRoadGeometry(graph: RoadGraph, cuts?: number[]): RoadGeometry {
     sidewalks: RoadGeometry["sidewalks"] = [],
     markings: RoadGeometry["markings"] = [];
   const trim = graph.edges.map(() => [0, 0] as [number, number]);
+  /** Where each junction ring meets an edge end: its corners and the mouth's normal. */
+  const mouthEnds = new Map<string, { endL: Point; endR: Point; l: Point }>();
   const junctionNodes = new Set<number>();
   const turns: { from: WalkEnd; to: WalkEnd; via: Point[] }[] = [];
   const departing = (edgeId: number, atStart: boolean): Arm => {
@@ -459,6 +461,7 @@ function layoutRoadGeometry(graph: RoadGraph, cuts?: number[]): RoadGeometry {
         { cut, l, endL, endR } = mouths[k];
       ring.push(endR, endL, ...corners[k].points);
       const index = a.e.id;
+      mouthEnds.set(`${index}:${a.atStart ? 0 : 1}`, { endL, endR, l });
       if (a.atStart) trim[index][0] = cut;
       else trim[index][1] = cut;
       // Sidewalk pieces: strip from the band end back to the corner on the left side,
@@ -569,6 +572,24 @@ function layoutRoadGeometry(graph: RoadGraph, cuts?: number[]): RoadGeometry {
     const pts = trimPolyline(e.points, trim[e.id][0], trim[e.id][1]);
     if (pts.length < 2) continue;
     const { left, right } = offsetPolyline(pts, e.width / 2);
+    const outer = offsetPolyline(pts, e.width / 2 + SIDEWALK);
+    // A short band is offset from its own chord, not from the road's tangent at each
+    // mouth, so its ends can miss the junction ring's mouth by a few centimetres and
+    // leave a wedge of bare terrain. The band takes the mouth's corners exactly.
+    const last = pts.length - 1;
+    for (const [at, end, flip] of [
+      [0, mouthEnds.get(`${e.id}:0`), false],
+      [last, mouthEnds.get(`${e.id}:1`), true],
+    ] as const) {
+      if (!end || dist(left[at], flip ? end.endR : end.endL) > 1) continue;
+      const toLeft = flip ? end.endR : end.endL,
+        toRight = flip ? end.endL : end.endR,
+        side = flip ? -1 : 1;
+      left[at] = toLeft;
+      right[at] = toRight;
+      outer.left[at] = add(toLeft, mul(end.l, SIDEWALK * side));
+      outer.right[at] = add(toRight, mul(end.l, -SIDEWALK * side));
+    }
     bands.push({
       edge: e.id,
       polygon: [...left, ...[...right].reverse()],
@@ -576,7 +597,6 @@ function layoutRoadGeometry(graph: RoadGraph, cuts?: number[]): RoadGeometry {
       right,
       centre: pts,
     });
-    const outer = offsetPolyline(pts, e.width / 2 + SIDEWALK);
     sidewalks.push({ edge: e.id, polygon: [...left, ...[...outer.left].reverse()] });
     sidewalks.push({
       edge: e.id,
@@ -849,6 +869,20 @@ export function trimPolyline(points: Point[], startCut: number, endCut: number) 
   // A band shorter than a metre still sits between its two mouths; only crossed
   // mouths collapse it, otherwise its square ends miss the junction rings' mouths.
   if (startCut + endCut >= total - 0.1) {
+    // Crossed mouths: each junction ring reaches past the other's mouth, so the band
+    // is only the overlap, with its ends on both mouth lines.
+    const from = Math.max(0, total - endCut),
+      to = Math.min(total, startCut);
+    if (to - from >= 0.05) {
+      const overlap: Point[] = [pointAt(points, from)];
+      let along = 0;
+      for (let i = 1; i < points.length - 1; i++) {
+        along += dist(points[i - 1], points[i]);
+        if (along > from + 0.5 && along < to - 0.5) overlap.push(points[i]);
+      }
+      overlap.push(pointAt(points, to));
+      return overlap;
+    }
     const a = pointAt(points, Math.min(startCut, total / 2 - 0.5)),
       b = pointAt(points, Math.max(total - endCut, total / 2 + 0.5));
     return [a, b];

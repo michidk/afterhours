@@ -67,3 +67,18 @@ test("a band under a metre long stays between its two mouths", () => {
     `${a.x} ${b.x}`,
   );
 });
+
+test("crossed mouths leave a band that spans only their overlap", () => {
+  const line = [
+    { x: 0, z: 0 },
+    { x: 30, z: 0 },
+    { x: 47.4, z: 0 },
+  ];
+  // The first mouth reaches 30 m, the second 30 m back from the far end (17.4 m).
+  const [from, ...rest] = trimPolyline(line, 30, 30);
+  const to = rest[rest.length - 1];
+  assert.ok(
+    Math.abs(from.x - 17.4) < 1e-6 && Math.abs(to.x - 30) < 1e-6,
+    `${from.x} ${to.x}`,
+  );
+});
