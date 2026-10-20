@@ -15,7 +15,12 @@ import {
 } from "../shared/water.ts";
 import { LIMIT, idle, type Entity } from "../shared/world.ts";
 import { Simulation } from "../server/simulation.ts";
-import { drapeOnTerrain, sinkUnderStreets } from "../mapgen/streetfit.ts";
+import {
+  closeTJunctions,
+  drapeOnTerrain,
+  sinkUnderStreets,
+  weldCorners,
+} from "../mapgen/streetfit.ts";
 import { createField } from "../mapgen/field.ts";
 import { shapeCoast } from "../mapgen/terrain.ts";
 import {
@@ -391,3 +396,28 @@ test("coast shaping turns a stepped plateau edge into a smooth beach at sea leve
 });
 const BEACH_SLOPE = 0.06,
   SHELF_SLOPE = 0.1;
+
+test("corners a few centimetres apart are welded and a T-junction that wide is closed", () => {
+  const square = (x: number, z: number, w: number) => [
+    x,
+    0,
+    z,
+    x + w,
+    0,
+    z,
+    x + w,
+    0,
+    z + 4,
+    x,
+    0,
+    z + 4,
+  ];
+  // The second piece starts 4 cm short of the first one's right edge.
+  const [a, b] = weldCorners([square(0, 0, 4), square(4.04, 0, 3)]);
+  assert.equal(a[3], b[0], "the shared corner is one point");
+  const [left] = closeTJunctions([
+    square(0, 0, 4),
+    [4.04, 0, 1, 7, 0, 1, 7, 0, 3, 4.04, 0, 3],
+  ]);
+  assert.ok(left.length > 12, "the neighbour's corners were added to the edge");
+});

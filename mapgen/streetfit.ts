@@ -394,13 +394,13 @@ export function drapeOnTerrain(
   );
 }
 /**
- * Moves corners lying within 2.5 cm of an earlier one onto it (adjacent whole centimetres can be 1.5 cm apart in x and z). Pieces cut from
- * differently rounded source polygons meet a centimetre apart, which would leave
- * a hairline crack through which the terrain shows.
+ * Moves corners lying within 5 cm of an earlier one onto it. Pieces cut from
+ * differently rounded source polygons meet a few centimetres apart, which would
+ * leave a hairline crack through which the terrain shows. 8 cm opened a hole.
  */
 export function weldCorners(rings: number[][]) {
-  const TOLERANCE = 0.025,
-    CELL = 0.02,
+  const TOLERANCE = 0.05,
+    CELL = 0.05,
     seen = new Map<string, number[][]>();
   const cell = (v: number) => Math.floor(v / CELL);
   return rings.flatMap((ring) => {
@@ -476,7 +476,7 @@ export function closeTJunctions(rings: number[][]) {
           for (const c of corners.get(`${cx},${cz}`) ?? []) {
             const t = ((c[0] - a[0]) * ux + (c[2] - a[2]) * uz) / length ** 2;
             if (t * length < 0.01 || (1 - t) * length < 0.01) continue;
-            if (Math.abs((c[0] - a[0]) * uz - (c[2] - a[2]) * ux) / length > 0.01)
+            if (Math.abs((c[0] - a[0]) * uz - (c[2] - a[2]) * ux) / length > 0.06)
               continue;
             found.set(cornerKey(c, 0), { t, corner: c });
           }
