@@ -129,3 +129,19 @@ Whole-island raster scans (surface coverage, overlaps, sidewalk on asphalt, slop
 
 - **Gentler banks** (4.3 m of run per metre of depth, capped at 26 m, instead of 2.2 and 16): steep sidewalk stayed at 37 m² (713) and 43 m² (2741); buildings 394 and 328.
 - **A slope limit on the final terrain under streets** (30% on every mesh edge with a corner under a street, applied just before draping). Moving corners on both sides of an edge tilted the streets themselves (2741: steep asphalt 13 to 153 m², sidewalk 43 to 153 m²). Moving only the corner off the street changed nothing: 37 and 43 m² again. The steep surface that remains lies on mesh edges whose two corners are both under streets, which means two street levels share one 8 m cell (a hairpin's legs, a fill beside a high street). Fixing those needs a different road layout or a finer terrain grid, not terrain relaxation.
+
+## Tight bends (the cause of the last steep surface)
+
+Nearly every remaining steep cluster sat on a bend with a 6-11 m turning radius on a street already at its grade limit: the inner and outer legs of such a bend lie within one 8 m terrain cell at different heights, and on the 18 m avenues the inner edge folded to a point. Two changes in `mapgen/roadgeometry.ts` removed them:
+
+- **Bend-aware grades (`bendGrades`).** A segment's grade limit falls to 40% of the road's limit at an 8 m radius and returns to the full limit at 40 m. The node-height relaxation counts that reduced capacity over the free stretch between a road's plateaus, so a profile still meets its pins.
+- **Wider bends (`widenBends`, called from `smoothCentrelines`).** Points around any bend tighter than half the road width plus the sidewalk plus 1 m are relaxed until it opens up; end points stay fixed. Before, 7 edges on seed 713 and 5 on seed 2741 had one.
+
+Seed 713 / seed 2741, m² steeper than 35%, and buildings:
+
+|                    | Asphalt 713 | Sidewalk 713 | Asphalt 2741 | Sidewalk 2741 | Buildings 713 / 2741 |
+| ------------------ | ----------- | ------------ | ------------ | ------------- | -------------------- |
+| Before this change | 9           | 37           | 13           | 43            | 393 / 323            |
+| Now                | 0           | 8            | 0            | 2             | 377 / 319            |
+
+Asphalt over 20% fell from 933 to 537 m² (713) and from 535 to 81 m² (2741); sidewalk over 20% from 560 to 103 m² and from 675 to 296 m². Both islands have no genuinely uncovered surface cell. Buildings are 4% fewer than at the start of the day (394 and 334) because bends now claim more room.

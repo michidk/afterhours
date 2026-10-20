@@ -154,7 +154,9 @@ export function roundCorners(points: Point[], radius: number, minTurn = 0.4) {
 export function smoothCentrelines(graph: RoadGraph) {
   for (const e of graph.edges) {
     const simplified = roundCorners(simplifyPolyline(e.points, 0.9), e.width * 2);
-    e.points = e.bridge ? simplified : catmullRom(simplified, 4);
+    e.points = e.bridge
+      ? simplified
+      : widenBends(catmullRom(simplified, 4), e.width / 2 + SIDEWALK + 1);
   }
 }
 
@@ -888,6 +890,63 @@ export function densifyCentrelines(graph: RoadGraph) {
   }
 }
 
+/**
+ * Grade limit of each segment of a centreline: the road's own limit, cut to 40% of it
+ * where the bend is tight (8 m radius or less) and eased back to the full limit at 40 m.
+ * The two legs of a tight bend lie within one 8 m terrain cell, so they must stay level
+ * with each other or the surface across that cell tilts.
+ */
+export function bendGrades(points: Point[], base: number) {
+  const radius = bendRadii(points);
+  return points.slice(1).map((_, i) => {
+    const r = Math.min(radius[i], radius[i + 1]);
+    return base * Math.min(1, Math.max(0.4, 0.4 + (0.6 * (r - 8)) / 32));
+  });
+}
+
+/** Turning radius at each point of a centreline, from the chords 8 m before and after. */
+export function bendRadii(points: Point[]) {
+  const along = [0];
+  for (let i = 1; i < points.length; i++)
+    along.push(along[i - 1] + dist(points[i - 1], points[i]));
+  return points.map((p, i) => {
+    const a = pointAt(points, Math.max(0, along[i] - 8)),
+      c = pointAt(points, Math.min(along[points.length - 1], along[i] + 8));
+    if (dist(a, p) < 1e-6 || dist(p, c) < 1e-6) return Infinity;
+    const turn = Math.abs(
+      Math.atan2(c.z - p.z, c.x - p.x) - Math.atan2(p.z - a.z, p.x - a.x),
+    );
+    const angle = Math.min(turn, Math.PI * 2 - turn);
+    return angle > 1e-3 ? 8 / angle : Infinity;
+  });
+}
+
+/**
+ * Relaxes the points around any bend tighter than `minRadius` until it opens up. A
+ * bend tighter than the road's half-width folds the inner edge to a point, and its
+ * two legs then lie within one terrain cell. The end points stay where they are.
+ */
+export function widenBends(points: Point[], minRadius: number) {
+  const out = points.map((p) => ({ ...p }));
+  for (let pass = 0; pass < 80; pass++) {
+    const radius = bendRadii(out),
+      tight = new Set<number>();
+    radius.forEach((r, i) => {
+      if (r < minRadius && i > 0 && i < out.length - 1)
+        for (let k = Math.max(1, i - 2); k <= Math.min(out.length - 2, i + 2); k++)
+          tight.add(k);
+    });
+    if (!tight.size) break;
+    const next = out.map((p) => ({ ...p }));
+    for (const i of tight) {
+      next[i].x = (out[i - 1].x + 2 * out[i].x + out[i + 1].x) / 4;
+      next[i].z = (out[i - 1].z + 2 * out[i].z + out[i + 1].z) / 4;
+    }
+    out.splice(0, out.length, ...next);
+  }
+  return out;
+}
+
 /** Unconnected nodes this close keep their heights within NEIGHBOUR_STEP of each other. */
 const NEIGHBOUR = 50,
   NEIGHBOUR_STEP = 1;
@@ -924,6 +983,25 @@ export function solveProfiles(
     // Steps under half a metre are ignored by the grade checks, so that is the floor.
     return Math.max(0.5, length - Math.min(length, t0 + t1));
   });
+  // What each road can climb between its plateaus: its grade limit over the free
+  // stretch, less where its bends are tight.
+  const climb = graph.edges.map((e) => {
+    const grades = bendGrades(e.points, maxGrade(e.kind)),
+      length = polylineLength(e.points),
+      [t0, t1] = trims[e.id];
+    let capacity = 0,
+      covered = 0,
+      start = 0;
+    for (let i = 1; i < e.points.length; i++) {
+      const run = dist(e.points[i - 1], e.points[i]),
+        overlap = Math.max(0, Math.min(start + run, length - t1) - Math.max(start, t0));
+      capacity += grades[i - 1] * overlap;
+      covered += overlap;
+      start += run;
+    }
+    // A road whose plateaus leave less than the floor still gets the floor at its limit.
+    return capacity + maxGrade(e.kind) * Math.max(0, free[e.id] - covered);
+  });
   // Plateaus of nodes that no road joins can still sit a few metres apart, such as
   // two dead ends facing each other: the one 8 m terrain cell between them would have
   // to climb the whole difference and tilt the streets on it.
@@ -954,7 +1032,7 @@ export function solveProfiles(
       if (e.bridge || e.a === e.b) continue;
       const a = graph.nodes[e.a],
         b = graph.nodes[e.b],
-        excess = Math.abs(a.y - b.y) - maxGrade(e.kind) * 0.95 * free[e.id];
+        excess = Math.abs(a.y - b.y) - 0.95 * climb[e.id];
       if (excess <= 0) continue;
       worst = Math.max(worst, excess);
       const step = (Math.sign(a.y - b.y) * excess) / 2;
@@ -1018,14 +1096,15 @@ export function solveProfiles(
             heights[Math.min(n - 1, i + 2)]) /
           5;
     pin(smooth);
-    const limit = maxGrade(e.kind);
+    const grades = bendGrades(pts, maxGrade(e.kind));
     // Sweep both ways until no step exceeds the limit: re-pinning the plateaus after
     // each sweep can otherwise leave a steeper step beside them.
     for (let pass = 0; pass < 60; pass++) {
       let clamped = false;
       for (let i = 1; i < n; i++) {
         const d = along[i] - along[i - 1] || 1,
-          delta = smooth[i] - smooth[i - 1];
+          delta = smooth[i] - smooth[i - 1],
+          limit = grades[i - 1];
         if (Math.abs(delta) > limit * d) {
           smooth[i] = smooth[i - 1] + Math.sign(delta) * limit * d;
           clamped = true;
@@ -1034,7 +1113,8 @@ export function solveProfiles(
       pin(smooth);
       for (let i = n - 2; i >= 0; i--) {
         const d = along[i + 1] - along[i] || 1,
-          delta = smooth[i] - smooth[i + 1];
+          delta = smooth[i] - smooth[i + 1],
+          limit = grades[i];
         if (Math.abs(delta) > limit * d) {
           smooth[i] = smooth[i + 1] + Math.sign(delta) * limit * d;
           clamped = true;
