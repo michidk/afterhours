@@ -191,7 +191,12 @@ export function placeVegetation(input: VegetationInputs): {
         n = perp(t);
       while (nextLamp <= s + d && nextLamp < total - 12) {
         const p = lerpPoint(a, b, (nextLamp - s) / d),
-          lamp = { x: p.x + n.x * offset * side, z: p.z + n.z * offset * side, h: 6 };
+          lamp = {
+            x: p.x + n.x * offset * side,
+            z: p.z + n.z * offset * side,
+            h: 6,
+            angle: Math.atan2(n.z * side, -n.x * side),
+          };
         // Junction mouths and neighbouring roads can cover the kerb spot.
         if (!onStreet(lamp)) lamps.push(lamp);
         side = -side;

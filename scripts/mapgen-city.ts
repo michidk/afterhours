@@ -510,7 +510,7 @@ export function cityFromMap(map: GeneratedMap): City {
     )
       continue;
     seen.add(key);
-    props.push({ x, z, h: round(l.h), kind: "lamp" });
+    props.push({ x, z, h: round(l.h), kind: "lamp", angle: round(l.angle) });
   }
 
   // Street surface lookups for placing parks, crates, signals and spawns.

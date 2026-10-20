@@ -50,7 +50,14 @@ export const citySchema = z.object({
     .min(1)
     .max(30000),
   props: z
-    .array(z.object({ ...point, h: size, kind: z.enum(["palm", "lamp", "tree"]) }))
+    .array(
+      z.object({
+        ...point,
+        h: size,
+        kind: z.enum(["palm", "lamp", "tree"]),
+        angle: z.number().finite().optional(),
+      }),
+    )
     .max(30000),
   buildings: z
     .array(

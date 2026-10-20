@@ -67,9 +67,10 @@ const prop = (
 export function destructibles(
   city: Pick<City, "props" | "parks" | "roads">,
 ): Destructible[] {
-  const result = city.props.map((p) =>
-    prop(p.kind, p.x, p.z, p.h, p.kind === "tree" ? 0.5 : 0.38),
-  );
+  const result = city.props.map((p) => ({
+    ...prop(p.kind, p.x, p.z, p.h, p.kind === "tree" ? 0.5 : 0.38),
+    ...(p.angle !== undefined ? { angle: p.angle } : {}),
+  }));
   for (const park of city.parks) {
     if (park.kind === "woodland") continue;
     for (const side of [-1, 1])
@@ -97,8 +98,8 @@ export function destructibles(
       // turning cars brush.
       const along = end * (length / 2 - (stop ?? 9)),
         lateral = end * (road.width / 2 + 1);
-      result.push(
-        prop(
+      result.push({
+        ...prop(
           "signal",
           road.x + nx * lateral + (dx / length) * along,
           road.z + nz * lateral + (dz / length) * along,
@@ -107,7 +108,9 @@ export function destructibles(
           0.4,
           phase ?? (Math.abs(dx) > Math.abs(dz) ? "x" : "z"),
         ),
-      );
+        // The lit face (local -z) looks back at the traffic driving into the junction.
+        angle: Math.atan2(end * dx, end * dz),
+      });
     }
     // One hydrant on long city streets, beside the sidewalk rather than in traffic.
     if (length >= 40 && road.kind !== "coast" && road.kind !== "service")

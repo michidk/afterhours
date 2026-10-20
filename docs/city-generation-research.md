@@ -171,7 +171,9 @@ Variable-radius Poisson-disc sampling with suitability from slope, moisture (dis
 to water), distance to roads and buildings, and land use; species by elevation and
 moisture (palms on sand, oaks on lowland, pines on upper slopes). Street trees sit on
 the sidewalk offset with a per-street spacing; lamps every 30–45 m staggered per side,
-skipping the junction approaches; signals where two arterials meet.
+skipping the junction approaches; signals where two arterials meet. Here lamp arms
+turn toward the street they light and each signal head faces the approach it controls;
+dead ends are joined to a road up to 110 m ahead when the connector is buildable.
 
 ## 8. Integration plan for the game
 

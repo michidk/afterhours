@@ -185,7 +185,13 @@ export interface City {
   surface?: PackedSurfaceChunks;
   roads: Road[];
   seed: number;
-  props: { x: number; z: number; h: number; kind: "palm" | "lamp" | "tree" }[];
+  props: {
+    x: number;
+    z: number;
+    h: number;
+    kind: "palm" | "lamp" | "tree";
+    angle?: number;
+  }[];
   buildings: Building[];
   parks: {
     x: number;

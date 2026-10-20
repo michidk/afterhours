@@ -548,3 +548,21 @@ test("full debris capacity never prevents a new prop from breaking", () => {
     destruction.dispose();
   }
 });
+
+test("signal heads face oncoming traffic and lamp arms reach over the street", () => {
+  const city = fixture();
+  city.parks = [];
+  city.roads = [
+    { x: 30, z: 40, ax: 0, az: 0, bx: 60, bz: 80, width: 12, kind: "street" as const },
+  ].map((road) => ({ ...road, signalA: true, signalB: true, stopA: 9, stopB: 9 }));
+  city.props = [{ x: 10, z: 0, h: 6, kind: "lamp", angle: Math.PI / 2 }];
+  const fixtures = destructibles(city);
+  for (const s of fixtures.filter((p) => p.kind === "signal")) {
+    // The lit face is local -z; the junction it guards is the nearer road end.
+    const face = { x: -Math.sin(s.angle!), z: -Math.cos(s.angle!) },
+      [jx, jz] =
+        Math.hypot(s.x, s.z) < Math.hypot(s.x - 60, s.z - 80) ? [0, 0] : [60, 80];
+    assert.ok(face.x * (jx - s.x) + face.z * (jz - s.z) < 0);
+  }
+  assert.equal(fixtures.find((p) => p.kind === "lamp")?.angle, Math.PI / 2);
+});

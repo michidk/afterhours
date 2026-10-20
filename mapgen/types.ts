@@ -132,6 +132,8 @@ export interface Tree extends Point {
 }
 export interface Lamp extends Point {
   h: number;
+  /** Yaw turning the arm, which points along local +x, out over the street. */
+  angle: number;
 }
 export interface Park {
   polygon: Point[];
