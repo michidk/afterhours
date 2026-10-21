@@ -181,3 +181,39 @@ fn removed_entities_leave_states() {
     w.step();
     assert!(w.states().is_empty());
 }
+
+#[test]
+fn ray_reports_the_body_it_hits() {
+    let mut w = flat_world();
+    let shooter = w.spawn_character([0.0, 1.0, 0.0]);
+    let target = w.spawn_character([0.0, 1.0, 5.0]);
+    let car = w.spawn_vehicle(VehicleSpec::SEDAN, [10.0, 1.0, 0.0], 0.0);
+    w.step();
+    let (id, t) = w
+        .cast_ray([0.0, 1.0, 0.0], [0.0, 0.0, 1.0], 40.0, shooter)
+        .unwrap();
+    assert_eq!(id, target);
+    assert!(t > 4.0 && t < 5.0, "capsule front at ~4.65 m, got {t}");
+    let (id, _) = w
+        .cast_ray([0.0, 1.0, 0.0], [1.0, 0.0, 0.0], 40.0, shooter)
+        .unwrap();
+    assert_eq!(id, car);
+    // Downwards into the slab: static geometry reports id 0.
+    let (id, t) = w
+        .cast_ray([3.0, 2.0, 3.0], [0.0, -1.0, 0.0], 5.0, 0)
+        .unwrap();
+    assert_eq!((id, t), (0, 2.0));
+    assert!(
+        w.cast_ray([0.0, 1.0, 0.0], [0.0, 1.0, 0.0], 40.0, shooter)
+            .is_none()
+    );
+    // Thrust lifts the shooter; teleport puts it back at rest.
+    w.set_vertical(shooter, 10.0);
+    w.step();
+    assert!(w.states()[VEHICLE_STRIDE + 2] > 1.2);
+    w.teleport_character(shooter, [1.0, 1.0, 1.0]);
+    assert_eq!(
+        &w.states()[VEHICLE_STRIDE + 1..VEHICLE_STRIDE + 4],
+        &[1.0, 1.0, 1.0]
+    );
+}

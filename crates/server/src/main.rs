@@ -30,7 +30,14 @@ fn boot() -> Result<(Game, Arc<CityStore>), String> {
     let at = loaded.spawn();
     let spawn = [at[0], loaded.height(at[0], at[1]) + 1.0, at[1]];
     tracing::info!(map = %store.map_id, ?spawn, "city loaded");
-    Ok((Game::new(world, spawn), Arc::new(store)))
+    let mut game = Game::new(world, spawn);
+    let pads: Vec<_> = loaded
+        .pickups
+        .iter()
+        .map(|p| (p.x, p.z, p.weapon.clone()))
+        .collect();
+    game.combat.supplies(&pads, |x, z| loaded.height(x, z));
+    Ok((game, Arc::new(store)))
 }
 
 #[tokio::main]

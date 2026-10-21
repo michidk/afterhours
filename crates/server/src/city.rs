@@ -47,6 +47,13 @@ pub struct Park {
 }
 
 #[derive(Deserialize)]
+pub struct Pad {
+    pub x: f32,
+    pub z: f32,
+    pub weapon: String,
+}
+
+#[derive(Deserialize)]
 pub struct Building {
     pub x: f32,
     pub z: f32,
@@ -80,6 +87,9 @@ pub struct City {
     pub ramps: Value,
     pub racetrack: Value,
     pub buildings: Vec<Building>,
+    /// Weapon pads on roads near the spawn (`x`, `z`, `weapon`).
+    #[serde(default)]
+    pub pickups: Vec<Pad>,
 }
 
 fn heights<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Vec<f32>>, D::Error> {

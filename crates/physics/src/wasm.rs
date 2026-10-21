@@ -69,6 +69,29 @@ impl Physics {
     pub fn remove_character(&mut self, id: u32) -> bool {
         self.0.remove_character(id)
     }
+    /// `[id, distance]` of the first body hit, or empty on a miss.
+    #[allow(clippy::too_many_arguments)]
+    pub fn cast_ray(
+        &self,
+        ox: f32,
+        oy: f32,
+        oz: f32,
+        dx: f32,
+        dy: f32,
+        dz: f32,
+        max: f32,
+        exclude: u32,
+    ) -> Vec<f32> {
+        self.0
+            .cast_ray([ox, oy, oz], [dx, dy, dz], max, exclude)
+            .map_or(Vec::new(), |(id, t)| vec![id as f32, t])
+    }
+    pub fn set_vertical(&mut self, id: u32, vy: f32) -> bool {
+        self.0.set_vertical(id, vy)
+    }
+    pub fn teleport_character(&mut self, id: u32, x: f32, y: f32, z: f32) -> bool {
+        self.0.teleport_character(id, [x, y, z])
+    }
     pub fn step(&mut self) {
         self.0.step()
     }

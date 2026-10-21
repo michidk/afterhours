@@ -1,5 +1,6 @@
 //! The authoritative simulation: one owner task, no locks. Sessions feed it `Event`s and
 //! it writes encoded `ServerMessage`s back through each session's channel.
+use crate::combat::Combat;
 use afterhours_physics::{CHARACTER_STRIDE, Drive, Move, VEHICLE_STRIDE, VehicleSpec, World};
 use afterhours_protocol::{
     ClientMessage, Controls, Entity, Kind, ServerMessage, TICK_RATE, VERSION, encode,
@@ -21,13 +22,13 @@ pub enum Event {
     Disconnect(u32),
 }
 
-struct Player {
+pub(crate) struct Player {
     out: UnboundedSender<Vec<u8>>,
     name: String,
     color: String,
-    character: Option<serde_json::Value>,
-    /// Physics character while on foot, else the car entity id.
-    body: Result<u32, u32>,
+    pub(crate) character: Option<serde_json::Value>,
+    /// Physics character while on foot, else the car physics id.
+    pub(crate) body: Result<u32, u32>,
     inputs: BTreeMap<u32, Controls>,
     held: Controls,
     acked: Option<u32>,
@@ -46,6 +47,7 @@ pub struct Game {
     history: VecDeque<(u32, HashMap<u32, Entity>)>,
     /// City manifest sent in every welcome.
     pub map: serde_json::Value,
+    pub combat: Combat,
 }
 
 /// Yaw, pitch, roll (Y-X-Z) from an x, y, z, w quaternion.
@@ -84,6 +86,7 @@ impl Game {
             cars,
             history: VecDeque::new(),
             map: serde_json::Value::Null,
+            combat: Combat::default(),
         }
     }
 
@@ -94,6 +97,7 @@ impl Game {
             }
             Event::Disconnect(id) => {
                 self.pending.remove(&id);
+                self.combat.forget(id);
                 if let Some(p) = self.players.remove(&id) {
                     match p.body {
                         Ok(c) => {
@@ -189,6 +193,13 @@ impl Game {
         for id in ids {
             self.apply_input(id);
         }
+        self.combat.step(
+            &mut self.world,
+            &mut self.players,
+            &mut self.cars,
+            self.spawn,
+            self.tick as f64 / TICK_RATE as f64,
+        );
         self.world.step();
         self.tick += 1;
         let entities = self.entities();
@@ -211,6 +222,7 @@ impl Game {
             p.applied = Some(tick);
         }
         let c = p.held.clone();
+        self.combat.control(id, &c, p.character.as_ref());
         match p.body {
             Ok(body) => {
                 let speed = WALK_SPEED * if c.sprint { SPRINT } else { 1.0 };
@@ -330,6 +342,8 @@ impl Game {
                     ..Default::default()
                 },
             );
+            self.combat
+                .car_fields(r[0] as u32, out.get_mut(&entity).unwrap());
         }
         let chars: HashMap<u32, _> = chars.iter().map(|r| (r[0] as u32, r)).collect();
         for (&id, p) in &self.players {
@@ -370,6 +384,7 @@ impl Game {
                     e.seat = Some(0);
                 }
             }
+            self.combat.player_fields(id, &mut e);
             out.insert(id, e);
         }
         out
@@ -391,9 +406,11 @@ impl Game {
         Some(snap[at..at + len].to_vec())
     }
 
-    fn broadcast(&self) {
+    fn broadcast(&mut self) {
+        let events = self.combat.take_events();
         let (tick, current) = self.history.back().unwrap();
-        for p in self.players.values() {
+        for (id, p) in &self.players {
+            let me = current.get(id).map_or((0.0, 0.0), |e| (e.x, e.z));
             let base = p
                 .acked
                 .and_then(|a| self.history.iter().find(|(t, _)| *t == a))
@@ -424,9 +441,9 @@ impl Game {
                 // shortcut: no day cycle yet; hold late afternoon until it lands.
                 day: 16.5,
                 day_rate: 0.0,
-                events: Vec::new(),
-                pickups: Vec::new(),
-                grenades: Vec::new(),
+                events: events.clone(),
+                pickups: self.combat.pickups_near(me.0, me.1),
+                grenades: self.combat.grenades_near(me.0, me.1),
                 debris: Vec::new(),
                 broken: None,
             }));
