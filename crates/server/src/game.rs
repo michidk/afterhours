@@ -1,6 +1,7 @@
 //! The authoritative simulation: one owner task, no locks. Sessions feed it `Event`s and
 //! it writes encoded `ServerMessage`s back through each session's channel.
 use crate::city::City;
+use crate::destruction::{Destructible, Destruction};
 use crate::vehicles::{INTEREST_RADIUS, Vehicles};
 use crate::{citizens::Citizens, traffic::Traffic};
 use afterhours_physics::{CHARACTER_STRIDE, Drive, Move, VEHICLE_STRIDE, World};
@@ -51,6 +52,7 @@ pub struct Game {
     pub map: serde_json::Value,
     traffic: Traffic,
     citizens: Citizens,
+    pub destruction: Destruction,
 }
 
 /// Yaw, pitch, roll (Y-X-Z) from an x, y, z, w quaternion.
@@ -88,6 +90,7 @@ impl Game {
             map: serde_json::Value::Null,
             traffic: Traffic::default(),
             citizens: Citizens::default(),
+            destruction: Destruction::new(),
         }
     }
 
@@ -113,6 +116,11 @@ impl Game {
         self.vehicles.park(&mut self.world, city);
     }
 
+    /// Breakable props (see `destruction.rs`), added to the physics world as static boxes.
+    pub fn add_props(&mut self, props: Vec<Destructible>) {
+        self.destruction.add_props(&mut self.world, props);
+    }
+
     pub fn handle(&mut self, event: Event) {
         match event {
             Event::Connect(id, out) => {
@@ -120,6 +128,7 @@ impl Game {
             }
             Event::Disconnect(id) => {
                 self.pending.remove(&id);
+                self.destruction.forget(id);
                 if let Some(p) = self.players.remove(&id) {
                     match p.body {
                         Ok(c) => {
@@ -223,6 +232,7 @@ impl Game {
         self.citizens.step(&mut self.world, last, self.tick);
         self.world.step();
         self.vehicles.update(&self.world);
+        self.destruction.step(&mut self.world, self.tick);
         self.tick += 1;
         let entities = self.entities();
         if self.history.len() == HISTORY {
@@ -366,9 +376,11 @@ impl Game {
     }
 
     fn broadcast(&mut self) {
-        let events = std::mem::take(&mut self.events);
+        let mut events = std::mem::take(&mut self.events);
+        events.append(&mut self.destruction.events);
         let (tick, current) = self.history.back().unwrap();
         for (id, p) in &self.players {
+            let broken = self.destruction.broken_for(*id, *tick);
             let me = current.get(id).map_or([0.0, 0.0], |e| [e.x, e.z]);
             let events = events
                 .iter()
@@ -408,8 +420,8 @@ impl Game {
                 events,
                 pickups: Vec::new(),
                 grenades: Vec::new(),
-                debris: Vec::new(),
-                broken: None,
+                debris: self.destruction.states.clone(),
+                broken,
             }));
         }
     }

@@ -6,6 +6,7 @@ use rapier3d::control::{
     CharacterLength, DynamicRayCastVehicleController, KinematicCharacterController, WheelTuning,
 };
 use rapier3d::prelude::*;
+use std::collections::HashMap;
 
 #[cfg(feature = "wasm")]
 mod wasm;
@@ -83,6 +84,7 @@ pub struct Move {
 struct Vehicle {
     id: u32,
     body: RigidBodyHandle,
+    collider: ColliderHandle,
     controller: DynamicRayCastVehicleController,
     spec: VehicleSpec,
     drive: Drive,
@@ -97,11 +99,27 @@ struct Character {
     grounded: bool,
 }
 
+/// A vehicle touched a prop this tick; `speed` is its approach speed along the contact
+/// normal before the solver cancelled it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Impact {
+    pub vehicle: u32,
+    pub prop: u32,
+    pub speed: f32,
+    /// The vehicle's velocity before the solver stopped it at the prop.
+    pub velocity: [f32; 3],
+}
+
 pub struct World {
     physics: PhysicsWorld,
     controller: KinematicCharacterController,
     vehicles: Vec<Vehicle>,
     characters: Vec<Character>,
+    /// Breakable static boxes, by id (see [`World::add_prop`]).
+    props: HashMap<u32, ColliderHandle>,
+    /// Free-tumbling bodies, by id (see [`World::spawn_debris`]).
+    debris: HashMap<u32, RigidBodyHandle>,
+    impacts: Vec<Impact>,
     next_id: u32,
 }
 
@@ -127,6 +145,9 @@ impl World {
             controller,
             vehicles: Vec::new(),
             characters: Vec::new(),
+            props: HashMap::new(),
+            debris: HashMap::new(),
+            impacts: Vec::new(),
             next_id: 1,
         }
     }
@@ -159,6 +180,103 @@ impl World {
         Ok(())
     }
 
+    /// Static box like [`World::add_box`] that vehicles report impacts against and that
+    /// can be removed once broken.
+    pub fn add_prop(&mut self, center: [f32; 3], half: [f32; 3], yaw: f32) -> u32 {
+        let pose = Pose::from_parts(Vector::from(center), Rotation::from_rotation_y(yaw));
+        let collider = self.physics.insert_collider(
+            ColliderBuilder::cuboid(half[0], half[1], half[2])
+                .position(pose)
+                .friction(0.8)
+                .build(),
+            None,
+        );
+        let id = self.next_id;
+        self.next_id += 1;
+        self.props.insert(id, collider);
+        id
+    }
+
+    pub fn remove_prop(&mut self, id: u32) -> bool {
+        match self.props.remove(&id) {
+            Some(c) => self.physics.remove_collider(c).is_some(),
+            None => false,
+        }
+    }
+
+    /// Vehicle-prop contacts recorded during the last [`World::step`].
+    pub fn impacts(&self) -> &[Impact] {
+        &self.impacts
+    }
+
+    // ── Debris ────────────────────────────────────────────────────────────
+
+    /// Dynamic box with CCD; tuning copied from the Node `server/destruction.ts` spawn.
+    #[allow(clippy::too_many_arguments)]
+    pub fn spawn_debris(
+        &mut self,
+        center: [f32; 3],
+        half: [f32; 3],
+        yaw: f32,
+        mass: f32,
+        linvel: [f32; 3],
+        angvel: [f32; 3],
+    ) -> u32 {
+        let body = self.physics.insert_body(
+            RigidBodyBuilder::dynamic()
+                .pose(Pose::from_parts(
+                    Vector::from(center),
+                    Rotation::from_rotation_y(yaw),
+                ))
+                .linvel(Vector::from(linvel))
+                .angvel(Vector::from(angvel))
+                .linear_damping(0.6)
+                .angular_damping(0.8)
+                .ccd_enabled(true)
+                .build(),
+        );
+        self.physics.insert_collider(
+            ColliderBuilder::cuboid(half[0], half[1], half[2])
+                .mass(mass)
+                .restitution(0.15)
+                .friction(0.8)
+                .build(),
+            Some(body),
+        );
+        let id = self.next_id;
+        self.next_id += 1;
+        self.debris.insert(id, body);
+        id
+    }
+
+    pub fn remove_debris(&mut self, id: u32) -> bool {
+        match self.debris.remove(&id) {
+            Some(b) => {
+                self.physics.remove_body_with_colliders(b, true);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// `[x, y, z, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz]` of one debris body.
+    pub fn debris_state(&self, id: u32) -> Option<[f32; 13]> {
+        let b = &self.physics.bodies[*self.debris.get(&id)?];
+        let (t, r, l, a) = (b.translation(), b.rotation(), b.linvel(), b.angvel());
+        Some([
+            t.x, t.y, t.z, r.x, r.y, r.z, r.w, l.x, l.y, l.z, a.x, a.y, a.z,
+        ])
+    }
+
+    /// Overrides a vehicle's velocity, e.g. to carry it through a prop it just broke.
+    pub fn set_vehicle_velocity(&mut self, id: u32, linvel: [f32; 3]) -> bool {
+        let Some(v) = self.vehicles.iter().find(|v| v.id == id) else {
+            return false;
+        };
+        self.physics.bodies[v.body].set_linvel(Vector::from(linvel), true);
+        true
+    }
+
     // ── Vehicles ──────────────────────────────────────────────────────────
 
     pub fn spawn_vehicle(&mut self, spec: VehicleSpec, position: [f32; 3], yaw: f32) -> u32 {
@@ -170,7 +288,7 @@ impl World {
                 ))
                 .build(),
         );
-        self.physics.insert_collider(
+        let collider = self.physics.insert_collider(
             ColliderBuilder::cuboid(spec.width / 2.0, spec.height / 2.0, spec.length / 2.0)
                 // Centre of mass near the floor pan, or hard braking tips the car over.
                 .mass_properties(MassProperties::new(
@@ -216,6 +334,7 @@ impl World {
         self.vehicles.push(Vehicle {
             id,
             body,
+            collider,
             controller,
             spec,
             drive: Drive::default(),
@@ -291,10 +410,68 @@ impl World {
     /// Advance one server tick.
     pub fn step(&mut self) {
         let dt = self.physics.integration_parameters.dt;
+        self.impacts.clear();
         for _ in 0..SUBSTEPS {
             self.drive_vehicles(dt);
             self.move_characters(dt);
+            // The solver cancels the approach velocity, so remember it before stepping.
+            let before: Vec<Vector> = self
+                .vehicles
+                .iter()
+                .map(|v| self.physics.bodies[v.body].linvel())
+                .collect();
             self.physics.step();
+            self.record_impacts(&before);
+        }
+    }
+
+    /// Keeps the fastest horizontal approach per (vehicle, prop) pair this tick, as the Node
+    /// contact pass did with `pointVelocity · normal` (angular velocity skipped).
+    fn record_impacts(&mut self, before: &[Vector]) {
+        if self.props.is_empty() {
+            return;
+        }
+        for (v, vel) in self.vehicles.iter().zip(before) {
+            for pair in self.physics.contact_pairs_with(v.collider) {
+                let other = if pair.collider1 == v.collider {
+                    pair.collider2
+                } else {
+                    pair.collider1
+                };
+                let Some((&prop, _)) = self.props.iter().find(|(_, c)| **c == other) else {
+                    continue;
+                };
+                let Some((m, c)) = pair.find_deepest_contact() else {
+                    continue;
+                };
+                if c.dist > 0.0 {
+                    continue;
+                }
+                // The manifold normal points from collider1 to collider2.
+                let n = if pair.collider1 == v.collider {
+                    m.data.normal
+                } else {
+                    -m.data.normal
+                };
+                let speed = vel.x * n.x + vel.z * n.z;
+                if speed <= 0.0 {
+                    continue;
+                }
+                match self
+                    .impacts
+                    .iter_mut()
+                    .find(|i| i.vehicle == v.id && i.prop == prop)
+                {
+                    Some(i) if i.speed >= speed => {}
+                    Some(i) => (i.speed, i.velocity) = (speed, [vel.x, vel.y, vel.z]),
+                    None => self.impacts.push(Impact {
+                        vehicle: v.id,
+                        prop,
+                        speed,
+                        velocity: [vel.x, vel.y, vel.z],
+                    }),
+                }
+            }
         }
     }
 
