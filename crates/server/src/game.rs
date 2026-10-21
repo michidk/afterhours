@@ -1,6 +1,6 @@
 //! The authoritative simulation: one owner task, no locks. Sessions feed it `Event`s and
 //! it writes encoded `ServerMessage`s back through each session's channel.
-use crate::city::City;
+use crate::city::{City, LIMIT, TERRAIN_SIDE, TERRAIN_STEP};
 use crate::destruction::{Destructible, Destruction};
 use crate::vehicles::{INTEREST_RADIUS, Vehicles};
 use crate::{citizens::Citizens, traffic::Traffic};
@@ -55,6 +55,7 @@ pub struct Game {
     traffic: Traffic,
     citizens: Citizens,
     pub destruction: Destruction,
+    terrain: Option<Vec<f32>>,
 }
 
 /// Yaw, pitch, roll (Y-X-Z) from an x, y, z, w quaternion.
@@ -94,6 +95,7 @@ impl Game {
             traffic: Traffic::default(),
             citizens: Citizens::default(),
             destruction: Destruction::new(),
+            terrain: None,
         }
     }
 
@@ -101,6 +103,24 @@ impl Game {
     pub fn set_city(&mut self, city: &City) {
         self.traffic = Traffic::new(city);
         self.citizens = Citizens::new(city);
+        self.terrain = city.terrain.clone();
+    }
+
+    fn ground_height(&self, x: f32, z: f32) -> f32 {
+        let Some(h) = &self.terrain else { return 0.0 };
+        let gx = (x + LIMIT) / TERRAIN_STEP as f32;
+        let gz = (z + LIMIT) / TERRAIN_STEP as f32;
+        let ix = gx.floor().clamp(0.0, (TERRAIN_SIDE - 2) as f32) as usize;
+        let iz = gz.floor().clamp(0.0, (TERRAIN_SIDE - 2) as f32) as usize;
+        let (u, v) = (gx - ix as f32, gz - iz as f32);
+        let i = iz * TERRAIN_SIDE + ix;
+        if u + v <= 1.0 {
+            h[i] + u * (h[i + 1] - h[i]) + v * (h[i + TERRAIN_SIDE] - h[i])
+        } else {
+            h[i + TERRAIN_SIDE + 1]
+                + (1.0 - u) * (h[i + TERRAIN_SIDE] - h[i + TERRAIN_SIDE + 1])
+                + (1.0 - v) * (h[i + 1] - h[i + TERRAIN_SIDE + 1])
+        }
     }
 
     /// Live AI counts: (cars, pedestrians).
@@ -264,17 +284,18 @@ impl Game {
                 if x.abs() > 1532.0 || z.abs() > 1532.0 { return Err("Teleport is outside the world".into()); }
                 let body = self.players.get(&id).map(|p| p.body).ok_or_else(|| "Not joined".to_string())?;
                 match body {
-                    Ok(character) => { self.world.set_character_position(character, [x, 0.8, z]); }
+                    Ok(character) => { self.world.set_character_position(character, [x, self.ground_height(x, z) + 1.0, z]); }
                     Err(car) => {
                         let row = rows(&self.world, &self.world.states()).0.iter().find(|r| r[0] as u32 == car).copied().ok_or_else(|| "Vehicle not found".to_string())?;
-                        self.world.set_vehicle_position(car, [x, row[2], z], euler([row[4], row[5], row[6], row[7]]).0);
+                        self.world.set_vehicle_position(car, [x, self.ground_height(x, z) + 1.0, z], euler([row[4], row[5], row[6], row[7]]).0);
                     }
                 }
             }
             "spawn" => {
                 let model = command.get("model").and_then(Value::as_str).ok_or_else(|| "Missing vehicle model".to_string())?;
                 let (x, z) = self.player_position(id)?;
-                self.vehicles.spawn_debug(&mut self.world, model, [x + 6.0, 0.8, z])?;
+                let y = self.ground_height(x + 6.0, z) + 1.0;
+                self.vehicles.spawn_debug(&mut self.world, model, [x + 6.0, y, z])?;
             }
             "gotoPlayer" | "bringPlayer" => {
                 let target = command
@@ -296,7 +317,7 @@ impl Game {
                     .get(&mover)
                     .map(|p| p.body)
                     .ok_or_else(|| "Player not found".to_string())?;
-                let position = [anchor_x + 3.0, 0.8, anchor_z];
+                let position = [anchor_x + 3.0, self.ground_height(anchor_x + 3.0, anchor_z) + 1.0, anchor_z];
                 if let Ok(character) = body {
                     self.world.set_character_position(character, position);
                 } else {
