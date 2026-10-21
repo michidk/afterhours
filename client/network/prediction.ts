@@ -70,14 +70,46 @@ export class Prediction {
   private id = 0;
   private facing = 0;
   private lastRender = 0;
+  private buildingColliders = new WeakSet<object>();
+  private parkColliders = new WeakSet<object>();
   constructor(map: Pick<City, "terrain">) {
-    // shortcut: only terrain, water and the world floor collide here; buildings, parks
-    // and props are server-only until the atlas carries them.
+    // Terrain and water are available immediately; streamed buildings and parks are
+    // added once their neighborhood arrives.
     if (map.terrain) {
       const { positions, indices } = terrainMesh(map.terrain);
       this.world.add_trimesh(Float32Array.from(positions), Uint32Array.from(indices));
     } else this.world.add_box(0, -0.1, 0, LIMIT, 0.1, LIMIT, 0);
     this.world.add_box(0, WATER_LEVEL - 0.4, 0, WORLD_LIMIT, 0.1, WORLD_LIMIT, 0);
+  }
+  /** Add streamed server colliders to the local vehicle world once. */
+  syncStatic(city: Pick<City, "buildings" | "parks">) {
+    for (const building of city.buildings) {
+      if (this.buildingColliders.has(building)) continue;
+      const y = building.y ?? 0;
+      this.world.add_box(
+        building.x,
+        (y + building.h) / 2,
+        building.z,
+        building.w / 2,
+        Math.max(0, (building.h - y) / 2),
+        building.d / 2,
+        building.angle ?? 0,
+      );
+      this.buildingColliders.add(building);
+    }
+    for (const park of city.parks) {
+      if (this.parkColliders.has(park)) continue;
+      this.world.add_box(
+        park.x,
+        0.2,
+        park.z,
+        (park.w ?? 38) / 2,
+        0.2,
+        (park.d ?? 38) / 2,
+        0,
+      );
+      this.parkColliders.add(park);
+    }
   }
   reset() {
     this.pending = [];

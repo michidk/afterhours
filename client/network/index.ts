@@ -204,6 +204,7 @@ export class GameNetwork {
     this.snapshotTimes = this.snapshotTimes.filter((at) => at >= now - 1000);
     const entities = [...this.entities.values()];
     this.timeline.push(m.time, entities, now);
+    if (this.city) this.prediction?.syncStatic(this.city);
     const me = this.entities.get(this.playerId);
     const controlledVehicle = me?.vehicle ? this.entities.get(me.vehicle) : undefined;
     if (me && m.you) this.prediction?.reconcile(me, controlledVehicle, m.you, this.ack);
