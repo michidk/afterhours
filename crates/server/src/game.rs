@@ -369,6 +369,20 @@ impl Game {
         self.traffic.step(&mut self.world, last, self.tick);
         self.citizens.step(&mut self.world, last, self.tick);
         self.world.step();
+        // Keep bodies on terrain when a vehicle starts inside a baked mesh seam.
+        // Rapier's vehicle ray casts can miss a triangle at spawn; recover before
+        // the next snapshot instead of letting a parked car fall through the city.
+        let vehicle_rows = rows(&self.world, &self.world.states()).0.to_vec();
+        for row in vehicle_rows {
+            let ground = self.ground_height(row[1], row[3]);
+            if ground > 0.0 && row[2] < ground - 0.5 {
+                self.world.set_vehicle_position(
+                    row[0] as u32,
+                    [row[1], ground + 1.0, row[3]],
+                    euler([row[4], row[5], row[6], row[7]]).0,
+                );
+            }
+        }
         self.vehicles.update(&self.world);
         self.destruction.step(&mut self.world, self.tick);
         self.tick += 1;
