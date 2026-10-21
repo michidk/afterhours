@@ -33,4 +33,4 @@ day: number, dayRate: number, events: Array<WorldEvent>, pickups: Array<Pickup>,
 /**
  * Prop ids broken so far, sent when the set changes; None means unchanged.
  */
-broken?: Array<string>, } | { "type": "chat", name: string, text: string, } | { "type": "pong", timestamp: number, tick: number, };
+broken?: Array<string>, } | { "type": "chat", name: string, text: string, } | { "type": "debugResult", requestId: number, state?: unknown, error?: string, } | { "type": "pong", timestamp: number, tick: number, };

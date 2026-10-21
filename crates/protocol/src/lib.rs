@@ -72,9 +72,15 @@ pub enum ClientMessage {
     Chat {
         text: String,
     },
-    /// Development-only cheats; the server ignores them unless debug is enabled.
+    /// Legacy development shortcut retained for old clients.
     Debug {
         kind: String,
+    },
+    /// Structured development command used by the Dev tools drawer.
+    DebugCommand {
+        request_id: u32,
+        #[ts(type = "unknown")]
+        command: serde_json::Value,
     },
     DebugView {
         #[ts(type = "{ x: number, z: number } | null")]
@@ -392,6 +398,16 @@ pub enum ServerMessage {
         name: String,
         text: String,
     },
+    DebugResult {
+        request_id: u32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        #[ts(type = "unknown")]
+        state: Option<serde_json::Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        error: Option<String>,
+    },
     Pong {
         timestamp: f64,
         tick: u32,
@@ -432,5 +448,20 @@ mod tests {
             decode(&rmp_serde::to_vec_named(&serde_json::json!({"up": true})).unwrap()).unwrap();
         assert!(c.up && !c.down && c.move_x.is_none());
         assert_eq!(c.y(), 1.0);
+    }
+
+    #[test]
+    fn debug_commands_and_results_round_trip() {
+        let command = ClientMessage::DebugCommand {
+            request_id: 9,
+            command: serde_json::json!({ "kind": "time", "hour": 12.0, "rate": 0.0 }),
+        };
+        assert_eq!(decode::<ClientMessage>(&encode(&command)).unwrap(), command);
+        let result = ServerMessage::DebugResult {
+            request_id: 9,
+            state: Some(serde_json::json!({ "day": 12.0 })),
+            error: None,
+        };
+        assert_eq!(decode::<ServerMessage>(&encode(&result)).unwrap(), result);
     }
 }

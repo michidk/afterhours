@@ -91,18 +91,24 @@ export class Prediction {
     this.kind = undefined;
   }
   /** Authoritative state for the local body plus its raw physics row. */
-  reconcile(entity: Entity, you: number[], ack: number | undefined) {
+  reconcile(
+    entity: Entity,
+    controlledVehicle: Entity | undefined,
+    you: number[],
+    ack: number | undefined,
+  ) {
     const kind = entity.vehicle ? "vehicle" : "character";
+    const model = controlledVehicle?.model ?? entity.model;
     const vehicleChanged =
       kind === "vehicle" &&
-      (this.vehicleModel !== entity.model || this.vehicleEntity !== entity.vehicle);
+      (this.vehicleModel !== model || this.vehicleEntity !== entity.vehicle);
     if (kind !== this.kind || vehicleChanged) {
       this.remove();
       this.kind = kind;
-      this.vehicleModel = entity.model;
+      this.vehicleModel = model;
       this.vehicleEntity = entity.vehicle;
-      const vehicleSpec = entity.model
-        ? (VEHICLE_SPECS[entity.model] ?? VEHICLE_SPECS.sedan)
+      const vehicleSpec = model
+        ? (VEHICLE_SPECS[model] ?? VEHICLE_SPECS.sedan)
         : VEHICLE_SPECS.sedan;
       this.id =
         kind === "vehicle"

@@ -9,6 +9,7 @@ use afterhours_protocol::{
     ClientMessage, Controls, Entity, Kind, ServerMessage, TICK_RATE, VERSION, WorldEvent, encode,
 };
 use std::collections::{BTreeMap, HashMap, VecDeque};
+use serde_json::{Value, json};
 use tokio::sync::mpsc::UnboundedSender;
 
 pub const SNAPSHOT_EVERY: u32 = 2;
@@ -45,6 +46,7 @@ pub struct Game {
     vehicles: Vehicles,
     /// Hour of the day; `simulation.ts` starts at late afternoon.
     pub day: f32,
+    pub day_rate: f32,
     /// World events since the last broadcast.
     events: Vec<WorldEvent>,
     history: VecDeque<(u32, HashMap<u32, Entity>)>,
@@ -85,6 +87,7 @@ impl Game {
             pending: HashMap::new(),
             vehicles,
             day: 16.5,
+            day_rate: 1.0 / 75.0,
             events: Vec::new(),
             history: VecDeque::new(),
             map: serde_json::Value::Null,
@@ -210,7 +213,24 @@ impl Game {
                     let _ = p.out.send(msg.clone());
                 }
             }
-            // shortcut: debug cheats land with the debug tools milestone; ignored until then.
+            Event::Message(id, ClientMessage::DebugCommand { request_id, command }) => {
+                let result = self.execute_debug(id, &command);
+                let message = match result {
+                    Ok(state) => ServerMessage::DebugResult {
+                        request_id,
+                        state: Some(state),
+                        error: None,
+                    },
+                    Err(error) => ServerMessage::DebugResult {
+                        request_id,
+                        state: None,
+                        error: Some(error),
+                    },
+                };
+                if let Some(p) = self.players.get(&id) {
+                    let _ = p.out.send(encode(&message));
+                }
+            }
             Event::Message(_, ClientMessage::Debug { .. } | ClientMessage::DebugView { .. }) => {}
             Event::Message(id, ClientMessage::Ping { timestamp }) => {
                 let tick = self.tick;
@@ -221,7 +241,104 @@ impl Game {
         }
     }
 
+    fn execute_debug(&mut self, id: u32, command: &Value) -> Result<Value, String> {
+        if !self.players.contains_key(&id) {
+            return Err("Not joined".to_string());
+        }
+        let kind = command.get("kind").and_then(Value::as_str).unwrap_or_default();
+        match kind {
+            "time" => {
+                let hour = command.get("hour").and_then(Value::as_f64).ok_or_else(|| "Missing hour".to_string())?;
+                if !hour.is_finite() || !(0.0..=24.0).contains(&hour) { return Err("Invalid hour".into()); }
+                self.day = (hour as f32).rem_euclid(24.0);
+                if let Some(rate) = command.get("rate").and_then(Value::as_f64) {
+                    if !rate.is_finite() || !(0.0..=24.0).contains(&rate) {
+                        return Err("Invalid day rate".into());
+                    }
+                    self.day_rate = rate as f32;
+                }
+            }
+            "teleport" => {
+                let x = command.get("x").and_then(Value::as_f64).ok_or_else(|| "Missing x".to_string())? as f32;
+                let z = command.get("z").and_then(Value::as_f64).ok_or_else(|| "Missing z".to_string())? as f32;
+                if x.abs() > 1532.0 || z.abs() > 1532.0 { return Err("Teleport is outside the world".into()); }
+                let body = self.players.get(&id).map(|p| p.body).ok_or_else(|| "Not joined".to_string())?;
+                match body {
+                    Ok(character) => { self.world.set_character_position(character, [x, 0.8, z]); }
+                    Err(car) => {
+                        let row = rows(&self.world, &self.world.states()).0.iter().find(|r| r[0] as u32 == car).copied().ok_or_else(|| "Vehicle not found".to_string())?;
+                        self.world.set_vehicle_position(car, [x, row[2], z], euler([row[4], row[5], row[6], row[7]]).0);
+                    }
+                }
+            }
+            "spawn" => {
+                let model = command.get("model").and_then(Value::as_str).ok_or_else(|| "Missing vehicle model".to_string())?;
+                let (x, z) = self.player_position(id)?;
+                self.vehicles.spawn_debug(&mut self.world, model, [x + 6.0, 0.8, z])?;
+            }
+            "gotoPlayer" | "bringPlayer" => {
+                let target = command
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .and_then(|value| value.parse::<u32>().ok())
+                    .ok_or_else(|| "Unknown player".to_string())?;
+                if target == id || !self.players.contains_key(&target) {
+                    return Err("Unknown player".into());
+                }
+                let (anchor_x, anchor_z) = if kind == "gotoPlayer" {
+                    self.player_position(target)?
+                } else {
+                    self.player_position(id)?
+                };
+                let mover = if kind == "gotoPlayer" { id } else { target };
+                let body = self
+                    .players
+                    .get(&mover)
+                    .map(|p| p.body)
+                    .ok_or_else(|| "Player not found".to_string())?;
+                let position = [anchor_x + 3.0, 0.8, anchor_z];
+                if let Ok(character) = body {
+                    self.world.set_character_position(character, position);
+                } else {
+                    return Err("Moving seated players is not supported yet".into());
+                }
+            }
+            "destroyProp" => return Err("Prop destruction is not available in the Rust debug adapter".into()),
+            "state" | "observe" => {}
+            _ => return Err(format!("Unknown debug command: {kind}")),
+        }
+        Ok(self.debug_state(id, kind == "observe", command.get("id").and_then(Value::as_str)))
+    }
+
+    fn player_position(&self, id: u32) -> Result<(f32, f32), String> {
+        self.entities().get(&id).map(|e| (e.x, e.z)).ok_or_else(|| "Player not found".into())
+    }
+
+    fn debug_state(&self, id: u32, inspect: bool, inspected: Option<&str>) -> Value {
+        let entities = self.entities();
+        let inspection = if inspect {
+            inspected
+                .and_then(|target| target.parse::<u32>().ok())
+                .and_then(|target| entities.get(&target))
+                .and_then(|e| {
+                    serde_json::to_string_pretty(e)
+                        .ok()
+                        .map(|data| json!({ "id": e.id, "data": data }))
+                })
+        } else {
+            None
+        };
+        json!({
+            "playerId": id.to_string(), "time": self.tick as f64 / TICK_RATE as f64,
+            "day": self.day, "dayRate": self.day_rate, "citySeed": 0,
+            "entities": entities.values().collect::<Vec<_>>(), "input": Controls::default(),
+            "inspection": inspection, "destruction": {"brokenProps": [], "nearby": [], "debris": self.destruction.states.clone(), "maxBodies": 128},
+            "traffic": {"jamCount": 0, "jammedCars": 0, "honks": 0, "respawned": 0, "pendingRespawns": 0}
+        })
+    }
+
     pub fn step(&mut self) {
+        self.day = (self.day + self.day_rate / TICK_RATE as f32).rem_euclid(24.0);
         let ids: Vec<u32> = self.players.keys().copied().collect();
         for id in ids {
             self.apply_input(id);

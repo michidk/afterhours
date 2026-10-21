@@ -81,6 +81,11 @@ export class GameNetwork {
   private lastResponse = 0;
   private snapshotTimes: number[] = [];
   private inputTimes: number[] = [];
+  private debugSerial = 0;
+  private debugRequests = new Map<
+    number,
+    { resolve: (state: DebugState) => void; reject: (error: Error) => void }
+  >();
   private timeline = new SnapshotTimeline();
   constructor(
     private hooks: NetworkHooks,
@@ -135,7 +140,13 @@ export class GameNetwork {
       if (m.type === "welcome") this.welcome(m);
       else if (m.type === "state") this.state(m);
       else if (m.type === "chat") this.hooks.chat(m.name, m.text);
-      else if (m.type === "pong") {
+      else if (m.type === "debugResult") {
+        const pending = this.debugRequests.get(m.requestId);
+        if (!pending) return;
+        this.debugRequests.delete(m.requestId);
+        if (m.error || !m.state) pending.reject(Error(m.error || "Missing state"));
+        else pending.resolve(m.state);
+      } else if (m.type === "pong") {
         const rtt = performance.now() - m.timestamp;
         this.jitter =
           this.rtt === undefined
@@ -194,7 +205,8 @@ export class GameNetwork {
     const entities = [...this.entities.values()];
     this.timeline.push(m.time, entities, now);
     const me = this.entities.get(this.playerId);
-    if (me && m.you) this.prediction?.reconcile(me, m.you, this.ack);
+    const controlledVehicle = me?.vehicle ? this.entities.get(me.vehicle) : undefined;
+    if (me && m.you) this.prediction?.reconcile(me, controlledVehicle, m.you, this.ack);
     if (m.broken) this.hooks.destruction?.(m.broken);
     this.hooks.state({
       entities,
@@ -244,6 +256,7 @@ export class GameNetwork {
       case "input":
       case "chat":
       case "ping":
+      case "debugCommand":
         break;
       default:
         return true;
@@ -256,8 +269,17 @@ export class GameNetwork {
       return false;
     }
   }
-  debug(_command: DebugCommand): Promise<DebugState> {
-    return Promise.reject(Error("Debug commands are not available on this server"));
+  debug(command: DebugCommand): Promise<DebugState> {
+    if (this.socket?.readyState !== WebSocket.OPEN)
+      return Promise.reject(Error("Not connected to the server"));
+    const requestId = ++this.debugSerial;
+    return new Promise<DebugState>((resolve, reject) => {
+      this.debugRequests.set(requestId, { resolve, reject });
+      if (!this.send({ type: "debugCommand", requestId, command })) {
+        this.debugRequests.delete(requestId);
+        reject(Error("Debug command could not be sent"));
+      }
+    });
   }
   /** Current server tick, extrapolated from the last snapshot. */
   private serverTickAt(now: number) {

@@ -176,6 +176,17 @@ impl Vehicles {
         );
     }
 
+    pub fn spawn_debug(&mut self, world: &mut World, model: &str, at: [f32; 3]) -> Result<(), String> {
+        let model = match model {
+            "sedan" => &SEDAN,
+            "sport" => &SPORT,
+            "van" => &VAN,
+            _ => return Err(format!("Unsupported debug vehicle: {model}")),
+        };
+        self.spawn(world, model, at, 0.0);
+        Ok(())
+    }
+
     /// Seats `who` (on foot as physics character `body`) in the nearest car within reach
     /// that has a free seat, driver's seat first. Returns the car's physics id.
     pub fn enter(&mut self, world: &World, body: u32, who: u32) -> Option<u32> {

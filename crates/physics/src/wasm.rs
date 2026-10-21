@@ -90,6 +90,9 @@ impl Physics {
     pub fn remove_vehicle(&mut self, id: u32) -> bool {
         self.0.remove_vehicle(id)
     }
+    pub fn set_vehicle_position(&mut self, id: u32, x: f32, y: f32, z: f32, yaw: f32) -> bool {
+        self.0.set_vehicle_position(id, [x, y, z], yaw)
+    }
     pub fn spawn_character(&mut self, x: f32, y: f32, z: f32) -> u32 {
         self.0.spawn_character([x, y, z])
     }
@@ -98,6 +101,9 @@ impl Physics {
     }
     pub fn remove_character(&mut self, id: u32) -> bool {
         self.0.remove_character(id)
+    }
+    pub fn set_character_position(&mut self, id: u32, x: f32, y: f32, z: f32) -> bool {
+        self.0.set_character_position(id, [x, y, z])
     }
     pub fn step(&mut self) {
         self.0.step()

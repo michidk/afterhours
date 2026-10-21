@@ -361,6 +361,21 @@ impl World {
         true
     }
 
+    /// Moves a vehicle to an administrative destination and clears its motion.
+    pub fn set_vehicle_position(&mut self, id: u32, position: [f32; 3], yaw: f32) -> bool {
+        let Some(v) = self.vehicles.iter().find(|v| v.id == id) else {
+            return false;
+        };
+        let body = &mut self.physics.bodies[v.body];
+        body.set_position(
+            Pose::from_parts(Vector::from(position), Rotation::from_rotation_y(yaw)),
+            true,
+        );
+        body.set_linvel(Vector::new(0.0, 0.0, 0.0), true);
+        body.set_angvel(Vector::new(0.0, 0.0, 0.0), true);
+        true
+    }
+
     // ── Characters ────────────────────────────────────────────────────────
 
     pub fn spawn_character(&mut self, position: [f32; 3]) -> u32 {
@@ -402,6 +417,17 @@ impl World {
         };
         let c = self.characters.remove(i);
         self.physics.remove_body_with_colliders(c.body, true);
+        true
+    }
+
+    /// Moves a character to an administrative destination and clears its motion.
+    pub fn set_character_position(&mut self, id: u32, position: [f32; 3]) -> bool {
+        let Some(c) = self.characters.iter().find(|c| c.id == id) else {
+            return false;
+        };
+        let body = &mut self.physics.bodies[c.body];
+        body.set_position(Pose::from_translation(Vector::from(position)), true);
+        body.set_next_kinematic_translation(Vector::from(position));
         true
     }
 
