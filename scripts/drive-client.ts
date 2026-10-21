@@ -6,6 +6,7 @@
 // session on the same server. Example:
 //   bun run bot:drive -- --url http://localhost:5173 --delay 60 --jitter 40 --spike 150
 import { setTimeout as pause } from "node:timers/promises";
+import { WebSocket as NodeWebSocket } from "ws";
 import { GameNetwork } from "../client/network/index.ts";
 import { InputClock } from "../client/input/clock.ts";
 import { OrderedDelay } from "./ordered-delay.ts";
@@ -25,6 +26,9 @@ import { CAR, clamp, wrap } from "../shared/physics/vehicle.ts";
 import { groundLevel, isWater } from "../shared/water.ts";
 import { Worker } from "node:worker_threads";
 import { ChunkDecoder, type ChunkReply } from "../client/world/chunk-decoder.ts";
+
+// Node's built-in WebSocket does not support the browser event surface used by GameNetwork.
+globalThis.WebSocket = NodeWebSocket as unknown as typeof WebSocket;
 
 const arg = (name: string, fallback: string) => {
   const i = process.argv.indexOf(`--${name}`);
