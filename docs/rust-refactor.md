@@ -41,7 +41,7 @@ Milestone 2.3, gameplay parity (one PR per system, Node code deleted as each lan
 - [ ] vehicles: enter/exit, seats, all catalog models
 - [ ] combat, inventory, pickups, grenades
 - [ ] destruction and debris
-- [ ] AI: traffic, citizens, pedestrians
+- [x] AI: traffic, citizens, pedestrians
 - [ ] aircraft, watercraft, flooding, day/night
 - [ ] debug commands and admin tools (opt-in)
 - [ ] delete `server/`, port the `tests/` that cover server behaviour, update
