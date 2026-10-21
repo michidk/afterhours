@@ -18,6 +18,7 @@ const { values } = parseArgs({
     jitter: { type: "string", default: "0" },
     output: { type: "string" },
     pattern: { type: "string", default: "loop" },
+    model: { type: "string", default: "sport" },
   },
 });
 const seconds = Number(values.seconds);
@@ -124,6 +125,8 @@ try {
         String(duration),
         "--pattern",
         values.pattern!,
+        "--model",
+        values.model!,
         "--delay",
         values.delay!,
         "--jitter",
@@ -195,7 +198,7 @@ try {
       };
       if (data.length < seconds * 0.7)
         failures.push(`${phase.name} client ${id + 1}: missing samples`);
-      if (max((s) => s.body?.speed ?? 0) < 5)
+      if (max((s) => s.body?.speed ?? 0) < (values.model === "none" ? 2 : 5))
         failures.push(
           `${phase.name} client ${id + 1}: car never reached driving speed`,
         );
