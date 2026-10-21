@@ -18,11 +18,12 @@ predicts with the same wasm physics the server runs.
 
 ### Phase 2: server crate (in progress)
 Milestone 2.1, transport and core loop:
-- [ ] `crates/protocol`: serde message types, ts-rs export to `shared/generated/`.
-- [ ] `crates/server`: axum HTTP (health, static `dist/`), WebSocket sessions,
+- [x] `crates/protocol`: serde message types, ts-rs export to `shared/generated/`.
+- [x] `crates/server`: axum HTTP (health, static `dist/`), WebSocket sessions,
       30 Hz tick, join/welcome, tick-stamped input queue with `lead`, delta
-      snapshots against the client's acked frame, players as physics characters.
-- [ ] Integration test: two clients join, drive, see each other.
+      snapshots against the client's acked frame, players as physics characters,
+      enter/exit the two placeholder cars on a flat slab.
+- [x] Integration test: two clients join, walk, see each other, enter a car.
 
 Milestone 2.2, client on the new protocol:
 - [ ] `client/network` speaks the generated types; prediction uses the wasm

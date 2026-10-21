@@ -1,0 +1,10 @@
+[package]
+name = "afterhours-protocol"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+rmp-serde = "1.3"
+serde = { version = "1", features = ["derive"] }
+ts-rs = { version = "12", features = ["serde-compat"] }
