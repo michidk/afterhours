@@ -1,8 +1,10 @@
 //! The authoritative simulation: one owner task, no locks. Sessions feed it `Event`s and
 //! it writes encoded `ServerMessage`s back through each session's channel.
-use afterhours_physics::{CHARACTER_STRIDE, Drive, Move, VEHICLE_STRIDE, VehicleSpec, World};
+use crate::city::City;
+use crate::vehicles::{INTEREST_RADIUS, Vehicles};
+use afterhours_physics::{CHARACTER_STRIDE, Drive, Move, VEHICLE_STRIDE, World};
 use afterhours_protocol::{
-    ClientMessage, Controls, Entity, Kind, ServerMessage, TICK_RATE, VERSION, encode,
+    ClientMessage, Controls, Entity, Kind, ServerMessage, TICK_RATE, VERSION, WorldEvent, encode,
 };
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use tokio::sync::mpsc::UnboundedSender;
@@ -11,9 +13,6 @@ pub const SNAPSHOT_EVERY: u32 = 2;
 const HISTORY: usize = 64;
 const WALK_SPEED: f32 = 4.5;
 const SPRINT: f32 = 1.6;
-const ENTER_RANGE: f32 = 4.0;
-/// Car entity ids live above every session id.
-const CAR_ID_BASE: u32 = 1 << 24;
 
 pub enum Event {
     Connect(u32, UnboundedSender<Vec<u8>>),
@@ -41,15 +40,18 @@ pub struct Game {
     tick: u32,
     players: HashMap<u32, Player>,
     pending: HashMap<u32, UnboundedSender<Vec<u8>>>,
-    /// Vehicle physics id -> (entity id, driver).
-    cars: HashMap<u32, (u32, Option<u32>)>,
+    vehicles: Vehicles,
+    /// Hour of the day; `simulation.ts` starts at late afternoon.
+    pub day: f32,
+    /// World events since the last broadcast.
+    events: Vec<WorldEvent>,
     history: VecDeque<(u32, HashMap<u32, Entity>)>,
     /// City manifest sent in every welcome.
     pub map: serde_json::Value,
 }
 
 /// Yaw, pitch, roll (Y-X-Z) from an x, y, z, w quaternion.
-fn euler(q: [f32; 4]) -> (f32, f32, f32) {
+pub(crate) fn euler(q: [f32; 4]) -> (f32, f32, f32) {
     let [x, y, z, w] = q;
     let yaw = (2.0 * (w * y + x * z)).atan2(1.0 - 2.0 * (y * y + z * z));
     let pitch = (2.0 * (w * x - y * z)).clamp(-1.0, 1.0).asin();
@@ -58,7 +60,7 @@ fn euler(q: [f32; 4]) -> (f32, f32, f32) {
 }
 
 /// Splits the flat physics state into vehicle and character rows.
-fn rows<'a>(
+pub(crate) fn rows<'a>(
     world: &World,
     s: &'a [f32],
 ) -> (&'a [[f32; VEHICLE_STRIDE]], &'a [[f32; CHARACTER_STRIDE]]) {
@@ -69,22 +71,24 @@ fn rows<'a>(
 impl Game {
     /// `world` already holds the static city; players and cars appear around `spawn`.
     pub fn new(mut world: World, spawn: [f32; 3]) -> Self {
-        let mut cars = HashMap::new();
-        for (i, dx) in [-6.0f32, 6.0].into_iter().enumerate() {
-            let at = [spawn[0] + dx, spawn[1], spawn[2] + 6.0];
-            let v = world.spawn_vehicle(VehicleSpec::SEDAN, at, 0.0);
-            cars.insert(v, (CAR_ID_BASE + i as u32, None));
-        }
+        let vehicles = Vehicles::new(&mut world, spawn);
         Self {
             world,
             spawn,
             tick: 0,
             players: HashMap::new(),
             pending: HashMap::new(),
-            cars,
+            vehicles,
+            day: 16.5,
+            events: Vec::new(),
             history: VecDeque::new(),
             map: serde_json::Value::Null,
         }
+    }
+
+    /// Parks the city's starter fleet in place of the no-city placeholders.
+    pub fn park(&mut self, city: &City) {
+        self.vehicles.park(&mut self.world, city);
     }
 
     pub fn handle(&mut self, event: Event) {
@@ -99,7 +103,9 @@ impl Game {
                         Ok(c) => {
                             self.world.remove_character(c);
                         }
-                        Err(car) => self.vacate(car),
+                        Err(car) => {
+                            self.vehicles.leave(&mut self.world, car, id);
+                        }
                     }
                 }
             }
@@ -190,6 +196,7 @@ impl Game {
             self.apply_input(id);
         }
         self.world.step();
+        self.vehicles.update(&self.world);
         self.tick += 1;
         let entities = self.entities();
         if self.history.len() == HISTORY {
@@ -224,29 +231,28 @@ impl Game {
                     },
                 );
                 if c.interact
-                    && let Some((car, pos)) = self.nearest_free_car(body)
+                    && let Some(car) = self.vehicles.enter(&self.world, body, id)
                 {
                     self.world.remove_character(body);
-                    self.cars.get_mut(&car).unwrap().1 = Some(id);
                     self.players.get_mut(&id).unwrap().body = Err(car);
-                    let _ = pos;
                 }
             }
             Err(car) => {
-                self.world.set_drive(
+                self.vehicles.drive(
+                    &mut self.world,
                     car,
+                    id,
                     Drive {
                         throttle: c.y(),
                         steer: c.x(),
                         brake: c.brake,
                     },
                 );
+                if let Some(e) = self.vehicles.horn(&self.world, car, id, c.attack) {
+                    self.events.push(e);
+                }
                 if c.interact {
-                    let pos = self
-                        .vehicle_state(car)
-                        .map(|s| [s[0] + 2.0, s[1], s[2]])
-                        .unwrap_or([0.0, 1.0, 0.0]);
-                    self.vacate(car);
+                    let pos = self.vehicles.leave(&mut self.world, car, id);
                     let body = self.world.spawn_character(pos);
                     self.players.get_mut(&id).unwrap().body = Ok(body);
                 }
@@ -263,74 +269,12 @@ impl Game {
         ) = (false, false, false, false, None);
     }
 
-    fn vacate(&mut self, car: u32) {
-        self.world.set_drive(car, Drive::default());
-        if let Some(c) = self.cars.get_mut(&car) {
-            c.1 = None;
-        }
-    }
-
-    fn vehicle_state(&self, car: u32) -> Option<[f32; 3]> {
-        let s = self.world.states();
-        rows(&self.world, &s)
-            .0
-            .iter()
-            .find(|r| r[0] as u32 == car)
-            .map(|r| [r[1], r[2], r[3]])
-    }
-
-    fn nearest_free_car(&self, body: u32) -> Option<(u32, [f32; 3])> {
-        let s = self.world.states();
-        let (cars, chars) = rows(&self.world, &s);
-        let me = chars.iter().find(|r| r[0] as u32 == body)?;
-        cars.iter()
-            .filter(|r| self.cars.get(&(r[0] as u32)).is_some_and(|c| c.1.is_none()))
-            .map(|r| {
-                (
-                    r[0] as u32,
-                    [r[1], r[2], r[3]],
-                    (r[1] - me[1]).hypot(r[3] - me[3]),
-                )
-            })
-            .filter(|&(_, _, d)| d <= ENTER_RANGE)
-            .min_by(|a, b| a.2.total_cmp(&b.2))
-            .map(|(id, pos, _)| (id, pos))
-    }
-
     fn entities(&self) -> HashMap<u32, Entity> {
         let s = self.world.states();
         let (cars, chars) = rows(&self.world, &s);
         let mut out = HashMap::new();
-        let mut car_rows = HashMap::new();
-        for r in cars {
-            let (entity, driver) = self.cars[&(r[0] as u32)];
-            car_rows.insert(r[0] as u32, r);
-            let (angle, pitch, roll) = euler([r[4], r[5], r[6], r[7]]);
-            out.insert(
-                entity,
-                Entity {
-                    id: entity.to_string(),
-                    kind: Kind::Car,
-                    x: r[1],
-                    y: r[2],
-                    z: r[3],
-                    angle,
-                    pitch,
-                    roll,
-                    vx: r[8],
-                    vy: r[9],
-                    vz: r[10],
-                    color: "#b8c0cc".into(),
-                    health: 100.0,
-                    name: None,
-                    character: None,
-                    model: Some("sedan".into()),
-                    seats: Some(vec![driver.map(|d| d.to_string())]),
-                    driver: driver.map(|d| d.to_string()),
-                    ..Default::default()
-                },
-            );
-        }
+        self.vehicles.entities(&self.world, self.day, &mut out);
+        let car_rows: HashMap<u32, _> = cars.iter().map(|r| (r[0] as u32, r)).collect();
         let chars: HashMap<u32, _> = chars.iter().map(|r| (r[0] as u32, r)).collect();
         for (&id, p) in &self.players {
             let mut e = Entity {
@@ -366,8 +310,10 @@ impl Game {
                     (e.x, e.y, e.z) = (r[1], r[2], r[3]);
                     (e.angle, e.pitch, e.roll) = euler([r[4], r[5], r[6], r[7]]);
                     (e.vx, e.vy, e.vz) = (r[8], r[9], r[10]);
-                    e.vehicle = Some(self.cars[&car].0.to_string());
-                    e.seat = Some(0);
+                    if let Some((vehicle, seat)) = self.vehicles.rider(car, id) {
+                        e.vehicle = Some(vehicle.to_string());
+                        e.seat = Some(seat);
+                    }
                 }
             }
             out.insert(id, e);
@@ -391,9 +337,16 @@ impl Game {
         Some(snap[at..at + len].to_vec())
     }
 
-    fn broadcast(&self) {
+    fn broadcast(&mut self) {
+        let events = std::mem::take(&mut self.events);
         let (tick, current) = self.history.back().unwrap();
-        for p in self.players.values() {
+        for (id, p) in &self.players {
+            let me = current.get(id).map_or([0.0, 0.0], |e| [e.x, e.z]);
+            let events = events
+                .iter()
+                .filter(|e| (e.x - me[0]).hypot(e.z - me[1]) < INTEREST_RADIUS)
+                .cloned()
+                .collect();
             let base = p
                 .acked
                 .and_then(|a| self.history.iter().find(|(t, _)| *t == a))
@@ -421,10 +374,10 @@ impl Game {
                 removed,
                 you: self.you(p),
                 players: self.players.len() as u32,
-                // shortcut: no day cycle yet; hold late afternoon until it lands.
-                day: 16.5,
+                // shortcut: no day cycle yet; `day` holds until the clock lands.
+                day: self.day,
                 day_rate: 0.0,
-                events: Vec::new(),
+                events,
                 pickups: Vec::new(),
                 grenades: Vec::new(),
                 debris: Vec::new(),

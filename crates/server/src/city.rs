@@ -46,6 +46,19 @@ pub struct Park {
     pub kind: Option<String>,
 }
 
+/// A parking place: position and the yaw a vehicle stands at.
+#[derive(Clone, Copy, Debug, Deserialize)]
+pub struct Spot {
+    pub x: f64,
+    pub z: f64,
+    pub angle: f64,
+}
+
+#[derive(Deserialize)]
+pub struct TownHall {
+    pub parking: Vec<Spot>,
+}
+
 #[derive(Deserialize)]
 pub struct Building {
     pub x: f32,
@@ -79,6 +92,8 @@ pub struct City {
     pub landmarks: Value,
     pub ramps: Value,
     pub racetrack: Value,
+    #[serde(default, rename = "townHall")]
+    pub town_hall: Option<TownHall>,
     pub buildings: Vec<Building>,
 }
 

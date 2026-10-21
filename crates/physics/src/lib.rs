@@ -47,6 +47,22 @@ impl VehicleSpec {
         steer: 0.55,
         wheel_radius: 0.34,
     };
+    /// `shared/catalog.ts` VEHICLES.sport; brake, steer and wheels as the sedan.
+    pub const SPORT: VehicleSpec = VehicleSpec {
+        mass: 850.0,
+        width: 1.9,
+        length: 4.1,
+        engine: 12500.0,
+        ..Self::SEDAN
+    };
+    /// `shared/catalog.ts` VEHICLES.van; brake, steer and wheels as the sedan.
+    pub const VAN: VehicleSpec = VehicleSpec {
+        mass: 1600.0,
+        width: 2.2,
+        length: 5.0,
+        engine: 12500.0,
+        ..Self::SEDAN
+    };
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

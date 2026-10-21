@@ -3,6 +3,7 @@
 //! city and its `/city/*` routes live in `city.rs`.
 pub mod city;
 mod game;
+pub mod vehicles;
 
 pub use afterhours_physics::World;
 pub use city::{City, CityStore};
