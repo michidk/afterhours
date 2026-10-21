@@ -20,7 +20,13 @@ export const PRESENTATION = { smoothing: 0.1 };
 let ready: Promise<unknown> | undefined;
 /** Loads the wasm physics once; the server runs the same crate natively. */
 export function loadPhysics() {
-  return (ready ??= init());
+  return (ready ??= typeof process !== "undefined" && process.versions?.node
+    ? import("node:fs/promises").then(({ readFile }) =>
+        readFile(new URL("../../crates/physics/pkg/afterhours_physics_bg.wasm", import.meta.url)).then(
+          (bytes) => init(bytes),
+        ),
+      )
+    : init());
 }
 
 export interface PredictedInput {
