@@ -16,7 +16,7 @@
     "map:stats": "tsx scripts/mapgen-stats.ts",
     "audio:prepare": "tsx scripts/prepare-audio.ts",
     "format": "prettier --write .",
-    "check": "prettier --check . && tsx scripts/check-boundaries.ts && tsc --noEmit",
+    "check": "scripts/build-physics.sh && prettier --check . && tsx scripts/check-boundaries.ts && tsc --noEmit",
     "bench:physics": "tsx scripts/physics-benchmark.ts",
     "bench:simulation": "tsx scripts/simulation-timing.ts",
     "bench:server": "tsx scripts/server-profile.ts",
