@@ -231,7 +231,14 @@ if (spawnCommand) {
   const car = spawned.entities.find((e) => e.model === model && !before.has(e.id));
   if (!car) throw Error("spawn produced no car");
   await debug({ kind: "teleport", x: car.x + 3, z: car.z });
-  network.send({ type: "interact" });
+  // The first snapshot after a spawn may still carry the character's previous
+  // position. Retry the edge action across a few snapshots so the probe measures
+  // vehicle prediction rather than a flaky boarding race.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    network.send({ type: "interact" });
+    await pause(500);
+    if (network.entities.get(network.playerId)?.vehicle === car.id) break;
+  }
   await until(
     () => network.entities.get(network.playerId)?.vehicle === car.id,
     "board the car",
