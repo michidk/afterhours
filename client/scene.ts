@@ -685,11 +685,11 @@ export class CityScene {
       const model = VEHICLES[e.model || "sedan"];
       root.scaling.set(
         model.width / 2,
-        e.model === "van" ? 1.35 : e.model === "sport" ? 0.8 : 1,
+        e.model === "van" ? 1.1 : e.model === "sport" ? 0.8 : 1,
         model.length / 4.3,
       );
       if (e.model === "van")
-        this.box("cargo", 0, 1.5, -0.6, 1.9, 1.5, 2.8, e.color, root, true);
+        this.box("cargo", 0, 1.2, -0.65, 1.9, 1.0, 2.55, e.color, root, true);
       if (e.model === "sport")
         this.box("spoiler", 0, 1.1, -1.85, 2, 0.13, 0.4, "#26363b", root, true);
     }

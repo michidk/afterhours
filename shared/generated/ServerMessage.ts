@@ -4,6 +4,7 @@ import type { Entity } from "./Entity";
 import type { GrenadeState } from "./GrenadeState";
 import type { Pickup } from "./Pickup";
 import type { WorldEvent } from "./WorldEvent";
+import type { DebugState } from "../debug";
 
 export type ServerMessage = { "type": "welcome", version: number, id: string, tick: number, tickRate: number, debug: boolean, 
 /**
@@ -33,4 +34,4 @@ day: number, dayRate: number, events: Array<WorldEvent>, pickups: Array<Pickup>,
 /**
  * Prop ids broken so far, sent when the set changes; None means unchanged.
  */
-broken?: Array<string>, } | { "type": "chat", name: string, text: string, } | { "type": "debugResult", requestId: number, state?: unknown, error?: string, } | { "type": "pong", timestamp: number, tick: number, };
+broken?: Array<string>, } | { "type": "chat", name: string, text: string, } | { "type": "debugResult", requestId: number, state?: DebugState, error?: string, } | { "type": "pong", timestamp: number, tick: number, };
