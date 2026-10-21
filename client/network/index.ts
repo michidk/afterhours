@@ -145,7 +145,7 @@ export class GameNetwork {
         if (!pending) return;
         this.debugRequests.delete(m.requestId);
         if (m.error || !m.state) pending.reject(Error(m.error || "Missing state"));
-        else pending.resolve(m.state);
+        else pending.resolve(m.state as DebugState);
       } else if (m.type === "pong") {
         const rtt = performance.now() - m.timestamp;
         this.jitter =
