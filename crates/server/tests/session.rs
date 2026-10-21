@@ -13,11 +13,16 @@ type Socket =
 async fn start() -> String {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    tokio::spawn(afterhours_server::serve(listener, "dist".into()));
+    // A flat slab stands in for the city; the game spawns players and cars at the origin.
+    let mut world = afterhours_server::World::new();
+    world.add_box([0.0, -0.5, 0.0], [400.0, 0.5, 400.0], 0.0);
+    let game = afterhours_server::Game::new(world, [0.0, 1.0, 0.0]);
+    let app = afterhours_server::router(game, None, "dist".into());
+    tokio::spawn(afterhours_server::serve(listener, app));
     format!("ws://{addr}/ws")
 }
 
-async fn join(url: &str, name: &str) -> (Socket, u32) {
+async fn join(url: &str, name: &str) -> (Socket, String) {
     let (mut ws, _) = tokio_tungstenite::connect_async(url).await.unwrap();
     send(
         &mut ws,
@@ -25,6 +30,7 @@ async fn join(url: &str, name: &str) -> (Socket, u32) {
             version: VERSION,
             name: name.into(),
             color: "#ff0000".into(),
+            character: None,
         },
     )
     .await;
@@ -53,7 +59,7 @@ async fn recv(ws: &mut Socket) -> ServerMessage {
 
 /// Applies snapshots like a client: a delta against the acked base, full otherwise.
 struct View {
-    entities: HashMap<u32, Entity>,
+    entities: HashMap<String, Entity>,
     tick: Option<u32>,
 }
 
@@ -80,7 +86,7 @@ impl View {
                 self.entities.remove(id);
             }
             for e in entities {
-                self.entities.insert(e.id, e.clone());
+                self.entities.insert(e.id.clone(), e.clone());
             }
             self.tick = Some(*tick);
         }
@@ -103,7 +109,7 @@ async fn two_players_see_each_other_drive() {
         },
     );
     let walk = Controls {
-        move_z: 1.0,
+        up: true,
         ..Default::default()
     };
     for _ in 0..60 {
@@ -117,7 +123,7 @@ async fn two_players_see_each_other_drive() {
                     &ClientMessage::Input {
                         tick: t,
                         ack: Some(tick),
-                        controls: walk,
+                        controls: walk.clone(),
                     },
                 )
                 .await;
@@ -161,7 +167,7 @@ async fn two_players_see_each_other_drive() {
         let m = recv(&mut a).await;
         va.apply(&m);
         let me = &va.entities[&id_a];
-        if me.link.is_some() {
+        if me.vehicle.is_some() {
             entered = true;
             break;
         }
@@ -170,9 +176,9 @@ async fn two_players_see_each_other_drive() {
             let d = dx.hypot(dz).max(0.01);
             let near = d < 3.0;
             let c = Controls {
-                move_x: dx / d,
-                move_z: dz / d,
-                enter: near && i % 10 == 0,
+                move_x: Some(dx / d),
+                move_y: Some(dz / d),
+                interact: near && i % 10 == 0,
                 ..Default::default()
             };
             send(
@@ -187,5 +193,5 @@ async fn two_players_see_each_other_drive() {
         }
     }
     assert!(entered, "ann should have entered the car");
-    assert_eq!(va.entities[&id_a].link, Some(car.id));
+    assert_eq!(va.entities[&id_a].vehicle, Some(car.id.clone()));
 }

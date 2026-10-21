@@ -1,8 +1,14 @@
 //! HTTP + WebSocket front for the game: `/ws` sessions, `/health`, and the built client
-//! from `dist/`. The simulation itself lives in `game.rs` on its own task.
+//! from `dist/`. The simulation itself lives in `game.rs` on its own task; the prepared
+//! city and its `/city/*` routes live in `city.rs`.
+pub mod city;
 mod game;
 
-use afterhours_protocol::{ClientMessage, TICK_RATE, decode};
+pub use afterhours_physics::World;
+pub use city::{City, CityStore};
+pub use game::Game;
+
+use afterhours_protocol::{ClientMessage, TICK_RATE, VERSION, decode};
 use axum::{
     Router,
     extract::{
@@ -13,10 +19,13 @@ use axum::{
     routing::get,
 };
 use futures_util::{SinkExt, StreamExt};
-use game::{Event, Game};
+use game::Event;
 use std::{
     path::PathBuf,
-    sync::atomic::{AtomicU32, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicU32, Ordering},
+    },
     time::Duration,
 };
 use tokio::{net::TcpListener, sync::mpsc};
@@ -27,11 +36,17 @@ struct App {
     events: mpsc::UnboundedSender<Event>,
 }
 
-/// Runs the simulation and serves until the listener closes.
-pub async fn serve(listener: TcpListener, dist: PathBuf) -> std::io::Result<()> {
+/// Runs `game` on its own task and builds the HTTP app around it. `city` is `None` only
+/// for tests that bring their own world.
+pub fn router(game: Game, city: Option<Arc<CityStore>>, dist: PathBuf) -> Router {
     let (events, mut inbox) = mpsc::unbounded_channel();
+    let tick = Arc::new(AtomicU32::new(0));
+    let counter = tick.clone();
+    let mut game = game;
+    if let Some(city) = &city {
+        game.map = city.manifest.clone();
+    }
     tokio::spawn(async move {
-        let mut game = Game::new();
         let mut clock = tokio::time::interval(Duration::from_secs_f64(1.0 / TICK_RATE as f64));
         clock.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
@@ -40,13 +55,28 @@ pub async fn serve(listener: TcpListener, dist: PathBuf) -> std::io::Result<()> 
                 game.handle(event);
             }
             game.step();
+            counter.fetch_add(1, Ordering::Relaxed);
         }
     });
+    let health = move || async move {
+        format!(
+            r#"{{"ok":true,"version":{VERSION},"tick":{}}}"#,
+            tick.load(Ordering::Relaxed)
+        )
+    };
     let app = Router::new()
         .route("/ws", get(ws))
-        .route("/health", get(|| async { r#"{"ok":true}"# }))
-        .fallback_service(ServeDir::new(dist))
+        .route("/health", get(health))
         .with_state(App { events });
+    match city {
+        Some(store) => app.merge(city::routes(store)),
+        None => app,
+    }
+    .fallback_service(ServeDir::new(dist))
+}
+
+/// Serves until the listener closes.
+pub async fn serve(listener: TcpListener, app: Router) -> std::io::Result<()> {
     axum::serve(listener, app).await
 }
 
