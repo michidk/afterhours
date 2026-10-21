@@ -183,9 +183,9 @@ impl Vehicles {
             "van" => &VAN,
             _ => return Err(format!("Unsupported debug vehicle: {model}")),
         };
-        // Face the car down the clear starting lane so the first throttle input
-        // avoids parked cars.
-        self.spawn(world, model, at, 0.0);
+        // Debug cars are placed behind the player; face them back down the lane so
+        // the first throttle input drives away from the wall at the default spawn.
+        self.spawn(world, model, at, std::f32::consts::PI);
         Ok(())
     }
 

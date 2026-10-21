@@ -294,10 +294,11 @@ impl Game {
             "spawn" => {
                 let model = command.get("model").and_then(Value::as_str).ok_or_else(|| "Missing vehicle model".to_string())?;
                 let (x, z) = self.player_position(id)?;
-                // Put debug cars on the open side of the starting lane, away from
-                // the parked starter fleet and town-hall wall.
+                // The player start sits beside the town-hall wall. Put debug cars
+                // behind the player so their body and suspension do not spawn inside
+                // that wall; keep the five-metre interaction reach intact.
                 let spawn_x = x + 8.0;
-                let spawn_z = z + 5.5;
+                let spawn_z = z - 5.5;
                 let y = self.ground_height(spawn_x, spawn_z) + 1.0;
                 self.vehicles.spawn_debug(&mut self.world, model, [spawn_x, y, spawn_z])?;
             }
