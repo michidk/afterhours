@@ -1,4 +1,4 @@
-use afterhours_server::{City, CityStore, Game, city};
+use afterhours_server::{City, CityStore, Game, city, destruction};
 use std::{path::PathBuf, process::Command, sync::Arc};
 
 /// Regenerates the city and its meshes with the current generator, exactly as the Node
@@ -30,7 +30,9 @@ fn boot() -> Result<(Game, Arc<CityStore>), String> {
     let at = loaded.spawn();
     let spawn = [at[0], loaded.height(at[0], at[1]) + 1.0, at[1]];
     tracing::info!(map = %store.map_id, ?spawn, "city loaded");
-    Ok((Game::new(world, spawn), Arc::new(store)))
+    let mut game = Game::new(world, spawn);
+    game.add_props(destruction::destructibles(&loaded));
+    Ok((game, Arc::new(store)))
 }
 
 #[tokio::main]

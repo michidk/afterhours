@@ -1,5 +1,6 @@
 //! The authoritative simulation: one owner task, no locks. Sessions feed it `Event`s and
 //! it writes encoded `ServerMessage`s back through each session's channel.
+use crate::destruction::{Destructible, Destruction};
 use afterhours_physics::{CHARACTER_STRIDE, Drive, Move, VEHICLE_STRIDE, VehicleSpec, World};
 use afterhours_protocol::{
     ClientMessage, Controls, Entity, Kind, ServerMessage, TICK_RATE, VERSION, encode,
@@ -46,6 +47,7 @@ pub struct Game {
     history: VecDeque<(u32, HashMap<u32, Entity>)>,
     /// City manifest sent in every welcome.
     pub map: serde_json::Value,
+    pub destruction: Destruction,
 }
 
 /// Yaw, pitch, roll (Y-X-Z) from an x, y, z, w quaternion.
@@ -84,7 +86,13 @@ impl Game {
             cars,
             history: VecDeque::new(),
             map: serde_json::Value::Null,
+            destruction: Destruction::new(),
         }
+    }
+
+    /// Breakable props (see `destruction.rs`), added to the physics world as static boxes.
+    pub fn add_props(&mut self, props: Vec<Destructible>) {
+        self.destruction.add_props(&mut self.world, props);
     }
 
     pub fn handle(&mut self, event: Event) {
@@ -94,6 +102,7 @@ impl Game {
             }
             Event::Disconnect(id) => {
                 self.pending.remove(&id);
+                self.destruction.forget(id);
                 if let Some(p) = self.players.remove(&id) {
                     match p.body {
                         Ok(c) => {
@@ -190,6 +199,7 @@ impl Game {
             self.apply_input(id);
         }
         self.world.step();
+        self.destruction.step(&mut self.world, self.tick);
         self.tick += 1;
         let entities = self.entities();
         if self.history.len() == HISTORY {
@@ -391,9 +401,11 @@ impl Game {
         Some(snap[at..at + len].to_vec())
     }
 
-    fn broadcast(&self) {
+    fn broadcast(&mut self) {
         let (tick, current) = self.history.back().unwrap();
-        for p in self.players.values() {
+        let events = std::mem::take(&mut self.destruction.events);
+        for (id, p) in &self.players {
+            let broken = self.destruction.broken_for(*id, *tick);
             let base = p
                 .acked
                 .and_then(|a| self.history.iter().find(|(t, _)| *t == a))
@@ -424,11 +436,11 @@ impl Game {
                 // shortcut: no day cycle yet; hold late afternoon until it lands.
                 day: 16.5,
                 day_rate: 0.0,
-                events: Vec::new(),
+                events: events.clone(),
                 pickups: Vec::new(),
                 grenades: Vec::new(),
-                debris: Vec::new(),
-                broken: None,
+                debris: self.destruction.states.clone(),
+                broken,
             }));
         }
     }

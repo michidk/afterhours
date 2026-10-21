@@ -46,6 +46,16 @@ pub struct Park {
     pub kind: Option<String>,
 }
 
+/// A street prop; breakable, see `destruction.rs`.
+#[derive(Clone, Deserialize)]
+pub struct Prop {
+    pub kind: String,
+    pub x: f64,
+    pub z: f64,
+    pub h: f64,
+    pub angle: Option<f64>,
+}
+
 #[derive(Deserialize)]
 pub struct Building {
     pub x: f32,
@@ -80,6 +90,8 @@ pub struct City {
     pub ramps: Value,
     pub racetrack: Value,
     pub buildings: Vec<Building>,
+    #[serde(default)]
+    pub props: Vec<Prop>,
 }
 
 fn heights<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Vec<f32>>, D::Error> {

@@ -20,6 +20,36 @@ impl Physics {
             .map_err(|e| JsError::new(&e))
     }
     #[allow(clippy::too_many_arguments)]
+    pub fn add_prop(
+        &mut self,
+        cx: f32,
+        cy: f32,
+        cz: f32,
+        hx: f32,
+        hy: f32,
+        hz: f32,
+        yaw: f32,
+    ) -> u32 {
+        self.0.add_prop([cx, cy, cz], [hx, hy, hz], yaw)
+    }
+    pub fn remove_prop(&mut self, id: u32) -> bool {
+        self.0.remove_prop(id)
+    }
+    /// Flat `[vehicle, prop, speed, vx, vy, vz]` rows from the last step.
+    pub fn impacts(&self) -> Vec<f32> {
+        self.0
+            .impacts()
+            .iter()
+            .flat_map(|i| {
+                let [vx, vy, vz] = i.velocity;
+                [i.vehicle as f32, i.prop as f32, i.speed, vx, vy, vz]
+            })
+            .collect()
+    }
+    pub fn set_vehicle_velocity(&mut self, id: u32, vx: f32, vy: f32, vz: f32) -> bool {
+        self.0.set_vehicle_velocity(id, [vx, vy, vz])
+    }
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn_vehicle(
         &mut self,
         mass: f32,

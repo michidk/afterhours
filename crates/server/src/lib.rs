@@ -2,6 +2,7 @@
 //! from `dist/`. The simulation itself lives in `game.rs` on its own task; the prepared
 //! city and its `/city/*` routes live in `city.rs`.
 pub mod city;
+pub mod destruction;
 mod game;
 
 pub use afterhours_physics::World;
