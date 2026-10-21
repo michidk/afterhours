@@ -297,9 +297,10 @@ impl Game {
                 // The player start sits beside the town-hall wall. Put debug cars
                 // behind the player so their body and suspension do not spawn inside
                 // that wall; keep the five-metre interaction reach intact.
+                let spawn_x = x + 8.0;
                 let spawn_z = z - 5.5;
-                let y = self.ground_height(x, spawn_z) + 1.0;
-                self.vehicles.spawn_debug(&mut self.world, model, [x, y, spawn_z])?;
+                let y = self.ground_height(spawn_x, spawn_z) + 1.0;
+                self.vehicles.spawn_debug(&mut self.world, model, [spawn_x, y, spawn_z])?;
             }
             "gotoPlayer" | "bringPlayer" => {
                 let target = command
