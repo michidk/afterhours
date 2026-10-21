@@ -123,6 +123,7 @@ impl Game {
                     id: id.to_string(),
                     tick: self.tick,
                     tick_rate: TICK_RATE,
+                    debug: false,
                     map: self.map.clone(),
                 }));
                 let body = self.world.spawn_character(self.spawn);
@@ -172,6 +173,8 @@ impl Game {
                     let _ = p.out.send(msg.clone());
                 }
             }
+            // shortcut: debug cheats land with the debug tools milestone; ignored until then.
+            Event::Message(_, ClientMessage::Debug { .. } | ClientMessage::DebugView { .. }) => {}
             Event::Message(id, ClientMessage::Ping { timestamp }) => {
                 let tick = self.tick;
                 if let Some(p) = self.players.get(&id) {
@@ -324,9 +327,7 @@ impl Game {
                     model: Some("sedan".into()),
                     seats: Some(vec![driver.map(|d| d.to_string())]),
                     driver: driver.map(|d| d.to_string()),
-                    vehicle: None,
-                    seat: None,
-                    steering: None,
+                    ..Default::default()
                 },
             );
         }
@@ -352,9 +353,7 @@ impl Game {
                 model: None,
                 seats: None,
                 driver: None,
-                vehicle: None,
-                seat: None,
-                steering: None,
+                ..Default::default()
             };
             match p.body {
                 Ok(body) => {
@@ -422,6 +421,14 @@ impl Game {
                 removed,
                 you: self.you(p),
                 players: self.players.len() as u32,
+                // shortcut: no day cycle yet; hold late afternoon until it lands.
+                day: 16.5,
+                day_rate: 0.0,
+                events: Vec::new(),
+                pickups: Vec::new(),
+                grenades: Vec::new(),
+                debris: Vec::new(),
+                broken: None,
             }));
         }
     }

@@ -72,21 +72,36 @@ pub enum ClientMessage {
     Chat {
         text: String,
     },
+    /// Development-only cheats; the server ignores them unless debug is enabled.
+    Debug {
+        kind: String,
+    },
+    DebugView {
+        #[ts(type = "{ x: number, z: number } | null")]
+        center: Option<serde_json::Value>,
+    },
     Ping {
         timestamp: f64,
     },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, rename_all = "camelCase")]
 pub enum Kind {
+    #[default]
     Player,
+    Pedestrian,
     Car,
+    Helicopter,
+    Plane,
+    Boat,
+    Jetski,
+    Speedboat,
 }
 
 /// What the client renders. Field names match the browser's existing `Entity`.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, rename_all = "camelCase")]
 pub struct Entity {
@@ -130,6 +145,198 @@ pub struct Entity {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub steering: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub max_health: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub weapon: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub inventory: Option<Vec<WeaponItem>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub equipped: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub reload_until: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cooldown: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub aim: Option<f32>,
+    /// Seconds a knocked-down character stays on the ground.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub down: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub burning: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub wreck: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub flooded: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub lights_on: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub skidding: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub wheel_skids: Option<Vec<bool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub angular_velocity: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub ai: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub flight: Option<Flight>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub takeoff_delay: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub parachute: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub jetpack: Option<Jetpack>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub enum Flight {
+    Grounded,
+    TakingOff,
+    Cruising,
+    Landing,
+    Falling,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct Jetpack {
+    pub fuel: f32,
+    pub active: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct WeaponItem {
+    pub id: String,
+    pub kind: String,
+    pub ammo: u32,
+    pub reserve: u32,
+}
+
+/// A one-shot effect for clients to draw and play; mirrors the browser's `WorldEvent`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct WorldEvent {
+    pub kind: String,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub angle: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub length: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub target: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub sound: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+#[ts(export, rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum PickupPayload {
+    Weapon { item: WeaponItem },
+    Ammo { ammo_kind: String, amount: u32 },
+    Jetpack { fuel: f32 },
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct Pickup {
+    #[serde(flatten)]
+    #[ts(flatten)]
+    pub payload: PickupPayload,
+    pub id: String,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub expires: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct GrenadeState {
+    pub id: String,
+    pub owner: String,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub vx: f32,
+    pub vy: f32,
+    pub vz: f32,
+    pub radius: f32,
+    pub detonate_at: f64,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct Vec3 {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct Quat {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub w: f32,
+}
+
+/// A broken prop's body, mirrors the browser's `DebrisState`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct DebrisState {
+    pub id: String,
+    #[ts(type = "unknown")]
+    pub source: serde_json::Value,
+    pub position: Vec3,
+    pub rotation: Quat,
+    pub velocity: Vec3,
+    pub angular_velocity: Vec3,
+    pub broken_at: f64,
+    pub expires_at: f64,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -145,6 +352,7 @@ pub enum ServerMessage {
         id: String,
         tick: u32,
         tick_rate: u32,
+        debug: bool,
         /// The city manifest; the client validates it with `mapManifestSchema`.
         #[ts(type = "unknown")]
         map: serde_json::Value,
@@ -166,6 +374,19 @@ pub enum ServerMessage {
         #[ts(optional)]
         you: Option<Vec<f32>>,
         players: u32,
+        /// Hour of the day, 0..24, and how fast it advances per second.
+        day: f32,
+        day_rate: f32,
+        events: Vec<WorldEvent>,
+        pickups: Vec<Pickup>,
+        #[serde(default)]
+        grenades: Vec<GrenadeState>,
+        #[serde(default)]
+        debris: Vec<DebrisState>,
+        /// Prop ids broken so far, sent when the set changes; None means unchanged.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        broken: Option<Vec<String>>,
     },
     Chat {
         name: String,

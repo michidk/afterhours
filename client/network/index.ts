@@ -169,7 +169,7 @@ export class GameNetwork {
     this.timeline.reset();
     this.prediction = new Prediction(this.city ?? {});
     this.hooks.status("connected");
-    this.hooks.welcome({ id: m.id, map: map.data, debug: false });
+    this.hooks.welcome({ id: m.id, map: map.data, debug: m.debug });
   }
   private state(m: Extract<ServerMessage, { type: "state" }>) {
     const now = performance.now();
@@ -195,14 +195,17 @@ export class GameNetwork {
     this.timeline.push(m.time, entities, now);
     const me = this.entities.get(this.playerId);
     if (me && m.you) this.prediction?.reconcile(me, m.you, this.ack);
+    if (m.broken) this.hooks.destruction?.(m.broken);
     this.hooks.state({
       entities,
-      pickups: [],
-      events: [],
+      pickups: m.pickups as Pickup[],
+      events: m.events as WorldEvent[],
       time: m.time,
-      // shortcut: the Rust server has no day cycle yet; hold noon until it does.
-      day: 12,
+      day: m.day,
+      dayRate: m.dayRate,
       players: m.players,
+      grenades: m.grenades,
+      debris: m.debris as DebrisState[],
     });
   }
   private disconnect(socket: WebSocket, reason?: string) {
