@@ -11,8 +11,22 @@ import {
 } from "../../shared/world.ts";
 import { wrap } from "../../shared/physics/vehicle.ts";
 
-/** Mirrors `VehicleSpec::SEDAN` and the walk speeds in crates/server/src/game.rs. */
-const SEDAN = [1000, 2, 4.3, 1.4, 9750, 7000, 0.55, 0.34] as const;
+/** Mirrors the three car `VehicleSpec`s in crates/physics/src/lib.rs. */
+type VehicleSpec = readonly [
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+];
+const VEHICLE_SPECS: Record<string, VehicleSpec> = {
+  sedan: [1000, 2, 4.3, 1.4, 9750, 7000, 0.55, 0.34],
+  sport: [850, 1.9, 4.1, 1.4, 12500, 7000, 0.55, 0.34],
+  van: [1600, 2.2, 5, 1.4, 12500, 7000, 0.55, 0.34],
+} as const;
 const WALK_SPEED = 4.5,
   SPRINT = 1.6;
 export const PRESENTATION = { smoothing: 0.1 };
@@ -51,6 +65,8 @@ export class Prediction {
   offset = { x: 0, y: 0, z: 0, angle: 0 };
   private world = new Physics();
   private kind: "character" | "vehicle" | undefined;
+  private vehicleModel: string | undefined;
+  private vehicleEntity: string | undefined;
   private id = 0;
   private facing = 0;
   private lastRender = 0;
@@ -77,13 +93,19 @@ export class Prediction {
   /** Authoritative state for the local body plus its raw physics row. */
   reconcile(entity: Entity, you: number[], ack: number | undefined) {
     const kind = entity.vehicle ? "vehicle" : "character";
-    if (kind !== this.kind) {
+    const vehicleChanged =
+      kind === "vehicle" &&
+      (this.vehicleModel !== entity.model || this.vehicleEntity !== entity.vehicle);
+    if (kind !== this.kind || vehicleChanged) {
       this.remove();
       this.kind = kind;
+      this.vehicleModel = entity.model;
+      this.vehicleEntity = entity.vehicle;
       this.id =
         kind === "vehicle"
           ? this.world.spawn_vehicle(
-              ...SEDAN,
+              ...(VEHICLE_SPECS[entity.model as keyof typeof VEHICLE_SPECS] ??
+                VEHICLE_SPECS.sedan),
               entity.x,
               entity.y,
               entity.z,

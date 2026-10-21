@@ -160,7 +160,7 @@ impl Game {
                     id: id.to_string(),
                     tick: self.tick,
                     tick_rate: TICK_RATE,
-                    debug: false,
+                    debug: true,
                     map: self.map.clone(),
                 }));
                 let body = self.world.spawn_character(self.spawn);

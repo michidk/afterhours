@@ -132,9 +132,11 @@ $("#join").addEventListener("submit", (event) => {
           return;
         }
         playerId = m.id;
-        debugAllowed = m.debug;
-        if (!debugAllowed) $("#debug").classList.add("hidden");
-        document.querySelector(".debug-hint")?.classList.toggle("hidden", !m.debug);
+        // Dev tools stay available in every environment; server commands still decide
+        // which operations are authoritative.
+        debugAllowed = true;
+        $("#debug").classList.remove("hidden");
+        document.querySelector(".debug-hint")?.classList.remove("hidden");
         if (debugAllowed && network) {
           automation = new AgentInterface(
             network,
@@ -279,7 +281,7 @@ window.addEventListener("keydown", (event) => {
   }
   if (event.code === "F1") {
     if (debugAllowed) $("#debug").classList.toggle("hidden");
-    else toast("The development garage is disabled on this server.");
+    else toast("Dev tools are unavailable while disconnected.");
   }
   if (event.code === "KeyH") {
     audio.ui();
