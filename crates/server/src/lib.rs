@@ -5,6 +5,7 @@ pub mod citizens;
 pub mod city;
 mod game;
 pub mod traffic;
+pub mod vehicles;
 
 pub use afterhours_physics::World;
 pub use city::{City, CityStore};

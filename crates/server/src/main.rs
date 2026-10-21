@@ -32,6 +32,7 @@ fn boot() -> Result<(Game, Arc<CityStore>), String> {
     tracing::info!(map = %store.map_id, ?spawn, "city loaded");
     let mut game = Game::new(world, spawn);
     game.set_city(&loaded);
+    game.park(&loaded);
     Ok((game, Arc::new(store)))
 }
 
