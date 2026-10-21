@@ -308,7 +308,9 @@ impl World {
             suspension_stiffness: 30.0,
             suspension_compression: 2.3,
             suspension_damping: 2.4,
-            max_suspension_travel: 0.3,
+            // City terrain is a baked mesh with small height discontinuities at
+            // chunk/road seams; extra travel keeps the raycast wheels grounded.
+            max_suspension_travel: 0.8,
             side_friction_stiffness: 1.0,
             friction_slip: 1.0,
             max_suspension_force: spec.mass * 40.0,
