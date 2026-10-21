@@ -316,7 +316,11 @@ impl World {
         let (hx, hz, y) = (
             spec.width * 0.35,
             spec.length * 0.31,
-            -spec.height / 2.0 + 0.1,
+            // Start the suspension ray just below the body floor.  The baked city
+            // terrain is a triangle mesh; placing the ray origin too high leaves
+            // small gaps at sloped triangles, so Rapier reports no wheel contact
+            // and the engine force never reaches the ground.
+            -spec.height / 2.0,
         );
         for (x, z) in [(-hx, hz), (hx, hz), (-hx, -hz), (hx, -hz)] {
             // Rapier drives along normal × axle, so a -X axle makes +Z the forward direction.
