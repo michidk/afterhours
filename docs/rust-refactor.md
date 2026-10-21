@@ -38,7 +38,7 @@ Milestone 2.2, client on the new protocol:
 Milestone 2.3, gameplay parity (one PR per system, Node code deleted as each lands):
 
 - [x] city loading and streaming (serve the prepared artifact, never generate it)
-- [ ] vehicles: enter/exit, seats, all catalog models
+- [x] vehicles: enter/exit, seats, all catalog models
 - [ ] combat, inventory, pickups, grenades
 - [ ] destruction and debris
 - [x] AI: traffic, citizens, pedestrians
