@@ -104,8 +104,7 @@ export class Prediction {
       this.id =
         kind === "vehicle"
           ? this.world.spawn_vehicle(
-              ...(VEHICLE_SPECS[entity.model as keyof typeof VEHICLE_SPECS] ??
-                VEHICLE_SPECS.sedan),
+              ...(VEHICLE_SPECS[entity.model] ?? VEHICLE_SPECS.sedan),
               entity.x,
               entity.y,
               entity.z,

@@ -44,7 +44,7 @@ The jittered-link driving probes and the Chromium movement spec were written aga
 | E / Q              | Same as Space / Shift: aircraft climb / descend; enabled jetpack thrust / descent                                                                                    |
 | B                  | Enable or disable equipped jetpack                                                                                                                                   |
 | Enter / H / Escape | Chat / help / close panels                                                                                                                                           |
-| M / N / F1         | Island map / mute sound / draggable Dev tools: vehicles, time, camera, networking, server stats, hover inspector and admin teleports     |
+| M / N / F1         | Island map / mute sound / draggable Dev tools: vehicles, time, camera, networking, server stats, hover inspector and admin teleports                                 |
 
 Local steering responds between network command ticks. Prop impacts predict the car's passage, including props dented by earlier hits, and throw the struck prop at once; when the server's debris arrives it takes over by sliding into place rather than snapping. Damage and pickups still wait for the server. Other drivers' and AI cars' future turns cannot be predicted exactly, so shared crashes can still need corrections. See [fast driving and shared collisions](docs/networking.md#fast-driving-and-shared-collisions).
 
