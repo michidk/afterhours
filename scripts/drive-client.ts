@@ -23,7 +23,7 @@ import { idle, spawnOrigin, type Input } from "../shared/world.ts";
 import { debugCommandSchema } from "../shared/debug.ts";
 import { VEHICLES } from "../shared/catalog.ts";
 import { CAR, clamp, wrap } from "../shared/physics/vehicle.ts";
-import { groundLevel, isWater } from "../shared/water.ts";
+import { groundLevel } from "../shared/water.ts";
 import { Worker } from "node:worker_threads";
 import { ChunkDecoder, type ChunkReply } from "../client/world/chunk-decoder.ts";
 
@@ -101,24 +101,10 @@ const stream = new CityStream(
 const city = stream.city;
 const radius = Number(arg("radius", "50"));
 if (!Number.isFinite(radius) || radius <= 0) throw Error("--radius must be positive");
-const airport = city.airport;
-const airportFloor = groundLevel(airport.x, airport.z, city);
-const airportReady = [-1, 0, 1].every((x) =>
-  [-1, 0, 1].every(
-    (z) =>
-      !isWater(airport.x + x * (radius + 10), airport.z + z * (radius + 10), city) &&
-      Math.abs(
-        groundLevel(
-          airport.x + x * (radius + 10),
-          airport.z + z * (radius + 10),
-          city,
-        ) - airportFloor,
-      ) < 0.1,
-  ),
-);
-const origin = airportReady
-  ? { x: airport.x - radius, z: airport.z }
-  : spawnOrigin(city);
+// Use the generated spawn lane for vehicle probes. The airport is flat but its
+// decorative terminal colliders can overlap a debug car, which measures a wall
+// collision instead of driving and makes the lag result meaningless.
+const origin = spawnOrigin(city);
 const center = {
   x: Number(arg("x", String(origin.x))),
   z: Number(arg("z", String(origin.z))),
