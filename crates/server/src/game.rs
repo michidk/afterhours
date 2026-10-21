@@ -375,10 +375,18 @@ impl Game {
         let vehicle_rows = rows(&self.world, &self.world.states()).0.to_vec();
         for row in vehicle_rows {
             let ground = self.ground_height(row[1], row[3]);
-            if ground > 0.0 && row[2] < ground - 0.5 {
+            let in_world = row[1].abs() <= LIMIT - TERRAIN_STEP as f32
+                && row[3].abs() <= LIMIT - TERRAIN_STEP as f32;
+            let fallen = !row[2].is_finite() || row[2] < -2.0;
+            if (in_world && ground > 0.0 && row[2] < ground - 0.5) || fallen || !in_world {
+                let (x, z, ground) = if in_world && ground > 0.0 {
+                    (row[1], row[3], ground)
+                } else {
+                    (self.spawn[0], self.spawn[2], self.ground_height(self.spawn[0], self.spawn[2]))
+                };
                 self.world.set_vehicle_position(
                     row[0] as u32,
-                    [row[1], ground + 1.0, row[3]],
+                    [x, ground + 1.0, z],
                     euler([row[4], row[5], row[6], row[7]]).0,
                 );
             }
