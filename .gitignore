@@ -5,3 +5,8 @@ dist/
 test-results/
 playwright-report/
 dist-explorer/
+
+# Rust
+target/
+crates/physics/pkg/
+crates/physics/pkg-node/
