@@ -294,8 +294,12 @@ impl Game {
             "spawn" => {
                 let model = command.get("model").and_then(Value::as_str).ok_or_else(|| "Missing vehicle model".to_string())?;
                 let (x, z) = self.player_position(id)?;
-                let y = self.ground_height(x + 6.0, z) + 1.0;
-                self.vehicles.spawn_debug(&mut self.world, model, [x + 6.0, y, z])?;
+                // The player start sits beside the town-hall wall. Put debug cars
+                // behind the player so their body and suspension do not spawn inside
+                // that wall; keep the five-metre interaction reach intact.
+                let spawn_z = z - 5.5;
+                let y = self.ground_height(x, spawn_z) + 1.0;
+                self.vehicles.spawn_debug(&mut self.world, model, [x, y, spawn_z])?;
             }
             "gotoPlayer" | "bringPlayer" => {
                 let target = command
@@ -337,6 +341,11 @@ impl Game {
 
     fn debug_state(&self, id: u32, inspect: bool, inspected: Option<&str>) -> Value {
         let entities = self.entities();
+        let input = self
+            .players
+            .get(&id)
+            .map(|player| player.held.clone())
+            .unwrap_or_default();
         let inspection = if inspect {
             inspected
                 .and_then(|target| target.parse::<u32>().ok())
@@ -352,7 +361,7 @@ impl Game {
         json!({
             "playerId": id.to_string(), "time": self.tick as f64 / TICK_RATE as f64,
             "day": self.day, "dayRate": self.day_rate, "citySeed": 0,
-            "entities": entities.values().collect::<Vec<_>>(), "input": Controls::default(),
+            "entities": entities.values().collect::<Vec<_>>(), "input": input,
             "inspection": inspection, "destruction": {"brokenProps": [], "nearby": [], "debris": self.destruction.states.clone(), "maxBodies": 128},
             "traffic": {"jamCount": 0, "jammedCars": 0, "honks": 0, "respawned": 0, "pendingRespawns": 0}
         })
