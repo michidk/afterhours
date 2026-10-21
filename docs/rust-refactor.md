@@ -12,12 +12,15 @@ predicts with the same wasm physics the server runs.
 ## Phases
 
 ### Phase 1: physics crate (done, PR 1)
+
 - [x] `crates/physics`: Rapier vehicles and characters, flat state export,
       snapshot/restore for replay.
 - [x] wasm build (`scripts/build-physics.sh`) and native-vs-wasm parity check.
 
 ### Phase 2: server crate (in progress)
+
 Milestone 2.1, transport and core loop:
+
 - [x] `crates/protocol`: serde message types, ts-rs export to `shared/generated/`.
 - [x] `crates/server`: axum HTTP (health, static `dist/`), WebSocket sessions,
       30 Hz tick, join/welcome, tick-stamped input queue with `lead`, delta
@@ -26,12 +29,15 @@ Milestone 2.1, transport and core loop:
 - [x] Integration test: two clients join, walk, see each other, enter a car.
 
 Milestone 2.2, client on the new protocol:
-- [ ] `client/network` speaks the generated types; prediction uses the wasm
+
+- [x] `client/network` speaks the generated types; prediction uses the wasm
       physics with restore + replay; interpolation for remote entities.
-- [ ] Vite dev proxies `/ws`, `/health` and city routes to the Rust server.
+- [x] Vite dev proxies `/ws`, `/health` and city routes to the Rust server
+      (`bun run server` + `bun run dev`).
 
 Milestone 2.3, gameplay parity (one PR per system, Node code deleted as each lands):
-- [ ] city loading and streaming (serve the prepared artifact, never generate it)
+
+- [x] city loading and streaming (serve the prepared artifact, never generate it)
 - [ ] vehicles: enter/exit, seats, all catalog models
 - [ ] combat, inventory, pickups, grenades
 - [ ] destruction and debris
@@ -42,10 +48,12 @@ Milestone 2.3, gameplay parity (one PR per system, Node code deleted as each lan
       Dockerfile and README
 
 ### Phase 3: city generator in Rust
+
 - [ ] port `mapgen/` and `scripts/prepare-city.ts` as `crates/mapgen`; keep the
       artifact format so the client does not change.
 
 ## Protocol decisions
+
 - msgpack over WebSocket now; WebTransport is a later swap behind the same types.
 - Inputs are tick-stamped (`tick`, `lead`) and carry edge events (interact, drop,
   reload, equip) in the same frame, so there is no separate event message to race.

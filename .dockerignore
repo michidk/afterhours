@@ -6,3 +6,7 @@ dist
 docs
 test-results
 playwright-report
+target
+crates/physics/pkg
+crates/physics/pkg-node
+.serena

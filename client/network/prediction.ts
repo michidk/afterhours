@@ -1,429 +1,166 @@
-import type { PredictedImpacts } from "../../shared/destruction.ts";
-import type { Entity, City, Input } from "../../shared/world.ts";
-import type { InputFrame } from "../../shared/protocol.ts";
+import init, { Physics } from "../../crates/physics/pkg/afterhours_physics.js";
+import { terrainMesh } from "../../shared/terrain.ts";
+import { WATER_LEVEL, WORLD_LIMIT } from "../../shared/water.ts";
 import {
-  predictStep,
-  predictionWorld,
-  constrainRenderPose,
-  wrap,
-} from "../../shared/physics/index.ts";
-import { TUNING } from "../../shared/catalog.ts";
+  inputX,
+  inputY,
+  LIMIT,
+  type City,
+  type Entity,
+  type Input,
+} from "../../shared/world.ts";
+import { wrap } from "../../shared/physics/vehicle.ts";
 
-const MAX_PREDICTION_STEPS = Math.floor(TUNING.predictionSeconds / TUNING.tick);
+/** Mirrors `VehicleSpec::SEDAN` and the walk speeds in crates/server/src/game.rs. */
+const SEDAN = [1000, 2, 4.3, 1.4, 9750, 7000, 0.55, 0.34] as const;
+const WALK_SPEED = 4.5,
+  SPRINT = 1.6;
+export const PRESENTATION = { smoothing: 0.1 };
+
+let ready: Promise<unknown> | undefined;
+/** Loads the wasm physics once; the server runs the same crate natively. */
+export function loadPhysics() {
+  return (ready ??= init());
+}
+
+export interface PredictedInput {
+  tick: number;
+  input: Input;
+}
+
 /**
- * Presentation clock for the controlled body. The input clock re-paces commands on
- * every server report, by up to a few milliseconds on a jittery link, and one command
- * is one tick of motion, so drawing it at the command rate makes the speed surge and
- * sag. The drawn body instead runs on its own clock at the average command rate,
- * drifting toward the newest command by at most `skew` while it is within half a
- * tick, up to `catchUp` (or `brake` when ahead) when it is a tick and a half away,
- * and snapping beyond
- * `snap` ticks. Rates average over `average` seconds; a change larger than `step`
- * is a real slowdown or recovery and is followed at once. The drawn body never moves
- * back: far ahead it holds still. Frames longer than `longFrame` ms skip smoothing.
+ * Runs the local body in the shared wasm physics: restore the server's row, replay the
+ * inputs it has not applied yet, and present the result with a decaying offset so
+ * corrections slide instead of snapping.
  */
-export const PRESENTATION = {
-  gain: 0.5,
-  skew: 0.05,
-  catchUp: 0.25,
-  brake: 0.6,
-  snap: 2,
-  average: 0.3,
-  step: 0.45,
-  longFrame: 100,
-};
-const MAX_PENDING_INPUTS = Math.ceil(2 / TUNING.tick);
-type PredictedInput = InputFrame & { interval: number };
 export class Prediction {
   pending: PredictedInput[] = [];
   body: Entity | undefined;
-  ownership = "";
   corrections = 0;
   lastCorrection = { distance: 0, angle: 0 };
-  offset = { x: 0, z: 0, y: 0, angle: 0 };
-  lastRender = 0;
-  /** Seconds the rendered body runs ahead of the authoritative snapshot it replays from. */
-  ahead = 0;
-  private smoothedAt = 0;
-  /** Presented command position in sequence units, its time and average rate. */
-  private presented: { at: number; seq: number; rate: number } | undefined;
-  private lastReconcile = 0;
-  private lastInput: PredictedInput | undefined;
-  private displayed: Pick<Entity, "x" | "y" | "z" | "angle"> | undefined;
-  private authoritative: Entity | undefined;
-  private presentationMode: "predicted" | "authoritative" | undefined;
-  private missingMap = false;
-  private nearby: Entity[] = [];
-  private shadows: Entity[] = [];
-  private contacts = new Set<string>();
-  private impacts: PredictedImpacts = new Map();
-  private suspended = false;
-  private discardedThrough = -1;
-  constructor(
-    readonly city: City,
-    private worldReady = (_point: { x: number; z: number }) => true,
-  ) {}
+  offset = { x: 0, y: 0, z: 0, angle: 0 };
+  private world = new Physics();
+  private kind: "character" | "vehicle" | undefined;
+  private id = 0;
+  private facing = 0;
+  private lastRender = 0;
+  constructor(map: Pick<City, "terrain">) {
+    // shortcut: only terrain, water and the world floor collide here; buildings, parks
+    // and props are server-only until the atlas carries them.
+    if (map.terrain) {
+      const { positions, indices } = terrainMesh(map.terrain);
+      this.world.add_trimesh(Float32Array.from(positions), Uint32Array.from(indices));
+    } else this.world.add_box(0, -0.1, 0, LIMIT, 0.1, LIMIT, 0);
+    this.world.add_box(0, WATER_LEVEL - 0.4, 0, WORLD_LIMIT, 0.1, WORLD_LIMIT, 0);
+  }
   reset() {
     this.pending = [];
     this.body = undefined;
-    this.ownership = "";
-    this.offset = { x: 0, z: 0, y: 0, angle: 0 };
-    this.lastInput = undefined;
-    this.displayed = undefined;
-    this.authoritative = undefined;
-    this.presentationMode = undefined;
-    this.missingMap = false;
-    this.nearby = [];
-    this.shadows = [];
-    this.contacts.clear();
-    this.impacts.clear();
-    this.suspended = false;
-    this.discardedThrough = -1;
-    this.lastRender = 0;
-    this.smoothedAt = 0;
-    this.presented = undefined;
-    this.lastReconcile = 0;
-    this.lastCorrection = { distance: 0, angle: 0 };
+    this.offset = { x: 0, y: 0, z: 0, angle: 0 };
+    this.remove();
   }
-  get status() {
-    if (!this.body) return "waiting for authority";
-    if (this.missingMap || !this.worldReady(this.body)) return "waiting for map";
-    return this.suspended || this.pending.length > MAX_PREDICTION_STEPS
-      ? "waiting for acknowledgements"
-      : "predicting";
+  private remove() {
+    if (this.kind === "vehicle") this.world.remove_vehicle(this.id);
+    else if (this.kind === "character") this.world.remove_character(this.id);
+    this.kind = undefined;
   }
-  reconcile(player: Entity, entities: Entity[], ack: number, now = this.lastRender) {
-    const authoritative = entities.find((e) => e.id === (player.vehicle || player.id));
-    if (!authoritative) return;
-    // Passengers follow the interpolated vehicle; their controls never predict it.
-    if (player.vehicle && authoritative.driver !== player.id) {
-      this.reset();
+  /** Authoritative state for the local body plus its raw physics row. */
+  reconcile(entity: Entity, you: number[], ack: number | undefined) {
+    const kind = entity.vehicle ? "vehicle" : "character";
+    if (kind !== this.kind) {
+      this.remove();
+      this.kind = kind;
+      this.id =
+        kind === "vehicle"
+          ? this.world.spawn_vehicle(
+              ...SEDAN,
+              entity.x,
+              entity.y,
+              entity.z,
+              entity.angle,
+            )
+          : this.world.spawn_character(entity.x, entity.y, entity.z);
+    }
+    try {
+      this.world.restore(Float32Array.from(you));
+    } catch {
       return;
     }
-    if (this.ownership !== authoritative.id) {
-      this.reset();
-      this.ownership = authoritative.id;
-    }
-    this.decayOffset(now);
-    // Compare both histories at one command position, including their extrapolation cap.
-    const sequence = this.lastInput
-      ? this.lastInput.seq + this.presentation(now, false)
-      : undefined;
-    const previous = this.sample(now, undefined, false, sequence)?.body;
-    const gap = Math.min(2, Math.max(0, (now - this.lastReconcile) / 1000));
-    this.lastReconcile = now;
-    const acknowledged = this.pending.find((frame) => frame.seq === ack);
-    this.pending = this.pending.filter((frame) => frame.seq > ack);
-    this.authoritative = structuredClone(authoritative);
-    this.body = structuredClone(authoritative);
-    this.nearby = entities;
-    this.shadows = predictionWorld(this.body, entities);
-    this.contacts = new Set([this.body.id]);
-    this.impacts = new Map();
-    this.suspended = ack < this.discardedThrough;
-    if (this.worldReady(this.body)) {
-      // Replay a complete prefix, never a suffix or an unbounded backlog.
-      const replay = this.suspended ? [] : this.pending.slice(0, MAX_PREDICTION_STEPS);
-      this.lastInput = this.suspended
-        ? undefined
-        : (replay.at(-1) ?? acknowledged ?? this.lastInput);
-      // Held slots move authority beyond the newest command; anchor presentation to
-      // that slot too, or extrapolation adds its movement a second time.
-      if (this.lastInput && this.lastInput.seq < ack)
-        this.lastInput = {
-          ...this.lastInput,
-          seq: ack,
-          timestamp:
-            this.lastInput.timestamp +
-            (ack - this.lastInput.seq) * this.lastInput.interval,
-        };
-      for (const frame of replay) {
-        if (!this.worldReady(this.body)) break;
-        predictStep(
-          this.body,
-          frame.input,
-          this.city,
-          entities,
-          TUNING.tick,
-          this.shadows,
-          this.contacts,
-          this.impacts,
-        );
-      }
-    }
-    this.missingMap = !this.worldReady(this.body);
-    if (this.missingMap) {
-      this.pending = [];
-      this.lastInput = undefined;
-      this.body = structuredClone(authoritative);
-      this.shadows = predictionWorld(this.body, entities);
-      this.contacts = new Set([this.body.id]);
-      this.impacts = new Map();
-    }
-    if (previous) {
-      const next = this.sample(now, undefined, false, sequence)!.body,
-        dx = previous.x - next.x,
-        dz = previous.z - next.z,
-        dy = previous.y - next.y;
-      this.lastCorrection = {
-        distance: Math.hypot(dx, dz, dy),
-        angle: Math.abs(wrap(previous.angle - next.angle)),
-      };
-      if (this.lastCorrection.distance > 0.3) this.corrections++;
-      const correctionLimit = Math.max(
-        3,
-        Math.hypot(previous.vx, previous.vy, previous.vz) * (0.5 + gap),
-        Math.hypot(this.body.vx, this.body.vy, this.body.vz) * (0.5 + gap),
-      );
-      if (this.lastCorrection.distance < correctionLimit) {
-        this.offset.x += dx;
-        this.offset.z += dz;
-        this.offset.y += dy;
-        this.offset.angle = wrap(this.offset.angle + wrap(previous.angle - next.angle));
-      } else {
-        this.offset = { x: 0, z: 0, y: 0, angle: 0 };
-        this.displayed = undefined;
-      }
-    }
-  }
-  private decayOffset(now: number) {
-    // New corrections start aging at receipt, even after a stalled render loop.
-    const seconds = Math.max(0, (now - this.smoothedAt) / 1000);
-    this.smoothedAt = now;
-    const distance = Math.hypot(this.offset.x, this.offset.z, this.offset.y);
-    const speed = this.body ? Math.hypot(this.body.vx, this.body.vy, this.body.vz) : 0;
-    const presentationSpeed = this.lastInput
-      ? (speed * TUNING.tick * 1000) / this.lastInput.interval
-      : speed;
-    // Smooth only presentation: small errors settle gently, large errors catch up faster.
-    const correctionSpeed = Math.max(18, presentationSpeed * 2);
-    const decay = Math.max(
-      Math.exp(-seconds * (6 + 12 * Math.min(1, distance))),
-      distance ? 1 - (correctionSpeed * seconds) / distance : 0,
-    );
-    const angleDecay = Math.exp(
-      -seconds * (6 + 12 * Math.min(1, Math.abs(this.offset.angle))),
-    );
-    const ahead =
-      this.body && speed > 0.1
-        ? (this.offset.x * this.body.vx +
-            this.offset.y * this.body.vy +
-            this.offset.z * this.body.vz) /
-          speed
-        : 0;
-    // Let authority catch a leading visual pose without reversing its travel.
-    const retained = Math.max(
-      0,
-      ahead * (1 - decay) - presentationSpeed * seconds * 0.5,
-    );
-    this.offset.x *= decay;
-    this.offset.z *= decay;
-    this.offset.y *= decay;
-    if (this.body && retained > 0) {
-      this.offset.x += (this.body.vx / speed) * retained;
-      this.offset.y += (this.body.vy / speed) * retained;
-      this.offset.z += (this.body.vz / speed) * retained;
-    }
-    this.offset.angle *= angleDecay;
-    if (Math.hypot(this.offset.x, this.offset.z, this.offset.y) < 0.001)
-      this.offset.x = this.offset.z = this.offset.y = 0;
-    if (Math.abs(this.offset.angle) < 0.00001) this.offset.angle = 0;
-  }
-  render(now: number, input?: Input) {
-    this.decayOffset(now);
-    this.lastRender = now;
-    const sample = this.sample(now, input, true);
-    if (!sample) return undefined;
-    const { body: pose, neighbours, contacts, impacts, mode } = sample;
-    if (this.displayed && this.presentationMode !== mode) {
+    if (ack !== undefined) this.pending = this.pending.filter((p) => p.tick > ack);
+    for (const p of this.pending) this.step(p.input);
+    const before = this.body,
+      after = this.read(entity);
+    if (before) {
+      const distance = Math.hypot(after.x - before.x, after.z - before.z),
+        angle = wrap(after.angle - before.angle);
+      this.lastCorrection = { distance, angle };
+      if (distance > 0.3) this.corrections++;
+      // Carry the visible error so the next frames ease it away.
       this.offset = {
-        x: this.displayed.x - pose.x,
-        y: this.displayed.y - pose.y,
-        z: this.displayed.z - pose.z,
-        angle: wrap(this.displayed.angle - pose.angle),
+        x: this.offset.x + before.x - after.x,
+        y: this.offset.y + before.y - after.y,
+        z: this.offset.z + before.z - after.z,
+        angle: this.offset.angle + wrap(before.angle - after.angle),
       };
+      if (distance > 2) this.offset = { x: 0, y: 0, z: 0, angle: 0 };
     }
-    this.presentationMode = mode;
-    pose.x += this.offset.x;
-    pose.z += this.offset.z;
-    pose.y += this.offset.y;
-    pose.angle = wrap(pose.angle + this.offset.angle);
-    const speed = Math.hypot(pose.vx, pose.vy, pose.vz);
-    const leading =
-      this.offset.x * pose.vx + this.offset.y * pose.vy + this.offset.z * pose.vz;
-    if (this.displayed && speed > 0.1 && (leading > 0 || mode === "authoritative")) {
-      const rewind =
-        ((this.displayed.x - pose.x) * pose.vx +
-          (this.displayed.y - pose.y) * pose.vy +
-          (this.displayed.z - pose.z) * pose.vz) /
-        speed;
-      if (rewind > 0) {
-        const dx = (pose.vx / speed) * rewind,
-          dy = (pose.vy / speed) * rewind,
-          dz = (pose.vz / speed) * rewind;
-        this.offset.x += dx;
-        this.offset.y += dy;
-        this.offset.z += dz;
-        pose.x += dx;
-        pose.y += dy;
-        pose.z += dz;
-      }
-    }
-    // A visual correction must not pull the controlled body through an obstacle.
-    if (
-      Math.hypot(this.offset.x, this.offset.z) > 0.001 ||
-      Math.abs(this.offset.angle) > 0.001
-    )
-      constrainRenderPose(pose, this.city, neighbours, impacts);
-    this.displayed = { x: pose.x, y: pose.y, z: pose.z, angle: pose.angle };
-    return { body: pose, neighbours, contacts, impacts };
+    this.body = after;
   }
-  private sample(now: number, input?: Input, advance = false, sequence?: number) {
-    if (this.body && !this.missingMap && this.worldReady(this.body)) {
-      const predicted = this.extrapolate(this.body, now, input, advance, sequence);
-      if (this.worldReady(predicted.body))
-        return { ...predicted, mode: "predicted" as const };
-    }
-    if (!this.authoritative) return undefined;
-    // Missing collision data disables physics, not presentation smoothing.
-    return {
-      body: structuredClone(this.authoritative),
-      neighbours: structuredClone(this.nearby),
-      contacts: new Set<string>(),
-      impacts: new Map<string, { x: number; y: number; z: number }>(),
-      mode: "authoritative" as const,
-    };
+  input(tick: number, input: Input) {
+    if (!this.kind || !this.body) return;
+    this.pending.push({ tick, input });
+    this.step(input);
+    this.body = this.read(this.body);
   }
-  /**
-   * Ticks the drawn body stands past the newest command: where the presentation clock
-   * is now, relative to that command. Steady pacing gives exactly the time since the
-   * command over its interval, as before.
-   */
-  private presentation(now: number, advance: boolean) {
-    const last = this.lastInput!,
-      tick = TUNING.tick * 1000,
-      target = last.seq + Math.max(0, (now - last.timestamp) / last.interval),
-      p = this.presented;
-    let next: { at: number; seq: number; rate: number };
-    // Long frames (a stalled or software-rendered browser) gain nothing from
-    // smoothing: draw where the commands put the body, as before.
-    if (!p || now < p.at || now - p.at > PRESENTATION.longFrame)
-      next = {
-        at: now,
-        seq: Math.max(target, p?.seq ?? target),
-        rate: tick / last.interval,
-      };
+  private step(input: Input) {
+    const x = inputX(input),
+      y = inputY(input);
+    if (this.kind === "vehicle") this.world.set_drive(this.id, y, x, input.brake);
     else {
-      const wall = (now - p.at) / tick,
-        instant = tick / last.interval,
-        // A large change is the server really slowing or recovering: follow it at once.
-        rate =
-          Math.abs(instant - p.rate) > PRESENTATION.step * p.rate
-            ? instant
-            : p.rate +
-              (instant - p.rate) *
-                (1 - Math.exp(-(now - p.at) / 1000 / PRESENTATION.average)),
-        error = target - (p.seq + wall * rate),
-        // Running ahead of the commands may brake hard; falling behind catches up
-        // gently, since a visible surge is worse than a brief slowdown.
-        limit =
-          PRESENTATION.skew +
-          ((error < 0 ? PRESENTATION.brake : PRESENTATION.catchUp) -
-            PRESENTATION.skew) *
-            Math.max(0, Math.min(1, Math.abs(error) - 0.5)),
-        trim = Math.max(-limit, Math.min(limit, error * PRESENTATION.gain));
-      next = { at: now, seq: p.seq + wall * rate * (1 + trim), rate };
-      // Snap forward when far behind; when far ahead hold still, never step back.
-      if (target - next.seq > PRESENTATION.snap) next.seq = target;
-      else if (next.seq - target > PRESENTATION.snap) next.seq = p.seq;
+      const speed = WALK_SPEED * (input.sprint ? SPRINT : 1);
+      this.world.set_move(this.id, x, y, speed, input.ascend);
+      if (x || y) this.facing = Math.atan2(x, y);
     }
-    if (advance) this.presented = next;
-    return Math.max(
-      -PRESENTATION.snap,
-      Math.min(
-        // With no future commands, authority continues held controls between snapshots.
-        this.pending.length ? PRESENTATION.snap : TUNING.inputHoldSeconds / TUNING.tick,
-        next.seq - last.seq,
-      ),
-    );
+    this.world.step();
   }
-  private extrapolate(
-    body: Entity,
-    now: number,
-    input?: Input,
-    advance = false,
-    sequence?: number,
-  ) {
-    const pose = {
-      ...body,
-      wheelSkids: body.wheelSkids?.slice(),
-      jetpack: body.jetpack && { ...body.jetpack },
+  private read(base: Entity): Entity {
+    const s = this.world.states();
+    if (this.kind === "vehicle") {
+      const [x, y, z, qx, qy, qz, qw, vx, vy, vz] = s.subarray(1, 11);
+      return {
+        ...base,
+        x,
+        y,
+        z,
+        vx,
+        vy,
+        vz,
+        angle: Math.atan2(2 * (qw * qy + qx * qz), 1 - 2 * (qy * qy + qz * qz)),
+        pitch: Math.asin(Math.max(-1, Math.min(1, 2 * (qw * qx - qy * qz)))),
+        roll: Math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qx * qx + qz * qz)),
+      };
+    }
+    const [x, y, z, vy] = s.subarray(1, 5);
+    return { ...base, x, y, z, vy, angle: this.facing };
+  }
+  /** The predicted body as drawn, with the correction offset easing out. */
+  render(now: number): Entity | undefined {
+    if (!this.body) return undefined;
+    const dt = Math.min(0.1, (now - this.lastRender) / 1000);
+    this.lastRender = now;
+    const keep = Math.exp(-dt / PRESENTATION.smoothing);
+    const o = this.offset;
+    this.offset = {
+      x: o.x * keep,
+      y: o.y * keep,
+      z: o.z * keep,
+      angle: o.angle * keep,
     };
-    const neighbours = structuredClone(this.shadows);
-    const contacts = new Set(this.contacts);
-    const impacts = new Map(this.impacts);
-    // Fill the gap between 30 Hz inputs at display refresh rate. This copy never
-    // changes the replay state or decides gameplay outcomes. The rendered pose sits
-    // one tick ahead of the last command's timestamp. Scale wall time by the
-    // paced input interval when the server is slow; allowing a second tick keeps
-    // it continuous when a late wakeup produces that command up to a tick late,
-    // instead of holding the pose and then lurching when the command arrives.
-    this.ahead = Math.min(this.pending.length, MAX_PREDICTION_STEPS) * TUNING.tick;
-    if (this.lastInput && !this.suspended) {
-      const partial =
-        (sequence === undefined
-          ? this.presentation(now, advance)
-          : sequence - this.lastInput.seq) * TUNING.tick;
-      this.ahead += partial;
-      // Behind the newest command (the clock ran slightly slow): step back along the
-      // motion; a fraction of a tick, so the straight-line estimate is exact enough.
-      if (partial < 0) {
-        pose.x += pose.vx * partial;
-        pose.y += pose.vy * partial;
-        pose.z += pose.vz * partial;
-        pose.angle = wrap(pose.angle + (pose.angularVelocity || 0) * partial);
-      }
-      if (partial > 0)
-        predictStep(
-          pose,
-          input ?? this.lastInput.input,
-          this.city,
-          this.nearby,
-          partial,
-          neighbours,
-          contacts,
-          impacts,
-        );
-    }
-    return { body: pose, neighbours, contacts, impacts };
-  }
-  input(frame: InputFrame, nearby: Entity[], interval = TUNING.tick * 1000) {
-    if (!this.body) return;
-    if (this.missingMap || !this.worldReady(this.body)) {
-      this.pending = [];
-      this.lastInput = undefined;
-      return;
-    }
-    this.nearby = nearby;
-    const predicted = { ...frame, interval };
-    this.pending.push(predicted);
-    if (this.pending.length > MAX_PENDING_INPUTS)
-      this.discardedThrough = this.pending.shift()!.seq;
-    if (this.suspended || this.pending.length > MAX_PREDICTION_STEPS) return;
-    this.lastInput = predicted;
-    if (this.body)
-      predictStep(
-        this.body,
-        frame.input,
-        this.city,
-        nearby,
-        TUNING.tick,
-        this.shadows,
-        this.contacts,
-        this.impacts,
-      );
+    const b = this.body;
+    return { ...b, x: b.x + o.x, y: b.y + o.y, z: b.z + o.z, angle: b.angle + o.angle };
   }
 }
+
 export function interpolate(
   a: Entity,
   b: Entity,

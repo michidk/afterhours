@@ -70,9 +70,15 @@ impl View {
             base,
             entities,
             removed,
+            you,
             ..
         } = m
         {
+            // The raw row is a `snapshot()` slice: 5 floats on foot, 13 in a car.
+            assert!(
+                you.as_ref().is_some_and(|y| y.len() == 5 || y.len() == 13),
+                "you={you:?}"
+            );
             // A delta against base B is valid for any state at or after B.
             assert!(
                 base.is_none_or(|b| self.tick.is_some_and(|t| b <= t)),

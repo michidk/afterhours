@@ -380,13 +380,16 @@ impl Game {
     fn you(&self, p: &Player) -> Option<Vec<f32>> {
         let s = self.world.states();
         let (cars, chars) = rows(&self.world, &s);
-        match p.body {
-            Ok(body) => chars
-                .iter()
-                .find(|r| r[0] as u32 == body)
-                .map(|r| r.to_vec()),
-            Err(car) => cars.iter().find(|r| r[0] as u32 == car).map(|r| r.to_vec()),
-        }
+        let snap = self.world.snapshot();
+        // `snapshot()` lays out 13 floats per vehicle then 5 per character, in `states()` order.
+        let (at, len) = match p.body {
+            Ok(body) => (
+                cars.len() * 13 + 5 * chars.iter().position(|r| r[0] as u32 == body)?,
+                5,
+            ),
+            Err(car) => (13 * cars.iter().position(|r| r[0] as u32 == car)?, 13),
+        };
+        Some(snap[at..at + len].to_vec())
     }
 
     fn broadcast(&self) {

@@ -1,6 +1,8 @@
 // Same scripted run as crates/physics/examples/parity.rs, on the wasm build.
 import { createRequire } from "node:module";
-const { Physics } = createRequire(import.meta.url)("../crates/physics/pkg-node/afterhours_physics.js");
+const { Physics } = createRequire(import.meta.url)(
+  "../crates/physics/pkg-node/afterhours_physics.js",
+);
 const w = new Physics();
 w.add_box(0, -0.5, 0, 200, 0.5, 200, 0);
 w.add_box(10, 0.5, 20, 3, 0.5, 3, 0.4);

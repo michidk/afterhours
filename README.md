@@ -6,11 +6,13 @@ A desktop browser urban sandbox: Babylon.js renders the city, and a CPU-only Nod
 
 ## Run
 
-Requires Node 24 and Bun 1.2.21 or newer.
+Requires Node 24, Bun 1.2.21 or newer, stable Rust with the `wasm32-unknown-unknown` target, and `wasm-bindgen-cli` 0.2.129.
 
 ```sh
 bun install --frozen-lockfile
-bun run dev
+scripts/build-physics.sh   # wasm physics for the client
+bun run server             # Rust game server on port 5174
+bun run dev                # Vite client, proxies /ws and /city to the server
 ```
 
 Open http://localhost:5173. A second tab or another device on your LAN joins the same city. Set `PORT` to change the port.
@@ -18,13 +20,14 @@ Open http://localhost:5173. A second tab or another device on your LAN joins the
 ```sh
 bun run check   # formatting, import boundaries, types
 bun run test    # unit and real-WebSocket tests
-bun run build   # production client
-bun run start   # serve the built client and WebSocket endpoint
+bun run build   # wasm physics and production client
+bun run start   # release server serving dist/ and the WebSocket endpoint
+cargo test      # physics, protocol and server tests
 ```
 
 `start` runs in production mode with debug tools disabled. `ALLOW_DEBUG=1` explicitly enables them for everyone on that server, and development always enables them, so never expose dev mode publicly. See [debugging](docs/debugging.md).
 
-Network and movement checks: `bun run test:network` (real WebSockets with delay and jitter), `bun run test:browser` (held-key movement in Chromium), and `bun run probe:drive -- --profile spiky` (deterministic jittered-link driving replay, profiles `none|lan|mild|moderate|spiky|wan`). `bun run bot:drive -- --url http://localhost:5173 --delay 60 --jitter 40 --spike 150` joins a running debug-enabled server as a second player with the real prediction stack, drives a car at full speed through an injected delay on its own socket only, and prints per-second networking stats plus the server health counters. See [movement testing](docs/movement-testing.md).
+The jittered-link driving probes and the Chromium movement spec were written against the retired Node netcode and are gone; `crates/server/tests` covers join, movement and vehicle entry over a real WebSocket. See [movement testing](docs/movement-testing.md).
 
 ## Controls
 
@@ -92,7 +95,7 @@ All of them are landmarks on the island map, and the debug Admin window teleport
 - `server/` owns all gameplay: movement, damage, pickups and ownership. It runs at 30 Hz and sends snapshots at 15 Hz.
 - `client/` renders, plays audio and predicts local movement. Prediction is provisional and always reconciles with server snapshots.
 - `shared/` holds protocol schemas, catalogs, spatial queries, navigation and the prediction-safe movement code both sides run.
-- `crates/physics/` is the Rust physics core (Rapier vehicles and characters) that will replace the TypeScript movement code; `scripts/build-physics.sh` builds it to wasm and `scripts/physics-parity.mjs` checks native and wasm runs match. `crates/protocol/` holds the wire types (`cargo test -p afterhours-protocol` regenerates `shared/generated/`), and `crates/server/` is the Rust server in progress (`cargo run -p afterhours-server`, port 5174). Neither is wired into the client yet; see `docs/rust-refactor.md`.
+- `crates/physics/` is the Rust physics core (Rapier vehicles and characters) that will replace the TypeScript movement code; `scripts/build-physics.sh` builds it to wasm and `scripts/physics-parity.mjs` checks native and wasm runs match. `crates/protocol/` holds the wire types (`cargo test -p afterhours-protocol` regenerates `shared/generated/`), and `crates/server/` is the Rust server (`bun run server`, port 5174) that the client now talks to; `bun run dev` serves the client and proxies to it. The Node `server/` stays until the Rust server reaches gameplay parity; see `docs/rust-refactor.md`.
 - `mapgen/` and `scripts/` hold the offline city pipeline and tooling. Import boundaries between these are enforced by `bun run check`.
 
 See [networking](docs/networking.md) and [physics](docs/physics.md).
@@ -109,26 +112,12 @@ This runs one non-root Node process behind Caddy with HTTPS, WebSockets, health 
 
 ## Current limits
 
-Snapshot delivery is checked separately from ping replies: after 500 ms without advancing authority the client requests a full state, and after two seconds it reconnects. Vehicle seats survive the 15-second reconnect grace period; stale controls are released and the parking brake is applied.
+The Rust server is the live backend and still reaches only part of the old gameplay: walking, jumping, and driving the two sedans parked at the spawn. The Node server under `server/` keeps the rest (combat, inventory, pickups, grenades, destruction, AI traffic and citizens, aircraft, watercraft, flooding, day and night, debug commands) until each system lands in Rust; see the milestone list in [the refactor goal](docs/rust-refactor.md).
 
-Delayed browser heartbeats allow queued replies to run before applying those deadlines, including stalls shorter than two seconds. The networking panel retains the last disconnect reason across reconnects so a snapshot timeout, send backlog and closed socket can be distinguished. This prevents false disconnects after a browser stall; it does not remove the rendering stall itself.
-
-Small prediction worlds avoid repeated collision sweep sorting while preserving collision pairs and solve order. Dense pileups can still exceed a frame budget; see the measured limits in [networking](docs/networking.md#small-collision-worlds).
-
-Map chunks are parsed and validated in a worker; mesh buffers transfer to the render thread without copying large number arrays. Duplicate chunk edges preserve collision caches. During a server stall, inputs for world ticks still owed survive until catch-up, in addition to the bounded future-command buffer. Input catch-up retains up to 500 ms of held movement, matching the server's hold window, and long-frame batches use at least the nominal tick interval. Longer pauses discard clock debt. This does not prevent stalls caused by CPU contention or rendering.
-
-Keyboard and pointer changes flush overdue input slots using the previous controls. The next scheduled slot can then be sent early with the new controls, without adding simulation ticks. Nearby planes replay the last authoritative throttle, steering and climb controls during provisional collision prediction. Protocol version 10 requires existing clients to refresh. Silent coasting consumes acknowledged movement slots, and resumed controls skip unsent slots only through the last silent coasting tick.
-
+- Inputs are stamped with the server tick they belong to and sent two ticks early; the client steers that lead from the `lead` the server reports in every snapshot. Late inputs are dropped, not queued, so a stall shows as a correction rather than slow motion.
+- Prediction runs the same wasm physics crate the server runs natively, restoring the server's raw state and replaying unacknowledged inputs. Only terrain, water and the world floor collide on the client; buildings and props are server-only until the client gets them.
+- Snapshots are deltas against the last tick the client acknowledged, with a full snapshot when the base is unknown. Remote bodies interpolate over a 100 ms buffer.
 - Graphics are procedural low-poly. There are no interiors, touch controls, accounts, moderation, saves or missions.
-- Cars use shared tire forces, slope gravity and ballistic vertical motion. Terrain contact cannot pull them down cliffs; crests preserve launch momentum. Pitch, roll and suspension are drawn, not simulated: the body settles on the ground under all four wheels, squats, dives and leans with acceleration, follows its flight path off a crest and squashes on landing, and a soft shadow stays on the ground below every car and aircraft. Stacking is not simulated. Building collision remains rectangular. The generator does not yet place ramps or paved surfaces.
-- Vehicles use a planar solver with separate altitude, not full suspension or aerodynamics.
-- The server buffers two spare input commands per player, kept there by the browser's input clock; a tick with nothing buffered repeats the last movement controls and acknowledges that slot in advance, so the late command is never stepped twice and the driver sees a correction only if it changed controls at exactly that moment. The input clock reduces its send rate as the server queue deepens, and prediction uses the exact interval scheduled for each command. Pacing adapts to sustained slowdown and drops its slow-rate estimate when the server buffer drains. An overloaded server can still slow gameplay; stalls longer than 500 ms release controls and correct. Late commands filling already simulated slots have separate queue capacity, so a returning batch does not evict new movement merely to fill those slots. The presentation clock advances its anchor with held-slot acknowledgements and follows held movement for the server's same half-second limit.
-- AI traffic and pedestrians that no player can reach within the prediction horizon are simulated at 15 Hz instead of 120 Hz (each moves every other tick, half of them on each), and distant pedestrians re-plan every fourth tick; everything within reach keeps full-rate physics. Parked vehicles at rest (no driver or AI, nothing burning, flooding or wrecked, on gentle ground or afloat) sleep until a collision moves them; moored boats still ride the swell, settled once per tick. A debug camera moved far from every player can show them. See [networking](docs/networking.md).
-- Sixteen moving clients have been tested locally, never over a real WAN. Server tick time under load has exceeded the 33 ms budget in some measurements; see [operations](docs/operations.md).
-- Automated browser tests use software rendering (SwiftShader), so their frame times are not hardware evidence. CI therefore skips the 250 ms frame-freeze check that local runs enforce.
-- Remote traffic uses a 100–250 ms adaptive interpolation buffer; uneven delivery adds display latency. Extrapolation remains capped at 100 ms. The client reconnects after five seconds without replies while the browser is responsive, or when outgoing traffic exceeds 4 KiB or stays queued for 250 ms.
-- Protocol 10 requires a refresh after deployment. Snapshots carry the last driving controls for remote cars and boats; new input changes still need a snapshot and can cause collision corrections.
-- Server stalls recover with complete world ticks, bounded to eight ticks of backlog. Longer pauses or sustained CPU overload can still cause slow motion and corrections. Contact display transitions are smoothed in both directions.
 - Fonts load from Google Fonts with local fallbacks.
 
 ## More documentation

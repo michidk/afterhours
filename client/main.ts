@@ -94,7 +94,7 @@ function toast(message: string) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => $("#toast").classList.add("hidden"), 4000);
 }
-function send(data: object) {
+function send(data: { type: string; [key: string]: unknown }) {
   network?.send(data);
 }
 function handleGamepadActions() {

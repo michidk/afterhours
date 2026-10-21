@@ -4,15 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --import tsx server/index.ts",
-    "build": "tsc --noEmit && vite build",
-    "start": "node --import tsx server/index.ts --production",
+    "dev": "vite",
+    "build": "scripts/build-physics.sh && tsc --noEmit && vite build",
+    "start": "cargo run --release -p afterhours-server",
     "test": "tsx --test --test-concurrency=1 tests/*.test.ts",
-    "test:network": "tsx scripts/network-realtime-test.ts",
-    "probe:drive": "tsx scripts/drive-probe.ts",
-    "bot:drive": "tsx scripts/drive-client.ts",
-    "test:browser": "playwright test",
-    "test:browser:docker": "bash scripts/test-browser-docker.sh",
     "city:generate": "tsx scripts/generate-city.ts",
     "city:meshes": "tsx scripts/bake-city-meshes.ts",
     "city:prepare": "tsx scripts/prepare-city.ts",
@@ -31,9 +26,9 @@
     "test:deployment": "tsx scripts/deployment-test.ts",
     "debug": "tsx scripts/debug.ts",
     "test:traffic": "tsx scripts/traffic-scenario.ts",
-    "bench:prediction": "tsx scripts/prediction-profile.ts",
     "probe:multiplayer": "tsx scripts/multiplayer-probe.ts",
-    "test:five-clients": "tsx scripts/five-client-test.ts"
+    "test:five-clients": "tsx scripts/five-client-test.ts",
+    "server": "cargo run -p afterhours-server"
   },
   "dependencies": {
     "@babylonjs/core": "^8.0.0",
