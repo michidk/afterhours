@@ -101,10 +101,13 @@ export class Prediction {
       this.kind = kind;
       this.vehicleModel = entity.model;
       this.vehicleEntity = entity.vehicle;
+      const vehicleSpec = entity.model
+        ? (VEHICLE_SPECS[entity.model] ?? VEHICLE_SPECS.sedan)
+        : VEHICLE_SPECS.sedan;
       this.id =
         kind === "vehicle"
           ? this.world.spawn_vehicle(
-              ...(VEHICLE_SPECS[entity.model] ?? VEHICLE_SPECS.sedan),
+              ...vehicleSpec,
               entity.x,
               entity.y,
               entity.z,
