@@ -92,6 +92,7 @@ All of them are landmarks on the island map, and the debug Admin window teleport
 - `server/` owns all gameplay: movement, damage, pickups and ownership. It runs at 30 Hz and sends snapshots at 15 Hz.
 - `client/` renders, plays audio and predicts local movement. Prediction is provisional and always reconciles with server snapshots.
 - `shared/` holds protocol schemas, catalogs, spatial queries, navigation and the prediction-safe movement code both sides run.
+- `crates/physics/` is the Rust physics core (Rapier vehicles and characters) that will replace the TypeScript movement code; `scripts/build-physics.sh` builds it to wasm and `scripts/physics-parity.mjs` checks native and wasm runs match. Not wired into the game yet.
 - `mapgen/` and `scripts/` hold the offline city pipeline and tooling. Import boundaries between these are enforced by `bun run check`.
 
 See [networking](docs/networking.md) and [physics](docs/physics.md).
