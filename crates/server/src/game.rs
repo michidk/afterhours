@@ -1,5 +1,6 @@
 //! The authoritative simulation: one owner task, no locks. Sessions feed it `Event`s and
 //! it writes encoded `ServerMessage`s back through each session's channel.
+use crate::{citizens::Citizens, city::City, traffic::Traffic};
 use afterhours_physics::{CHARACTER_STRIDE, Drive, Move, VEHICLE_STRIDE, VehicleSpec, World};
 use afterhours_protocol::{
     ClientMessage, Controls, Entity, Kind, ServerMessage, TICK_RATE, VERSION, encode,
@@ -46,10 +47,12 @@ pub struct Game {
     history: VecDeque<(u32, HashMap<u32, Entity>)>,
     /// City manifest sent in every welcome.
     pub map: serde_json::Value,
+    traffic: Traffic,
+    citizens: Citizens,
 }
 
 /// Yaw, pitch, roll (Y-X-Z) from an x, y, z, w quaternion.
-fn euler(q: [f32; 4]) -> (f32, f32, f32) {
+pub(crate) fn euler(q: [f32; 4]) -> (f32, f32, f32) {
     let [x, y, z, w] = q;
     let yaw = (2.0 * (w * y + x * z)).atan2(1.0 - 2.0 * (y * y + z * z));
     let pitch = (2.0 * (w * x - y * z)).clamp(-1.0, 1.0).asin();
@@ -84,7 +87,26 @@ impl Game {
             cars,
             history: VecDeque::new(),
             map: serde_json::Value::Null,
+            traffic: Traffic::default(),
+            citizens: Citizens::default(),
         }
+    }
+
+    /// Streets and sidewalks for AI traffic and pedestrians; without it there is no AI.
+    pub fn set_city(&mut self, city: &City) {
+        self.traffic = Traffic::new(city);
+        self.citizens = Citizens::new(city);
+    }
+
+    /// Live AI counts: (cars, pedestrians).
+    pub fn population(&self) -> (usize, usize) {
+        (self.traffic.len(), self.citizens.len())
+    }
+
+    /// Takes an AI car away from traffic control so another owner can seat players in it;
+    /// see `Traffic::vacate_car`. The vehicle stays in the physics world.
+    pub fn vacate_ai_car(&mut self, car: u32) -> Option<u32> {
+        self.traffic.vacate_car(car)
     }
 
     pub fn handle(&mut self, event: Event) {
@@ -189,6 +211,10 @@ impl Game {
         for id in ids {
             self.apply_input(id);
         }
+        let empty = HashMap::new();
+        let last = self.history.back().map_or(&empty, |(_, e)| e);
+        self.traffic.step(&mut self.world, last, self.tick);
+        self.citizens.step(&mut self.world, last, self.tick);
         self.world.step();
         self.tick += 1;
         let entities = self.entities();
@@ -303,8 +329,10 @@ impl Game {
         let mut out = HashMap::new();
         let mut car_rows = HashMap::new();
         for r in cars {
-            let (entity, driver) = self.cars[&(r[0] as u32)];
             car_rows.insert(r[0] as u32, r);
+            let Some(&(entity, driver)) = self.cars.get(&(r[0] as u32)) else {
+                continue;
+            };
             let (angle, pitch, roll) = euler([r[4], r[5], r[6], r[7]]);
             out.insert(
                 entity,
@@ -332,6 +360,8 @@ impl Game {
             );
         }
         let chars: HashMap<u32, _> = chars.iter().map(|r| (r[0] as u32, r)).collect();
+        self.traffic.entities(&car_rows, &mut out);
+        self.citizens.entities(&chars, &mut out);
         for (&id, p) in &self.players {
             let mut e = Entity {
                 id: id.to_string(),

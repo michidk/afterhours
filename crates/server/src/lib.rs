@@ -1,12 +1,14 @@
 //! HTTP + WebSocket front for the game: `/ws` sessions, `/health`, and the built client
 //! from `dist/`. The simulation itself lives in `game.rs` on its own task; the prepared
 //! city and its `/city/*` routes live in `city.rs`.
+pub mod citizens;
 pub mod city;
 mod game;
+pub mod traffic;
 
 pub use afterhours_physics::World;
 pub use city::{City, CityStore};
-pub use game::Game;
+pub use game::{Event, Game};
 
 use afterhours_protocol::{ClientMessage, TICK_RATE, VERSION, decode};
 use axum::{
@@ -19,7 +21,6 @@ use axum::{
     routing::get,
 };
 use futures_util::{SinkExt, StreamExt};
-use game::Event;
 use std::{
     path::PathBuf,
     sync::{

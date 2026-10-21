@@ -34,6 +34,22 @@ pub struct Road {
     pub bx: f64,
     pub bz: f64,
     pub width: f64,
+    /// Signal phase and stop-line distance for traffic arriving at end A/B (`shared/world.ts`).
+    #[serde(rename = "phaseA", skip_serializing_if = "Option::is_none")]
+    pub phase_a: Option<String>,
+    #[serde(rename = "phaseB", skip_serializing_if = "Option::is_none")]
+    pub phase_b: Option<String>,
+    #[serde(rename = "approachA", skip_serializing_if = "Option::is_none")]
+    pub approach_a: Option<f64>,
+    #[serde(rename = "approachB", skip_serializing_if = "Option::is_none")]
+    pub approach_b: Option<f64>,
+}
+
+/// Sidewalk graph: `points` is x, z pairs; `links` is a, b, crossing (0 none, 1 x, 2 z) triples.
+#[derive(Deserialize, Serialize)]
+pub struct Walkways {
+    pub points: Vec<f64>,
+    pub links: Vec<u32>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -76,6 +92,7 @@ pub struct City {
     pub surface: Option<serde::de::IgnoredAny>,
     pub roads: Vec<Road>,
     pub parks: Vec<Park>,
+    pub walkways: Option<Walkways>,
     pub landmarks: Value,
     pub ramps: Value,
     pub racetrack: Value,
