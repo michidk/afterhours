@@ -275,9 +275,6 @@ impl World {
     /// Advance one server tick.
     pub fn step(&mut self) {
         let dt = self.physics.integration_parameters.dt;
-        // Re-index colliders first so a tick after `restore` sees the same scene as a
-        // continuous run; the wheel raycasts below run before the pipeline's own update.
-        self.physics.detect_collisions(&(), &());
         for _ in 0..SUBSTEPS {
             self.drive_vehicles(dt);
             self.move_characters(dt);
@@ -437,6 +434,12 @@ impl World {
             c.vertical = d[3];
             c.grounded = d[4] != 0.0;
         }
+        // A zero-length pipeline step re-indexes the moved bodies without integrating, so
+        // the next tick's wheel raycasts see the same scene as a continuous run.
+        let dt = self.physics.integration_parameters.dt;
+        self.physics.integration_parameters.dt = 0.0;
+        self.physics.step();
+        self.physics.integration_parameters.dt = dt;
         Ok(())
     }
 }
