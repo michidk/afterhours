@@ -8,6 +8,8 @@
     "build": "scripts/build-physics.sh && tsc --noEmit && vite build",
     "start": "cargo run --release -p afterhours-server",
     "test": "tsx --test --test-concurrency=1 tests/*.test.ts",
+    "test:network": "tsx --test --test-concurrency=1 tests/network.test.ts tests/session.test.ts",
+    "test:browser": "tsx --test --test-concurrency=1 tests/city-render.test.ts tests/gameplay-render.test.ts",
     "city:generate": "tsx scripts/generate-city.ts",
     "city:meshes": "tsx scripts/bake-city-meshes.ts",
     "city:prepare": "tsx scripts/prepare-city.ts",
