@@ -36,8 +36,11 @@ const out = resolve(value("--out", ".mapgen-dump"));
 if (!Number.isInteger(seed)) throw Error("--seed must be an integer");
 await mkdir(out, { recursive: true });
 const json = (v: unknown) =>
-  JSON.stringify(v, (_k, nested) =>
-    ArrayBuffer.isView(nested) && !(nested instanceof DataView)
+  JSON.stringify(v, (_k, nested: unknown) =>
+    nested instanceof Float32Array ||
+    nested instanceof Float64Array ||
+    nested instanceof Int32Array ||
+    nested instanceof Uint8Array
       ? Array.from(nested)
       : nested,
   );

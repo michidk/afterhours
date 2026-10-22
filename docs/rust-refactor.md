@@ -61,6 +61,92 @@ shaped terrain, blocks, buildings, parks, and vegetation snapshots. The Rust
 `generate-city` binary intentionally exits until the native pipeline is complete;
 it contains no TypeScript or shell bridge.
 
+Step 2 is native Rust in `terrain.rs`, `hydrology.rs`, `shoreline.rs`, and
+`site.rs`. Calculations use f64; buffers corresponding to TypeScript
+`Float32Array` round to f32 only on writes. The field helpers preserve the
+TypeScript sliding blur sums and intermediate distance-transform rounding.
+Stable sorts, neighbour order, flood-heap ties, and shoreline insertion order
+match the oracle.
+
+The integration test runs unchanged TypeScript stages through
+`scripts/mapgen-dump.ts --terrain-only`, then compares each checkpoint. It runs
+both seeds at the full 385 × 385 runtime grid, checks integers, strings, array
+lengths, and object keys exactly, and accepts float differences only within
+`1e-9 * max(1, abs(expected), abs(actual))`. It reports the first differing JSON
+path and maximum absolute and relative numeric deltas. JSON decoding enables
+`float_roundtrip` so the comparison measures generator differences rather than
+parser rounding.
+
+Measured with Bun on this Linux worktree, in both debug and release parity tests:
+
+| Checkpoint                                                                          | Seed 713 max absolute / relative delta | Seed 42 max absolute / relative delta |
+| ----------------------------------------------------------------------------------- | -------------------------------------- | ------------------------------------- |
+| Raw heightmap and flatness                                                          | 0 / 0                                  | 0 / 0                                 |
+| First thermal erosion                                                               | 0 / 0                                  | 0 / 0                                 |
+| Droplet erosion                                                                     | 0 / 0                                  | 0 / 0                                 |
+| Second thermal erosion                                                              | 0 / 0                                  | 0 / 0                                 |
+| Settle                                                                              | 0 / 0                                  | 0 / 0                                 |
+| Keep main island                                                                    | 0 / 0                                  | 0 / 0                                 |
+| Shape coast                                                                         | 0 / 0                                  | 0 / 0                                 |
+| Priority fill: field and fill depth; D8 directions and flux                         | 0 / 0                                  | 0 / 0                                 |
+| Hydrology: carved/refilled field, rivers, lakes, flow, masks, water/coast distances | 0 / 0                                  | 0 / 0                                 |
+| Desirability and centre                                                             | 0 / 0                                  | 0 / 0                                 |
+| Shorelines: sloping bowl, disconnected basin, and seed-specific terrain             | 0 / 0                                  | 0 / 0                                 |
+
+No float-order exception or terrain-stage shortcut is needed for these seeds.
+The tests are enabled by default and finish well below two minutes in debug.
+Bun is a test prerequisite; production `src/` never invokes it. Run:
+
+```sh
+export PATH=$HOME/.cargo/bin:$PATH
+cargo test -p afterhours-mapgen --test terrain_parity -- --nocapture
+cargo clippy -p afterhours-mapgen --all-targets -- -D warnings
+```
+
+To retain and reuse dumps:
+
+```sh
+bun run scripts/mapgen-dump.ts --terrain-only --seed 713 --out /tmp/mapgen-dumps/713
+bun run scripts/mapgen-dump.ts --terrain-only --seed 42 --out /tmp/mapgen-dumps/42
+export PATH=$HOME/.cargo/bin:$PATH
+MAPGEN_DUMP_ROOT=/tmp/mapgen-dumps cargo test -p afterhours-mapgen --test terrain_parity -- --nocapture
+```
+
+The public `generate_heightmap(seed, size, cell)` returns `(Field, flatness)`;
+`generate_heightmap_with_tuning` accepts custom tuning. The requested read-only
+`generate_hydrology(&Field, seed, sea_level)` computes on a clone. The **pipeline
+must call `generate_hydrology_in_place(&mut field, seed, sea_level)`** so site
+scoring and roads see the filled basins and carved riverbeds, matching the
+TypeScript pipeline. Both entry points use the same native implementation.
+`desirability_field` and `choose_centre` consume that mutated field.
+
+Phase 3 remains unchecked until the other stages are merged and the complete
+seed 713 artifact comparison passes. Keep the TypeScript generator as the oracle;
+it can be deleted when full artifact parity is trusted and equivalent fixtures
+replace the oracle. `shortcut: Babylon mesh baking stays in TypeScript; upgrade
+when a native mesh baker can reproduce the existing renderer's output`.
+
+When integrating `pipeline.rs`, preserve this order from `mapgen/pipeline.ts`:
+
+1. Heightmap; thermal erosion with 10 iterations and talus 0.6; droplets with
+   `round(w * h * 0.7)` using `derive(seed, "droplets")`; thermal erosion with 4
+   iterations and talus 0.6; settle radius 1; keep main island; shape coast.
+2. Hydrology **in place**, with seed and sea level 0; desirability with the same
+   seed; centre selection; roads using that field and hydrology.
+3. Clone the field to `shaped`; smooth and densify road centrelines; build road
+   geometry; solve profiles against the original field and geometry trims; stamp
+   roads into `shaped`, retaining the returned road-cell mask; build bridges.
+4. Blocks against `shaped`; place buildings; stamp building pads using the
+   road-cell mask; sink terrain under asphalt and sidewalks, accounting for
+   buildings and the shared street/kerb constants.
+5. Parks against the final shaped field; vegetation with the geometry's street
+   predicate. Preserve the original field as `terrain` and the modified clone as
+   `shaped` in `GeneratedMap`.
+
+Temporary stage functions that return empty/default outputs cannot be part of the
+completed pipeline. The pipeline must call the native modules directly before
+full artifact parity can be assessed.
+
 ## Protocol decisions
 
 - msgpack over WebSocket now; WebTransport is a later swap behind the same types.
