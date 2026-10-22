@@ -34,6 +34,12 @@ fn boot() -> Result<(Game, Arc<CityStore>), String> {
     game.set_city(&loaded);
     game.park(&loaded);
     game.add_props(destruction::destructibles(&loaded));
+    let pads: Vec<_> = loaded
+        .pickups
+        .iter()
+        .map(|p| (p.x, p.z, p.weapon.clone()))
+        .collect();
+    game.combat.supplies(&pads, |x, z| loaded.height(x, z));
     Ok((game, Arc::new(store)))
 }
 

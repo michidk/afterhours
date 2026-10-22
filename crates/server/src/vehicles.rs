@@ -176,6 +176,16 @@ impl Vehicles {
         );
     }
 
+    /// `(physics id, entity id)` of every car.
+    pub fn pairs(&self) -> Vec<(u32, u32)> {
+        self.cars.iter().map(|(id, c)| (*id, c.entity)).collect()
+    }
+
+    /// Entity id of the car with physics id `car`.
+    pub fn entity_of(&self, car: u32) -> Option<u32> {
+        self.cars.get(&car).map(|c| c.entity)
+    }
+
     /// Width and length of a debug-spawnable model's footprint.
     pub fn footprint(&self, model: &str) -> Result<(f32, f32), String> {
         match model {

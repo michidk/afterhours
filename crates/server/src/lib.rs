@@ -3,6 +3,7 @@
 //! city and its `/city/*` routes live in `city.rs`.
 pub mod citizens;
 pub mod city;
+mod combat;
 pub mod destruction;
 mod game;
 pub mod traffic;

@@ -592,6 +592,69 @@ impl World {
         }
     }
 
+    // ── Queries used by gameplay ──────────────────────────────────────────
+
+    /// First body along `origin + dir * t`, `t <= max`: its vehicle/character id (0 for
+    /// static geometry) and the distance. `exclude` skips one body id (0 skips none).
+    pub fn cast_ray(
+        &self,
+        origin: [f32; 3],
+        dir: [f32; 3],
+        max: f32,
+        exclude: u32,
+    ) -> Option<(u32, f32)> {
+        let dir = Vector::from(dir).normalize_or_zero();
+        let mut filter = QueryFilter::default();
+        if let Some(h) = self.body_of(exclude) {
+            filter = filter.exclude_rigid_body(h);
+        }
+        let (collider, t) =
+            self.physics
+                .cast_ray(&Ray::new(Vector::from(origin), dir), max, true, filter)?;
+        let body = self.physics.colliders[collider].parent();
+        let id = self
+            .vehicles
+            .iter()
+            .map(|v| (v.id, v.body))
+            .chain(self.characters.iter().map(|c| (c.id, c.body)))
+            .find(|(_, b)| Some(*b) == body)
+            .map_or(0, |(id, _)| id);
+        Some((id, t))
+    }
+
+    fn body_of(&self, id: u32) -> Option<RigidBodyHandle> {
+        self.vehicles
+            .iter()
+            .find(|v| v.id == id)
+            .map(|v| v.body)
+            .or_else(|| self.characters.iter().find(|c| c.id == id).map(|c| c.body))
+    }
+
+    /// Overrides a character's vertical speed and lifts it off the ground (jetpack thrust).
+    pub fn set_vertical(&mut self, id: u32, vy: f32) -> bool {
+        match self.characters.iter_mut().find(|c| c.id == id) {
+            Some(c) => {
+                c.vertical = vy;
+                c.grounded = false;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Moves a character to `position` at rest (respawn).
+    pub fn teleport_character(&mut self, id: u32, position: [f32; 3]) -> bool {
+        let Some(c) = self.characters.iter_mut().find(|c| c.id == id) else {
+            return false;
+        };
+        let b = &mut self.physics.bodies[c.body];
+        b.set_position(Pose::from_translation(Vector::from(position)), true);
+        b.set_next_kinematic_translation(Vector::from(position));
+        c.vertical = 0.0;
+        c.grounded = false;
+        true
+    }
+
     // ── Reading and replaying state ───────────────────────────────────────
 
     /// Flat state: per vehicle `[id, x, y, z, qx, qy, qz, qw, vx, vy, vz]`, then per

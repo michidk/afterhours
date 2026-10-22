@@ -1,6 +1,7 @@
 //! The authoritative simulation: one owner task, no locks. Sessions feed it `Event`s and
 //! it writes encoded `ServerMessage`s back through each session's channel.
 use crate::city::{City, LIMIT, TERRAIN_SIDE, TERRAIN_STEP};
+use crate::combat::Combat;
 use crate::destruction::{Destructible, Destruction};
 use crate::vehicles::{INTEREST_RADIUS, Vehicles};
 use crate::{citizens::Citizens, traffic::Traffic};
@@ -23,13 +24,13 @@ pub enum Event {
     Disconnect(u32),
 }
 
-struct Player {
+pub(crate) struct Player {
     out: UnboundedSender<Vec<u8>>,
     name: String,
     color: String,
-    character: Option<serde_json::Value>,
-    /// Physics character while on foot, else the car entity id.
-    body: Result<u32, u32>,
+    pub(crate) character: Option<serde_json::Value>,
+    /// Physics character while on foot, else the car physics id.
+    pub(crate) body: Result<u32, u32>,
     inputs: BTreeMap<u32, Controls>,
     held: Controls,
     acked: Option<u32>,
@@ -55,6 +56,7 @@ pub struct Game {
     traffic: Traffic,
     citizens: Citizens,
     pub destruction: Destruction,
+    pub combat: Combat,
     terrain: Option<Vec<f32>>,
 }
 
@@ -95,6 +97,7 @@ impl Game {
             traffic: Traffic::default(),
             citizens: Citizens::default(),
             destruction: Destruction::new(),
+            combat: Combat::default(),
             terrain: None,
         }
     }
@@ -152,6 +155,7 @@ impl Game {
             Event::Disconnect(id) => {
                 self.pending.remove(&id);
                 self.destruction.forget(id);
+                self.combat.forget(id);
                 if let Some(p) = self.players.remove(&id) {
                     match p.body {
                         Ok(c) => {
@@ -453,6 +457,13 @@ impl Game {
         let last = self.history.back().map_or(&empty, |(_, e)| e);
         self.traffic.step(&mut self.world, last, self.tick);
         self.citizens.step(&mut self.world, last, self.tick);
+        self.combat.step(
+            &mut self.world,
+            &mut self.players,
+            &mut self.vehicles,
+            self.spawn,
+            self.tick as f64 / TICK_RATE as f64,
+        );
         self.world.step();
         // Keep bodies on terrain when a vehicle starts inside a baked mesh seam.
         // Rapier's vehicle ray casts can miss a triangle at spawn; recover before
@@ -503,6 +514,7 @@ impl Game {
             p.applied = Some(tick);
         }
         let c = p.held.clone();
+        self.combat.control(id, &c, p.character.as_ref());
         match p.body {
             Ok(body) => {
                 let speed = WALK_SPEED * if c.sprint { SPRINT } else { 1.0 };
@@ -559,6 +571,11 @@ impl Game {
         let (cars, chars) = rows(&self.world, &s);
         let mut out = HashMap::new();
         self.vehicles.entities(&self.world, self.day, &mut out);
+        for (car, entity) in self.vehicles.pairs() {
+            if let Some(e) = out.get_mut(&entity) {
+                self.combat.car_fields(car, e);
+            }
+        }
         let car_rows: HashMap<u32, _> = cars.iter().map(|r| (r[0] as u32, r)).collect();
         let chars: HashMap<u32, _> = chars.iter().map(|r| (r[0] as u32, r)).collect();
         self.traffic.entities(&car_rows, &mut out);
@@ -603,6 +620,7 @@ impl Game {
                     }
                 }
             }
+            self.combat.player_fields(id, &mut e);
             out.insert(id, e);
         }
         out
@@ -627,6 +645,7 @@ impl Game {
     fn broadcast(&mut self) {
         let mut events = std::mem::take(&mut self.events);
         events.append(&mut self.destruction.events);
+        events.append(&mut self.combat.take_events());
         let (tick, current) = self.history.back().unwrap();
         for (id, p) in &self.players {
             let broken = self.destruction.broken_for(*id, *tick);
@@ -667,8 +686,8 @@ impl Game {
                 day: self.day,
                 day_rate: 0.0,
                 events,
-                pickups: Vec::new(),
-                grenades: Vec::new(),
+                pickups: self.combat.pickups_near(me[0], me[1]),
+                grenades: self.combat.grenades_near(me[0], me[1]),
                 debris: self.destruction.states.clone(),
                 broken,
             }));
