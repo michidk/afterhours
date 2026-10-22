@@ -39,8 +39,8 @@ fn palette(k: BuildingKind) -> &'static [&'static str] {
     }
 }
 fn type_and_height(zone: Zone, dc: f64, footprint: f64, rng: &mut Rng) -> (BuildingKind, f64) {
-    let falloff = (-dc / 420.).exp();
-    let lognormal = range(rng, -0.25, 0.3).exp();
+    let falloff = crate::js_math::exp(-dc / 420.);
+    let lognormal = crate::js_math::exp(range(rng, -0.25, 0.3));
     let (mut kind, mut h) = match zone {
         Zone::Core => {
             if footprint > 450. && rng() < 0.45 + falloff * 0.4 {

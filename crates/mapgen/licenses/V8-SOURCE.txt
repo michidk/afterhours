@@ -2,8 +2,8 @@ Upstream URL:
 https://raw.githubusercontent.com/nodejs/node/v26.11.1/deps/v8/src/base/ieee754.cc
 
 Upstream SHA-256: badd30a2643ed785dcfbbce42f95c2522ccea3605cd39e2933467688aae1de14
-Adapted SHA-256:  b5efb5d473a0445d6d7697da362a08cc9e3c0d21152d8be705cc152a2e61b603
+Adapted SHA-256:  8873e57f7047e478173d92c530b016792dfc9187cad278b984bbd515a97395a5
 
-V8-STANDALONE.patch records every change from that upstream file: standalone includes and type shims, the provenance comment, and three C ABI exports. The mathematical routines are unchanged. The fdlibm and V8 notices are preserved in the translation unit and V8-LICENSE.
+V8-STANDALONE.patch records every change from that upstream file: standalone includes and type shims, the provenance comment, and four C ABI exports. The mathematical routines are unchanged. The fdlibm and V8 notices are preserved in the translation unit and V8-LICENSE.
 
 The build requires a C++20 compiler supporting -ffp-contract=off. Failure to support that flag fails the build, so the compiler cannot silently fuse operations that the oracle evaluates separately. No JavaScript runtime is used by this code.

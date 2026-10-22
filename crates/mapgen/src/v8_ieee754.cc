@@ -14,7 +14,7 @@
 // Copyright 2016 the V8 project authors. All rights reserved.
 
 // Vendored from nodejs/node v26.11.1, deps/v8/src/base/ieee754.cc.
-// Only adaptation: stand-alone include/type shims and three C ABI exports below.
+// Only adaptation: stand-alone include/type shims and four C ABI exports below.
 // See ../licenses/V8-LICENSE for the V8 BSD terms.
 
 #include <cmath>
@@ -3056,3 +3056,4 @@ double libm_cos(double x) { return glibc_cos(x); }
 extern "C" double afterhours_v8_sin(double x){return v8::base::ieee754::sin(x);}
 extern "C" double afterhours_v8_cos(double x){return v8::base::ieee754::cos(x);}
 extern "C" double afterhours_v8_atan2(double y,double x){return v8::base::ieee754::atan2(y,x);}
+extern "C" double afterhours_v8_exp(double x){return v8::base::ieee754::exp(x);}

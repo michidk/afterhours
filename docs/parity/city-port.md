@@ -45,12 +45,12 @@ that the unmerged native stages form an exact full pipeline.
 
 ## Floating-point details
 
-Platform `sin`, `cos`, `atan2` and `hypot` can differ from V8 by one ULP.
+Platform `sin`, `cos`, `atan2`, `exp` and `hypot` can differ from V8 by one ULP.
 Oriented-box area comparisons use strict `<`; one ULP can change the chosen edge,
 then change recursive lot splits and later RNG consumption. Adding epsilon ties
 would change the TypeScript algorithm and was rejected.
 
-The port instead uses the V8 fdlibm trigonometric routines and the two-argument
+The port instead uses the V8 fdlibm trigonometric and exponential routines and the two-argument
 V8 `Math.hypot` scaling/evaluation order. It preserves f64 expression order and
 f32 assignments where TypeScript writes a Float32Array. JSON parsing enables
 serde_json's `float_roundtrip`, since an imprecisely parsed input also changes

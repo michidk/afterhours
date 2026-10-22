@@ -4,6 +4,7 @@ unsafe extern "C" {
     fn afterhours_v8_sin(x: f64) -> f64;
     fn afterhours_v8_cos(x: f64) -> f64;
     fn afterhours_v8_atan2(y: f64, x: f64) -> f64;
+    fn afterhours_v8_exp(x: f64) -> f64;
 }
 pub fn sin(x: f64) -> f64 {
     unsafe { afterhours_v8_sin(x) }
@@ -13,6 +14,9 @@ pub fn cos(x: f64) -> f64 {
 }
 pub fn atan2(y: f64, x: f64) -> f64 {
     unsafe { afterhours_v8_atan2(y, x) }
+}
+pub fn exp(x: f64) -> f64 {
+    unsafe { afterhours_v8_exp(x) }
 }
 
 /// V8 FastMathHypot's two-argument order, including its scaling rounding.
@@ -41,5 +45,6 @@ mod tests {
         assert_eq!(cos(2.18403598161692), -0.5755198258855536);
         assert_eq!(atan2(1.23456789, 9.87654321), 0.12435499342522296);
         assert_eq!(hypot(1.23456789, 9.87654321), 9.9534046262581);
+        assert_eq!(exp(-0.25), 0.7788007830714049);
     }
 }
