@@ -224,7 +224,7 @@ pub fn place_vegetation(
                         x: q.x,
                         z: q.z,
                         h: 6.,
-                        angle: (n.z * side).atan2(-n.x * side),
+                        angle: crate::js_math::atan2(n.z * side, -n.x * side),
                     })
                 }
                 side = -side;

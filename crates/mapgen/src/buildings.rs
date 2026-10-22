@@ -212,7 +212,7 @@ fn fit_lot(
     }
     let a = lot.polygon[lot.frontage as usize];
     let b = lot.polygon[(lot.frontage as usize + 1) % lot.polygon.len()];
-    let angle = (b.z - a.z).atan2(b.x - a.x);
+    let angle = crate::js_math::atan2(b.z - a.z, b.x - a.x);
     let (c, s) = (crate::js_math::cos(-angle), crate::js_math::sin(-angle));
     let local: Vec<_> = lot
         .polygon
