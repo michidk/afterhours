@@ -327,11 +327,71 @@ impl GraphBuilder {
         }
     }
     pub fn to_road_graph(&self) -> RoadGraph {
+        let continuous = |node: usize| {
+            let n = &self.nodes[node];
+            if n.edges.len() != 2 {
+                return false;
+            }
+            let mut it = n.edges.iter();
+            let p = &self.edges[*it.next().unwrap()];
+            let q = &self.edges[*it.next().unwrap()];
+            p.kind == q.kind && p.bridge == q.bridge
+        };
+        let mut used = vec![false; self.edges.len()];
+        let mut chains: Vec<(RoadKind, bool, Vec<usize>)> = Vec::new();
+        for e in self.edges.iter().filter(|e| e.alive) {
+            if used[e.id] {
+                continue;
+            }
+            let mut start_node = e.a;
+            let mut start_edge = e.id;
+            let mut seen = HashSet::from([e.id]);
+            while continuous(start_node) {
+                let next = self.nodes[start_node]
+                    .edges
+                    .iter()
+                    .copied()
+                    .map(|id| &self.edges[id])
+                    .find(|x| x.id != start_edge);
+                let Some(prev) = next else {
+                    break;
+                };
+                if !seen.insert(prev.id) {
+                    break;
+                }
+                start_edge = prev.id;
+                start_node = if prev.a == start_node { prev.b } else { prev.a };
+            }
+            let kind = self.edges[start_edge].kind;
+            let bridge = self.edges[start_edge].bridge;
+            let mut nodes = vec![start_node];
+            let mut current = start_node;
+            let mut edge = start_edge;
+            loop {
+                used[edge] = true;
+                let e = &self.edges[edge];
+                current = if e.a == current { e.b } else { e.a };
+                nodes.push(current);
+                if !continuous(current) {
+                    break;
+                }
+                let next = self.nodes[current]
+                    .edges
+                    .iter()
+                    .copied()
+                    .find(|id| *id != edge && !used[*id]);
+                let Some(next) = next else {
+                    break;
+                };
+                edge = next;
+            }
+            chains.push((kind, bridge, nodes));
+        }
         let mut map = vec![usize::MAX; self.nodes.len()];
         let mut nodes = Vec::new();
         let mut edges = Vec::new();
-        for e in self.edges.iter().filter(|e| e.alive) {
-            for &id in &[e.a, e.b] {
+        for (kind, bridge, chain) in chains {
+            for &id in [chain[0], *chain.last().unwrap()].iter() {
                 if map[id] == usize::MAX {
                     map[id] = nodes.len();
                     let p = self.nodes[id].p;
@@ -347,29 +407,97 @@ impl GraphBuilder {
             let id = edges.len();
             edges.push(RoadEdge {
                 id,
-                a: map[e.a],
-                b: map[e.b],
-                kind: e.kind,
-                width: road_width(e.kind),
-                bridge: e.bridge,
-                points: vec![self.nodes[e.a].p, self.nodes[e.b].p],
+                a: map[chain[0]],
+                b: map[*chain.last().unwrap()],
+                kind,
+                width: road_width(kind),
+                bridge,
+                points: chain.iter().map(|n| self.nodes[*n].p).collect(),
                 heights: Vec::new(),
             });
-            nodes[map[e.a]].edges.push(id);
-            nodes[map[e.b]].edges.push(id);
+            nodes[map[chain[0]]].edges.push(id);
+            nodes[map[*chain.last().unwrap()]].edges.push(id);
         }
         RoadGraph { nodes, edges }
     }
 }
 
-pub fn planar_faces(graph: &RoadGraph) -> Vec<Vec<Point>> {
-    let mut out = Vec::new();
+pub fn planar_faces(graph: &RoadGraph) -> Vec<(Vec<Point>, Vec<usize>)> {
+    #[derive(Clone)]
+    struct Half {
+        edge: usize,
+        from: usize,
+        to: usize,
+        points: Vec<Point>,
+    }
+    let mut outgoing: HashMap<usize, Vec<Half>> = HashMap::new();
     for e in &graph.edges {
-        if e.points.len() >= 2 {
-            out.push(e.points.clone());
+        outgoing.entry(e.a).or_default().push(Half {
+            edge: e.id,
+            from: e.a,
+            to: e.b,
+            points: e.points.clone(),
+        });
+        outgoing.entry(e.b).or_default().push(Half {
+            edge: e.id,
+            from: e.b,
+            to: e.a,
+            points: e.points.iter().copied().rev().collect(),
+        });
+    }
+    let angle = |h: &Half| {
+        let p = h.points[0];
+        let q = h.points[1.min(h.points.len() - 1)];
+        (q.z - p.z).atan2(q.x - p.x)
+    };
+    for list in outgoing.values_mut() {
+        list.sort_by(|a, b| angle(a).total_cmp(&angle(b)));
+    }
+    let key = |h: &Half| (h.edge, h.from);
+    let mut used = HashSet::new();
+    let mut faces = Vec::new();
+    for list in outgoing.values() {
+        for start in list {
+            if used.contains(&key(start)) {
+                continue;
+            }
+            let mut h = start.clone();
+            let mut ring = Vec::new();
+            let mut edges = Vec::new();
+            for _ in 0..10000 {
+                if !used.insert(key(&h)) {
+                    break;
+                }
+                edges.push(h.edge);
+                ring.extend_from_slice(&h.points[..h.points.len().saturating_sub(1)]);
+                let arrivals = &outgoing[&h.to];
+                let back = h.points[h.points.len().saturating_sub(2)];
+                let tip = *h.points.last().unwrap();
+                let incoming = (back.z - tip.z).atan2(back.x - tip.x);
+                let mut best = None;
+                for cand in arrivals {
+                    let mut delta = incoming - angle(cand);
+                    while delta <= 1e-9 {
+                        delta += std::f64::consts::TAU;
+                    }
+                    if cand.edge == h.edge && arrivals.len() > 1 {
+                        delta += std::f64::consts::TAU;
+                    }
+                    if best.as_ref().is_none_or(|(d, _)| delta < *d) {
+                        best = Some((delta, cand));
+                    }
+                }
+                let Some((_, next)) = best else {
+                    break;
+                };
+                h = next.clone();
+            }
+            if ring.len() >= 3 && geom::signed_area(&ring) > 0.0 {
+                faces.push((ring, edges));
+            }
         }
     }
-    out
+    faces
 }
 pub fn turns_left(a: Point, b: Point, c: Point) -> bool {
     geom::cross(geom::sub(b, a), geom::sub(c, b)) > 0.0
