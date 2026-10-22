@@ -1,3 +1,4 @@
+#![allow(clippy::chunks_exact_to_as_chunks, clippy::collapsible_if)]
 //! Faithful map-to-runtime conversion from `scripts/mapgen-city.ts`.
 use crate::{
     city_geometry::{
@@ -398,7 +399,10 @@ pub fn city_from_map_with_snapshots(
         markings,
         taken: Vec::new(),
         wet: wet_mask(map),
-        paved_rings: paved.iter().map(|p| ring(p)).collect(),
+        paved_rings: paved
+            .iter()
+            .map(|p| crate::features::PavedRing::new(ring(p)))
+            .collect(),
     };
     snapshot("before-town-hall", &features);
     let town_hall = place_town_hall(&mut features);

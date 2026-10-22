@@ -84,6 +84,29 @@ fn vegetation_matches_every_ts_output_field() {
     for seed in [713, 42] {
         let v = support::fixture(seed, "vegetation-input");
         let geometry: RoadGeometry = get(&v, "geometry");
+        let mut grid = std::collections::HashMap::<(i64, i64), Vec<&Vec<Point>>>::new();
+        for poly in geometry
+            .bands
+            .iter()
+            .map(|b| &b.polygon)
+            .chain(geometry.junctions.iter().map(|j| &j.polygon))
+        {
+            let mut x0 = f64::INFINITY;
+            let mut x1 = f64::NEG_INFINITY;
+            let mut z0 = f64::INFINITY;
+            let mut z1 = f64::NEG_INFINITY;
+            for p in poly {
+                x0 = x0.min(p.x);
+                x1 = x1.max(p.x);
+                z0 = z0.min(p.z);
+                z1 = z1.max(p.z);
+            }
+            for x in ((x0 - 0.25) / 32.).floor() as i64..=((x1 + 0.25) / 32.).floor() as i64 {
+                for z in ((z0 - 0.25) / 32.).floor() as i64..=((z1 + 0.25) / 32.).floor() as i64 {
+                    grid.entry((x, z)).or_default().push(poly);
+                }
+            }
+        }
         let on_street = |p: Point| {
             [
                 p,
@@ -106,12 +129,8 @@ fn vegetation_matches_every_ts_output_field() {
             ]
             .iter()
             .any(|q| {
-                geometry
-                    .bands
-                    .iter()
-                    .map(|b| &b.polygon)
-                    .chain(geometry.junctions.iter().map(|j| &j.polygon))
-                    .any(|poly| point_in_polygon(*q, poly))
+                grid.get(&((q.x / 32.).floor() as i64, (q.z / 32.).floor() as i64))
+                    .is_some_and(|polys| polys.iter().any(|poly| point_in_polygon(*q, poly)))
             })
         };
         let (trees, lamps) = place_vegetation(
