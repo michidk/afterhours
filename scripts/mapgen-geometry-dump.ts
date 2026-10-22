@@ -6,6 +6,8 @@ import { generateHeightmap, thermalErosion, dropletErosion, settle, keepMainIsla
 import { generateHydrology } from "../mapgen/hydrology.ts";
 import { chooseCentre, desirabilityField } from "../mapgen/site.ts";
 import { generateRoads } from "../mapgen/roads.ts";
+import { generateBlocks } from "../mapgen/blocks.ts";
+import { placeBuildings, stampPads } from "../mapgen/buildings.ts";
 import { derive } from "../mapgen/random.ts";
 import * as road from "../mapgen/roadgeometry.ts";
 import * as street from "../mapgen/streetfit.ts";
@@ -14,7 +16,7 @@ import { TERRAIN_STEP } from "../shared/terrain.ts";
 
 export async function dumpGeometry(seed: number, out: string) {
   await mkdir(out, { recursive: true });
-  const write = (name: string, value: unknown) => writeFile(resolve(out, `${name}.json`), JSON.stringify(value, (_key, nested) => ArrayBuffer.isView(nested) ? Array.from(nested as Float32Array) : nested));
+  const write = (name: string, value: unknown) => writeFile(resolve(out, `${name}.json`), JSON.stringify(value, (_key, nested) => nested instanceof Float32Array ? Array.from(nested) : nested));
   const { field } = generateHeightmap(seed, LIMIT * 2, TERRAIN_STEP);
   thermalErosion(field, 10);
   dropletErosion(field, derive(seed, "droplets"), Math.round(field.w * field.h * 0.7));
@@ -43,8 +45,9 @@ export async function dumpGeometry(seed: number, out: string) {
   await write("streets", streets);
   const layers = [{ polygons: streets.asphalt, top: STREET_LIFT }, { polygons: streets.sidewalks, top: STREET_LIFT + KERB_HEIGHT }];
   const grid = { heights: shaped.data, side: shaped.w, step: shaped.cell, half: shaped.size / 2 };
-  // A rotated pad exercises the optional pad height and angle branch separately.
-  const pads = [{ x: centre.x, z: centre.z, w: 24, d: 15, y: 12, angle: 0.37 }, { x: 0, z: 0, w: 10, d: 12 }];
+  const blocks = generateBlocks({ graph, field: shaped, hydro, centre, seed });
+  const pads = placeBuildings(blocks, shaped, centre, seed);
+  stampPads(shaped, pads, cells);
   await write("sink-input", { grid, layers, pads });
   street.sinkUnderStreets(grid, layers, pads);
   await write("sunk-field", shaped);

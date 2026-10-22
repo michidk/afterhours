@@ -19,7 +19,9 @@ fn compare(expected: &Value, actual: &Value, path: &str) -> Option<Difference> {
             let af = a.as_f64()?;
             let bf = b.as_f64()?;
             let tolerance = 1e-9 * af.abs().max(bf.abs()).max(1.0);
-            if (af - bf).abs() <= tolerance {
+            if af == bf
+                || ((af.fract() != 0.0 || bf.fract() != 0.0) && (af - bf).abs() <= tolerance)
+            {
                 None
             } else {
                 Some(Difference {
@@ -32,9 +34,9 @@ fn compare(expected: &Value, actual: &Value, path: &str) -> Option<Difference> {
         (Value::Array(a), Value::Array(b)) => {
             if a.len() != b.len() {
                 return Some(Difference {
-                    path: path.into(),
-                    expected: expected.clone(),
-                    actual: actual.clone(),
+                    path: format!("{path}.length"),
+                    expected: a.len().into(),
+                    actual: b.len().into(),
                 });
             }
             a.iter()

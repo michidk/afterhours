@@ -35,13 +35,10 @@ pub fn len(a: Point) -> f64 {
 }
 pub fn norm(a: Point) -> Point {
     let l = len(a);
-    if l == 0.0 {
-        Point { x: 0.0, z: 0.0 }
-    } else {
-        Point {
-            x: a.x / l,
-            z: a.z / l,
-        }
+    let l = if l == 0.0 { 1.0 } else { l };
+    Point {
+        x: a.x / l,
+        z: a.z / l,
     }
 }
 pub fn perp(a: Point) -> Point {

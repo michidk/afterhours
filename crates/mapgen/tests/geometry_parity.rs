@@ -126,3 +126,67 @@ fn stamp_and_bridges_match_ts() {
         compare(&dir, "bridges", &bridge_decks(&graph));
     }
 }
+
+#[derive(serde::Deserialize)]
+struct SinkInput {
+    grid: afterhours_mapgen::streetfit::TerrainGrid,
+    layers: Vec<afterhours_mapgen::streetfit::StreetLayer>,
+    pads: Vec<afterhours_mapgen::streetfit::StreetPad>,
+}
+#[test]
+#[ignore = "full-size seed 713 and 42 oracle generation; see docs/rust-refactor.md"]
+fn street_fit_matches_ts() {
+    for seed in [713, 42] {
+        let dir = dump(seed);
+        let graph = load(&dir, "profile-graph");
+        let geometry = load(&dir, "geometry");
+        let actual = afterhours_mapgen::streetfit::street_polygons(&graph, &geometry);
+        compare(
+            &dir,
+            "streets",
+            &serde_json::json!({"asphalt": actual.0, "sidewalks": actual.1}),
+        );
+        let input: SinkInput = load(&dir, "sink-input");
+        let mut grid = input.grid.clone();
+        afterhours_mapgen::streetfit::sink_under_streets(&mut grid, &input.layers, &input.pads);
+        let expected: HeightField = load(&dir, "sunk-field");
+        compare(&dir, "sunk-field", &grid_to_field(&grid, &expected));
+        let tests: serde_json::Value = load(&dir, "street-test");
+        for row in tests.as_array().unwrap() {
+            let margin = row["margin"].as_f64().unwrap();
+            let queries = row["queries"].as_array().unwrap();
+            let test = afterhours_mapgen::streetfit::street_test(&geometry, margin);
+            let got: Vec<_> = queries
+                .iter()
+                .map(|q| {
+                    test(Point {
+                        x: q["x"].as_f64().unwrap(),
+                        z: q["z"].as_f64().unwrap(),
+                    })
+                })
+                .collect();
+            assert_eq!(
+                got,
+                row["results"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.as_bool().unwrap())
+                    .collect::<Vec<_>>(),
+                "street test seed {seed} margin {margin}"
+            );
+        }
+    }
+}
+fn grid_to_field(
+    grid: &afterhours_mapgen::streetfit::TerrainGrid,
+    template: &HeightField,
+) -> HeightField {
+    HeightField {
+        w: template.w,
+        h: template.h,
+        cell: template.cell,
+        size: template.size,
+        data: grid.heights.clone(),
+    }
+}
