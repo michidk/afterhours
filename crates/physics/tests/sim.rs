@@ -29,6 +29,8 @@ fn car_drives_forward_and_stays_on_the_ground() {
             throttle: 1.0,
             steer: 0.0,
             brake: false,
+            occupied: true,
+            ..Drive::default()
         },
     );
     for _ in 0..90 {
@@ -48,6 +50,8 @@ fn car_drives_forward_and_stays_on_the_ground() {
             throttle: 0.0,
             steer: 0.0,
             brake: true,
+            occupied: true,
+            ..Drive::default()
         },
     );
     // 7 m/s² takes about five seconds to shed the 33 m/s a three second run reaches.
@@ -64,17 +68,19 @@ fn positive_steer_turns_right() {
     w.set_drive(
         car,
         Drive {
-            throttle: 1.0,
+            throttle: 0.3,
             steer: 1.0,
             brake: false,
+            occupied: true,
+            ..Drive::default()
         },
     );
-    for _ in 0..90 {
+    for _ in 0..45 {
         w.step();
     }
     let s = w.states();
     assert!(yaw(&s[4..8]) > 0.2, "yaw={}", yaw(&s[4..8]));
-    assert!(s[1] > 1.0, "right turn moves toward +x, x={}", s[1]);
+    assert!(s[1] > 0.5, "right turn moves toward +x, x={}", s[1]);
 }
 
 #[test]
@@ -144,6 +150,8 @@ fn restore_and_replay_matches_the_continuous_run() {
                 throttle: 1.0,
                 steer: (i as f32 / 10.0).sin(),
                 brake: i % 40 > 35,
+                occupied: true,
+                ..Drive::default()
             },
         );
         w.set_move(

@@ -220,7 +220,8 @@ fn laps_the_racetrack_smoothly_and_stops() {
         }
         prev = now;
     }
-    for _ in 0..90 {
+    // The handbrake of the original game takes about five seconds to shed 20 m/s.
+    for _ in 0..300 {
         scene.input(
             1,
             Controls {
@@ -343,7 +344,7 @@ fn every_car_model_drives_level_and_brakes_to_a_stop() {
         let run = (moved.x - start.x).hypot(moved.z - start.z);
         assert!(run > 6.0, "{model} only covered {run:.1} m");
         assert!(tilt < 0.4, "{model} tilted {tilt:.2} rad");
-        for _ in 0..150 {
+        for _ in 0..300 {
             scene.input(
                 1,
                 Controls {

@@ -44,12 +44,14 @@ fn flat_out_levels_off_at_the_catalogue_top_speed() {
     }
 }
 
+/// The original game's brake is the handbrake: it locks the rear wheels, so a car sheds 20 m/s
+/// over about five seconds (sedan 5.2, sport 4.4 in `scripts/compare-handling.ts`).
 #[test]
-fn braking_from_20_stops_quickly_without_diving_or_hopping() {
+fn braking_from_20_stops_like_the_original_without_diving_or_hopping() {
     for (model, _) in CARS {
         let m = go("brake-from-20", model);
         assert!(
-            m.stopped_after.is_some_and(|t| t < 4.0),
+            m.stopped_after.is_some_and(|t| (3.5..8.0).contains(&t)),
             "{model}: {:?}",
             m.stopped_after
         );
@@ -159,4 +161,28 @@ fn hitting_a_parked_car_flat_out_does_not_roll_the_car() {
             m.max_height
         );
     }
+}
+
+/// Reference numbers measured on the original TypeScript game (`scripts/compare-handling.ts`,
+/// sedan): coasting 30 m/s for 10 s leaves 8.3, a 15 m/s turn at full lock leaves 9.2 m/s and
+/// swings at 1.0 rad/s, and full lock at 38 m/s slides sideways at 7.6 m/s down to 15.7 m/s.
+#[test]
+fn the_sedan_drives_like_the_original() {
+    let near = |got: f32, want: f32| (got - want).abs() <= want * 0.15;
+    let coast = go("coast-from-30", "sedan");
+    assert!(near(coast.final_speed, 8.3), "coast {}", coast.final_speed);
+    let corner = go("corner-15", "sedan");
+    assert!(
+        near(corner.final_speed, 9.2),
+        "corner {}",
+        corner.final_speed
+    );
+    assert!(
+        near(corner.mean_yaw_rate, 1.0),
+        "yaw {}",
+        corner.mean_yaw_rate
+    );
+    let lock = go("full-lock-at-speed", "sedan");
+    assert!(near(lock.max_lateral, 7.6), "slide {}", lock.max_lateral);
+    assert!(near(lock.final_speed, 15.7), "lock {}", lock.final_speed);
 }

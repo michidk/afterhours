@@ -39,7 +39,7 @@ const player = (model: string): [Entity, Entity] => {
   ];
 };
 
-const snapshot = [0, 0.8, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0];
+const snapshot = [0, 0.8, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0];
 
 test("local prediction uses the authoritative model for a seated driver", async () => {
   await loadPhysics();

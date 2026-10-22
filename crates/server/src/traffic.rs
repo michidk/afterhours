@@ -24,30 +24,8 @@ const COLORS: [&str; 5] = ["#e8b63f", "#e86551", "#55a9b8", "#f3eee0", "#80a177"
 /// `shared/catalog.ts` VEHICLES sedan/sport/van: (model, seats, health, spec).
 const MODELS: [(&str, usize, f32, VehicleSpec); 3] = [
     ("sedan", 4, 100.0, VehicleSpec::SEDAN),
-    (
-        "sport",
-        2,
-        85.0,
-        VehicleSpec {
-            mass: 850.0,
-            width: 1.9,
-            length: 4.1,
-            engine: 12500.0,
-            ..VehicleSpec::SEDAN
-        },
-    ),
-    (
-        "van",
-        2,
-        170.0,
-        VehicleSpec {
-            mass: 1600.0,
-            width: 2.2,
-            length: 5.0,
-            engine: 12500.0,
-            ..VehicleSpec::SEDAN
-        },
-    ),
+    ("sport", 2, 85.0, VehicleSpec::SPORT),
+    ("van", 2, 170.0, VehicleSpec::VAN),
 ];
 
 /// xorshift64: deterministic for a given city seed, no `rand` crate.
@@ -469,14 +447,17 @@ impl Car {
             return Drive {
                 throttle: -0.4,
                 steer: -error.clamp(-1.0, 1.0),
-                brake: false,
+                occupied: true,
+                ..Drive::default()
             };
         }
         Drive {
             throttle: if speed < desired { 0.65 } else { 0.0 },
             steer: (error * 2.0 - yaw_rate * 0.5).clamp(-1.0, 1.0),
-            // shortcut: the physics brake is on/off, so the Node service-brake ramp is a threshold.
-            brake: speed > desired + 0.5,
+            // shortcut: a threshold stands in for the Node service-brake ramp.
+            service_brake: f32::from(speed > desired + 0.5),
+            brake: false,
+            occupied: true,
         }
     }
 }
@@ -562,7 +543,7 @@ mod tests {
         };
         let d = car.drive(&e, &HashMap::new(), 0.0, &g, &mut Rng::new(3));
         assert_eq!(car.points.len(), 3);
-        assert!(d.throttle > 0.0 && !d.brake);
+        assert!(d.throttle > 0.0 && d.service_brake == 0.0);
         // Signalled junctions need three arms; fake one 8 m ahead with the x axis on red.
         car.points[0].junction = Some(Junction {
             x: -42.0,
@@ -576,7 +557,7 @@ mod tests {
         };
         let d = car.drive(&moving, &HashMap::new(), 0.0, &g, &mut Rng::new(3));
         assert_eq!(d.throttle, 0.0);
-        assert!(d.brake);
+        assert!(d.service_brake > 0.0);
         let d = car.drive(&moving, &HashMap::new(), 10.0, &g, &mut Rng::new(3));
         assert!(d.throttle > 0.0, "green for x traffic at 10 s");
     }

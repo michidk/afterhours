@@ -19,8 +19,34 @@ pub const GRAVITY: f32 = -9.81;
 /// Floats per vehicle and per character in [`World::states`].
 pub const VEHICLE_STRIDE: usize = 11;
 pub const CHARACTER_STRIDE: usize = 6;
+/// Floats per vehicle in [`World::snapshot`]: pose, velocities, then the tyre state
+/// (steering angle, rear grip lost to the handbrake).
+pub const SNAPSHOT_VEHICLE: usize = 15;
 /// Below this speed with no throttle the parking brake holds the car (m/s).
 const HOLD_SPEED: f32 = 2.0;
+/// The four-wheel tyre model of the original game (`shared/physics/vehicle.ts` CAR and
+/// WHEELS): per-wheel viscous rolling and lateral damping instead of Rapier's friction.
+const WHEELS: [(f32, f32, bool); 4] = [
+    (-0.7, 1.35, true),
+    (0.7, 1.35, true),
+    (-0.7, -1.35, false),
+    (0.7, -1.35, false),
+];
+const ROLLING: f32 = 32.5;
+/// Speed in m/s at which the steering lock halves.
+const STEER_FALLOFF: f32 = 30.0;
+const REAR_BIAS: f32 = 1.25;
+const STEER_RATE: f32 = 1.65;
+const STEER_RETURN: f32 = 2.8;
+const COUNTER_STEER_RATE: f32 = 3.5;
+const REAR_GRIP: f32 = 0.15;
+const HANDBRAKE: f32 = 0.75;
+const BRAKE_ROLLING: f32 = 8.0;
+const RECOVERY: f32 = 0.15;
+/// Deceleration in m/s² a stopped or slow car holds against shoves and slopes.
+const PARKING_BRAKE: f32 = 9.0;
+/// Deceleration in m/s² at full `service_brake` (AI stopping).
+const SERVICE_BRAKE: f32 = 14.0;
 const JUMP_SPEED: f32 = 5.5;
 const CHARACTER_RADIUS: f32 = 0.35;
 const CHARACTER_HALF_HEIGHT: f32 = 0.55;
@@ -33,8 +59,9 @@ pub struct VehicleSpec {
     pub height: f32,
     /// Peak drive force in newtons split over all four wheels.
     pub engine: f32,
-    /// Total braking force in newtons.
-    pub brake: f32,
+    /// Lateral tyre damping per front wheel in N per m/s of sideways speed
+    /// (`shared/catalog.ts` `grip`); the rear wheels grip 25% harder.
+    pub grip: f32,
     /// Steering lock in radians at standstill.
     pub steer: f32,
     pub wheel_radius: f32,
@@ -49,28 +76,28 @@ impl VehicleSpec {
         length: 4.3,
         height: 1.4,
         engine: 9750.0,
-        brake: 7_000.0,
+        grip: 1320.0,
         steer: 0.55,
         wheel_radius: 0.34,
         top_speed: 42.0,
     };
-    /// `shared/catalog.ts` VEHICLES.sport; brake, steer and wheels as the sedan.
+    /// `shared/catalog.ts` VEHICLES.sport; steer and wheels as the sedan.
     pub const SPORT: VehicleSpec = VehicleSpec {
         mass: 850.0,
         width: 1.9,
         length: 4.1,
         engine: 12500.0,
+        grip: 1500.0,
         top_speed: 52.0,
         ..Self::SEDAN
     };
-    /// `shared/catalog.ts` VEHICLES.van; brake, steer and wheels as the sedan.
+    /// `shared/catalog.ts` VEHICLES.van; steer and wheels as the sedan.
     pub const VAN: VehicleSpec = VehicleSpec {
         mass: 1600.0,
         width: 2.2,
         length: 5.0,
         engine: 12500.0,
-        // The sedan's 7 m/s² of braking, scaled to the heavier body.
-        brake: 11_200.0,
+        grip: 1800.0,
         top_speed: 30.0,
         ..Self::SEDAN
     };
@@ -80,7 +107,13 @@ impl VehicleSpec {
 pub struct Drive {
     pub throttle: f32,
     pub steer: f32,
+    /// The handbrake: locks the rear wheels (rolling drag up, grip down) for drifts.
     pub brake: bool,
+    /// Graded stopping brake, 0..1 of 14 m/s²; the AI's brake (players use `brake`).
+    pub service_brake: f32,
+    /// Someone is driving. An empty car (the default) holds the parking brake at any speed,
+    /// so a shove slides it to a halt; a driver off the throttle holds only below 2 m/s.
+    pub occupied: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -98,6 +131,9 @@ struct Vehicle {
     controller: DynamicRayCastVehicleController,
     spec: VehicleSpec,
     drive: Drive,
+    /// Current front wheel angle in radians; it chases the target at a limited rate.
+    steering: f32,
+    rear_grip_loss: f32,
 }
 
 struct Character {
@@ -322,8 +358,9 @@ impl World {
             // City terrain is a baked mesh with small height discontinuities at
             // chunk/road seams; extra travel keeps the raycast wheels grounded.
             max_suspension_travel: 0.8,
-            side_friction_stiffness: 1.0,
-            friction_slip: 1.35,
+            // The wheels only carry the suspension; `drive_vehicles` supplies all traction.
+            side_friction_stiffness: 0.0,
+            friction_slip: 0.0,
             max_suspension_force: spec.mass * 40.0,
         };
         let (hx, hz, y) = (
@@ -355,6 +392,8 @@ impl World {
             controller,
             spec,
             drive: Drive::default(),
+            steering: 0.0,
+            rear_grip_loss: 0.0,
         });
         id
     }
@@ -540,38 +579,7 @@ impl World {
     fn drive_vehicles(&mut self, dt: f32) {
         let p = &mut self.physics;
         for v in &mut self.vehicles {
-            // Read speed off the body, not the controller: a controller rebuilt after a
-            // restore has no history, and replay must match the continuous run exactly.
-            let speed = p.bodies[v.body].linvel().length();
-            // Steering lock halves at 30 m/s so fast turns stay gripped (as the old model).
-            let lock = v.spec.steer / (1.0 + speed / 30.0);
-            // Rapier takes a per-wheel, per-update brake impulse, so convert the total force.
-            // An unpowered car near standstill is held by the parking brake, so it cannot
-            // roll off a slope (`shared/physics/vehicle.ts` CAR.holdSpeed).
-            let hold = v.drive.throttle == 0.0 && speed < HOLD_SPEED;
-            let brake = if v.drive.brake || hold {
-                v.spec.brake * dt / 4.0
-            } else {
-                0.0
-            };
-            // The engine fades out over the last 30% of the top speed, so a flat-out car
-            // levels off there instead of accelerating without limit.
-            let headroom = ((1.0 - speed / v.spec.top_speed) / 0.3).clamp(0.0, 1.0);
-            // Wheel rays that land on a wall would drive the car up it, so a car tipped
-            // beyond about 30 degrees loses its engine until it falls back.
-            let upright = (p.bodies[v.body].rotation() * Vector::Y).y > 0.85;
-            let force = v.drive.throttle.clamp(-1.0, 1.0) * v.spec.engine / 4.0
-                * headroom
-                * f32::from(upright);
-            for (i, w) in v.controller.wheels_mut().iter_mut().enumerate() {
-                w.steering = if i < 2 {
-                    v.drive.steer.clamp(-1.0, 1.0) * lock
-                } else {
-                    0.0
-                };
-                w.engine_force = force;
-                w.brake = brake;
-            }
+            // Suspension first, so the wheel contacts below are this tick's, not history.
             let queries = p.broad_phase.as_query_pipeline_mut(
                 p.narrow_phase.query_dispatcher(),
                 &mut p.bodies,
@@ -579,6 +587,114 @@ impl World {
                 QueryFilter::exclude_dynamic().exclude_rigid_body(v.body),
             );
             v.controller.update_vehicle(dt, queries);
+            let body = &p.bodies[v.body];
+            let (rotation, vel, spin) = (*body.rotation(), body.linvel(), body.angvel());
+            // Heading as a unit vector; `libm` (not std) keeps sin/cos bit-identical on wasm.
+            let nose = rotation * Vector::Z;
+            let flat = (nose.x * nose.x + nose.z * nose.z).sqrt().max(1e-6);
+            let (sin, cos) = (nose.x / flat, nose.z / flat);
+            let (steer_sin, steer_cos) = (libm::sinf(v.steering), libm::cosf(v.steering));
+            let forward = vel.x * sin + vel.z * cos;
+            let spec = v.spec;
+            let drive = v.drive;
+            // The steering angle chases its target at a limited rate and counter-steers faster.
+            let target =
+                drive.steer.clamp(-1.0, 1.0) * spec.steer / (1.0 + forward.abs() / STEER_FALLOFF);
+            let rate = if target == 0.0 {
+                STEER_RETURN
+            } else if v.steering * target < 0.0 {
+                COUNTER_STEER_RATE
+            } else {
+                STEER_RATE
+            };
+            v.steering += (target - v.steering).clamp(-rate * dt, rate * dt);
+            v.rear_grip_loss = if drive.brake {
+                1.0
+            } else {
+                (v.rear_grip_loss - dt / RECOVERY).max(0.0)
+            };
+            // Tyre forces need the wheels on the ground, and on wheels rather than a wall:
+            // a car tipped beyond about 30 degrees gets none until it falls back.
+            let contacts = v
+                .controller
+                .wheels()
+                .iter()
+                .filter(|w| w.raycast_info().is_in_contact)
+                .count();
+            if contacts >= 2 && (rotation * Vector::Y).y > 0.85 {
+                let mass = spec.mass;
+                let inertia = mass * (spec.width * spec.width + spec.length * spec.length) / 12.0;
+                let power = drive.throttle.clamp(-1.0, 1.0)
+                    * spec.engine
+                    * if drive.throttle < 0.0 && forward <= 0.0 {
+                        0.75
+                    } else {
+                        1.0
+                    };
+                let (mut fx, mut fz, mut torque) = (sin * power, cos * power, 0.0);
+                for (wx, wz, front) in WHEELS {
+                    let (rx, rz) = (cos * wx + sin * wz, -sin * wx + cos * wz);
+                    let (ux, uz) = (vel.x + spin.y * rz, vel.z - spin.y * rx);
+                    let (sx, cz) = if front {
+                        (
+                            sin * steer_cos + cos * steer_sin,
+                            cos * steer_cos - sin * steer_sin,
+                        )
+                    } else {
+                        (sin, cos)
+                    };
+                    let (rolling_speed, lateral_speed) = (ux * sx + uz * cz, ux * cz - uz * sx);
+                    let rolling = ROLLING
+                        * if !front && drive.brake {
+                            1.0 + HANDBRAKE * (BRAKE_ROLLING - 1.0)
+                        } else {
+                            1.0
+                        };
+                    let lateral = spec.grip
+                        * if front {
+                            1.0
+                        } else {
+                            REAR_BIAS * (1.0 - v.rear_grip_loss * HANDBRAKE * (1.0 - REAR_GRIP))
+                        };
+                    let force_x = -sx * rolling * rolling_speed - cz * lateral * lateral_speed;
+                    let force_z = -cz * rolling * rolling_speed + sx * lateral * lateral_speed;
+                    fx += force_x;
+                    fz += force_z;
+                    torque += rz * force_x - rx * force_z;
+                }
+                // An empty or idling car holds its place; the AI's graded brake is separate.
+                let speed = (vel.x * vel.x + vel.z * vel.z).sqrt();
+                let hold = !drive.occupied || (drive.throttle == 0.0 && speed < HOLD_SPEED);
+                let brake = (speed / dt).min(if hold {
+                    PARKING_BRAKE
+                } else {
+                    drive.service_brake.clamp(0.0, 1.0) * SERVICE_BRAKE
+                });
+                if speed > 0.0 {
+                    fx -= vel.x / speed * brake * mass;
+                    fz -= vel.z / speed * brake * mass;
+                }
+                let mut next = Vector::new(vel.x + fx / mass * dt, vel.y, vel.z + fz / mass * dt);
+                // Locked wheels hold a hill, which viscous drag alone cannot: cancel the
+                // along-slope part of gravity while the handbrake is on and the pedal is up.
+                if drive.brake && drive.throttle == 0.0 {
+                    let up = rotation * Vector::Y;
+                    next.x -= -GRAVITY * up.y * up.x * dt;
+                    next.z -= -GRAVITY * up.y * up.z * dt;
+                }
+                // The catalogue speed is a hard ceiling, as in the original.
+                let ground_speed = (next.x * next.x + next.z * next.z).sqrt();
+                if ground_speed > spec.top_speed {
+                    next.x *= spec.top_speed / ground_speed;
+                    next.z *= spec.top_speed / ground_speed;
+                }
+                let body = &mut p.bodies[v.body];
+                body.set_linvel(next, true);
+                body.set_angvel(
+                    Vector::new(spin.x, spin.y + torque / inertia * dt, spin.z),
+                    true,
+                );
+            }
         }
     }
 
@@ -730,7 +846,21 @@ impl World {
             let b = &self.physics.bodies[v.body];
             let (t, r, l, a) = (b.translation(), b.rotation(), b.linvel(), b.angvel());
             out.extend_from_slice(&[
-                t.x, t.y, t.z, r.x, r.y, r.z, r.w, l.x, l.y, l.z, a.x, a.y, a.z,
+                t.x,
+                t.y,
+                t.z,
+                r.x,
+                r.y,
+                r.z,
+                r.w,
+                l.x,
+                l.y,
+                l.z,
+                a.x,
+                a.y,
+                a.z,
+                v.steering,
+                v.rear_grip_loss,
             ]);
         }
         for c in &self.characters {
@@ -742,15 +872,20 @@ impl World {
 
     /// Inverse of [`World::snapshot`] for the same set of entities, spawned in the same order.
     pub fn restore(&mut self, data: &[f32]) -> Result<(), String> {
-        let expected = self.vehicles.len() * 13 + self.characters.len() * 5;
+        let expected = self.vehicles.len() * SNAPSHOT_VEHICLE + self.characters.len() * 5;
         if data.len() != expected {
             return Err(format!(
                 "snapshot has {} floats, world needs {expected}",
                 data.len()
             ));
         }
-        let (vehicles, rest) = data.split_at(self.vehicles.len() * 13);
-        for (v, d) in self.vehicles.iter().zip(vehicles.as_chunks::<13>().0) {
+        let (vehicles, rest) = data.split_at(self.vehicles.len() * SNAPSHOT_VEHICLE);
+        for (v, d) in self
+            .vehicles
+            .iter_mut()
+            .zip(vehicles.as_chunks::<SNAPSHOT_VEHICLE>().0)
+        {
+            (v.steering, v.rear_grip_loss) = (d[13], d[14]);
             let b = &mut self.physics.bodies[v.body];
             b.set_position(
                 Pose::from_parts(

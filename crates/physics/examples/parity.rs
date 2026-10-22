@@ -17,6 +17,8 @@ fn main() {
                 // Triangle waves, not sin/cos: libm results differ between native and wasm.
                 steer: ((i % 40) as f32 - 20.0) / 20.0,
                 brake: i % 50 > 45,
+                occupied: true,
+                ..Drive::default()
             },
         );
         w.set_move(

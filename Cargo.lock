@@ -15,6 +15,7 @@ dependencies = [
 name = "afterhours-physics"
 version = "0.1.0"
 dependencies = [
+ "libm",
  "rapier3d",
  "serde",
  "serde_json",

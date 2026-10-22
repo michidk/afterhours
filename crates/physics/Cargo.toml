@@ -10,6 +10,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # enhanced-determinism: identical results on native x86_64 and wasm32.
 rapier3d = { version = "0.36", features = ["enhanced-determinism"] }
+libm = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 wasm-bindgen = { version = "0.2.129", optional = true }

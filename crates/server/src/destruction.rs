@@ -424,6 +424,14 @@ mod tests {
             vec![Destructible::new("lamp", 0.0, 8.0, 6.0, None, 0.0)],
         );
         w.set_vehicle_velocity(car, [0.0, 0.0, 12.0]);
+        // A driver off the throttle coasts; an empty car would stop on its parking brake.
+        w.set_drive(
+            car,
+            afterhours_physics::Drive {
+                occupied: true,
+                ..Default::default()
+            },
+        );
         let mut broke_at = None;
         for tick in 1..120 {
             w.step();

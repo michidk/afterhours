@@ -465,6 +465,8 @@ mod tests {
             throttle: 1.0,
             steer: 0.5,
             brake: false,
+            service_brake: 0.0,
+            occupied: true,
         };
         v.drive(&mut w, car, 2, drive);
         assert_eq!(v.cars[&car].steer, 0.0);

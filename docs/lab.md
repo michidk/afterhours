@@ -37,6 +37,24 @@ speed), `max_height`, `max_lateral` (sideways slide), `mean_yaw_rate`, `distance
 
 The ground drawing in `client/lab.ts` mirrors `build` in `src/lab.rs`: keep them in step.
 
+### Comparing with the original game
+
+The car is meant to drive like the original TypeScript game on `main` (`shared/physics/vehicle.ts`).
+`scripts/legacy-lab.ts` runs the same scenario JSON through that branch's own `predictStep`, and
+`scripts/compare-handling.ts` prints both side by side (top speed, 0-20 time, stopping time,
+coasting, turn rate, slide):
+
+```sh
+git worktree add --detach ../main-ref origin/main && ln -s "$PWD/node_modules" ../main-ref/node_modules
+LEGACY_DIR=../main-ref bunx tsx scripts/compare-handling.ts
+```
+
+The Rust car applies the original's four-wheel tyre model (per-wheel rolling and lateral damping,
+rate-limited steering, handbrake that locks the rear wheels, hard speed cap) to the Rapier body;
+Rapier only supplies suspension, collisions and terrain. `the_sedan_drives_like_the_original` in
+`crates/physics/tests/handling.rs` pins the original's numbers. Main only has flat ground, so slope,
+wall and kerb scenarios have no counterpart.
+
 ## Scene lab: the real city and game loop (`crates/server`)
 
 `scene-lab` boots `data/city.json` exactly like `main.rs` (world, parked fleet, props), joins

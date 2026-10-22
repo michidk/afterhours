@@ -57,7 +57,7 @@ impl Physics {
         length: f32,
         height: f32,
         engine: f32,
-        brake: f32,
+        grip: f32,
         steer: f32,
         wheel_radius: f32,
         top_speed: f32,
@@ -72,7 +72,7 @@ impl Physics {
             length,
             height,
             engine,
-            brake,
+            grip,
             steer,
             wheel_radius,
             top_speed,
@@ -86,6 +86,8 @@ impl Physics {
                 throttle,
                 steer,
                 brake,
+                service_brake: 0.0,
+                occupied: true,
             },
         )
     }

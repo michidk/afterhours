@@ -6,7 +6,7 @@ use crate::craft::{Fleet, PARACHUTE_FALL};
 use crate::destruction::{Destructible, Destruction};
 use crate::vehicles::{INTEREST_RADIUS, Vehicles};
 use crate::{citizens::Citizens, traffic::Traffic};
-use afterhours_physics::{CHARACTER_STRIDE, Drive, Move, VEHICLE_STRIDE, World};
+use afterhours_physics::{CHARACTER_STRIDE, Drive, Move, SNAPSHOT_VEHICLE, VEHICLE_STRIDE, World};
 use afterhours_protocol::{
     ClientMessage, Controls, Entity, Kind, ServerMessage, TICK_RATE, VERSION, WorldEvent, encode,
 };
@@ -621,6 +621,8 @@ impl Game {
                         throttle: c.y(),
                         steer: c.x(),
                         brake: c.brake,
+                        service_brake: 0.0,
+                        occupied: true,
                     },
                 );
                 if let Some(e) = self.vehicles.horn(&self.world, car, id, c.attack) {
@@ -712,13 +714,17 @@ impl Game {
         let s = self.world.states();
         let (cars, chars) = rows(&self.world, &s);
         let snap = self.world.snapshot();
-        // `snapshot()` lays out 13 floats per vehicle then 5 per character, in `states()` order.
+        // `snapshot()` lays out SNAPSHOT_VEHICLE floats per vehicle then 5 per character, in `states()` order.
         let (at, len) = match p.body {
             Ok(body) => (
-                cars.len() * 13 + 5 * chars.iter().position(|r| r[0] as u32 == body)?,
+                cars.len() * SNAPSHOT_VEHICLE
+                    + 5 * chars.iter().position(|r| r[0] as u32 == body)?,
                 5,
             ),
-            Err(car) => (13 * cars.iter().position(|r| r[0] as u32 == car)?, 13),
+            Err(car) => (
+                SNAPSHOT_VEHICLE * cars.iter().position(|r| r[0] as u32 == car)?,
+                SNAPSHOT_VEHICLE,
+            ),
         };
         Some(snap[at..at + len].to_vec())
     }

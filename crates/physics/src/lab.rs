@@ -222,6 +222,8 @@ pub fn run(scenario: &Scenario) -> Result<Report, String> {
                 throttle: step.throttle,
                 steer: step.steer,
                 brake: step.brake,
+                service_brake: 0.0,
+                occupied: true,
             },
         );
         for _ in 0..(step.seconds / TICK).round() as u32 {
@@ -282,8 +284,13 @@ pub const PRESETS: &[(&str, &str, &str)] = &[
     ),
     (
         "brake-from-20",
-        "20 m/s then full brake: stops within about 3 s without nose-diving or hopping.",
-        r#"{"start_speed":20,"script":[{"seconds":5,"brake":true}]}"#,
+        "20 m/s then the handbrake: stops in about 5 s (the original game's) without nose-diving or hopping.",
+        r#"{"start_speed":20,"script":[{"seconds":8,"brake":true}]}"#,
+    ),
+    (
+        "coast-from-30",
+        "30 m/s with the pedals released for 10 s: rolling drag leaves about 8 m/s (the original game's 8.3).",
+        r#"{"start_speed":30,"script":[{"seconds":10}]}"#,
     ),
     (
         "corner-15",
@@ -292,7 +299,7 @@ pub const PRESETS: &[(&str, &str, &str)] = &[
     ),
     (
         "full-lock-at-speed",
-        "Near top speed with full lock: must not roll over or leave the ground.",
+        "Near top speed with full lock: the rear breaks loose and the car scrubs speed, as in the original, but must not roll over or leave the ground.",
         r#"{"start_speed":38,"script":[{"seconds":4,"throttle":1,"steer":1}]}"#,
     ),
     (
