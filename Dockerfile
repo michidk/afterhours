@@ -29,7 +29,6 @@ COPY shared ./shared
 COPY mapgen ./mapgen
 COPY scripts ./scripts
 COPY client ./client
-COPY server ./server
 RUN mkdir -p data && chown node:node data
 USER node
 ENV NODE_ENV=production PORT=5173 RUST_LOG=info

@@ -9,7 +9,7 @@ import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { CityRenderer, type GeometryOptions } from "../client/world/render.ts";
 import type { CityScene } from "../client/scene.ts";
 import type { City } from "../shared/world.ts";
-import { CityStore } from "../server/city-stream.ts";
+import { CityStore } from "../scripts/city-store.ts";
 import { emptyCity } from "../shared/city-stream.ts";
 
 test("streamed meshes batch synchronously, boundary buildings render once and eviction disposes geometry", () => {

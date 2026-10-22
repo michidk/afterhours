@@ -232,19 +232,7 @@ impl Destruction {
                 i.vehicle,
                 [vx * STRIKE_RETENTION, vy, vz * STRIKE_RETENTION],
             );
-            self.events.push(WorldEvent {
-                kind: "propBreak".into(),
-                x: prop.x as f32,
-                y: prop.y + 0.5,
-                z: prop.z as f32,
-                angle: None,
-                length: None,
-                target: None,
-                source: None,
-                sound: Some(prop.sound().into()),
-            });
-            self.spawn(world, prop, time, strike_velocity(vx, vz));
-            self.changed += 1;
+            self.shatter(world, prop, time, vx, vz);
         }
         let mut i = 0;
         while i < self.debris.len() {
@@ -286,6 +274,37 @@ impl Destruction {
             }
         }
         self.states = self.debris.iter().map(|(_, d)| d.state.clone()).collect();
+    }
+
+    /// Announces a broken prop and throws its debris along (vx, vz).
+    fn shatter(&mut self, world: &mut World, prop: Destructible, time: f64, vx: f32, vz: f32) {
+        self.events.push(WorldEvent {
+            kind: "propBreak".into(),
+            x: prop.x as f32,
+            y: prop.y + 0.5,
+            z: prop.z as f32,
+            angle: None,
+            length: None,
+            target: None,
+            source: None,
+            sound: Some(prop.sound().into()),
+        });
+        self.spawn(world, prop, time, strike_velocity(vx, vz));
+        self.changed += 1;
+    }
+
+    /// Dev tool: breaks the standing prop `id` without a vehicle.
+    pub fn destroy(&mut self, world: &mut World, id: &str, tick: u32) -> Result<(), String> {
+        let key = self
+            .standing
+            .iter()
+            .find(|(_, s)| s.prop.id == id)
+            .map(|(k, _)| *k)
+            .ok_or_else(|| format!("No standing prop {id}"))?;
+        let prop = self.standing.remove(&key).unwrap().prop;
+        world.remove_prop(key);
+        self.shatter(world, prop, tick as f64 / TICK_RATE as f64, 0.0, 0.0);
+        Ok(())
     }
 
     fn spawn(&mut self, world: &mut World, prop: Destructible, time: f64, v: [f32; 3]) {
@@ -375,6 +394,22 @@ mod tests {
         assert_eq!(d.broken_for(1, 8), Some(vec![]));
         assert_eq!(d.broken_for(1, 10), None);
         assert_eq!(d.broken_for(2, 10), Some(vec![]));
+    }
+
+    #[test]
+    fn the_dev_tool_breaks_a_standing_prop_once() {
+        let mut w = World::new();
+        w.add_box([0.0, -0.5, 0.0], [200.0, 0.5, 200.0], 0.0);
+        let mut d = Destruction::new();
+        d.add_props(
+            &mut w,
+            vec![Destructible::new("lamp", 3.0, 3.0, 6.0, None, 0.0)],
+        );
+        let id = "lamp:3.0000,3.0000";
+        d.destroy(&mut w, id, 0).unwrap();
+        assert_eq!(d.broken(), vec![id.to_string()]);
+        assert_eq!(d.events.len(), 1);
+        assert!(d.destroy(&mut w, id, 0).is_err());
     }
 
     #[test]

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { decode } from "@msgpack/msgpack";
 import { z } from "zod";
-import type { CityStore } from "./city-stream.ts";
+import type { CityStore } from "./city-store.ts";
 
 const bytes = z.custom<Uint8Array>((value) => value instanceof Uint8Array);
 const artifact = z.object({

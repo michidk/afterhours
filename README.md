@@ -92,10 +92,10 @@ All of them are landmarks on the island map, and the debug Admin window teleport
 
 ## Architecture
 
-- `server/` owns all gameplay: movement, damage, pickups and ownership. It runs at 30 Hz and sends snapshots at 15 Hz.
+- `crates/server/` owns all gameplay: movement, damage, pickups and ownership. It runs at 30 Hz and sends snapshots at 15 Hz.
 - `client/` renders, plays audio and predicts local movement. Prediction is provisional and always reconciles with server snapshots.
 - `shared/` holds protocol schemas, catalogs, spatial queries, navigation and the prediction-safe movement code both sides run.
-- `crates/physics/` is the Rust physics core (Rapier vehicles and characters) that will replace the TypeScript movement code; `scripts/build-physics.sh` builds it to wasm and `scripts/physics-parity.mjs` checks native and wasm runs match. `crates/protocol/` holds the wire types (`cargo test -p afterhours-protocol` regenerates `shared/generated/`), and `crates/server/` is the Rust server (`bun run server`, port 5174) that the client now talks to; `bun run dev` serves the client and proxies to it. The Node `server/` stays until the Rust server reaches gameplay parity; see `docs/rust-refactor.md`.
+- `crates/physics/` is the Rust physics core (Rapier vehicles and characters) that will replace the TypeScript movement code; `scripts/build-physics.sh` builds it to wasm and `scripts/physics-parity.mjs` checks native and wasm runs match. `crates/protocol/` holds the wire types (`cargo test -p afterhours-protocol` regenerates `shared/generated/`), and `crates/server/` is the Rust server (`bun run server`, port 5174) that the client now talks to; `bun run dev` serves the client and proxies to it. The Node server is gone; see `docs/rust-refactor.md`.
 - `mapgen/` and `scripts/` hold the offline city pipeline and tooling. Import boundaries between these are enforced by `bun run check`.
 
 See [networking](docs/networking.md) and [physics](docs/physics.md).
@@ -112,7 +112,7 @@ This runs one non-root Node process behind Caddy with HTTPS, WebSockets, health 
 
 ## Current limits
 
-The Rust server is the live backend and still reaches only part of the old gameplay: walking, jumping, and driving the two sedans parked at the spawn. The Node server under `server/` keeps the rest (combat, inventory, pickups, grenades, destruction, AI traffic and citizens, aircraft, watercraft, flooding, day and night, debug commands) until each system lands in Rust; see the milestone list in [the refactor goal](docs/rust-refactor.md).
+The Rust server implements walking, driving, seats, combat, inventory, pickups, grenades, destruction, AI traffic and citizens, and the dev tools. See [the refactor goal](docs/rust-refactor.md) for what is still open.
 
 - Inputs are stamped with the server tick they belong to and sent two ticks early; the client steers that lead from the `lead` the server reports in every snapshot. Late inputs are dropped, not queued, so a stall shows as a correction rather than slow motion.
 - Prediction runs the same wasm physics crate the server runs natively, restoring the server's raw state and replaying unacknowledged inputs. Only terrain, water and the world floor collide on the client; buildings and props are server-only until the client gets them.

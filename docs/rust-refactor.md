@@ -43,9 +43,9 @@ Milestone 2.3, gameplay parity (one PR per system, Node code deleted as each lan
 - [x] destruction and debris
 - [x] AI: traffic, citizens, pedestrians
 - [ ] aircraft, watercraft, flooding, day/night
-- [ ] debug commands and admin tools (opt-in)
-- [ ] delete `server/`, port the `tests/` that cover server behaviour, update
-      Dockerfile and README
+- [x] debug commands and admin tools (the Dev tools drawer; always on, see README)
+- [x] delete `server/`; gameplay tests are now Rust integration tests under
+      `crates/server/tests`, the Dockerfile and README are updated
 
 ### Phase 3: city generator in Rust
 

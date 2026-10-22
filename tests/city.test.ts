@@ -5,7 +5,7 @@ import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { loadCity } from "../server/city-loader.ts";
+import { loadCity } from "../scripts/city-loader.ts";
 import { navigationFor } from "../shared/navigation.ts";
 test("manual generator persists a reproducible city and loader rejects bad artifacts", async () => {
   const dir = await mkdtemp(join(tmpdir(), "afterhours-city-")),

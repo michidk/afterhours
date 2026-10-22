@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loadCity } from "../server/city-loader.ts";
+import { loadCity } from "../scripts/city-loader.ts";
 import { terrainHeight } from "../shared/terrain.ts";
 
 test("no tree crown of the saved city sits inside the terrain", async () => {
