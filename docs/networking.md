@@ -347,3 +347,20 @@ where the server stops it. Before this, every touch of another car was a 1-2 m c
 without disturbing the rest. Shortcuts: props (lamps, trees) and other people are not predicted,
 and a neighbour's future steering and throttle are unknown, so a head-on with a moving car can
 still correct.
+
+## The ack, held ticks and server cost
+
+`ack` in a state message is the newest tick the state includes, input or not: when no input
+arrived the server runs the held controls and still acks that tick. Acking only real inputs made
+the client replay one tick too many after a held tick and one too few after the next, a +-1.2 m
+seesaw at 18 m/s even on a clean link. A jump in the client's stamp stream skips server ticks
+that run on held controls, so the client steps its prediction through them with the last input.
+`scripts/drive-client.ts --pattern track` over a 150 ms round trip with 40 ms jitter and 250 ms
+spikes went from 44-61 corrections a lap (about 20 over 1 m) to none.
+
+The server tick must also fit its 33 ms budget. Two costs had grown past it on a busy server (tick
+CPU p95 35 ms with 50 cars): `record_impacts` scanned every prop collider (thousands) for every
+contact pair of every car on every substep, now a reverse map, and the tyre model kept every
+parked car awake. Sleeping cars with the pedals up now skip suspension and tyre work. The Server
+stats window shows tick CPU, late ticks and dropped time; `cargo run --release -p
+afterhours-server --example tick-cost` measures the cost as cars accumulate (about 5 ms with 50).

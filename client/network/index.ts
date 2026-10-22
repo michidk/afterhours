@@ -62,6 +62,8 @@ export class GameNetwork {
   clock: InputClock | undefined;
   worldReady = (_point: { x: number; z: number }) => true;
   seq = 0;
+  /** The controls of the newest sent input, which the server holds through ticks with none. */
+  private lastInput: Input | undefined;
   serverTime = 0;
   received = 0;
   latency = 0;
@@ -174,6 +176,8 @@ export class GameNetwork {
     this.playerId = m.id;
     this.serverTick = m.tick;
     this.stamper.reset(m.tick);
+    this.seq = 0;
+    this.lastInput = undefined;
     this.received = performance.now();
     this.entities.clear();
     this.timeline.reset();
@@ -307,7 +311,13 @@ export class GameNetwork {
     };
     this.edge = { interact: false, drop: false, reload: false, jetpack: false };
     if (!this.send({ type: "input", tick, ack: this.serverTick, controls })) return;
+    // A jump in the stamps skips server ticks. It runs them on the held controls, so the
+    // predicted body must step through them too or it trails the server by a tick or two.
+    if (this.lastInput && tick > this.seq + 1 && tick - this.seq <= 8)
+      for (let held = this.seq + 1; held < tick; held++)
+        this.prediction.input(held, this.lastInput);
     this.seq = tick;
+    this.lastInput = input;
     this.prediction.input(tick, input);
     this.inputTimes.push(timestamp);
     this.inputTimes = this.inputTimes.filter((at) => at >= timestamp - 1000);

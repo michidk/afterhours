@@ -82,8 +82,26 @@ Errors come back as `{"ok":false,"error":...}`; nothing panics on bad input.
 The same world is a Rust API for tests (`afterhours_server::lab::Lab`): see
 `crates/server/tests/{scene,craft,lab}.rs`.
 
+## Latency: the live lap bot
+
+The scene lab has no latency model, so lag is measured with the real client stack against a
+running server. `scripts/drive-client.ts` joins with `GameNetwork`, the predicted body and the
+input clock, spawns a car, and `--pattern track` laps the racetrack in `data/city.json` with a
+pure-pursuit driver while injecting one-way delay, jitter and spikes on its own socket:
+
+```sh
+bunx tsx scripts/drive-client.ts --url http://localhost:5174 --pattern track --speed 18 \
+  --seconds 60 --delay 37 --jitter 20 --spike 150
+```
+
+It prints the per-second link counters and a summary: corrections (count, over 1 m, worst),
+pending replay, drawn-speed error and hitches, lurches, freezes and the worst input delay. A good
+lap on a 74 ms link with spikes has no corrections, a server queue of 2-3 and at most 6-8 pending
+inputs. Frame-pacing numbers (hitches, freezes) move with host load; compare corrections and
+pending inputs between runs.
+
 ## Known gaps
 
-The scene lab drives one player; it has no scripted second client or latency model, so
-prediction/reconciliation problems still need a browser or the socket tests in
-`crates/server/tests/session.rs`.
+Prediction does not include props or other people, and a neighbour car's future steering is
+unknown, so a head-on with a moving car can still correct. The scene lab drives one player; use
+the lap bot or the socket tests in `crates/server/tests/session.rs` for latency.

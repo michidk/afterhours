@@ -587,8 +587,12 @@ impl Game {
         p.inputs = p.inputs.split_off(&tick);
         if let Some(c) = p.inputs.remove(&tick) {
             p.held = c;
-            p.applied = Some(tick);
         }
+        // The state sent after this tick includes it whether an input arrived or the held
+        // controls ran, so ack it either way. Acking only real inputs made the client replay
+        // one tick too many after every held tick and one too few on the next snapshot: a
+        // +-1.2 m seesaw at 18 m/s.
+        p.applied = Some(tick);
         let c = p.held.clone();
         self.combat.control(id, &c, p.character.as_ref());
         match p.body {

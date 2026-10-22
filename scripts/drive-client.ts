@@ -10,7 +10,7 @@ import { WebSocket as NodeWebSocket } from "ws";
 import { GameNetwork } from "../client/network/index.ts";
 import { InputClock } from "../client/input/clock.ts";
 import { OrderedDelay } from "./ordered-delay.ts";
-import { appendFileSync, existsSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { CityStream } from "../client/world/stream.ts";
 import {
   mapManifestSchema,
@@ -105,9 +105,24 @@ if (!Number.isFinite(radius) || radius <= 0) throw Error("--radius must be posit
 // decorative terminal colliders can overlap a debug car, which measures a wall
 // collision instead of driving and makes the lag result meaningless.
 const origin = spawnOrigin(city);
+// `--pattern track` laps the city's racetrack (data/city.json) with a pure-pursuit driver.
+const racetrack =
+  pattern === "track"
+    ? (JSON.parse(readFileSync(arg("city", "data/city.json"), "utf8")).city
+        .racetrack as {
+        path: number[];
+        grid: { x: number; z: number }[];
+      })
+    : undefined;
+const trackPath = racetrack
+  ? Array.from({ length: racetrack.path.length / 2 }, (_, i) => ({
+      x: racetrack.path[2 * i],
+      z: racetrack.path[2 * i + 1],
+    }))
+  : [];
 const center = {
-  x: Number(arg("x", String(origin.x))),
-  z: Number(arg("z", String(origin.z))),
+  x: Number(arg("x", String(racetrack?.grid[0].x ?? origin.x))),
+  z: Number(arg("z", String(racetrack?.grid[0].z ?? origin.z))),
 };
 await stream.prepare(spawnOrigin(city));
 await stream.prepare(center);
@@ -266,6 +281,38 @@ const started = performance.now();
 const circle = Math.min(1, Math.atan(2.7 / radius) / CAR.steer);
 const steer = (t: number): Partial<Input> => {
   if (pattern === "straight") return {};
+  if (pattern === "track") {
+    const body = network.prediction?.body;
+    if (!body) return {};
+    const near = trackPath.reduce(
+      (best, p, i) =>
+        Math.hypot(p.x - body.x, p.z - body.z) <
+        Math.hypot(trackPath[best].x - body.x, trackPath[best].z - body.z)
+          ? i
+          : best,
+      0,
+    );
+    let i = near,
+      run = 0;
+    while (run < 10) {
+      const next = (i + 1) % trackPath.length;
+      run += Math.hypot(
+        trackPath[next].x - trackPath[i].x,
+        trackPath[next].z - trackPath[i].z,
+      );
+      i = next;
+    }
+    const err = wrap(
+        Math.atan2(trackPath[i].x - body.x, trackPath[i].z - body.z) - body.angle,
+      ),
+      speed = Math.hypot(body.vx, body.vz),
+      cruise = targetSpeed * (1 - 0.5 * Math.min(1, Math.abs(err)));
+    return {
+      moveX: clamp(err * 1.5, -1, 1),
+      moveY: speed < cruise ? 1 : 0,
+      brake: speed > cruise + 1,
+    };
+  }
   if (pattern === "zigzag") return { moveX: t % 6 >= 3 ? -circle : circle, moveY: 1 };
   const body = network.prediction?.body;
   if (!body) return {};

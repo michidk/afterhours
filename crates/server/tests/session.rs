@@ -201,3 +201,21 @@ async fn two_players_see_each_other_drive() {
     assert!(entered, "ann should have entered the car");
     assert_eq!(va.entities[&id_a].vehicle, Some(car.id.clone()));
 }
+
+/// The state sent after a tick includes that tick whether an input arrived or the held controls
+/// ran, so the ack must follow the simulated tick. Acking only real inputs made the client replay
+/// one tick too many after every held tick and one too few after the next: a +-1.2 m seesaw at
+/// 18 m/s that no amount of link quality fixed.
+#[tokio::test]
+async fn the_ack_follows_the_simulated_tick_even_when_no_input_arrived() {
+    let url = start().await;
+    let (mut ws, _) = join(&url, "idle").await;
+    let mut seen = 0;
+    while seen < 8 {
+        if let ServerMessage::State { tick, ack, .. } = recv(&mut ws).await {
+            // `tick` is the next tick to simulate; the state includes the one before it.
+            assert_eq!(ack, Some(tick - 1), "state at tick {tick} acked {ack:?}");
+            seen += 1;
+        }
+    }
+}

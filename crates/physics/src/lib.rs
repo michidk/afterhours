@@ -175,6 +175,9 @@ pub struct World {
     characters: Vec<Character>,
     /// Breakable static boxes, by id (see [`World::add_prop`]).
     props: HashMap<u32, ColliderHandle>,
+    /// The reverse of `props`: contact pairs name colliders, and a scan of thousands of props
+    /// per pair, per vehicle, per substep cost more than the rest of the physics step.
+    prop_of: HashMap<ColliderHandle, u32>,
     /// Free-tumbling bodies, by id (see [`World::spawn_debris`]).
     debris: HashMap<u32, RigidBodyHandle>,
     impacts: Vec<Impact>,
@@ -204,6 +207,7 @@ impl World {
             vehicles: Vec::new(),
             characters: Vec::new(),
             props: HashMap::new(),
+            prop_of: HashMap::new(),
             debris: HashMap::new(),
             impacts: Vec::new(),
             next_id: 1,
@@ -252,12 +256,16 @@ impl World {
         let id = self.next_id;
         self.next_id += 1;
         self.props.insert(id, collider);
+        self.prop_of.insert(collider, id);
         id
     }
 
     pub fn remove_prop(&mut self, id: u32) -> bool {
         match self.props.remove(&id) {
-            Some(c) => self.physics.remove_collider(c).is_some(),
+            Some(c) => {
+                self.prop_of.remove(&c);
+                self.physics.remove_collider(c).is_some()
+            }
             None => false,
         }
     }
@@ -559,7 +567,7 @@ impl World {
                 } else {
                     pair.collider1
                 };
-                let Some((&prop, _)) = self.props.iter().find(|(_, c)| **c == other) else {
+                let Some(&prop) = self.prop_of.get(&other) else {
                     continue;
                 };
                 let Some((m, c)) = pair.find_deepest_contact() else {
@@ -599,6 +607,15 @@ impl World {
     fn drive_vehicles(&mut self, dt: f32) {
         let p = &mut self.physics;
         for v in &mut self.vehicles {
+            // A car asleep with the pedals up (every parked one) needs neither suspension
+            // rays nor tyre forces; contact or a throttle wakes it. Each awake car costs
+            // about 0.2 ms a tick, so a city of idle cars must not.
+            if p.bodies[v.body].is_sleeping() {
+                if v.drive.throttle == 0.0 && v.drive.service_brake == 0.0 {
+                    continue;
+                }
+                p.bodies[v.body].wake_up(true);
+            }
             // Suspension first, so the wheel contacts below are this tick's, not history.
             let queries = p.broad_phase.as_query_pipeline_mut(
                 p.narrow_phase.query_dispatcher(),
@@ -709,10 +726,11 @@ impl World {
                     next.z *= spec.top_speed / ground_speed;
                 }
                 let body = &mut p.bodies[v.body];
-                body.set_linvel(next, true);
+                // Trimming the velocity of an awake body must not keep it from sleeping.
+                body.set_linvel(next, false);
                 body.set_angvel(
                     Vector::new(spin.x, spin.y + torque / inertia * dt, spin.z),
-                    true,
+                    false,
                 );
             }
         }
