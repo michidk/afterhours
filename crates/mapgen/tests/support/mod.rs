@@ -37,7 +37,7 @@ pub fn fixture(seed: i32, name: &str) -> Value {
     .unwrap()
 }
 pub fn compare(label: &str, expected: &Value, actual: &Value) {
-    if let Some(diff) = afterhours_mapgen::parity::first_difference(expected, actual) {
+    if let Some(diff) = afterhours_mapgen::parity::first_exact_difference(expected, actual) {
         panic!(
             "{label}: first difference at {}: expected {}, actual {}",
             diff.path, diff.expected, diff.actual
@@ -69,6 +69,12 @@ pub fn compare(label: &str, expected: &Value, actual: &Value) {
     println!(
         "{label}: max absolute delta={:.17e}, max relative delta={:.17e}",
         max.0, max.1
+    );
+    assert!(
+        max.0 == 0.0,
+        "{label}: unexplained float delta abs={:.17e} rel={:.17e}",
+        max.0,
+        max.1
     );
 }
 pub fn cmp(label: &str, expected: &Value, actual: &Value) {

@@ -34,3 +34,14 @@ fn terrain_packing_matches_complete_typescript_city() {
         );
     }
 }
+
+#[test]
+fn node_seed_713_oracle_matches_checked_in_artifact() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/city.json");
+    let checked_in = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    support::compare(
+        "checked-in city vs Node oracle 713",
+        &checked_in,
+        &support::fixture(713, "artifact"),
+    );
+}

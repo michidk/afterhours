@@ -1,0 +1,7 @@
+Vendored source: Node.js v26.11.1, deps/v8/src/base/ieee754.cc.
+The checked-in adapted translation unit is v8_ieee754.cc. Its SHA-256 is recorded below so source updates are reviewable:
+
+SHA-256 (adapted translation unit):
+d4c811a4112c334471631f8f89d3318fb377486a3771c1ae33ad05fe57804ad4  crates/mapgen/src/v8_ieee754.cc
+
+The adaptation keeps the V8 fdlibm implementation and adds stand-alone C++ type/include shims, three C ABI exports, and no runtime JavaScript dependency. The original fdlibm and V8 license notices remain at the top of the translation unit and V8-LICENSE.
