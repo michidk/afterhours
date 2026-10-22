@@ -1,176 +1,13 @@
 //! Headless scenes on the real city: boot exactly like `main.rs`, join players, step the
 //! simulation and inspect what clients would see. No sockets, no wall-clock time.
-use afterhours_protocol::{ClientMessage, Controls, Entity, Kind, ServerMessage, VERSION, decode};
-use afterhours_server::{City, Event, Game, city, destruction};
+use afterhours_protocol::{Controls, Entity};
+use afterhours_server::lab::{Lab, off_centre, pursue};
 use std::collections::HashMap;
-use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 
-struct Scene {
-    game: Game,
-    inbox: HashMap<u32, UnboundedReceiver<Vec<u8>>>,
-    /// Latest full entity table per client.
-    pub seen: HashMap<u32, HashMap<String, Entity>>,
-    pub tick: u32,
-    /// First racetrack grid slot (x, z): open tarmac to drive on.
-    grid: (f32, f32),
-    /// Racetrack centreline, one point every couple of metres, closed.
-    path: Vec<(f32, f32)>,
-}
+type Scene = Lab;
 
-impl Scene {
-    fn boot() -> Self {
-        let loaded = City::load(concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/city.json"))
-            .expect("data/city.json");
-        let world = city::world(&loaded);
-        let at = loaded.spawn();
-        let spawn = [at[0], loaded.height(at[0], at[1]) + 1.0, at[1]];
-        let mut game = Game::new(world, spawn);
-        game.set_city(&loaded);
-        game.park(&loaded);
-        if std::env::var("SCENE_NO_PROPS").is_err() {
-            game.add_props(destruction::destructibles(&loaded));
-        }
-        let slot = &loaded.racetrack["grid"][0];
-        let grid = (
-            slot["x"].as_f64().unwrap() as f32,
-            slot["z"].as_f64().unwrap() as f32,
-        );
-        let path = loaded.racetrack["path"]
-            .as_array()
-            .unwrap()
-            .chunks(2)
-            .map(|p| (p[0].as_f64().unwrap() as f32, p[1].as_f64().unwrap() as f32))
-            .collect();
-        Self {
-            game,
-            inbox: HashMap::new(),
-            seen: HashMap::new(),
-            tick: 0,
-            grid,
-            path,
-        }
-    }
-
-    fn join(&mut self, id: u32) {
-        let (tx, rx) = unbounded_channel();
-        self.game.handle(Event::Connect(id, tx));
-        self.game.handle(Event::Message(
-            id,
-            ClientMessage::Join {
-                version: VERSION,
-                name: format!("p{id}"),
-                color: "#ff0000".into(),
-                character: None,
-            },
-        ));
-        self.inbox.insert(id, rx);
-        self.seen.insert(id, HashMap::new());
-    }
-
-    fn debug(&mut self, id: u32, command: serde_json::Value) {
-        self.game.handle(Event::Message(
-            id,
-            ClientMessage::DebugCommand {
-                request_id: self.tick,
-                command,
-            },
-        ));
-    }
-
-    #[allow(dead_code)]
-    fn input(&mut self, id: u32, controls: Controls) {
-        let tick = self.tick;
-        // Land the frame on the next simulated tick, as a client with lead 1 would.
-        self.game.handle(Event::Message(
-            id,
-            ClientMessage::Input {
-                tick: tick + 1,
-                ack: None,
-                controls,
-            },
-        ));
-    }
-
-    /// One tick, then fold every snapshot the clients were sent into `seen`.
-    fn step(&mut self) {
-        self.game.step();
-        self.tick += 1;
-        for (id, rx) in &mut self.inbox {
-            while let Ok(bytes) = rx.try_recv() {
-                if let Ok(ServerMessage::State {
-                    base: None,
-                    entities,
-                    ..
-                }) = decode(&bytes)
-                {
-                    let table = self.seen.get_mut(id).unwrap();
-                    table.clear();
-                    for e in entities {
-                        table.insert(e.id.clone(), e);
-                    }
-                }
-            }
-        }
-    }
-
-    /// Debug-teleport client `id` next to the racetrack grid and let it settle.
-    fn go_to_track(&mut self, id: u32) {
-        let (x, z) = self.grid;
-        self.debug(
-            id,
-            serde_json::json!({ "kind": "teleport", "x": x + 3.0, "z": z }),
-        );
-        for _ in 0..10 {
-            self.step();
-        }
-    }
-
-    fn me(&self, id: u32) -> Entity {
-        self.seen[&id][&id.to_string()].clone()
-    }
-
-    /// Walk client `id` to the nearest parked car and climb in; returns the car's id.
-    fn board(&mut self, id: u32) -> String {
-        for i in 0..600 {
-            let me = self.me(id);
-            if let Some(car) = me.vehicle.clone() {
-                return car;
-            }
-            let target = self
-                .cars(id)
-                .into_iter()
-                .filter(|c| c.ai != Some(true))
-                .min_by(|a, b| {
-                    (a.x - me.x)
-                        .hypot(a.z - me.z)
-                        .total_cmp(&(b.x - me.x).hypot(b.z - me.z))
-                })
-                .expect("a parked car");
-            let (dx, dz) = (target.x - me.x, target.z - me.z);
-            let d = dx.hypot(dz).max(0.01);
-            self.input(
-                id,
-                Controls {
-                    move_x: Some(dx / d),
-                    move_y: Some(dz / d),
-                    interact: d < 3.0 && i % 8 == 0,
-                    ..Default::default()
-                },
-            );
-            self.step();
-        }
-        panic!("never boarded a car");
-    }
-
-    fn cars(&self, id: u32) -> Vec<Entity> {
-        let mut v: Vec<_> = self.seen[&id]
-            .values()
-            .filter(|e| e.kind == Kind::Car)
-            .cloned()
-            .collect();
-        v.sort_by(|a, b| a.id.cmp(&b.id));
-        v
-    }
+fn boot() -> Scene {
+    Lab::boot(concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/city.json"))
 }
 
 /// Footprint (width, length) per model, from `shared/catalog.ts`.
@@ -213,7 +50,7 @@ fn overlap(a: &Entity, b: &Entity) -> f32 {
 
 #[test]
 fn parked_fleet_stays_put_and_apart() {
-    let mut scene = Scene::boot();
+    let mut scene = boot();
     scene.join(1);
     // Warm up until the first snapshot lists the fleet, and remember where it was parked.
     for _ in 0..4 {
@@ -282,7 +119,7 @@ fn parked_fleet_stays_put_and_apart() {
 /// player, must leave the cars apart and at rest: no stacked bodies, no fling.
 #[test]
 fn repeated_debug_spawns_land_apart_and_settle() {
-    let mut scene = Scene::boot();
+    let mut scene = boot();
     scene.join(1);
     for _ in 0..30 {
         scene.step();
@@ -340,45 +177,12 @@ fn repeated_debug_spawns_land_apart_and_settle() {
     assert!(worst_rise < 1.5, "cars were flung {worst_rise:.2} m upward");
 }
 
-/// Pure-pursuit driver: aim at the centreline point `ahead` metres past the nearest one,
-/// holding `cruise` m/s.
-fn pursue(path: &[(f32, f32)], car: &Entity, ahead: f32, cruise: f32) -> Controls {
-    let near = (0..path.len())
-        .min_by(|&a, &b| {
-            let d = |i: usize| (path[i].0 - car.x).hypot(path[i].1 - car.z);
-            d(a).total_cmp(&d(b))
-        })
-        .unwrap();
-    let mut i = near;
-    let mut run = 0.0;
-    while run < ahead {
-        let next = (i + 1) % path.len();
-        run += (path[next].0 - path[i].0).hypot(path[next].1 - path[i].1);
-        i = next;
-    }
-    let want = (path[i].0 - car.x).atan2(path[i].1 - car.z);
-    let err = (want - car.angle).sin().atan2((want - car.angle).cos());
-    let speed = car.vx.hypot(car.vz);
-    Controls {
-        move_x: Some((err * 1.5).clamp(-1.0, 1.0)),
-        move_y: Some(if speed < cruise { 1.0 } else { 0.0 }),
-        brake: speed > cruise + 1.0,
-        ..Default::default()
-    }
-}
-
-fn off_centre(path: &[(f32, f32)], x: f32, z: f32) -> f32 {
-    path.iter()
-        .map(|p| (p.0 - x).hypot(p.1 - z))
-        .fold(f32::MAX, f32::min)
-}
-
 /// Lap the racetrack at 12 m/s with a pure-pursuit driver, then brake to a halt. Every
 /// snapshot must move the car about as far as its speed says, the car must stay on the
 /// 12 m wide track, keep level, and stop under braking.
 #[test]
 fn laps_the_racetrack_smoothly_and_stops() {
-    let mut scene = Scene::boot();
+    let mut scene = boot();
     scene.join(1);
     for _ in 0..4 {
         scene.step();
@@ -449,7 +253,7 @@ fn laps_the_racetrack_smoothly_and_stops() {
 /// A hard drive into a parked car must not launch or flip anything.
 #[test]
 fn ramming_a_parked_car_does_not_launch_it() {
-    let mut scene = Scene::boot();
+    let mut scene = boot();
     scene.join(1);
     for _ in 0..4 {
         scene.step();
@@ -507,7 +311,7 @@ fn ramming_a_parked_car_does_not_launch_it() {
 #[test]
 fn every_car_model_drives_level_and_brakes_to_a_stop() {
     for model in ["sedan", "sport", "van"] {
-        let mut scene = Scene::boot();
+        let mut scene = boot();
         scene.join(1);
         for _ in 0..4 {
             scene.step();

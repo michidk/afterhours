@@ -8,6 +8,7 @@ use rapier3d::control::{
 use rapier3d::prelude::*;
 use std::collections::HashMap;
 
+pub mod lab;
 #[cfg(feature = "wasm")]
 mod wasm;
 
@@ -37,6 +38,8 @@ pub struct VehicleSpec {
     /// Steering lock in radians at standstill.
     pub steer: f32,
     pub wheel_radius: f32,
+    /// Speed in m/s the engine cannot push past (`shared/catalog.ts` `speed`).
+    pub top_speed: f32,
 }
 
 impl VehicleSpec {
@@ -49,6 +52,7 @@ impl VehicleSpec {
         brake: 7_000.0,
         steer: 0.55,
         wheel_radius: 0.34,
+        top_speed: 42.0,
     };
     /// `shared/catalog.ts` VEHICLES.sport; brake, steer and wheels as the sedan.
     pub const SPORT: VehicleSpec = VehicleSpec {
@@ -56,6 +60,7 @@ impl VehicleSpec {
         width: 1.9,
         length: 4.1,
         engine: 12500.0,
+        top_speed: 52.0,
         ..Self::SEDAN
     };
     /// `shared/catalog.ts` VEHICLES.van; brake, steer and wheels as the sedan.
@@ -64,6 +69,9 @@ impl VehicleSpec {
         width: 2.2,
         length: 5.0,
         engine: 12500.0,
+        // The sedan's 7 m/s² of braking, scaled to the heavier body.
+        brake: 11_200.0,
+        top_speed: 30.0,
         ..Self::SEDAN
     };
 }
@@ -308,13 +316,14 @@ impl World {
         let mut controller = DynamicRayCastVehicleController::new(body);
         let tuning = WheelTuning {
             suspension_stiffness: 30.0,
-            suspension_compression: 2.3,
-            suspension_damping: 2.4,
+            // Light damping let a car rock for seconds after settling on a slope.
+            suspension_compression: 6.0,
+            suspension_damping: 6.0,
             // City terrain is a baked mesh with small height discontinuities at
             // chunk/road seams; extra travel keeps the raycast wheels grounded.
             max_suspension_travel: 0.8,
             side_friction_stiffness: 1.0,
-            friction_slip: 1.0,
+            friction_slip: 1.35,
             max_suspension_force: spec.mass * 40.0,
         };
         let (hx, hz, y) = (
@@ -545,7 +554,15 @@ impl World {
             } else {
                 0.0
             };
-            let force = v.drive.throttle.clamp(-1.0, 1.0) * v.spec.engine / 4.0;
+            // The engine fades out over the last 30% of the top speed, so a flat-out car
+            // levels off there instead of accelerating without limit.
+            let headroom = ((1.0 - speed / v.spec.top_speed) / 0.3).clamp(0.0, 1.0);
+            // Wheel rays that land on a wall would drive the car up it, so a car tipped
+            // beyond about 30 degrees loses its engine until it falls back.
+            let upright = (p.bodies[v.body].rotation() * Vector::Y).y > 0.85;
+            let force = v.drive.throttle.clamp(-1.0, 1.0) * v.spec.engine / 4.0
+                * headroom
+                * f32::from(upright);
             for (i, w) in v.controller.wheels_mut().iter_mut().enumerate() {
                 w.steering = if i < 2 {
                     v.drive.steer.clamp(-1.0, 1.0) * lock
@@ -665,7 +682,13 @@ impl World {
         );
         for v in &self.vehicles {
             let b = &self.physics.bodies[v.body];
-            let (t, r, l) = (b.translation(), b.rotation(), b.linvel());
+            // A sleeping body keeps the velocity it dozed off with; report it as still.
+            let l = if b.is_sleeping() {
+                Vector::ZERO
+            } else {
+                b.linvel()
+            };
+            let (t, r) = (b.translation(), b.rotation());
             out.extend_from_slice(&[
                 v.id as f32,
                 t.x,

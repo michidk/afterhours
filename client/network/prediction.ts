@@ -21,11 +21,12 @@ type VehicleSpec = readonly [
   number,
   number,
   number,
+  number,
 ];
 const VEHICLE_SPECS: Record<string, VehicleSpec> = {
-  sedan: [1000, 2, 4.3, 1.4, 9750, 7000, 0.55, 0.34],
-  sport: [850, 1.9, 4.1, 1.4, 12500, 7000, 0.55, 0.34],
-  van: [1600, 2.2, 5, 1.4, 12500, 7000, 0.55, 0.34],
+  sedan: [1000, 2, 4.3, 1.4, 9750, 7000, 0.55, 0.34, 42],
+  sport: [850, 1.9, 4.1, 1.4, 12500, 7000, 0.55, 0.34, 52],
+  van: [1600, 2.2, 5, 1.4, 12500, 11200, 0.55, 0.34, 30],
 } as const;
 const WALK_SPEED = 4.5,
   SPRINT = 1.6;

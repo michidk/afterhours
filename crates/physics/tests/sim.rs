@@ -50,7 +50,8 @@ fn car_drives_forward_and_stays_on_the_ground() {
             brake: true,
         },
     );
-    for _ in 0..120 {
+    // 7 m/s² takes about five seconds to shed the 33 m/s a three second run reaches.
+    for _ in 0..180 {
         w.step();
     }
     assert!(w.states()[10].abs() < 0.2, "brakes should stop the car");

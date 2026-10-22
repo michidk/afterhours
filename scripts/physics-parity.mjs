@@ -6,7 +6,21 @@ const { Physics } = createRequire(import.meta.url)(
 const w = new Physics();
 w.add_box(0, -0.5, 0, 200, 0.5, 200, 0);
 w.add_box(10, 0.5, 20, 3, 0.5, 3, 0.4);
-const car = w.spawn_vehicle(1000, 2, 4.3, 1.4, 9750, 7000, 0.55, 0.34, 0, 1, 0, 0.2);
+const car = w.spawn_vehicle(
+  1000,
+  2,
+  4.3,
+  1.4,
+  9750,
+  7000,
+  0.55,
+  0.34,
+  42,
+  0,
+  1,
+  0,
+  0.2,
+);
 const who = w.spawn_character(4, 1, 0);
 let hash = 0xcbf29ce484222325n;
 const view = new DataView(new ArrayBuffer(4));

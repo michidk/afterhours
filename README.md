@@ -25,6 +25,8 @@ bun run start   # release server serving dist/ and the WebSocket endpoint
 cargo test      # physics, protocol and server tests
 ```
 
+Test worlds for cars and scenes, scriptable with JSON (`handling-lab`, `scene-lab`): see [the labs](docs/lab.md).
+
 `start` runs in production mode with debug tools disabled. `ALLOW_DEBUG=1` explicitly enables them for everyone on that server, and development always enables them, so never expose dev mode publicly. See [debugging](docs/debugging.md).
 
 The jittered-link driving probes and the Chromium movement spec were written against the retired Node netcode and are gone; `crates/server/tests` covers join, movement and vehicle entry over a real WebSocket. See [movement testing](docs/movement-testing.md).
@@ -122,4 +124,4 @@ The Rust server implements walking, driving, seats, combat, inventory, pickups, 
 
 ## More documentation
 
-[Architecture](docs/architecture.md) · [Networking](docs/networking.md) · [Physics](docs/physics.md) · [Traffic](docs/traffic.md) · [Water](docs/water.md) · [Destruction](docs/destruction.md) · [Audio](docs/audio.md) · [Debugging](docs/debugging.md) · [Map controls](docs/map-controls.md) · [Movement testing](docs/movement-testing.md) · [Playtesting](docs/playtesting.md) · [Operations](docs/operations.md)
+[Architecture](docs/architecture.md) · [Networking](docs/networking.md) · [Physics](docs/physics.md) · [Traffic](docs/traffic.md) · [Water](docs/water.md) · [Destruction](docs/destruction.md) · [Audio](docs/audio.md) · [Debugging](docs/debugging.md) · [Map controls](docs/map-controls.md) · [Test worlds](docs/lab.md) · [Movement testing](docs/movement-testing.md) · [Playtesting](docs/playtesting.md) · [Operations](docs/operations.md)

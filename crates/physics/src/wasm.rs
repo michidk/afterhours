@@ -60,6 +60,7 @@ impl Physics {
         brake: f32,
         steer: f32,
         wheel_radius: f32,
+        top_speed: f32,
         x: f32,
         y: f32,
         z: f32,
@@ -74,6 +75,7 @@ impl Physics {
             brake,
             steer,
             wheel_radius,
+            top_speed,
         };
         self.0.spawn_vehicle(spec, [x, y, z], yaw)
     }

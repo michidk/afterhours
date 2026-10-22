@@ -7,6 +7,7 @@ mod combat;
 mod craft;
 pub mod destruction;
 mod game;
+pub mod lab;
 pub mod traffic;
 pub mod vehicles;
 

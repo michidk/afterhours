@@ -402,7 +402,7 @@ pub enum ServerMessage {
         request_id: u32,
         #[serde(skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
-        #[ts(type = "unknown")]
+        #[ts(type = "import(\"../debug\").DebugState")]
         state: Option<serde_json::Value>,
         #[serde(skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
