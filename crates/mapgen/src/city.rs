@@ -69,9 +69,9 @@ fn pieces(left: &[Point], right: &[Point]) -> Vec<Vec<Point>> {
         if self_intersects(&q) {
             let c = mul(q.iter().copied().fold(Point { x: 0.0, z: 0.0 }, add), 0.25);
             q.sort_by(|a, b| {
-                (a.z - c.z)
-                    .atan2(a.x - c.x)
-                    .total_cmp(&(b.z - c.z).atan2(b.x - c.x))
+                crate::js_math::atan2(a.z - c.z, a.x - c.x)
+                    .partial_cmp(&crate::js_math::atan2(b.z - c.z, b.x - c.x))
+                    .unwrap_or(std::cmp::Ordering::Equal)
             });
         }
         if area(&q) > 0.01 {
@@ -355,7 +355,9 @@ pub fn city_from_map_with_snapshots(
     let walk_rings: Vec<Vec<Point>> = sidewalks.iter().map(|p| ring(p)).collect();
     let mut indices: Vec<usize> = (0..buildings.len()).collect();
     indices.sort_by(|&p, &q| {
-        (buildings[q].w * buildings[q].d).total_cmp(&(buildings[p].w * buildings[p].d))
+        (buildings[q].w * buildings[q].d)
+            .partial_cmp(&(buildings[p].w * buildings[p].d))
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
     let mut kept: Vec<(usize, Vec<Point>)> = Vec::new();
     for i in indices {
@@ -708,7 +710,11 @@ pub fn city_from_map_with_snapshots(
         .copied()
         .filter(|p| !on_asphalt(*p))
         .collect();
-    spots.sort_by(|a, b| dist(*a, centre).total_cmp(&dist(*b, centre)));
+    spots.sort_by(|a, b| {
+        dist(*a, centre)
+            .partial_cmp(&dist(*b, centre))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     for weapon in ["pistol", "bat", "pistol"] {
         let Some(spot) = spots
             .iter()
