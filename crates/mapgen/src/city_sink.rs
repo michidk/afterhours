@@ -1,5 +1,6 @@
+#![allow(clippy::chunks_exact_to_as_chunks)]
 //! Terrain/surface constraint solver from `mapgen/streetfit.ts`.
-use crate::{geom::ear_clip, types::Point, city_types::Building};
+use crate::{city_types::Building, geom::ear_clip, types::Point};
 
 pub type Pad = Building;
 

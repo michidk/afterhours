@@ -21,6 +21,12 @@ pub fn derive(seed: i32, label: &str) -> Rng {
     mulberry(hash as i32)
 }
 
+/// JavaScript Math.round uses ties toward positive infinity, including negatives.
+pub fn js_round(v: f64) -> f64 {
+    let floor = v.floor();
+    if v - floor < 0.5 { floor } else { floor + 1.0 }
+}
+
 pub fn range(rng: &mut Rng, lo: f64, hi: f64) -> f64 {
     lo + rng() * (hi - lo)
 }
