@@ -2,7 +2,7 @@
 //! `server/traffic.ts`, and lane waypoints from `shared/navigation.ts`. Cars wander the
 //! street graph at random instead of routing to a far goal; everything else is a port.
 use crate::city::{City, Road};
-use afterhours_physics::{Drive, TICK, VEHICLE_STRIDE, VehicleSpec, World};
+use afterhours_physics::{Drive, TICK, VEHICLE_STRIDE, VehicleSpec, World, vehicle_contact_y};
 use afterhours_protocol::{Entity, Kind};
 use std::collections::{HashMap, VecDeque};
 
@@ -351,6 +351,7 @@ impl Traffic {
     /// Appends one `Entity` per AI car from the physics rows keyed by vehicle id.
     pub fn entities(
         &self,
+        world: &World,
         rows: &HashMap<u32, &[f32; VEHICLE_STRIDE]>,
         out: &mut HashMap<u32, Entity>,
     ) {
@@ -364,11 +365,12 @@ impl Traffic {
                     id: car.entity.to_string(),
                     kind: Kind::Car,
                     x: r[1],
-                    y: r[2],
+                    y: vehicle_contact_y(r[2], pitch, roll),
                     z: r[3],
                     angle,
                     pitch,
                     roll,
+                    steering: Some(world.steering(*id)),
                     vx: r[8],
                     vy: r[9],
                     vz: r[10],

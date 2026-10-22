@@ -6,7 +6,10 @@ use crate::craft::{Fleet, PARACHUTE_FALL};
 use crate::destruction::{Destructible, Destruction};
 use crate::vehicles::{INTEREST_RADIUS, Vehicles};
 use crate::{citizens::Citizens, traffic::Traffic};
-use afterhours_physics::{CHARACTER_STRIDE, Drive, Move, SNAPSHOT_VEHICLE, VEHICLE_STRIDE, World};
+use afterhours_physics::{
+    CHARACTER_FEET, CHARACTER_STRIDE, Drive, Move, SNAPSHOT_VEHICLE, VEHICLE_STRIDE, World,
+    vehicle_contact_y,
+};
 use afterhours_protocol::{
     ClientMessage, Controls, Entity, Kind, ServerMessage, TICK_RATE, VERSION, WorldEvent, encode,
 };
@@ -142,7 +145,8 @@ impl Game {
         self.terrain = city.terrain.clone();
     }
 
-    fn ground_height(&self, x: f32, z: f32) -> f32 {
+    /// Terrain height at a point (the ground a client draws things on).
+    pub fn ground_height(&self, x: f32, z: f32) -> f32 {
         terrain_at(&self.terrain, x, z)
     }
 
@@ -674,7 +678,7 @@ impl Game {
         }
         let car_rows: HashMap<u32, _> = cars.iter().map(|r| (r[0] as u32, r)).collect();
         let chars: HashMap<u32, _> = chars.iter().map(|r| (r[0] as u32, r)).collect();
-        self.traffic.entities(&car_rows, &mut out);
+        self.traffic.entities(&self.world, &car_rows, &mut out);
         self.citizens.entities(&chars, &mut out);
         for (&id, p) in &self.players {
             let mut e = Entity {
@@ -702,15 +706,15 @@ impl Game {
             match p.body {
                 Ok(body) => {
                     if let Some(r) = chars.get(&body) {
-                        (e.x, e.y, e.z, e.vy) = (r[1], r[2], r[3], r[4]);
+                        (e.x, e.y, e.z, e.vy) = (r[1], r[2] - CHARACTER_FEET, r[3], r[4]);
                     }
                     self.craft.decorate(id, &mut e);
                     self.craft.decorate_chute(id, &mut e);
                 }
                 Err(car) => {
                     let r = car_rows[&car];
-                    (e.x, e.y, e.z) = (r[1], r[2], r[3]);
                     (e.angle, e.pitch, e.roll) = euler([r[4], r[5], r[6], r[7]]);
+                    (e.x, e.y, e.z) = (r[1], vehicle_contact_y(r[2], e.pitch, e.roll), r[3]);
                     (e.vx, e.vy, e.vz) = (r[8], r[9], r[10]);
                     if let Some((vehicle, seat)) = self.vehicles.rider(car, id) {
                         e.vehicle = Some(vehicle.to_string());

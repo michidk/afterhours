@@ -3,7 +3,7 @@
 //! `shared/seats.ts` and `shared/physics/vehicle.ts`.
 use crate::city::{City, Spot};
 use crate::game::{euler, rows};
-use afterhours_physics::{Drive, VEHICLE_STRIDE, VehicleSpec, World};
+use afterhours_physics::{Drive, VEHICLE_STRIDE, VehicleSpec, World, vehicle_contact_y};
 use afterhours_protocol::{Entity, Kind, WorldEvent};
 use std::collections::{BTreeMap, HashMap};
 
@@ -391,7 +391,7 @@ impl Vehicles {
                     id: c.entity.to_string(),
                     kind: Kind::Car,
                     x: r[1],
-                    y: r[2],
+                    y: vehicle_contact_y(r[2], pitch, roll),
                     z: r[3],
                     angle,
                     pitch,
@@ -405,7 +405,7 @@ impl Vehicles {
                     model: Some(c.model.name.into()),
                     seats: Some(c.seats.iter().map(|s| s.map(|id| id.to_string())).collect()),
                     driver: c.seats[0].map(|id| id.to_string()),
-                    steering: Some(c.steer),
+                    steering: Some(world.steering(r[0] as u32)),
                     skidding: Some(c.skid),
                     wheel_skids: Some(vec![false, false, c.skid, c.skid]),
                     lights_on: Some(!(6.0..18.0).contains(&day)),

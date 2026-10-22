@@ -362,3 +362,94 @@ fn every_car_model_drives_level_and_brakes_to_a_stop() {
         );
     }
 }
+
+/// What clients draw is positioned by `Entity.y`: the renderer treats a car as airborne unless
+/// its height is the ground under its wheels, and a pedestrian's model has its feet at `y`.
+/// The physics body centres sit 1.26 m and 0.91 m above that, so the wire must subtract them.
+#[test]
+fn cars_and_people_are_reported_at_ground_height() {
+    let mut scene = boot();
+    scene.join(1);
+    // Long enough for traffic and pedestrians, which have their own entity builders.
+    for _ in 0..240 {
+        scene.step();
+    }
+    let ground = |e: &Entity| scene.game.ground_height(e.x, e.z);
+    let mut checked = (0, 0);
+    let mut ai_cars = 0;
+    for e in scene.seen[&1].values() {
+        match e.kind {
+            afterhours_protocol::Kind::Car => {
+                let above = e.y - ground(e);
+                assert!(above.abs() < 0.2, "car {} floats {above:.2} m", e.id);
+                assert!(e.steering.is_some(), "car {} has no wheel angle", e.id);
+                ai_cars += usize::from(e.ai == Some(true));
+                checked.0 += 1;
+            }
+            afterhours_protocol::Kind::Pedestrian | afterhours_protocol::Kind::Player => {
+                let above = e.y - ground(e);
+                assert!(
+                    above.abs() < 0.2,
+                    "{:?} {} floats {above:.2} m",
+                    e.kind,
+                    e.id
+                );
+                checked.1 += 1;
+            }
+            _ => {}
+        }
+    }
+    assert!(
+        checked.0 > 3 && checked.1 > 0,
+        "saw {checked:?} cars and people"
+    );
+}
+
+/// `Entity.steering` turns the drawn front wheels, so it must be the wheel angle in radians
+/// easing toward lock, not the raw stick: full lock from straight takes about a fifth of a
+/// second to reach the sedan's 0.55 rad (halved by speed).
+#[test]
+fn the_front_wheels_turn_gradually_to_the_steering_lock() {
+    let mut scene = boot();
+    scene.join(1);
+    for _ in 0..4 {
+        scene.step();
+    }
+    scene.go_to_track(1);
+    scene.debug(1, serde_json::json!({ "kind": "spawn", "model": "sedan" }));
+    for _ in 0..30 {
+        scene.step();
+    }
+    let ours = scene.board(1);
+    let steering = |s: &Scene| {
+        s.cars(1)
+            .into_iter()
+            .find(|c| c.id == ours)
+            .and_then(|c| c.steering)
+            .unwrap()
+    };
+    let mut seen = vec![steering(&scene)];
+    for _ in 0..12 {
+        scene.input(
+            1,
+            Controls {
+                right: true,
+                move_x: Some(1.0),
+                ..Default::default()
+            },
+        );
+        scene.step();
+        seen.push(steering(&scene));
+    }
+    assert!(seen[0].abs() < 0.01, "starts straight: {seen:?}");
+    // Snapshots repeat every other tick, so the first change shows at the third sample.
+    assert!(
+        seen[2] > 0.0 && seen[2] < 0.2,
+        "eases in, not a jump: {seen:?}"
+    );
+    let last = *seen.last().unwrap();
+    assert!(
+        (last - 0.55).abs() < 0.02,
+        "settles at the 0.55 rad lock: {seen:?}"
+    );
+}

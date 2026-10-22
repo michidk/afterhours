@@ -1,4 +1,8 @@
-import init, { Physics } from "../../crates/physics/pkg/afterhours_physics.js";
+import init, {
+  Physics,
+  character_feet,
+  vehicle_rest,
+} from "../../crates/physics/pkg/afterhours_physics.js";
 import { terrainMesh } from "../../shared/terrain.ts";
 import { WATER_LEVEL, WORLD_LIMIT } from "../../shared/water.ts";
 import {
@@ -152,11 +156,11 @@ export class Prediction {
           ? this.world.spawn_vehicle(
               ...vehicleSpec,
               entity.x,
-              entity.y,
+              entity.y + vehicle_rest(),
               entity.z,
               entity.angle,
             )
-          : this.world.spawn_character(entity.x, entity.y, entity.z);
+          : this.world.spawn_character(entity.x, entity.y + character_feet(), entity.z);
     }
     try {
       this.world.restore(Float32Array.from(you));
@@ -206,21 +210,26 @@ export class Prediction {
     const s = this.world.states();
     if (this.kind === "vehicle") {
       const [x, y, z, qx, qy, qz, qw, vx, vy, vz] = s.subarray(1, 11);
+      const pitch = Math.asin(Math.max(-1, Math.min(1, 2 * (qw * qx - qy * qz)))),
+        roll = Math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qx * qx + qz * qz));
       return {
         ...base,
         x,
-        y,
+        // Entities carry the ground under the wheels, not the body centre.
+        y: y - vehicle_rest() * Math.cos(pitch) * Math.cos(roll),
         z,
         vx,
         vy,
         vz,
         angle: Math.atan2(2 * (qw * qy + qx * qz), 1 - 2 * (qy * qy + qz * qz)),
-        pitch: Math.asin(Math.max(-1, Math.min(1, 2 * (qw * qx - qy * qz)))),
-        roll: Math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qx * qx + qz * qz)),
+        pitch,
+        roll,
+        // The wheels turn as the predicted car does, not as the delayed snapshot says.
+        steering: this.world.steering(this.id),
       };
     }
     const [x, y, z, vy] = s.subarray(1, 5);
-    return { ...base, x, y, z, vy, angle: this.facing };
+    return { ...base, x, y: y - character_feet(), z, vy, angle: this.facing };
   }
   /** The predicted body as drawn, with the correction offset easing out. */
   render(now: number): Entity | undefined {

@@ -323,3 +323,15 @@ and ten pending replays). The stamper now skips a slot whenever its stream is al
 tick past the aim, and its target decays by a quarter tick per snapshot once the lead exceeds
 three. `tests/input-lead.test.ts` simulates the loop over lan, 74 ms and stalling links at 30, 31
 and 32.3 Hz sends (`tests/support/link.ts`); `scripts/drive-client.ts` measures the same live.
+
+## Entity heights and steering
+
+Clients draw an entity at its reported `y`, and the car renderer treats a car as airborne unless
+`y` is the ground under its wheels (`carGrounded`), as the original game reported it. The physics
+body centres sit above that, so the server subtracts `VEHICLE_REST` (1.26 m, tilt-adjusted) for
+cars and `CHARACTER_FEET` (0.91 m) for people, and the client's local prediction applies the same
+offsets to the wasm body. Without them every car hovered about 1.3 m up with drooping wheels and
+people floated. `Entity.steering` is the front wheel angle in radians from the physics, and the
+local car reads it from the predicted body so the wheels turn with the key, not a snapshot later.
+`cars_and_people_are_reported_at_ground_height` and `the_front_wheels_turn_gradually_to_the_steering_lock`
+in `crates/server/tests/scene.rs` pin both.

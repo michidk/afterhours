@@ -91,6 +91,9 @@ impl Physics {
             },
         )
     }
+    pub fn steering(&self, id: u32) -> f32 {
+        self.0.steering(id)
+    }
     pub fn remove_vehicle(&mut self, id: u32) -> bool {
         self.0.remove_vehicle(id)
     }
@@ -164,4 +167,14 @@ pub fn run_lab(scenario: &str) -> Result<String, JsError> {
 #[wasm_bindgen]
 pub fn lab_presets() -> String {
     serde_json::to_string(crate::lab::PRESETS).expect("presets serialise")
+}
+
+/// See [`crate::CHARACTER_FEET`] and [`crate::VEHICLE_REST`]: body centre to ground contact.
+#[wasm_bindgen]
+pub fn character_feet() -> f32 {
+    crate::CHARACTER_FEET
+}
+#[wasm_bindgen]
+pub fn vehicle_rest() -> f32 {
+    crate::VEHICLE_REST
 }

@@ -6,7 +6,7 @@ use crate::city::City;
 use crate::traffic::{
     INTEREST_RADIUS, Rng, SAMPLE_TICKS, SPAWN_PLAYER_DISTANCE, Signal, nearest, players, signal,
 };
-use afterhours_physics::{CHARACTER_STRIDE, Move, TICK, World};
+use afterhours_physics::{CHARACTER_FEET, CHARACTER_STRIDE, Move, TICK, World};
 use afterhours_protocol::{Entity, Kind};
 use serde_json::json;
 use std::collections::HashMap;
@@ -177,7 +177,7 @@ impl Citizens {
                     id: p.entity.to_string(),
                     kind: Kind::Pedestrian,
                     x: r[1],
-                    y: r[2],
+                    y: r[2] - CHARACTER_FEET,
                     z: r[3],
                     angle: p.heading[0].atan2(p.heading[1]),
                     vx: p.heading[0] * p.speed,

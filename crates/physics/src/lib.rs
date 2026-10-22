@@ -50,6 +50,18 @@ const SERVICE_BRAKE: f32 = 14.0;
 const JUMP_SPEED: f32 = 5.5;
 const CHARACTER_RADIUS: f32 = 0.35;
 const CHARACTER_HALF_HEIGHT: f32 = 0.55;
+/// How far a standing character's body centre rides above the ground under its feet. The
+/// original game (and the client) report the height of the feet, so entities subtract this.
+pub const CHARACTER_FEET: f32 = 0.91;
+/// The same for a car resting level on its suspension (measured; every model has the
+/// same body height and travel). The client draws a car whose entity height is its ground
+/// contact, as the original game reported it.
+pub const VEHICLE_REST: f32 = 1.26;
+
+/// Height of the ground under a car given its body-centre height and attitude.
+pub fn vehicle_contact_y(centre_y: f32, pitch: f32, roll: f32) -> f32 {
+    centre_y - VEHICLE_REST * libm::cosf(pitch) * libm::cosf(roll)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VehicleSpec {
@@ -396,6 +408,14 @@ impl World {
             rear_grip_loss: 0.0,
         });
         id
+    }
+
+    /// Current front wheel angle in radians (`Entity.steering`), 0 for an unknown vehicle.
+    pub fn steering(&self, id: u32) -> f32 {
+        self.vehicles
+            .iter()
+            .find(|v| v.id == id)
+            .map_or(0.0, |v| v.steering)
     }
 
     pub fn set_drive(&mut self, id: u32, drive: Drive) -> bool {
