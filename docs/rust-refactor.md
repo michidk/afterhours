@@ -52,7 +52,7 @@ Milestone 2.3, gameplay parity (one PR per system, Node code deleted as each lan
 
 - [x] port `mapgen/` and the city conversion as `crates/mapgen`; keep the
       artifact format so the client does not change. `cargo run --release -p
-  afterhours-mapgen --bin generate-city -- --seed 713` takes about 9 s and
+afterhours-mapgen --bin generate-city -- --seed 713` takes about 9 s and
       produces an artifact equal as JSON to the checked-in TypeScript output
       (`seed_713_artifact_matches_checked_in_city`); every stage also matches the
       TS oracle with zero delta (see the per-stage sections). `prepare-city.ts`
