@@ -12,12 +12,12 @@ import type { DebrisClock } from "../world/destruction.ts";
 import type { City, Entity, Input, WorldEvent } from "../../shared/world.ts";
 import type { InputClock } from "../input/clock.ts";
 import { TUNING } from "../../shared/catalog.ts";
+import { InputStamper } from "./lead.ts";
 import { Prediction, loadPhysics } from "./prediction.ts";
 import { SnapshotTimeline } from "./timeline.ts";
 
 export const VERSION = 1;
 /** Ticks an input should arrive before the server simulates it. */
-const LEAD_TARGET = 2;
 
 export interface Welcome {
   id: string;
@@ -70,8 +70,7 @@ export class GameNetwork {
   ack: number | undefined;
   lead = 0;
   private serverTick = 0;
-  private nextTick = 0;
-  private leadTarget = LEAD_TARGET;
+  private stamper = new InputStamper();
   private edge: Edge = { interact: false, drop: false, reload: false, jetpack: false };
   private welcomed = false;
   private closed = false;
@@ -174,7 +173,7 @@ export class GameNetwork {
     this.welcomed = true;
     this.playerId = m.id;
     this.serverTick = m.tick;
-    this.nextTick = m.tick + this.leadTarget;
+    this.stamper.reset(m.tick);
     this.received = performance.now();
     this.entities.clear();
     this.timeline.reset();
@@ -191,14 +190,7 @@ export class GameNetwork {
     this.serverTime = m.time;
     this.ack = m.ack ?? undefined;
     this.lead = m.lead;
-    // Nudge the send schedule so inputs land about LEAD_TARGET ticks early.
-    this.leadTarget = Math.max(
-      1,
-      Math.min(
-        8,
-        this.leadTarget + (m.lead < 1 ? 1 : m.lead > LEAD_TARGET + 1 ? -0.05 : 0),
-      ),
-    );
+    this.stamper.feedback(m.lead);
     this.received = now;
     this.snapshotTimes.push(now);
     this.snapshotTimes = this.snapshotTimes.filter((at) => at >= now - 1000);
@@ -293,13 +285,10 @@ export class GameNetwork {
       !this.prediction
     )
       return;
-    const estimate = Math.ceil(this.serverTickAt(timestamp) + this.leadTarget);
-    // Keep the stream contiguous, but resynchronise after a pause or a drift.
-    const tick =
-      Math.abs(estimate - this.nextTick) > 8
-        ? estimate
-        : Math.max(this.nextTick, estimate);
-    this.nextTick = tick + 1;
+    const tick = this.stamper.stamp(this.serverTickAt(timestamp));
+    // Already a tick or more ahead of the aim: the server runs one input per tick, so an
+    // extra one would only queue. The next slot carries the current controls.
+    if (tick === undefined) return;
     const controls: Controls = {
       up: input.up,
       down: input.down,

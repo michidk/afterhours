@@ -311,3 +311,15 @@ window, and changing controls during an outage can still require reconciliation.
 
 The production trace included outages longer than a second. This change does not
 remove that underlying transport delay or promise smooth movement through it.
+
+## Input lead (Rust server)
+
+Each input is stamped with the server tick it should run on (`client/network/lead.ts`). The
+snapshot's `lead` says how many ticks early the newest input arrived (the Networking panel's
+"Server input buffer"); the stamper aims for about two and bumps its target when inputs arrive
+late. The server runs one input per tick, so a send timer slightly faster than 30 Hz used to
+stack extra inputs until a resync (a clean link sat at 9-10 commands, about 300 ms of input age
+and ten pending replays). The stamper now skips a slot whenever its stream is already more than a
+tick past the aim, and its target decays by a quarter tick per snapshot once the lead exceeds
+three. `tests/input-lead.test.ts` simulates the loop over lan, 74 ms and stalling links at 30, 31
+and 32.3 Hz sends (`tests/support/link.ts`); `scripts/drive-client.ts` measures the same live.
