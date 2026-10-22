@@ -125,9 +125,9 @@ pub fn sink_under_streets(
         }
     }
     for b in pads {
-        let c = b.angle.unwrap_or(0.0).cos();
-        let s = b.angle.unwrap_or(0.0).sin();
-        let reach = b.w.hypot(b.d) / 2.0 + 2.0;
+        let c = crate::js_math::cos(b.angle.unwrap_or(0.0));
+        let s = crate::js_math::sin(b.angle.unwrap_or(0.0));
+        let reach = crate::js_math::hypot(b.w, b.d) / 2.0 + 2.0;
         let z0 = ((b.z - reach + half) / step).floor().max(0.0) as usize;
         let z1 = ((b.z + reach + half) / step).ceil().min((side - 1) as f64) as usize;
         let x0 = ((b.x - reach + half) / step).floor().max(0.0) as usize;

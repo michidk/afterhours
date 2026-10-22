@@ -309,7 +309,8 @@ fn road_distance(f: &HeightField, g: &RoadGraph) -> Vec<f32> {
                 for x in x0..=x1 {
                     let p = to_world(f, x, z);
                     let t = (((p.x - a.x) * dx + (p.z - a.z) * dz) / l2).clamp(0., 1.);
-                    let d = (p.x - a.x - dx * t).hypot(p.z - a.z - dz * t) - e.width / 2.;
+                    let d = crate::js_math::hypot(p.x - a.x - dx * t, p.z - a.z - dz * t)
+                        - e.width / 2.;
                     let i = z * f.w + x;
                     if d < f64::from(out[i]) {
                         out[i] = d as f32;

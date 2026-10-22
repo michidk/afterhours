@@ -18,6 +18,7 @@
 // See ../licenses/V8-LICENSE for the V8 BSD terms.
 
 #include <cmath>
+#include <limits>
 #include <cstdint>
 #include <cstring>
 #include <type_traits>
@@ -25,7 +26,28 @@
 #define V8_CC_MSVC 0
 #define V8_INLINE inline
 #define V8_WARN_UNUSED_RESULT
-namespace v8 { namespace base { template<class T> T NegateWithWraparound(T x){using U=std::make_unsigned_t<T>;return std::bit_cast<T>(U(0)-static_cast<U>(x));} template<class T> T SubWithWraparound(T a,T b){using U=std::make_unsigned_t<T>;return std::bit_cast<T>(static_cast<U>(a)-static_cast<U>(b));} template<class T,class U> T bit_cast(U u){return std::bit_cast<T>(u);} template<class T> T Divide(T a,T b){return a/b;} } }
+namespace v8 {
+namespace base {
+template <class T>
+T NegateWithWraparound(T x) {
+  using U = std::make_unsigned_t<T>;
+  return std::bit_cast<T>(U(0) - static_cast<U>(x));
+}
+template <class T>
+T SubWithWraparound(T a, T b) {
+  using U = std::make_unsigned_t<T>;
+  return std::bit_cast<T>(static_cast<U>(a) - static_cast<U>(b));
+}
+template <class T, class U>
+T bit_cast(U u) {
+  return std::bit_cast<T>(u);
+}
+template <class T>
+T Divide(T a, T b) {
+  return a / b;
+}
+}  // namespace base
+}  // namespace v8
 namespace v8 {
 namespace base {
 namespace ieee754 {

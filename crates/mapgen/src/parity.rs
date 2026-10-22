@@ -20,6 +20,15 @@ pub fn first_exact_difference(expected: &Value, actual: &Value) -> Option<Differ
 fn compare(expected: &Value, actual: &Value, path: &str, exact: bool) -> Option<Difference> {
     match (expected, actual) {
         (Value::Number(a), Value::Number(b)) => {
+            if a.as_i64().zip(b.as_i64()).is_some_and(|(a, b)| a != b)
+                || a.as_u64().zip(b.as_u64()).is_some_and(|(a, b)| a != b)
+            {
+                return Some(Difference {
+                    path: path.into(),
+                    expected: expected.clone(),
+                    actual: actual.clone(),
+                });
+            }
             let af = a.as_f64()?;
             let bf = b.as_f64()?;
             let tolerance = 1e-9 * af.abs().max(bf.abs()).max(1.0);
@@ -85,6 +94,11 @@ mod tests {
     fn reports_first_field_and_requires_exact_integers() {
         assert!(first_difference(&json!(1), &json!(1.0)).is_none());
         assert!(first_difference(&json!(1000000000), &json!(1000000001)).is_some());
+        assert!(
+            first_exact_difference(&json!(9007199254740992_u64), &json!(9007199254740993_u64))
+                .is_some()
+        );
+        assert!(first_exact_difference(&json!(0.5), &json!(0.5 + 1e-12)).is_some());
         assert_eq!(
             first_difference(&json!({"items":[1,2]}), &json!({"items":[1,3]}))
                 .unwrap()

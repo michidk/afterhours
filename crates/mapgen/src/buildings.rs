@@ -333,7 +333,7 @@ pub fn stamp_pads(f: &mut HeightField, buildings: &[BuildingPlacement], protecte
     let (w, h) = (f.w, f.h);
     for b in buildings {
         let margin = 3.;
-        let r = b.w.hypot(b.d) / 2. + margin;
+        let r = crate::js_math::hypot(b.w, b.d) / 2. + margin;
         let x0 = (((b.x - r + f.size / 2.) / f.cell).floor().max(0.)) as usize;
         let x1 = (((b.x + r + f.size / 2.) / f.cell)
             .ceil()
@@ -342,14 +342,14 @@ pub fn stamp_pads(f: &mut HeightField, buildings: &[BuildingPlacement], protecte
         let z1 = (((b.z + r + f.size / 2.) / f.cell)
             .ceil()
             .min((h - 1) as f64)) as usize;
-        let (c, s) = ((-b.angle).cos(), (-b.angle).sin());
+        let (c, s) = (crate::js_math::cos(-b.angle), crate::js_math::sin(-b.angle));
         for z in z0..=z1 {
             for x in x0..=x1 {
                 let px = x as f64 * f.cell - f.size / 2. - b.x;
                 let pz = z as f64 * f.cell - f.size / 2. - b.z;
                 let lx = (px * c - pz * s).abs();
                 let lz = (px * s + pz * c).abs();
-                let dd = (0f64.max(lx - b.w / 2.)).hypot(0f64.max(lz - b.d / 2.));
+                let dd = crate::js_math::hypot(0f64.max(lx - b.w / 2.), 0f64.max(lz - b.d / 2.));
                 if dd > margin {
                     continue;
                 }

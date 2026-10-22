@@ -225,7 +225,7 @@ pub fn city_from_map_with_snapshots(
             let a = pts[i - 1];
             let b = pts[i];
             let (ax, az, bx, bz) = (round(a.x), round(a.z), round(b.x), round(b.z));
-            if (bx - ax).hypot(bz - az) < 0.05 {
+            if crate::js_math::hypot(bx - ax, bz - az) < 0.05 {
                 continue;
             };
             let signal_a = junction.contains(&e.a)
@@ -368,14 +368,15 @@ pub fn city_from_map_with_snapshots(
             probes.push(lerp(*c, r[(i + 1) % 4], 0.5))
         }
         probes.push(bp(b));
-        let reach = b.w.hypot(b.d) / 2.0;
+        let reach = crate::js_math::hypot(b.w, b.d) / 2.0;
         if walk_rings.iter().any(|w| {
             dist(w[0], bp(b)) < reach + 40.0
                 && (probes.iter().any(|q| point_in_polygon(*q, w))
                     || w.iter().any(|q| point_in_polygon(*q, &r)))
         }) || kept.iter().any(|(k, kr)| {
             let kb = &buildings[*k];
-            dist(bp(kb), bp(b)) < reach + kb.w.hypot(kb.d) / 2.0 && convex_overlap(kr, &r)
+            dist(bp(kb), bp(b)) < reach + crate::js_math::hypot(kb.w, kb.d) / 2.0
+                && convex_overlap(kr, &r)
         }) {
             continue;
         }
@@ -895,8 +896,11 @@ fn clear_of_streets(
     let near: Vec<&Road> = roads
         .iter()
         .filter(|r| {
-            (r.x - centre.x).hypot(r.z - centre.z)
-                < (r.bx - r.ax).hypot(r.bz - r.az) / 2.0 + r.width / 2.0 + w.hypot(d) / 2.0 + 4.0
+            crate::js_math::hypot(r.x - centre.x, r.z - centre.z)
+                < crate::js_math::hypot(r.bx - r.ax, r.bz - r.az) / 2.0
+                    + r.width / 2.0
+                    + crate::js_math::hypot(w, d) / 2.0
+                    + 4.0
         })
         .collect();
     for _ in 0..8 {
@@ -922,7 +926,7 @@ fn clear_of_streets(
                         continue;
                     }
                     worst = depth;
-                    let away = (centre.x - point.x).hypot(centre.z - point.z);
+                    let away = crate::js_math::hypot(centre.x - point.x, centre.z - point.z);
                     let away = if away == 0.0 { 1.0 } else { away };
                     push = Point {
                         x: (centre.x - point.x) / away,
@@ -1021,8 +1025,10 @@ fn place_airport(
         while z <= LIMIT - half - 40.0 {
             let mut x = -LIMIT + half + 40.0;
             while x <= LIMIT - half - 40.0 {
-                if (x - map.centre.x).hypot(z - map.centre.z) < far
-                    || others.iter().any(|o| (x - o.x).hypot(z - o.z) < apart)
+                if crate::js_math::hypot(x - map.centre.x, z - map.centre.z) < far
+                    || others
+                        .iter()
+                        .any(|o| crate::js_math::hypot(x - o.x, z - o.z) < apart)
                 {
                     x += 32.0;
                     continue;
@@ -1068,7 +1074,8 @@ fn place_airport(
                     .iter()
                     .any(|b| (b.x - x).abs() < half + 20.0 && (b.z - z).abs() < half + 20.0)
                     || roads.iter().any(|r| {
-                        let steps = ((r.bx - r.ax).hypot(r.bz - r.az) / 8.0).ceil() as usize;
+                        let steps =
+                            (crate::js_math::hypot(r.bx - r.ax, r.bz - r.az) / 8.0).ceil() as usize;
                         (0..=steps).any(|i| {
                             let t = i as f64 / steps as f64;
                             (r.ax + (r.bx - r.ax) * t - x).abs() < clear + r.width / 2.0
@@ -1103,7 +1110,8 @@ fn place_airport(
             let dx = r.bx - r.ax;
             let dz = r.bz - r.az;
             let t = (((px - r.ax) * dx + (pz - r.az) * dz) / (dx * dx + dz * dz)).clamp(0.0, 1.0);
-            (r.ax + dx * t - px).hypot(r.az + dz * t - pz) < r.width / 2.0 + 2.5 + 8.0
+            crate::js_math::hypot(r.ax + dx * t - px, r.az + dz * t - pz)
+                < r.width / 2.0 + 2.5 + 8.0
         })
     };
     for z in 0..f.h {
@@ -1112,7 +1120,7 @@ fn place_airport(
             let pz = z as f64 * f.cell - f.size / 2.0;
             let dx = ((px - site.0).abs() - half).max(0.0);
             let dz = ((pz - site.1).abs() - half).max(0.0);
-            let d = dx.hypot(dz);
+            let d = crate::js_math::hypot(dx, dz);
             if d > TERRAIN_STEP + margin || (d > TERRAIN_STEP && near_road(px, pz)) {
                 continue;
             }
@@ -1132,7 +1140,7 @@ fn destructibles(road: &Road) -> Vec<(&'static str, Point)> {
     let mut result = Vec::new();
     let dx = road.bx - road.ax;
     let dz = road.bz - road.az;
-    let length = dx.hypot(dz);
+    let length = crate::js_math::hypot(dx, dz);
     if length < 15.0 && road.stop_a.is_none() && road.stop_b.is_none() {
         return result;
     }

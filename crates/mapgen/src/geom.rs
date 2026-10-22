@@ -185,7 +185,7 @@ pub fn clean_ring(poly: &[Point], epsilon: f64) -> Vec<Point> {
     out
 }
 pub fn rotated_rect(c: Point, w: f64, d: f64, angle: f64) -> Vec<Point> {
-    let (co, si) = (angle.cos(), angle.sin());
+    let (co, si) = (crate::js_math::cos(angle), crate::js_math::sin(angle));
     [
         (-w / 2.0, -d / 2.0),
         (w / 2.0, -d / 2.0),
