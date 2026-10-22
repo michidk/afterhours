@@ -33,6 +33,7 @@ import { makeParks, placeVegetation } from "./vegetation.ts";
 export function generateMap(
   options: MapOptions,
   progress?: (stage: string) => void,
+  snapshot?: (name: string, value: unknown) => void,
 ): GeneratedMap {
   const timings: StageTiming[] = [];
   const now = () =>
@@ -81,12 +82,20 @@ export function generateMap(
     return geometry;
   });
   const bridges = bridgeDecks(roads);
+  snapshot?.("blocks-input", { graph: roads, field: shaped, hydro, centre, seed });
   const blocks = stage("blocks", () =>
     generateBlocks({ graph: roads, field: shaped, hydro, centre, seed }),
   );
   const buildings = stage("buildings", () => {
+    snapshot?.("buildings-input", { blocks, field: shaped, centre, seed });
     const placed = placeBuildings(blocks, shaped, centre, seed);
+    snapshot?.("pads-input", {
+      field: shaped,
+      buildings: placed,
+      protectedCells: roadCells,
+    });
     stampPads(shaped, placed, roadCells);
+    snapshot?.("pads", shaped);
     return placed;
   });
   // The coarse terrain grid must stay below every drawn street surface.
@@ -106,7 +115,18 @@ export function generateMap(
       buildings,
     );
   });
+  snapshot?.("parks-input", { blocks, hydro, field: shaped });
   const parks = makeParks(blocks, hydro, shaped);
+  snapshot?.("vegetation-input", {
+    field: shaped,
+    hydro,
+    graph: roads,
+    blocks,
+    buildings,
+    desirability,
+    seed,
+    geometry,
+  });
   const { trees, lamps } = stage("vegetation", () =>
     placeVegetation({
       field: shaped,
