@@ -22,6 +22,8 @@ import { dumpRoadStages } from "./mapgen-roads-dump.ts";
 import { generateMap } from "../mapgen/pipeline.ts";
 import { LIMIT } from "../shared/world.ts";
 import { TERRAIN_STEP } from "../shared/terrain.ts";
+import { cityFromMap } from "./mapgen-city.ts";
+import { packCity } from "../shared/city-pack.ts";
 const args = process.argv.slice(2);
 const value = (name: string, fallback: string) => {
   const i = args.indexOf(name);
@@ -145,7 +147,12 @@ await write(
 // The complete snapshot remains useful to later stage ports.
 await dumpRoadStages(seed, LIMIT * 2, TERRAIN_STEP, out);
 if (!args.includes("--terrain-only")) {
-  const map = generateMap(options);
+  const snapshots = new Map<string, string>();
+  const map = generateMap(options, undefined, (name, value) => {
+    snapshots.set(name, json(value));
+  });
+  for (const [name, value] of snapshots)
+    await writeFile(resolve(out, `${name}.json`), `${value}\n`);
   await write("roads", map.roads);
   await write("geometry", map.geometry);
   await write("bridges", map.bridges);
@@ -156,5 +163,15 @@ if (!args.includes("--terrain-only")) {
   await write("buildings", map.buildings);
   await write("parks", map.parks);
   await write("vegetation", { trees: map.trees, lamps: map.lamps });
+  await write("map", map);
+  const city = cityFromMap(map, (name, context, extra) => {
+    const { map: _map, paved: _paved, ...fields } = context;
+    snapshots.set(`feature-${name}`, json({ ...fields, ...(extra as object) }));
+  });
+  for (const [name, value] of snapshots)
+    if (name.startsWith("feature-"))
+      await writeFile(resolve(out, `${name}.json`), `${value}\n`);
+  await write("city", city);
+  await write("artifact", { format: "afterhours-city", version: 7, city: packCity(city) });
 }
 console.log(`Wrote mapgen stage dumps for seed ${seed} to ${out}`);

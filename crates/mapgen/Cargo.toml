@@ -8,3 +8,5 @@ publish = false
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 
+[build-dependencies]
+cc = "1"

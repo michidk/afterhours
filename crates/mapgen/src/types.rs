@@ -75,6 +75,7 @@ pub struct Hydrology {
     pub flow: Vec<f32>,
 }
 
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Phase {
@@ -216,6 +217,7 @@ pub struct BuildingPlacement {
     pub y: f64,
     pub kind: BuildingKind,
     pub color: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub footprint: Option<Vec<Point>>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

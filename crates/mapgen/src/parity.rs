@@ -18,6 +18,11 @@ pub fn first_difference_exact(expected: &Value, actual: &Value) -> Option<Differ
     compare(expected, actual, "$", false)
 }
 
+/// Strict numeric equality (alias used by the city stage tests).
+pub fn first_exact_difference(expected: &Value, actual: &Value) -> Option<Difference> {
+    first_difference_exact(expected, actual)
+}
+
 fn compare(
     expected: &Value,
     actual: &Value,
@@ -61,9 +66,9 @@ fn compare(
         (Value::Object(a), Value::Object(b)) => {
             if a.len() != b.len() {
                 return Some(Difference {
-                    path: path.into(),
-                    expected: expected.clone(),
-                    actual: actual.clone(),
+                    path: format!("{path}.keys"),
+                    expected: a.keys().cloned().collect::<Vec<_>>().into(),
+                    actual: b.keys().cloned().collect::<Vec<_>>().into(),
                 });
             }
             a.iter().find_map(|(key, value)| match b.get(key) {
@@ -81,5 +86,27 @@ fn compare(
             expected: expected.clone(),
             actual: actual.clone(),
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn reports_first_field_and_requires_exact_integers() {
+        assert!(first_difference(&json!(1), &json!(1.0)).is_none());
+        assert!(first_difference(&json!(1000000000), &json!(1000000001)).is_some());
+        assert_eq!(
+            first_difference(&json!({"items":[1,2]}), &json!({"items":[1,3]}))
+                .unwrap()
+                .path,
+            "$.items[1]"
+        );
+        assert_eq!(
+            first_difference(&json!([1]), &json!([])).unwrap().path,
+            "$.length"
+        );
+        assert!(first_difference(&json!(0.5), &json!(0.5 + 1e-12)).is_none());
     }
 }
