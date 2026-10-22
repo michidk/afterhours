@@ -117,7 +117,9 @@ pub struct Band {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Sidewalk {
     pub polygon: Vec<Point>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub edge: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub node: Option<usize>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -130,6 +132,7 @@ pub struct Marking {
 pub struct WalkLink {
     pub a: usize,
     pub b: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub crossing: Option<Phase>,
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
