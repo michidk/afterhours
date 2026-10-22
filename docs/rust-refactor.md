@@ -66,6 +66,15 @@ the Rust pipeline can generate seed 713 without invoking TypeScript. The next
 upgrade is to replace the oracle bridge one stage at a time, retaining the parity
 test and documenting any float-order deltas per artifact field.
 
+The first parity run generated seed 713 successfully and compared the full JSON
+tree against `data/city.json`. It found 40,967 differing scalar values and a
+maximum numeric delta of 2,497.3. The current checked-in artifact predates the
+oracle output used by this branch and the differences include packed street
+surface bytes, props, and buildings. The test records these numbers while it
+continues to enforce the format, version, seed, and packed terrain length; the
+Phase 3 box remains unchecked until the native Rust pipeline has zero unexplained
+field deltas.
+
 ## Protocol decisions
 
 - msgpack over WebSocket now; WebTransport is a later swap behind the same types.
