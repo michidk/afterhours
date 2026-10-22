@@ -9,22 +9,30 @@ const seed = process.env.CITY_SEED || "713",
   meshes = process.env.CITY_MESH_PATH || "data/city-meshes.msgpack";
 if (!/^-?\d+$/.test(seed)) throw Error(`CITY_SEED must be an integer, got ${seed}`);
 
-const run = (script: string, args: string[]) =>
+const run = (command: string, args: string[]) =>
   new Promise<void>((resolve, reject) => {
-    const child = spawn(
-      process.execPath,
-      ["--import", "tsx", fileURLToPath(new URL(script, import.meta.url)), ...args],
-      { stdio: "inherit" },
-    );
+    const child = spawn(command, args, { stdio: "inherit" });
     child.on("error", reject);
     child.on("exit", (code) =>
-      code === 0 ? resolve() : reject(Error(`${script} exited with code ${code}`)),
+      code === 0 ? resolve() : reject(Error(`${command} exited with code ${code}`)),
     );
   });
 
 const started = performance.now();
-await run("./generate-city.ts", ["--seed", seed, "--out", city]);
-await run("./bake-city-meshes.ts", ["--city", city, "--out", meshes]);
+const generator = process.env.CITY_GENERATOR || "cargo";
+const generatorArgs = process.env.CITY_GENERATOR
+  ? ["--seed", seed, "--out", city]
+  : ["run", "--release", "-p", "afterhours-mapgen", "--bin", "generate-city", "--", "--seed", seed, "--out", city];
+await run(generator, generatorArgs);
+await run(process.execPath, [
+  "--import",
+  "tsx",
+  fileURLToPath(new URL("./bake-city-meshes.ts", import.meta.url)),
+  "--city",
+  city,
+  "--out",
+  meshes,
+]);
 console.log(
   `City ${seed} prepared in ${((performance.now() - started) / 1000).toFixed(1)} s`,
 );

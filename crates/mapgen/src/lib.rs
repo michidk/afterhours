@@ -8,6 +8,7 @@
 pub mod field;
 pub mod geom;
 pub mod hydrology;
+pub mod packing;
 pub mod random;
 pub mod shoreline;
 pub mod terrain;

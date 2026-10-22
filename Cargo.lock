@@ -5,6 +5,9 @@ version = 4
 [[package]]
 name = "afterhours-mapgen"
 version = "0.1.0"
+dependencies = [
+ "base64",
+]
 
 [[package]]
 name = "afterhours-physics"

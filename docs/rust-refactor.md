@@ -52,6 +52,20 @@ Milestone 2.3, gameplay parity (one PR per system, Node code deleted as each lan
 - [ ] port `mapgen/` and `scripts/prepare-city.ts` as `crates/mapgen`; keep the
       artifact format so the client does not change.
 
+Phase 3 work in progress. `crates/mapgen` owns the Rust crate, the f64 PRNG,
+geometry contracts, height-field operations, and hydrology contracts. The
+`generate-city` binary currently invokes `scripts/generate-city.ts` as the parity
+oracle, so the produced version-7 artifact remains compatible with the client and
+`crates/server`. `scripts/prepare-city.ts` now runs that binary before the
+unchanged TypeScript mesh baker. Set `CITY_GENERATOR` to a built `generate-city`
+path to avoid Cargo startup on repeated preparations.
+
+This is a deliberate shortcut. The stage implementations and city conversion are
+not yet native Rust, and the Phase 3 parity box stays unchecked until a test proves
+the Rust pipeline can generate seed 713 without invoking TypeScript. The next
+upgrade is to replace the oracle bridge one stage at a time, retaining the parity
+test and documenting any float-order deltas per artifact field.
+
 ## Protocol decisions
 
 - msgpack over WebSocket now; WebTransport is a later swap behind the same types.
