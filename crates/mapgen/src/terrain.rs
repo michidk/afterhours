@@ -234,10 +234,10 @@ pub fn droplet_erosion(f: &mut Field, rng: &mut Rng, count: usize) {
                         continue;
                     }
                     let j = bz as usize * w + bx as usize;
-                    let take = (f.data[j] - 0.2).min(amount as f32 * weight as f32);
+                    let take = ((f.data[j] as f64) - 0.2).min(amount * weight);
                     if take > 0.0 {
-                        f.data[j] -= take;
-                        sediment += take as f64;
+                        f.data[j] -= take as f32;
+                        sediment += take;
                     }
                 }
             }
