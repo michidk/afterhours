@@ -61,7 +61,10 @@ pub struct Lake {
     pub outline: Vec<Point>,
     pub level: f64,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// Hydrology data consumed by road generation.  The masks use the same row-major
+/// indexing as `HeightField` and are deliberately byte/f32 arrays to preserve the
+/// TypeScript dump representation.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Hydrology {
     pub rivers: Vec<River>,

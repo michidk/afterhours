@@ -18,6 +18,7 @@ import {
 import { derive } from "../mapgen/random.ts";
 import { desirabilityField, chooseCentre } from "../mapgen/site.ts";
 import { lakeShorelines } from "../mapgen/shoreline.ts";
+import { dumpRoadStages } from "./mapgen-roads-dump.ts";
 import { generateMap } from "../mapgen/pipeline.ts";
 import { LIMIT } from "../shared/world.ts";
 import { TERRAIN_STEP } from "../shared/terrain.ts";
@@ -136,10 +137,15 @@ await write(
   })),
 );
 // The complete snapshot remains useful to later stage ports.
+await dumpRoadStages(seed, LIMIT * 2, TERRAIN_STEP, out);
 if (!args.includes("--terrain-only")) {
   const map = generateMap(options);
   await write("roads", map.roads);
+  await write("geometry", map.geometry);
+  await write("bridges", map.bridges);
   await write("shaped", map.shaped);
+  const streets = (await import("../mapgen/streetfit.ts")).streetPolygons(map.roads, map.geometry);
+  await write("streets", streets);
   await write("blocks", map.blocks);
   await write("buildings", map.buildings);
   await write("parks", map.parks);
