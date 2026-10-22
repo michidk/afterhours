@@ -403,6 +403,7 @@ fn cars_and_people_are_reported_at_ground_height() {
         checked.0 > 3 && checked.1 > 0,
         "saw {checked:?} cars and people"
     );
+    assert!(ai_cars > 0, "no traffic in view to check");
 }
 
 /// `Entity.steering` turns the drawn front wheels, so it must be the wheel angle in radians
