@@ -33,9 +33,10 @@ pub fn sample(field: &HeightField, x: f64, z: f64) -> f64 {
     let tu = (u - ix as f64).clamp(0.0, 1.0);
     let tv = (v - iz as f64).clamp(0.0, 1.0);
     let i = iz * field.w + ix;
-    let top = f64::from(field.data[i]) + f64::from(field.data[i + 1] - field.data[i]) * tu;
+    let top =
+        f64::from(field.data[i]) + (f64::from(field.data[i + 1]) - f64::from(field.data[i])) * tu;
     let bottom = f64::from(field.data[i + field.w])
-        + f64::from(field.data[i + field.w + 1] - field.data[i + field.w]) * tu;
+        + (f64::from(field.data[i + field.w + 1]) - f64::from(field.data[i + field.w])) * tu;
     top + (bottom - top) * tv
 }
 
@@ -63,9 +64,9 @@ pub fn cell_slope(field: &HeightField, ix: usize, iz: usize) -> f64 {
     let x1 = (ix + 1).min(field.w - 1);
     let z0 = iz.saturating_sub(1);
     let z1 = (iz + 1).min(field.h - 1);
-    let gx = (field.data[iz * field.w + x1] - field.data[iz * field.w + x0]) as f64
+    let gx = (f64::from(field.data[iz * field.w + x1]) - f64::from(field.data[iz * field.w + x0]))
         / ((x1 - x0).max(1) as f64 * field.cell);
-    let gz = (field.data[z1 * field.w + ix] - field.data[z0 * field.w + ix]) as f64
+    let gz = (f64::from(field.data[z1 * field.w + ix]) - f64::from(field.data[z0 * field.w + ix]))
         / ((z1 - z0).max(1) as f64 * field.cell);
     gx.hypot(gz)
 }
@@ -81,11 +82,11 @@ pub fn distance_transform(inside: &[u8], w: usize, h: usize) -> Vec<f32> {
         z[0] = -INF;
         z[1] = INF;
         for q in 1..n {
-            let mut s = (src[q] + (q * q) as f64 - src[v[k]] - (v[k] * v[k]) as f64)
+            let mut s = (src[q] + (q * q) as f64 - (src[v[k]] + (v[k] * v[k]) as f64))
                 / (2 * (q - v[k])) as f64;
             while s <= z[k] {
                 k -= 1;
-                s = (src[q] + (q * q) as f64 - src[v[k]] - (v[k] * v[k]) as f64)
+                s = (src[q] + (q * q) as f64 - (src[v[k]] + (v[k] * v[k]) as f64))
                     / (2 * (q - v[k])) as f64;
             }
             k += 1;
@@ -102,7 +103,7 @@ pub fn distance_transform(inside: &[u8], w: usize, h: usize) -> Vec<f32> {
         }
         out
     }
-    let mut values = vec![INF; w * h];
+    let mut values = vec![INF as f32; w * h];
     for i in 0..values.len() {
         if inside[i] != 0 {
             values[i] = 0.0;
@@ -112,25 +113,25 @@ pub fn distance_transform(inside: &[u8], w: usize, h: usize) -> Vec<f32> {
     let mut result = vec![0.0; h];
     for x in 0..w {
         for z in 0..h {
-            column[z] = values[z * w + x];
+            column[z] = f64::from(values[z * w + x]);
         }
         result = edt(&column, h);
         for z in 0..h {
-            values[z * w + x] = result[z];
+            values[z * w + x] = result[z] as f32;
         }
     }
     let mut row = vec![0.0; w];
     let mut out = vec![0.0; w];
     for z in 0..h {
         for x in 0..w {
-            row[x] = values[z * w + x];
+            row[x] = f64::from(values[z * w + x]);
         }
         out = edt(&row, w);
         for x in 0..w {
-            values[z * w + x] = out[x].sqrt();
+            values[z * w + x] = out[x].sqrt() as f32;
         }
     }
-    values.into_iter().map(|v| v as f32).collect()
+    values
 }
 
 pub fn blur(data: &[f32], w: usize, h: usize, radius: usize, passes: usize) -> Vec<f32> {
@@ -138,19 +139,43 @@ pub fn blur(data: &[f32], w: usize, h: usize, radius: usize, passes: usize) -> V
     let mut b = vec![0.0; data.len()];
     for _ in 0..passes {
         for z in 0..h {
+            let mut sum = 0.0;
+            let mut count = 0;
+            for x in 0..=radius.min(w - 1) {
+                sum += f64::from(a[z * w + x]);
+                count += 1;
+            }
             for x in 0..w {
-                let x0 = x.saturating_sub(radius);
-                let x1 = (x + radius + 1).min(w);
-                let (sum, n) = (x0..x1).fold((0.0, 0), |(s, n), xx| (s + a[z * w + xx], n + 1));
-                b[z * w + x] = sum / n as f32;
+                b[z * w + x] = (sum / count as f64) as f32;
+                if x >= radius {
+                    sum -= f64::from(a[z * w + x - radius]);
+                    count -= 1;
+                }
+                let inn = x + radius + 1;
+                if inn < w {
+                    sum += f64::from(a[z * w + inn]);
+                    count += 1;
+                }
             }
         }
         for x in 0..w {
+            let mut sum = 0.0;
+            let mut count = 0;
+            for z in 0..=radius.min(h - 1) {
+                sum += f64::from(b[z * w + x]);
+                count += 1;
+            }
             for z in 0..h {
-                let z0 = z.saturating_sub(radius);
-                let z1 = (z + radius + 1).min(h);
-                let (sum, n) = (z0..z1).fold((0.0, 0), |(s, n), zz| (s + b[zz * w + x], n + 1));
-                a[z * w + x] = sum / n as f32;
+                a[z * w + x] = (sum / count as f64) as f32;
+                if z >= radius {
+                    sum -= f64::from(b[(z - radius) * w + x]);
+                    count -= 1;
+                }
+                let inn = z + radius + 1;
+                if inn < h {
+                    sum += f64::from(b[inn * w + x]);
+                    count += 1;
+                }
             }
         }
     }
@@ -166,5 +191,26 @@ mod tests {
         f.data
             .copy_from_slice(&[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
         assert_eq!(sample(&f, 0.0, 0.0), 4.0);
+    }
+
+    #[test]
+    fn samples_and_slopes_promote_float32_values_before_arithmetic() {
+        let f = HeightField {
+            w: 2,
+            h: 2,
+            size: 1.0,
+            cell: 1.0,
+            data: vec![100_000_000.0, 1.0, 100_000_000.0, 1.0],
+        };
+        assert_eq!(sample(&f, 0.0, 0.0), 50_000_000.5);
+        assert_eq!(cell_slope(&f, 0, 0), 99_999_999.0);
+    }
+
+    #[test]
+    fn blur_accumulates_in_f64_and_rounds_only_on_float32_array_writes() {
+        assert_eq!(
+            blur(&[16_777_216.0, 1.0, -16_777_216.0, 3.0], 4, 1, 1, 1),
+            vec![8_388_608.0, 0.333_333_34, -5_592_404.0, -8_388_606.5],
+        );
     }
 }

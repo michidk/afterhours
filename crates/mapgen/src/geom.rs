@@ -2,6 +2,10 @@
 
 pub use crate::types::Point;
 
+pub fn hypot(x: f64, z: f64) -> f64 {
+    x.hypot(z)
+}
+
 pub fn dist(a: Point, b: Point) -> f64 {
     (a.x - b.x).hypot(a.z - b.z)
 }
@@ -35,10 +39,10 @@ pub fn len(a: Point) -> f64 {
 }
 pub fn norm(a: Point) -> Point {
     let l = len(a);
-    if l == 0.0 {
-        Point { x: 0.0, z: 0.0 }
-    } else {
-        mul(a, 1.0 / l)
+    let l = if l == 0.0 { 1.0 } else { l };
+    Point {
+        x: a.x / l,
+        z: a.z / l,
     }
 }
 pub fn perp(a: Point) -> Point {
@@ -321,5 +325,11 @@ mod tests {
             ]),
             0.5
         );
+    }
+
+    #[test]
+    fn normalization_divides_each_component_like_javascript() {
+        assert_eq!(norm(Point { x: 3.0, z: 4.0 }), Point { x: 0.6, z: 0.8 });
+        assert!(norm(Point { x: -0.0, z: 0.0 }).x.is_sign_negative());
     }
 }
