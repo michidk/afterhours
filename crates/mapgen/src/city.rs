@@ -342,7 +342,10 @@ pub fn city_from_map_with_snapshots(
             d: round(bx.2.clamp(3.0, 256.0)),
             y: Some(y),
             h: round((y + b.h).min(256.0)),
-            angle: Some(round(angle.sin().atan2(angle.cos()))),
+            angle: Some(round(crate::js_math::atan2(
+                crate::js_math::sin(angle),
+                crate::js_math::cos(angle),
+            ))),
             asset: asset(b.kind).into(),
             facing: 0.0,
             color: b.color.to_lowercase(),
@@ -463,6 +466,7 @@ pub fn city_from_map_with_snapshots(
         ],
         &pads,
     );
+    snapshot("after-sink", &features);
     let FeatureContext {
         mut heights,
         mut roads,
@@ -757,8 +761,13 @@ pub fn city_from_map_with_snapshots(
                     })
                 }) || buildings.iter().any(|b| {
                     let angle = b.angle.unwrap_or(0.0);
-                    ((p.x - b.x) * angle.cos() + (p.z - b.z) * angle.sin()).abs() < b.w / 2.0 + 0.6
-                        && (-(p.x - b.x) * angle.sin() + (p.z - b.z) * angle.cos()).abs()
+                    ((p.x - b.x) * crate::js_math::cos(angle)
+                        + (p.z - b.z) * crate::js_math::sin(angle))
+                    .abs()
+                        < b.w / 2.0 + 0.6
+                        && (-(p.x - b.x) * crate::js_math::sin(angle)
+                            + (p.z - b.z) * crate::js_math::cos(angle))
+                        .abs()
                             < b.d / 2.0 + 0.6
                 }))
             {
@@ -923,8 +932,8 @@ fn clear_of_streets(
             x: centre.x + push.x * worst * 0.5,
             z: centre.z + push.z * worst * 0.5,
         };
-        let c = angle.cos();
-        let s = angle.sin();
+        let c = crate::js_math::cos(angle);
+        let s = crate::js_math::sin(angle);
         w -= (push.x * c + push.z * s).abs() * worst;
         d -= (-push.x * s + push.z * c).abs() * worst;
         if w < 4.0 || d < 4.0 {
