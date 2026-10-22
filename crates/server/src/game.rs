@@ -152,6 +152,11 @@ impl Game {
             .park(city, &|x, z| terrain_at(terrain, x, z).max(WATER_LEVEL));
     }
 
+    /// Where each parked craft model stands; see `Fleet::spots`.
+    pub fn craft_spots(&self) -> Vec<(&'static str, f32, f32)> {
+        self.craft.spots()
+    }
+
     /// Breakable props (see `destruction.rs`), added to the physics world as static boxes.
     pub fn add_props(&mut self, props: Vec<Destructible>) {
         self.destruction.add_props(&mut self.world, props);

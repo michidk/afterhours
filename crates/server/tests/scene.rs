@@ -502,3 +502,58 @@ fn ramming_a_parked_car_does_not_launch_it() {
     assert!(tilt < 1.0, "a car rolled to {tilt:.2} rad");
     assert!(rise < 1.0, "the struck car was launched {rise:.2} m");
 }
+
+/// Every spawnable model accelerates on tarmac, stays level and rolls to a stop on the brake.
+#[test]
+fn every_car_model_drives_level_and_brakes_to_a_stop() {
+    for model in ["sedan", "sport", "van"] {
+        let mut scene = Scene::boot();
+        scene.join(1);
+        for _ in 0..4 {
+            scene.step();
+        }
+        scene.go_to_track(1);
+        scene.debug(1, serde_json::json!({ "kind": "spawn", "model": model }));
+        for _ in 0..30 {
+            scene.step();
+        }
+        let ours = scene.board(1);
+        let find = |s: &Scene| s.cars(1).into_iter().find(|c| c.id == ours).unwrap();
+        let start = find(&scene);
+        let mut tilt = 0.0f32;
+        // Short burst: the open tarmac is not long enough to hold full throttle for long.
+        for _ in 0..45 {
+            scene.input(
+                1,
+                Controls {
+                    up: true,
+                    move_y: Some(1.0),
+                    ..Default::default()
+                },
+            );
+            scene.step();
+            let c = find(&scene);
+            tilt = tilt.max(c.pitch.abs()).max(c.roll.abs());
+        }
+        let moved = find(&scene);
+        let run = (moved.x - start.x).hypot(moved.z - start.z);
+        assert!(run > 6.0, "{model} only covered {run:.1} m");
+        assert!(tilt < 0.4, "{model} tilted {tilt:.2} rad");
+        for _ in 0..150 {
+            scene.input(
+                1,
+                Controls {
+                    brake: true,
+                    ..Default::default()
+                },
+            );
+            scene.step();
+        }
+        let c = find(&scene);
+        assert!(
+            c.vx.hypot(c.vz) < 1.0,
+            "{model} still at {:.1} m/s",
+            c.vx.hypot(c.vz)
+        );
+    }
+}

@@ -348,6 +348,11 @@ impl Fleet {
         }
     }
 
+    /// Parked or flying craft as (model, x, z); lets scenes find ones outside a client's view.
+    pub fn spots(&self) -> Vec<(&'static str, f32, f32)> {
+        self.craft.iter().map(|c| (c.spec.name, c.x, c.z)).collect()
+    }
+
     pub fn open_parachute(&mut self, player: u32) {
         self.chutes.insert(player);
     }
