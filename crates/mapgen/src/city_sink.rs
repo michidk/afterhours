@@ -1,15 +1,7 @@
 //! Terrain/surface constraint solver from `mapgen/streetfit.ts`.
-use crate::{geom::ear_clip, types::Point};
+use crate::{geom::ear_clip, types::Point, city_types::Building};
 
-#[derive(Clone, Copy, Debug)]
-pub struct Pad {
-    pub x: f64,
-    pub z: f64,
-    pub w: f64,
-    pub d: f64,
-    pub y: Option<f64>,
-    pub angle: Option<f64>,
-}
+pub type Pad = Building;
 
 /// Clear terrain triangles below every street sample, preserving pad heights and
 /// the original Float32Array storage for the solver's give and floor fields.
