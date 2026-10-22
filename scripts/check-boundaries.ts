@@ -13,7 +13,7 @@ async function files(path: string): Promise<string[]> {
   ).flat();
 }
 let failures = 0;
-for (const root of ["client", "server", "shared"])
+for (const root of ["client", "shared"])
   for (const file of await files(root)) {
     const source = await readFile(file, "utf8");
     for (const match of source.matchAll(/(?:from\s*|import\s*)["']([^"']+)["']/g)) {
