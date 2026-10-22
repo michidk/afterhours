@@ -335,3 +335,15 @@ people floated. `Entity.steering` is the front wheel angle in radians from the p
 local car reads it from the predicted body so the wheels turn with the key, not a snapshot later.
 `cars_and_people_are_reported_at_ground_height` and `the_front_wheels_turn_gradually_to_the_steering_lock`
 in `crates/server/tests/scene.rs` pin both.
+
+## Cars in the predicted world
+
+The client's predicted world has terrain, water, buildings and parks. It also keeps the (up to
+eight) cars within 40 m as real bodies, reset from every snapshot and coasting between them
+(parked ones hold their brake), so driving into a parked or passing car stops the predicted body
+where the server stops it. Before this, every touch of another car was a 1-2 m correction: the
+`scripts/drive-client.ts` run that hits a parked car near spawn went from 2-3 corrections (up to
+2.3 m) to none. `restore_entity` and `state_of` in the physics crate restore and read one body
+without disturbing the rest. Shortcuts: props (lamps, trees) and other people are not predicted,
+and a neighbour's future steering and throttle are unknown, so a head-on with a moving car can
+still correct.

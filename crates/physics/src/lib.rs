@@ -890,6 +890,62 @@ impl World {
         out
     }
 
+    /// Restores one body from its [`World::snapshot`] row: 15 floats for a vehicle, 5 for a
+    /// character. Other bodies are untouched, so a client can keep neighbours in its world.
+    pub fn restore_entity(&mut self, id: u32, d: &[f32]) -> Result<(), String> {
+        if let Some(v) = self.vehicles.iter_mut().find(|v| v.id == id) {
+            let d: &[f32; SNAPSHOT_VEHICLE] = d.try_into().map_err(|_| {
+                format!(
+                    "a vehicle row has {SNAPSHOT_VEHICLE} floats, got {}",
+                    d.len()
+                )
+            })?;
+            (v.steering, v.rear_grip_loss) = (d[13], d[14]);
+            let b = &mut self.physics.bodies[v.body];
+            b.set_position(
+                Pose::from_parts(
+                    Vector::new(d[0], d[1], d[2]),
+                    Rotation::from_xyzw(d[3], d[4], d[5], d[6]),
+                ),
+                true,
+            );
+            b.set_linvel(Vector::new(d[7], d[8], d[9]), true);
+            b.set_angvel(Vector::new(d[10], d[11], d[12]), true);
+        } else if let Some(c) = self.characters.iter_mut().find(|c| c.id == id) {
+            let d: &[f32; 5] = d
+                .try_into()
+                .map_err(|_| format!("a character row has 5 floats, got {}", d.len()))?;
+            let b = &mut self.physics.bodies[c.body];
+            b.set_position(Pose::from_translation(Vector::new(d[0], d[1], d[2])), true);
+            b.set_next_kinematic_translation(Vector::new(d[0], d[1], d[2]));
+            c.vertical = d[3];
+            c.grounded = d[4] != 0.0;
+        } else {
+            return Err(format!("no body {id}"));
+        }
+        self.reindex();
+        Ok(())
+    }
+
+    /// A zero-length pipeline step re-indexes moved bodies without integrating, so the next
+    /// tick's wheel raycasts see the same scene as a continuous run.
+    fn reindex(&mut self) {
+        let dt = self.physics.integration_parameters.dt;
+        self.physics.integration_parameters.dt = 0.0;
+        self.physics.step();
+        self.physics.integration_parameters.dt = dt;
+    }
+
+    /// The [`World::states`] row of one body, if it exists.
+    pub fn state_of(&self, id: u32) -> Option<Vec<f32>> {
+        let s = self.states();
+        let (cars, people) = s.split_at(self.vehicles.len() * VEHICLE_STRIDE);
+        cars.chunks(VEHICLE_STRIDE)
+            .chain(people.chunks(CHARACTER_STRIDE))
+            .find(|r| r[0] as u32 == id)
+            .map(<[f32]>::to_vec)
+    }
+
     /// Inverse of [`World::snapshot`] for the same set of entities, spawned in the same order.
     pub fn restore(&mut self, data: &[f32]) -> Result<(), String> {
         let expected = self.vehicles.len() * SNAPSHOT_VEHICLE + self.characters.len() * 5;
@@ -924,12 +980,7 @@ impl World {
             c.vertical = d[3];
             c.grounded = d[4] != 0.0;
         }
-        // A zero-length pipeline step re-indexes the moved bodies without integrating, so
-        // the next tick's wheel raycasts see the same scene as a continuous run.
-        let dt = self.physics.integration_parameters.dt;
-        self.physics.integration_parameters.dt = 0.0;
-        self.physics.step();
-        self.physics.integration_parameters.dt = dt;
+        self.reindex();
         Ok(())
     }
 }

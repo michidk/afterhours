@@ -226,3 +226,33 @@ fn ray_reports_the_body_it_hits() {
         &[1.0, 1.0, 1.0]
     );
 }
+
+/// A client keeps neighbours in its world beside its own body: restoring or reading one body
+/// must not disturb the others.
+#[test]
+fn one_body_restores_and_reads_without_touching_the_others() {
+    let mut w = flat_world();
+    let mine = w.spawn_vehicle(VehicleSpec::SEDAN, [0.0, 1.0, 0.0], 0.0);
+    let other = w.spawn_vehicle(VehicleSpec::SPORT, [10.0, 1.0, 0.0], 0.0);
+    for _ in 0..30 {
+        w.step();
+    }
+    let untouched = w.state_of(other).unwrap();
+    let mut row = [0.0f32; SNAPSHOT_VEHICLE];
+    row[..7].copy_from_slice(&[3.0, 1.26, 4.0, 0.0, 0.0, 0.0, 1.0]);
+    row[9] = 7.0;
+    w.restore_entity(mine, &row).unwrap();
+    let moved = w.state_of(mine).unwrap();
+    assert_eq!(
+        (moved[1], moved[3], moved[10]),
+        (3.0, 4.0, 7.0),
+        "{moved:?}"
+    );
+    assert_eq!(w.state_of(other).unwrap(), untouched);
+    assert!(
+        w.restore_entity(mine, &[0.0; 5]).is_err(),
+        "a car row is 15 floats"
+    );
+    assert!(w.restore_entity(999, &row).is_err());
+    assert!(w.state_of(999).is_none());
+}

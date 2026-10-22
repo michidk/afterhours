@@ -144,6 +144,16 @@ impl Physics {
     pub fn snapshot(&self) -> Vec<f32> {
         self.0.snapshot()
     }
+    /// Restores one body from its row (15 floats for a vehicle, 5 for a character).
+    pub fn restore_entity(&mut self, id: u32, data: &[f32]) -> Result<(), JsError> {
+        self.0
+            .restore_entity(id, data)
+            .map_err(|e| JsError::new(&e))
+    }
+    /// The `states()` row of one body (empty when it does not exist).
+    pub fn state_of(&self, id: u32) -> Vec<f32> {
+        self.0.state_of(id).unwrap_or_default()
+    }
     pub fn restore(&mut self, data: &[f32]) -> Result<(), JsError> {
         self.0.restore(data).map_err(|e| JsError::new(&e))
     }

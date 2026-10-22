@@ -37,6 +37,26 @@ const VEHICLE_SPECS: Record<string, VehicleSpec> = {
 const WALK_SPEED = TUNING.walk,
   SPRINT = TUNING.sprint;
 export const PRESENTATION = { smoothing: 0.1 };
+/** Cars within this many metres (at most `NEIGHBOURS` of them) join the predicted world. */
+const NEIGHBOUR_RANGE = 40,
+  NEIGHBOURS = 8;
+/** Quaternion (x, y, z, w) for yaw about Y, then pitch about X, then roll about Z. */
+export function yawPitchRoll(yaw: number, pitch: number, roll: number) {
+  const [sy, cy, sp, cp, sr, cr] = [
+    Math.sin(yaw / 2),
+    Math.cos(yaw / 2),
+    Math.sin(pitch / 2),
+    Math.cos(pitch / 2),
+    Math.sin(roll / 2),
+    Math.cos(roll / 2),
+  ];
+  return [
+    cy * sp * cr + sy * cp * sr,
+    sy * cp * cr - cy * sp * sr,
+    cy * cp * sr - sy * sp * cr,
+    cy * cp * cr + sy * sp * sr,
+  ];
+}
 
 let ready: Promise<unknown> | undefined;
 /** Loads the wasm physics once; the server runs the same crate natively. */
@@ -78,6 +98,8 @@ export class Prediction {
   private id = 0;
   private facing = 0;
   private lastRender = 0;
+  /** Nearby cars simulated alongside the local body: entity id -> physics body id. */
+  private neighbours = new Map<string, number>();
   private buildingColliders = new WeakSet<object>();
   private parkColliders = new WeakSet<object>();
   constructor(map: Pick<City, "terrain">) {
@@ -124,6 +146,58 @@ export class Prediction {
     this.body = undefined;
     this.offset = { x: 0, y: 0, z: 0, angle: 0 };
     this.remove();
+    for (const body of this.neighbours.values()) this.world.remove_vehicle(body);
+    this.neighbours.clear();
+  }
+  /**
+   * Keeps the cars around the local body in the predicted world, as the server has them, so
+   * driving into a parked or passing car stops the predicted body where the server stops it
+   * instead of correcting by metres. They are reset from the snapshot on every reconcile and
+   * coast between snapshots (parked ones hold their brake).
+   */
+  private syncNeighbours(local: Entity, cars: Entity[]) {
+    const near = cars
+      .filter(
+        (c) =>
+          c.kind === "car" &&
+          c.id !== local.vehicle &&
+          Math.hypot(c.x - local.x, c.z - local.z) < NEIGHBOUR_RANGE,
+      )
+      .sort(
+        (a, b) =>
+          Math.hypot(a.x - local.x, a.z - local.z) -
+          Math.hypot(b.x - local.x, b.z - local.z),
+      )
+      .slice(0, NEIGHBOURS);
+    const keep = new Set(near.map((c) => c.id));
+    for (const [id, body] of this.neighbours)
+      if (!keep.has(id)) {
+        this.world.remove_vehicle(body);
+        this.neighbours.delete(id);
+      }
+    for (const c of near) {
+      const pitch = c.pitch ?? 0,
+        roll = c.roll ?? 0,
+        [x, y, z, w] = yawPitchRoll(c.angle, pitch, roll),
+        centre = c.y + vehicle_rest() * Math.cos(pitch) * Math.cos(roll);
+      let body = this.neighbours.get(c.id);
+      if (body === undefined) {
+        body = this.world.spawn_vehicle(
+          ...(VEHICLE_SPECS[c.model ?? "sedan"] ?? VEHICLE_SPECS.sedan),
+          c.x,
+          centre,
+          c.z,
+          c.angle,
+        );
+        this.neighbours.set(c.id, body);
+      }
+      this.world.restore_entity(
+        body,
+        Float32Array.of(c.x, centre, c.z, x, y, z, w, c.vx, c.vy, c.vz, 0, 0, 0, 0, 0),
+      );
+      // Someone is at the wheel: coast rather than hold the parking brake.
+      if (c.driver || c.ai) this.world.set_drive(body, 0, 0, false);
+    }
   }
   private remove() {
     if (this.kind === "vehicle") this.world.remove_vehicle(this.id);
@@ -136,6 +210,7 @@ export class Prediction {
     controlledVehicle: Entity | undefined,
     you: number[],
     ack: number | undefined,
+    cars: Entity[] = [],
   ) {
     const kind = entity.vehicle ? "vehicle" : "character";
     this.physique = entity.character?.physique;
@@ -163,7 +238,8 @@ export class Prediction {
           : this.world.spawn_character(entity.x, entity.y + character_feet(), entity.z);
     }
     try {
-      this.world.restore(Float32Array.from(you));
+      this.syncNeighbours(entity, cars);
+      this.world.restore_entity(this.id, Float32Array.from(you));
     } catch {
       return;
     }
@@ -207,7 +283,7 @@ export class Prediction {
     this.world.step();
   }
   private read(base: Entity): Entity {
-    const s = this.world.states();
+    const s = this.world.state_of(this.id);
     if (this.kind === "vehicle") {
       const [x, y, z, qx, qy, qz, qw, vx, vy, vz] = s.subarray(1, 11);
       const pitch = Math.asin(Math.max(-1, Math.min(1, 2 * (qw * qx - qy * qz)))),

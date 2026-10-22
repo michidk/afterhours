@@ -199,7 +199,8 @@ export class GameNetwork {
     if (this.city) this.prediction?.syncStatic(this.city);
     const me = this.entities.get(this.playerId);
     const controlledVehicle = me?.vehicle ? this.entities.get(me.vehicle) : undefined;
-    if (me && m.you) this.prediction?.reconcile(me, controlledVehicle, m.you, this.ack);
+    if (me && m.you)
+      this.prediction?.reconcile(me, controlledVehicle, m.you, this.ack, entities);
     if (m.broken) this.hooks.destruction?.(m.broken);
     this.hooks.state({
       entities,
