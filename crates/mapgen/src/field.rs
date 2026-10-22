@@ -64,10 +64,10 @@ pub fn cell_slope(field: &HeightField, ix: usize, iz: usize) -> f64 {
     let x1 = (ix + 1).min(field.w - 1);
     let z0 = iz.saturating_sub(1);
     let z1 = (iz + 1).min(field.h - 1);
-    let gx = field.data[iz * field.w + x1] as f64
-        - field.data[iz * field.w + x0] as f64 / ((x1 - x0).max(1) as f64 * field.cell);
-    let gz = field.data[z1 * field.w + ix] as f64
-        - field.data[z0 * field.w + ix] as f64 / ((z1 - z0).max(1) as f64 * field.cell);
+    let gx = (field.data[iz * field.w + x1] as f64 - field.data[iz * field.w + x0] as f64)
+        / ((x1 - x0).max(1) as f64 * field.cell);
+    let gz = (field.data[z1 * field.w + ix] as f64 - field.data[z0 * field.w + ix] as f64)
+        / ((z1 - z0).max(1) as f64 * field.cell);
     gx.hypot(gz)
 }
 
