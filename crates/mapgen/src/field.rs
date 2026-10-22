@@ -33,9 +33,10 @@ pub fn sample(field: &HeightField, x: f64, z: f64) -> f64 {
     let tu = (u - ix as f64).clamp(0.0, 1.0);
     let tv = (v - iz as f64).clamp(0.0, 1.0);
     let i = iz * field.w + ix;
-    let top = f64::from(field.data[i]) + f64::from(field.data[i + 1] - field.data[i]) * tu;
-    let bottom = f64::from(field.data[i + field.w])
-        + f64::from(field.data[i + field.w + 1] - field.data[i + field.w]) * tu;
+    let top =
+        f64::from(field.data[i]) + f64::from(field.data[i + 1]) - f64::from(field.data[i]) * tu;
+    let bottom = f64::from(field.data[i + field.w]) + f64::from(field.data[i + field.w + 1])
+        - f64::from(field.data[i + field.w]) * tu;
     top + (bottom - top) * tv
 }
 
@@ -63,10 +64,10 @@ pub fn cell_slope(field: &HeightField, ix: usize, iz: usize) -> f64 {
     let x1 = (ix + 1).min(field.w - 1);
     let z0 = iz.saturating_sub(1);
     let z1 = (iz + 1).min(field.h - 1);
-    let gx = (field.data[iz * field.w + x1] - field.data[iz * field.w + x0]) as f64
-        / ((x1 - x0).max(1) as f64 * field.cell);
-    let gz = (field.data[z1 * field.w + ix] - field.data[z0 * field.w + ix]) as f64
-        / ((z1 - z0).max(1) as f64 * field.cell);
+    let gx = field.data[iz * field.w + x1] as f64
+        - field.data[iz * field.w + x0] as f64 / ((x1 - x0).max(1) as f64 * field.cell);
+    let gz = field.data[z1 * field.w + ix] as f64
+        - field.data[z0 * field.w + ix] as f64 / ((z1 - z0).max(1) as f64 * field.cell);
     gx.hypot(gz)
 }
 
@@ -81,11 +82,11 @@ pub fn distance_transform(inside: &[u8], w: usize, h: usize) -> Vec<f32> {
         z[0] = -INF;
         z[1] = INF;
         for q in 1..n {
-            let mut s = (src[q] + (q * q) as f64 - src[v[k]] - (v[k] * v[k]) as f64)
+            let mut s = (src[q] + (q * q) as f64 - (src[v[k]] + (v[k] * v[k]) as f64))
                 / (2 * (q - v[k])) as f64;
             while s <= z[k] {
                 k -= 1;
-                s = (src[q] + (q * q) as f64 - src[v[k]] - (v[k] * v[k]) as f64)
+                s = (src[q] + (q * q) as f64 - (src[v[k]] + (v[k] * v[k]) as f64))
                     / (2 * (q - v[k])) as f64;
             }
             k += 1;
@@ -94,63 +95,91 @@ pub fn distance_transform(inside: &[u8], w: usize, h: usize) -> Vec<f32> {
             z[k + 1] = INF;
         }
         k = 0;
-        for (q, value) in out.iter_mut().enumerate().take(n) {
+        for q in 0..n {
             while z[k + 1] < q as f64 {
                 k += 1;
             }
-            *value = (q as f64 - v[k] as f64).powi(2) + src[v[k]];
+            out[q] = (q as f64 - v[k] as f64).powi(2) + src[v[k]];
         }
         out
     }
-    let mut values = vec![INF; w * h];
-    for i in 0..values.len() {
-        if inside[i] != 0 {
-            values[i] = 0.0;
+    let mut f = vec![0f32; w * h];
+    for i in 0..f.len() {
+        if inside[i] == 0 {
+            f[i] = INF as f32;
         }
     }
-    let mut column = vec![0.0; h];
-    let mut result = vec![0.0; h];
+    let mut col = vec![0f64; h];
     for x in 0..w {
         for z in 0..h {
-            column[z] = values[z * w + x];
+            col[z] = f[z * w + x] as f64;
         }
-        result = edt(&column, h);
+        let out = edt(&col, h);
         for z in 0..h {
-            values[z * w + x] = result[z];
+            f[z * w + x] = out[z] as f32;
         }
     }
-    let mut row = vec![0.0; w];
-    let mut out = vec![0.0; w];
+    let mut row = vec![0f64; w];
     for z in 0..h {
         for x in 0..w {
-            row[x] = values[z * w + x];
+            row[x] = f[z * w + x] as f64;
         }
-        out = edt(&row, w);
+        let out = edt(&row, w);
         for x in 0..w {
-            values[z * w + x] = out[x].sqrt();
+            f[z * w + x] = out[x].sqrt() as f32;
         }
     }
-    values.into_iter().map(|v| v as f32).collect()
+    f
 }
 
-pub fn blur(data: &[f32], w: usize, h: usize, radius: usize, passes: usize) -> Vec<f32> {
-    let mut a = data.to_vec();
-    let mut b = vec![0.0; data.len()];
+pub fn blur(src: &[f32], w: usize, h: usize, radius: usize, passes: usize) -> Vec<f32> {
+    let mut a = src.to_vec();
+    let mut b = vec![0f32; src.len()];
     for _ in 0..passes {
         for z in 0..h {
+            let mut sum = 0f64;
+            let mut count = 0usize;
+            for x in 0..=radius {
+                if x < w {
+                    sum += a[z * w + x] as f64;
+                    count += 1;
+                }
+            }
             for x in 0..w {
-                let x0 = x.saturating_sub(radius);
-                let x1 = (x + radius + 1).min(w);
-                let (sum, n) = (x0..x1).fold((0.0, 0), |(s, n), xx| (s + a[z * w + xx], n + 1));
-                b[z * w + x] = sum / n as f32;
+                b[z * w + x] = (sum / count as f64) as f32;
+                let out = x as isize - radius as isize;
+                let inn = x + radius + 1;
+                if out >= 0 {
+                    sum -= a[z * w + out as usize] as f64;
+                    count -= 1;
+                }
+                if inn < w {
+                    sum += a[z * w + inn] as f64;
+                    count += 1;
+                }
             }
         }
         for x in 0..w {
+            let mut sum = 0f64;
+            let mut count = 0usize;
+            for z in 0..=radius {
+                if z < h {
+                    sum += b[z * w + x] as f64;
+                    count += 1;
+                }
+            }
             for z in 0..h {
-                let z0 = z.saturating_sub(radius);
-                let z1 = (z + radius + 1).min(h);
-                let (sum, n) = (z0..z1).fold((0.0, 0), |(s, n), zz| (s + b[zz * w + x], n + 1));
-                a[z * w + x] = sum / n as f32;
+                a[z * w + x] = (sum / count as f64) as f32;
+                let out = z as isize - radius as isize;
+                let inn = z + radius + 1;
+                if out >= 0 {
+                    sum -= b[out as usize * w + x] as f64;
+                    count -= 1;
+                }
+                if inn < h {
+                    sum += b[inn * w + x] as f64;
+                    count += 1;
+                }
             }
         }
     }

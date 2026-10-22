@@ -27,6 +27,20 @@ pub struct HeightField {
     pub size: f64,
     pub data: Vec<f32>,
 }
+pub type Field = HeightField;
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct TerrainTuning {
+    pub land_fraction: f64,
+    pub max_hill: f64,
+    pub plateau: [f64; 2],
+    pub droplets: f64,
+    pub thermal_iterations: usize,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HeightmapResult {
+    pub field: HeightField,
+    pub flatness: Vec<f32>,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -45,6 +59,15 @@ pub struct River {
 pub struct Lake {
     pub outline: Vec<Point>,
     pub level: f64,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Hydrology {
+    pub rivers: Vec<River>,
+    pub lakes: Vec<Lake>,
+    pub river_mask: Vec<u8>,
+    pub water_distance: Vec<f32>,
+    pub coast_distance: Vec<f32>,
+    pub flow: Vec<f32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
