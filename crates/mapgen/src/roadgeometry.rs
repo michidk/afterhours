@@ -84,7 +84,8 @@ pub fn catmull_rom(points: &[Point], step: f64) -> Vec<Point> {
         points[points.len() - 2],
     ));
     let mut out = vec![points[0]];
-    let knot = |a, b| dist(a, b).max(1e-4).powf(0.5);
+    // JavaScript Math.pow(x, 0.5) takes the sqrt path; libm pow differs by one ULP.
+    let knot = |a, b| dist(a, b).max(1e-4).sqrt();
     for i in 1..p.len() - 2 {
         let (p0, p1, p2, p3) = (p[i - 1], p[i], p[i + 1], p[i + 2]);
         let t0 = 0.;

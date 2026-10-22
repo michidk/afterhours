@@ -1,9 +1,8 @@
 //! Deterministic city-map generation contracts.
 //!
 //! The public data shapes mirror `mapgen/types.ts`.  The command-line entry point
-//! currently delegates the large parity oracle to the TypeScript pipeline; keeping
-//! these contracts in Rust first makes the eventual stage-by-stage port explicit
-//! without changing the versioned artifact.
+//! remains disabled until the native pipeline is complete. Integration tests may
+//! run the TypeScript oracle; native generation never launches it.
 
 pub mod field;
 pub mod geom;

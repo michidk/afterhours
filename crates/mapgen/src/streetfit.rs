@@ -692,8 +692,8 @@ pub fn seal_surfaces(layers: &[Vec<Vec<f64>>]) -> Vec<Vec<Vec<f64>>> {
 fn merge_pieces(mut pieces: Vec<Vec<f64>>) -> Vec<Vec<f64>> {
     let key = |f: &[f64], i: usize| {
         (
-            (f[i * 3] * 100. + 0.5).floor() as i64,
-            (f[i * 3 + 2] * 100. + 0.5).floor() as i64,
+            js_round(f[i * 3] * 100.) as i64,
+            js_round(f[i * 3 + 2] * 100.) as i64,
         )
     };
     let union = |a: &[f64], b: &[f64]| {
@@ -724,12 +724,7 @@ fn merge_pieces(mut pieces: Vec<Vec<f64>>) -> Vec<Vec<f64>> {
                     .collect();
                 let keys: HashSet<_> = points
                     .iter()
-                    .map(|q| {
-                        (
-                            (q.x * 100. + 0.5).floor() as i64,
-                            (q.z * 100. + 0.5).floor() as i64,
-                        )
-                    })
+                    .map(|q| (js_round(q.x * 100.) as i64, js_round(q.z * 100.) as i64))
                     .collect();
                 return if keys.len() == points.len() && !self_intersects(&points) {
                     Some(out)
@@ -758,13 +753,22 @@ fn merge_pieces(mut pieces: Vec<Vec<f64>>) -> Vec<Vec<f64>> {
     }
     pieces
 }
+// Math.round chooses the upper integer at ties, including negative values.
+fn js_round(value: f64) -> f64 {
+    let floor = value.floor();
+    if value - floor < 0.5 {
+        floor
+    } else {
+        floor + 1.0
+    }
+}
 pub fn snap_cm(v: f64) -> f64 {
-    (v * 100. + 1e-4 + 0.5).floor() / 100. + 0.
+    js_round(v * 100. + 1e-4) / 100. + 0.
 }
 fn corner_key(flat: &[f64], i: usize) -> (i64, i64) {
     (
-        (snap_cm(flat[i]) * 100. + 0.5).floor() as i64,
-        (snap_cm(flat[i + 2]) * 100. + 0.5).floor() as i64,
+        js_round(snap_cm(flat[i]) * 100.) as i64,
+        js_round(snap_cm(flat[i + 2]) * 100.) as i64,
     )
 }
 fn each_corner(flat: &[f64], mut visit: impl FnMut((i64, i64), bool, usize)) {
