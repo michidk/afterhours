@@ -101,7 +101,7 @@ its minus button collapses it and its close button hides it. Focus a title bar a
 arrow keys to move it with the keyboard. Reset layout restores the default positions.
 Escape or F1 hides the tools. Layout lasts until the page reloads.
 
-Server stats refresh once per second while that window is expanded. Tick CPU and wall
+Server stats refresh once per second while that window is expanded (the Rust server reads CPU, memory and tick timing from `/proc` and the cgroup in `crates/server/src/diagnostics.rs`; there is no JS heap, so that row shows the process's anonymous memory and catch-up ticks stay 0 because the tick loop delays rather than bursts). Tick CPU and wall
 p95 cover the latest 600 ticks (up to 20 seconds); CPU is the simulation thread's work,
 not host-wide CPU utilization. Backlog measures simulation time still owed, including
 elapsed time since the last scheduler pass. Catch-up ticks, dropped time, and overloads

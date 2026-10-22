@@ -6,6 +6,7 @@ pub mod city;
 mod combat;
 pub mod craft;
 pub mod destruction;
+mod diagnostics;
 mod game;
 pub mod lab;
 pub mod traffic;
@@ -56,11 +57,14 @@ pub fn router(game: Game, city: Option<Arc<CityStore>>, dist: PathBuf) -> Router
         let mut clock = tokio::time::interval(Duration::from_secs_f64(1.0 / TICK_RATE as f64));
         clock.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
-            clock.tick().await;
+            let slot = clock.tick().await;
+            game.diagnostics
+                .begin(slot.elapsed().as_secs_f64() * 1000.0);
             while let Ok(event) = inbox.try_recv() {
                 game.handle(event);
             }
             game.step();
+            game.diagnostics.end();
             counter.fetch_add(1, Ordering::Relaxed);
         }
     });

@@ -41,6 +41,7 @@ pub(crate) struct Player {
 }
 
 pub struct Game {
+    pub(crate) diagnostics: crate::diagnostics::Diagnostics,
     world: World,
     spawn: [f32; 3],
     tick: u32,
@@ -113,6 +114,7 @@ impl Game {
     pub fn new(mut world: World, spawn: [f32; 3]) -> Self {
         let vehicles = Vehicles::new(&mut world, spawn);
         Self {
+            diagnostics: crate::diagnostics::Diagnostics::new(TICK_RATE),
             world,
             spawn,
             tick: 0,
@@ -467,7 +469,9 @@ impl Game {
         } else {
             None
         };
+        let server = inspect.then(|| self.diagnostics.report(self.players.len(), entities.len()));
         json!({
+            "server": server,
             "playerId": id.to_string(), "time": self.tick as f64 / TICK_RATE as f64,
             "day": self.day, "dayRate": self.day_rate, "citySeed": 0,
             "entities": entities.values().collect::<Vec<_>>(), "input": input,
