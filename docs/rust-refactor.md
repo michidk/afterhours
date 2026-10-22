@@ -61,6 +61,12 @@ shaped terrain, blocks, buildings, parks, and vegetation snapshots. The Rust
 `generate-city` binary intentionally exits until the native pipeline is complete;
 it contains no TypeScript or shell bridge.
 
+The city-stage branch now ports blocks, buildings, vegetation, runtime features,
+city conversion and artifact packing. Seeds 713 and 42 match every JSON output
+field from their TypeScript stage inputs at zero delta. See
+[the city parity report](parity/city-port.md) for reproduction, native math
+provenance and the adapters that must be replaced when terrain and roads merge.
+
 ## Protocol decisions
 
 - msgpack over WebSocket now; WebTransport is a later swap behind the same types.

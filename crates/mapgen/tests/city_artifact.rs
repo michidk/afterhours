@@ -3,17 +3,26 @@ mod support;
 #[test]
 #[ignore = "requires the merged native terrain and road stages"]
 fn seed_713_artifact_matches_checked_in_city() {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/city.json");
-    let expected = std::fs::read(path).expect("checked-in city artifact");
-    let options = afterhours_mapgen::types::MapOptions {
-        seed: 713,
-        size: 3072.0,
-        cell: 8.0,
-        debug: false,
-    };
-    let map = afterhours_mapgen::pipeline::generate_map(options, None);
-    let city = afterhours_mapgen::city::city_from_map(&map);
-    let actual = afterhours_mapgen::packing::artifact(&city).unwrap();
-    let expected = serde_json::from_slice(&expected).unwrap();
-    support::compare("native seed 713 artifact", &expected, &actual);
+    let expected_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/city.json");
+    let expected = std::fs::read(expected_path).expect("checked-in city artifact");
+    let out =
+        std::env::temp_dir().join(format!("afterhours-full-city-{}.json", std::process::id()));
+    let result = std::process::Command::new(env!("CARGO_BIN_EXE_generate-city"))
+        .args(["--seed", "713", "--out"])
+        .arg(&out)
+        .output()
+        .expect("generate-city binary");
+    assert!(
+        result.status.success(),
+        "generate-city failed: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let actual = std::fs::read(&out).expect("generated city artifact");
+    std::fs::remove_file(out).unwrap();
+    support::compare(
+        "native CLI seed 713 artifact",
+        &serde_json::from_slice(&expected).unwrap(),
+        &serde_json::from_slice(&actual).unwrap(),
+    );
 }
