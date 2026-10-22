@@ -1,4 +1,5 @@
 //! Height-field operations used by terrain and later stages.
+use crate::js_math::JsMath;
 
 use crate::{geom::Point, types::HeightField};
 
@@ -57,7 +58,7 @@ pub fn gradient(field: &HeightField, x: f64, z: f64) -> Point {
 }
 pub fn slope(field: &HeightField, x: f64, z: f64) -> f64 {
     let g = gradient(field, x, z);
-    g.x.hypot(g.z)
+    g.x.js_hypot(g.z)
 }
 pub fn cell_slope(field: &HeightField, ix: usize, iz: usize) -> f64 {
     let x0 = ix.saturating_sub(1);
@@ -68,7 +69,7 @@ pub fn cell_slope(field: &HeightField, ix: usize, iz: usize) -> f64 {
         / ((x1 - x0).max(1) as f64 * field.cell);
     let gz = (field.data[z1 * field.w + ix] as f64 - field.data[z0 * field.w + ix] as f64)
         / ((z1 - z0).max(1) as f64 * field.cell);
-    gx.hypot(gz)
+    gx.js_hypot(gz)
 }
 
 pub fn distance_transform(inside: &[u8], w: usize, h: usize) -> Vec<f32> {

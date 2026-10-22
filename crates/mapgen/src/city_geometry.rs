@@ -1,6 +1,7 @@
 #![allow(clippy::chunks_exact_to_as_chunks, clippy::type_complexity)]
 //! Exact street surface operations used by the artifact converter.
 pub use crate::city_sink::sink_under_streets;
+use crate::js_math::JsMath;
 use crate::{
     geom::{closest_on_segment, dist, ear_clip, self_intersects, signed_area},
     types::{Point, RoadEdge},
@@ -68,7 +69,7 @@ pub fn simplify_polyline(points: &[Point], tolerance: f64) -> Vec<Point> {
         let mut index = None;
         for i in a + 1..b {
             let ab = crate::geom::sub(points[b], points[a]);
-            let l = ab.x.hypot(ab.z);
+            let l = ab.x.js_hypot(ab.z);
             let d = if l < 1e-6 {
                 dist(points[i], points[a])
             } else {
@@ -135,7 +136,7 @@ fn weld_corners(rings: Vec<Vec<f64>>, seen: &mut Seen) -> Vec<Vec<f64>> {
                         .get(&(cx + dx, cz + dz))
                         .and_then(|v| {
                             v.iter()
-                                .find(|c| (c[0] - ring[i]).hypot(c[1] - ring[i + 2]) <= 0.05)
+                                .find(|c| (c[0] - ring[i]).js_hypot(c[1] - ring[i + 2]) <= 0.05)
                         })
                         .copied();
                 }
@@ -180,7 +181,7 @@ fn close_t_junctions(rings: Vec<Vec<f64>>, layers: Option<&[usize]>) -> Vec<Vec<
                 let b = &ring[j * 3..j * 3 + 3];
                 let ux = b[0] - a[0];
                 let uz = b[2] - a[2];
-                let length = ux.hypot(uz);
+                let length = ux.js_hypot(uz);
                 out.extend_from_slice(a);
                 if length < 0.02 {
                     continue;
@@ -299,7 +300,7 @@ fn apart(a: &[Point], b: &[Point]) -> bool {
         for i in 0..p.len() {
             let u = p[i];
             let v = p[(i + 1) % p.len()];
-            let length = (v.z - u.z).hypot(u.x - v.x);
+            let length = (v.z - u.z).js_hypot(u.x - v.x);
             if length < 1e-12 {
                 continue;
             }
@@ -547,7 +548,7 @@ pub fn drape_on_terrain(polygons: &[Vec<f64>], h: &[f64], avoid: &[Vec<f64>]) ->
                                 .enumerate()
                                 .filter(|(k, q)| {
                                     let r = sub0[(*k + 1) % sub0.len()];
-                                    ((r.x - q.x) * step).hypot((r.z - q.z) * step) > 1e-6
+                                    ((r.x - q.x) * step).js_hypot((r.z - q.z) * step) > 1e-6
                                 })
                                 .map(|(_, &q)| q)
                                 .collect::<Vec<_>>();

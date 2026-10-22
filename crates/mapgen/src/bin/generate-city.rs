@@ -34,6 +34,13 @@ fn run() -> Result<(), String> {
         },
         Some(&mut progress),
     );
+    if let Some(path) = env::var_os("MAPGEN_DUMP_MAP") {
+        fs::write(
+            &path,
+            serde_json::to_string(&map).map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| format!("{}: {e}", PathBuf::from(&path).display()))?;
+    }
     let city = city_from_map(&map);
     let artifact = packing::artifact(&city)?;
     if let Some(parent) = out.parent().filter(|p| !p.as_os_str().is_empty()) {

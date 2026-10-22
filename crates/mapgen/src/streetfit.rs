@@ -1,4 +1,5 @@
 //! Line-for-line port of `mapgen/streetfit.ts`, including surface sealing.
+use crate::js_math::JsMath;
 use crate::{
     geom::{
         add, closest_on_segment, cross, dist, mul, point_in_polygon, self_intersects, signed_area,
@@ -216,9 +217,9 @@ pub fn sink_under_streets(grid: &mut TerrainGrid, layers: &[StreetLayer], pads: 
         }
     }
     for b in pads {
-        let c = b.angle.unwrap_or(0.).cos();
-        let s = b.angle.unwrap_or(0.).sin();
-        let reach = b.w.hypot(b.d) / 2. + 2.;
+        let c = b.angle.unwrap_or(0.).js_cos();
+        let s = b.angle.unwrap_or(0.).js_sin();
+        let reach = b.w.js_hypot(b.d) / 2. + 2.;
         let z0 = ((b.z - reach + grid.half) / grid.step).floor().max(0.) as i64;
         let z1 = ((b.z + reach + grid.half) / grid.step)
             .ceil()
@@ -463,7 +464,7 @@ pub fn drape_on_terrain(
                                 .enumerate()
                                 .filter_map(|(k, &q)| {
                                     let r = sub[(k + 1) % sub.len()];
-                                    (((r.x - q.x) * step).hypot((r.z - q.z) * step) > 1e-6)
+                                    (((r.x - q.x) * step).js_hypot((r.z - q.z) * step) > 1e-6)
                                         .then_some(q)
                                 })
                                 .collect();
@@ -561,7 +562,7 @@ fn weld_corners_with_seen(rings: &[Vec<f64>], seen: &mut WeldMap) -> Vec<Vec<f64
                 for dz in -1..=1 {
                     if let Some(c) = seen.get(&(cx + dx, cz + dz)).and_then(|list| {
                         list.iter()
-                            .find(|c| (c.0 - ring[i]).hypot(c.1 - ring[i + 2]) <= tolerance)
+                            .find(|c| (c.0 - ring[i]).js_hypot(c.1 - ring[i + 2]) <= tolerance)
                     }) {
                         at = Some(*c);
                         break 'search;
@@ -614,7 +615,7 @@ pub fn close_t_junctions(rings: &[Vec<f64>], layers: Option<&[usize]>) -> Vec<Ve
                 let b = &ring[j * 3..j * 3 + 3];
                 let ux = b[0] - a[0];
                 let uz = b[2] - a[2];
-                let length = ux.hypot(uz);
+                let length = ux.js_hypot(uz);
                 out.extend_from_slice(a);
                 if length < 0.02 {
                     continue;
@@ -788,7 +789,7 @@ fn apart(a: &[Point], b: &[Point]) -> bool {
         for i in 0..p.len() {
             let u = p[i];
             let v = p[(i + 1) % p.len()];
-            let length = (v.z - u.z).hypot(u.x - v.x);
+            let length = (v.z - u.z).js_hypot(u.x - v.x);
             if length < 1e-12 {
                 continue;
             }
@@ -905,8 +906,8 @@ pub fn street_polygons(
                 let c = mul(quad.iter().copied().fold(Point { x: 0., z: 0. }, add), 0.25);
                 quad.sort_by(|a, b| {
                     (a.z - c.z)
-                        .atan2(a.x - c.x)
-                        .partial_cmp(&(b.z - c.z).atan2(b.x - c.x))
+                        .js_atan2(a.x - c.x)
+                        .partial_cmp(&(b.z - c.z).js_atan2(b.x - c.x))
                         .unwrap()
                 });
             }

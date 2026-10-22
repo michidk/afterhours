@@ -1,8 +1,10 @@
-//! The `stages` integration boundary is replaced by the terrain and roads merges.
+//! `mapgen/pipeline.ts`: the native stage order. `stages` adapts each verified stage to the
+//! pipeline's calling convention, with the defaults the TypeScript signatures declare.
 use crate::types::*;
-pub const NATIVE_STAGES_AVAILABLE: bool = false;
+pub const NATIVE_STAGES_AVAILABLE: bool = true;
 pub mod stages {
     use super::*;
+    use crate::streetfit::{StreetLayer, StreetPad, TerrainGrid};
     /// Borrowed equivalents of the TypeScript road generation inputs.
     pub struct RoadInputs<'a> {
         pub field: &'a HeightField,
@@ -16,85 +18,114 @@ pub mod stages {
     pub type Progress<'a> = Option<&'a mut dyn FnMut(&str)>;
     pub type StreetPolygons = (Vec<Vec<f64>>, Vec<Vec<f64>>);
     pub type StreetLayers<'a> = &'a [(&'a [Vec<f64>], f64)];
-    // Each missing integration stage fails explicitly. The final merge replaces
-    // these adapters with calls to the verified terrain and roads implementations.
-    macro_rules! missing_stage {
-        ($name:ident) => {
-            panic!(concat!(
-                "native integration stage has not been merged: ",
-                stringify!($name)
-            ))
-        };
+
+    pub fn generate_heightmap(seed: i32, size: f64, cell: f64) -> HeightField {
+        crate::terrain::generate_heightmap(seed, size, cell).0
     }
-    pub fn generate_heightmap(_seed: i32, _size: f64, _cell: f64) -> HeightField {
-        missing_stage!(generate_heightmap)
+    /// `thermalErosion(f, iterations, talusAngle = 0.6)`.
+    pub fn thermal_erosion(f: &mut HeightField, iterations: usize) {
+        crate::terrain::thermal_erosion(f, iterations, 0.6)
     }
-    pub fn thermal_erosion(_f: &mut HeightField, _iterations: usize) {
-        missing_stage!(thermal_erosion)
+    pub fn droplet_erosion(f: &mut HeightField, rng: &mut crate::random::Rng, count: usize) {
+        crate::terrain::droplet_erosion(f, rng, count)
     }
-    pub fn droplet_erosion(_f: &mut HeightField, _rng: &mut crate::random::Rng, _count: usize) {
-        missing_stage!(droplet_erosion)
+    /// `settle(f, radius = 1)`.
+    pub fn settle(f: &mut HeightField) {
+        crate::terrain::settle(f, 1)
     }
-    pub fn settle(_f: &mut HeightField) {
-        missing_stage!(settle)
+    pub fn keep_main_island(f: &mut HeightField) {
+        crate::terrain::keep_main_island(f, 0.0)
     }
-    pub fn keep_main_island(_f: &mut HeightField) {
-        missing_stage!(keep_main_island)
+    pub fn shape_coast(f: &mut HeightField) {
+        crate::terrain::shape_coast(f, 0.0)
     }
-    pub fn shape_coast(_f: &mut HeightField) {
-        missing_stage!(shape_coast)
-    }
+    /// `shortcut`: the debug timing log is not ported; upgrade if stage timings are needed.
     pub fn generate_hydrology(
-        _f: &mut HeightField,
-        _seed: i32,
-        _sea_level: f64,
+        f: &mut HeightField,
+        seed: i32,
+        sea_level: f64,
         _log: DebugLog<'_>,
     ) -> Hydrology {
-        missing_stage!(generate_hydrology)
+        crate::hydrology::generate_hydrology_in_place(f, seed, sea_level)
     }
-    pub fn desirability_field(_f: &HeightField, _hydro: &Hydrology, _seed: i32) -> Vec<f32> {
-        missing_stage!(desirability_field)
+    pub fn desirability_field(f: &HeightField, hydro: &Hydrology, seed: i32) -> Vec<f32> {
+        crate::site::desirability_field(f, hydro, seed)
     }
-    pub fn choose_centre(_f: &HeightField, _desirability: &[f32]) -> Point {
-        missing_stage!(choose_centre)
+    pub fn choose_centre(f: &HeightField, desirability: &[f32]) -> Point {
+        crate::site::choose_centre(f, desirability)
     }
-    pub fn generate_roads(_input: &RoadInputs<'_>, _progress: Progress<'_>) -> RoadGraph {
-        missing_stage!(generate_roads)
+    pub fn generate_roads(input: &RoadInputs<'_>, progress: Progress<'_>) -> RoadGraph {
+        crate::roads::generate_roads(
+            &crate::roads::RoadInputs {
+                field: input.field.clone(),
+                hydro: input.hydro.clone(),
+                desirability: input.desirability.to_vec(),
+                centre: input.centre,
+                seed: input.seed,
+                debug: input.debug,
+            },
+            progress,
+        )
     }
-    pub fn smooth_centrelines(_graph: &mut RoadGraph) {
-        missing_stage!(smooth_centrelines)
+    pub fn smooth_centrelines(graph: &mut RoadGraph) {
+        crate::roadgeometry::smooth_centrelines(graph)
     }
-    pub fn densify_centrelines(_graph: &mut RoadGraph) {
-        missing_stage!(densify_centrelines)
+    pub fn densify_centrelines(graph: &mut RoadGraph) {
+        crate::roadgeometry::densify_centrelines(graph)
     }
-    pub fn build_road_geometry(_graph: &RoadGraph) -> RoadGeometry {
-        missing_stage!(build_road_geometry)
+    pub fn build_road_geometry(graph: &RoadGraph) -> RoadGeometry {
+        crate::roadgeometry::build_road_geometry(graph)
     }
-    pub fn solve_profiles(_graph: &mut RoadGraph, _f: &HeightField, _trims: &[(f64, f64)]) {
-        missing_stage!(solve_profiles)
+    pub fn solve_profiles(graph: &mut RoadGraph, f: &HeightField, trims: &[(f64, f64)]) {
+        crate::roadgeometry::solve_profiles(graph, f, trims)
     }
     pub fn stamp_roads(
-        _f: &mut HeightField,
-        _graph: &RoadGraph,
-        _geometry: &RoadGeometry,
+        f: &mut HeightField,
+        graph: &RoadGraph,
+        geometry: &RoadGeometry,
     ) -> Vec<f32> {
-        missing_stage!(stamp_roads)
+        crate::roadgeometry::stamp_roads(f, graph, geometry)
     }
-    pub fn bridge_decks(_graph: &RoadGraph) -> Vec<Bridge> {
-        missing_stage!(bridge_decks)
+    pub fn bridge_decks(graph: &RoadGraph) -> Vec<Bridge> {
+        crate::roadgeometry::bridge_decks(graph)
     }
-    pub fn street_polygons(_graph: &RoadGraph, _geometry: &RoadGeometry) -> StreetPolygons {
-        missing_stage!(street_polygons)
+    pub fn street_polygons(graph: &RoadGraph, geometry: &RoadGeometry) -> StreetPolygons {
+        crate::streetfit::street_polygons(graph, geometry)
     }
     pub fn sink_under_streets(
-        _f: &mut HeightField,
-        _layers: StreetLayers<'_>,
-        _pads: &[BuildingPlacement],
+        f: &mut HeightField,
+        layers: StreetLayers<'_>,
+        pads: &[BuildingPlacement],
     ) {
-        missing_stage!(sink_under_streets)
+        let mut grid = TerrainGrid {
+            heights: std::mem::take(&mut f.data),
+            side: f.w,
+            step: f.cell,
+            half: f.size / 2.0,
+        };
+        let layers: Vec<StreetLayer> = layers
+            .iter()
+            .map(|(polygons, top)| StreetLayer {
+                polygons: polygons.to_vec(),
+                top: *top,
+            })
+            .collect();
+        let pads: Vec<StreetPad> = pads
+            .iter()
+            .map(|b| StreetPad {
+                x: b.x,
+                z: b.z,
+                w: b.w,
+                d: b.d,
+                y: Some(b.y),
+                angle: Some(b.angle),
+            })
+            .collect();
+        crate::streetfit::sink_under_streets(&mut grid, &layers, &pads);
+        f.data = grid.heights;
     }
-    pub fn street_test(_geometry: &RoadGeometry, _margin: f64) -> impl Fn(Point) -> bool + '_ {
-        |_p| missing_stage!(street_test)
+    pub fn street_test(geometry: &RoadGeometry, margin: f64) -> impl Fn(Point) -> bool + '_ {
+        crate::streetfit::street_test(geometry, margin)
     }
 }
 /// Execute the same stages and mutations as `mapgen/pipeline.ts`.

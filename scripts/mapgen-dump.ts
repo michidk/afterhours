@@ -157,7 +157,10 @@ if (!args.includes("--terrain-only")) {
   await write("geometry", map.geometry);
   await write("bridges", map.bridges);
   await write("shaped", map.shaped);
-  const streets = (await import("../mapgen/streetfit.ts")).streetPolygons(map.roads, map.geometry);
+  const streets = (await import("../mapgen/streetfit.ts")).streetPolygons(
+    map.roads,
+    map.geometry,
+  );
   await write("streets", streets);
   await write("blocks", map.blocks);
   await write("buildings", map.buildings);
@@ -172,6 +175,10 @@ if (!args.includes("--terrain-only")) {
     if (name.startsWith("feature-"))
       await writeFile(resolve(out, `${name}.json`), `${value}\n`);
   await write("city", city);
-  await write("artifact", { format: "afterhours-city", version: 7, city: packCity(city) });
+  await write("artifact", {
+    format: "afterhours-city",
+    version: 7,
+    city: packCity(city),
+  });
 }
 console.log(`Wrote mapgen stage dumps for seed ${seed} to ${out}`);

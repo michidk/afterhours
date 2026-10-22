@@ -1,9 +1,10 @@
 //! Small f64 geometry primitives shared by map-generation stages.
 
+use crate::js_math::JsMath;
 pub use crate::types::Point;
 
 pub fn hypot(x: f64, z: f64) -> f64 {
-    x.hypot(z)
+    x.js_hypot(z)
 }
 
 pub fn dist(a: Point, b: Point) -> f64 {
@@ -186,7 +187,7 @@ pub fn clean_ring(poly: &[Point], epsilon: f64) -> Vec<Point> {
     out
 }
 pub fn rotated_rect(c: Point, w: f64, d: f64, angle: f64) -> Vec<Point> {
-    let (co, si) = (angle.cos(), angle.sin());
+    let (co, si) = (angle.js_cos(), angle.js_sin());
     [
         (-w / 2.0, -d / 2.0),
         (w / 2.0, -d / 2.0),

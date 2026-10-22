@@ -36,10 +36,11 @@ impl Dumps {
         ));
         fs::create_dir_all(&path).unwrap();
         let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let output = Command::new("bun")
+        let output = Command::new("node")
             .current_dir(repo)
             .args([
-                "run",
+                "--import",
+                "tsx",
                 "scripts/mapgen-dump.ts",
                 "--terrain-only",
                 "--seed",
@@ -48,7 +49,7 @@ impl Dumps {
             ])
             .arg(&path)
             .output()
-            .expect("install Bun to run the TypeScript parity oracle");
+            .expect("install Node (with the repo's tsx) to run the TypeScript parity oracle");
         assert!(
             output.status.success(),
             "oracle failed: {}",

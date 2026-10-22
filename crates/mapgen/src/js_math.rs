@@ -4,6 +4,11 @@ unsafe extern "C" {
     fn afterhours_v8_sin(x: f64) -> f64;
     fn afterhours_v8_cos(x: f64) -> f64;
     fn afterhours_v8_atan2(y: f64, x: f64) -> f64;
+    fn afterhours_v8_exp(x: f64) -> f64;
+    fn afterhours_v8_tan(x: f64) -> f64;
+    fn afterhours_v8_acos(x: f64) -> f64;
+    fn afterhours_v8_log1p(x: f64) -> f64;
+    fn afterhours_v8_pow(x: f64, y: f64) -> f64;
 }
 pub fn sin(x: f64) -> f64 {
     unsafe { afterhours_v8_sin(x) }
@@ -13,6 +18,65 @@ pub fn cos(x: f64) -> f64 {
 }
 pub fn atan2(y: f64, x: f64) -> f64 {
     unsafe { afterhours_v8_atan2(y, x) }
+}
+
+pub fn exp(x: f64) -> f64 {
+    unsafe { afterhours_v8_exp(x) }
+}
+pub fn tan(x: f64) -> f64 {
+    unsafe { afterhours_v8_tan(x) }
+}
+pub fn acos(x: f64) -> f64 {
+    unsafe { afterhours_v8_acos(x) }
+}
+pub fn log1p(x: f64) -> f64 {
+    unsafe { afterhours_v8_log1p(x) }
+}
+pub fn pow(x: f64, y: f64) -> f64 {
+    unsafe { afterhours_v8_pow(x, y) }
+}
+
+/// `f64` methods with V8's exact results; the generator must match Node bit for bit, and
+/// the system libm differs from V8's fdlibm in the last place.
+pub trait JsMath {
+    fn js_sin(self) -> f64;
+    fn js_cos(self) -> f64;
+    fn js_tan(self) -> f64;
+    fn js_acos(self) -> f64;
+    fn js_exp(self) -> f64;
+    fn js_log1p(self) -> f64;
+    fn js_pow(self, y: f64) -> f64;
+    fn js_atan2(self, x: f64) -> f64;
+    fn js_hypot(self, z: f64) -> f64;
+}
+impl JsMath for f64 {
+    fn js_sin(self) -> f64 {
+        sin(self)
+    }
+    fn js_cos(self) -> f64 {
+        cos(self)
+    }
+    fn js_tan(self) -> f64 {
+        tan(self)
+    }
+    fn js_acos(self) -> f64 {
+        acos(self)
+    }
+    fn js_exp(self) -> f64 {
+        exp(self)
+    }
+    fn js_log1p(self) -> f64 {
+        log1p(self)
+    }
+    fn js_pow(self, y: f64) -> f64 {
+        pow(self, y)
+    }
+    fn js_atan2(self, x: f64) -> f64 {
+        atan2(self, x)
+    }
+    fn js_hypot(self, z: f64) -> f64 {
+        hypot(self, z)
+    }
 }
 
 /// V8 FastMathHypot's two-argument order, including its scaling rounding.

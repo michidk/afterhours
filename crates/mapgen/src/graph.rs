@@ -1,5 +1,6 @@
 //! Literal port of `mapgen/graph.ts`. Adjacency vectors preserve JavaScript Set
 //! insertion order, including deletion followed by reinsertion.
+use crate::js_math::JsMath;
 use crate::{
     geom::{
         self, Point, area, closest_on_segment, cross, dist, polyline_length, segment_intersection,
@@ -274,7 +275,7 @@ impl GraphBuilder {
         let v = sub(d, c);
         let cos = (u.x * v.x + u.z * v.z).abs()
             / (or_one(geom::hypot(u.x, u.z)) * or_one(geom::hypot(v.x, v.z)));
-        cos.min(1.0).acos()
+        cos.min(1.0).js_acos()
     }
     /// Insert from an existing node, preserving all mutations on rejection just
     /// as the TypeScript builder does.
@@ -412,7 +413,7 @@ impl GraphBuilder {
                 let angle = ((u.x * v.x + u.z * v.z)
                     / (or_one(geom::hypot(u.x, u.z)) * or_one(geom::hypot(v.x, v.z))))
                 .clamp(-1.0, 1.0)
-                .acos();
+                .js_acos();
                 if angle < min_angle {
                     return None;
                 }
@@ -623,7 +624,7 @@ impl GraphBuilder {
                     .map(|&id| {
                         let e = self.edges[id];
                         let o = self.nodes[self.other(e, node)].point;
-                        (e, (o.z - n.z).atan2(o.x - n.x))
+                        (e, (o.z - n.z).js_atan2(o.x - n.x))
                     })
                     .collect();
                 arms.sort_by(|p, q| cmp(p.1, q.1));
@@ -1107,7 +1108,7 @@ pub fn planar_faces(graph: &RoadGraph) -> Vec<(Vec<Point>, Vec<usize>)> {
     let angle = |h: &Half| {
         let p = h.points[0];
         let q = h.points[1];
-        (q.z - p.z).atan2(q.x - p.x)
+        (q.z - p.z).js_atan2(q.x - p.x)
     };
     for &id in &order {
         outgoing[id].sort_by(|a, b| cmp(angle(a), angle(b)));
@@ -1132,7 +1133,7 @@ pub fn planar_faces(graph: &RoadGraph) -> Vec<(Vec<Point>, Vec<usize>)> {
                 // Reverse the arrival direction, then take the next edge clockwise.
                 let back = h.points[h.points.len() - 2];
                 let tip = h.points[h.points.len() - 1];
-                let incoming = (back.z - tip.z).atan2(back.x - tip.x);
+                let incoming = (back.z - tip.z).js_atan2(back.x - tip.x);
                 let mut next = &arrivals[0];
                 let mut best_delta = f64::INFINITY;
                 for cand in arrivals {

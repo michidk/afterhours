@@ -26,9 +26,11 @@ fn dump(seed: i32) -> PathBuf {
     let path = root.join(seed.to_string());
     if !path.join("street-test.json").exists() {
         let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let output = Command::new("bun")
+        let output = Command::new("node")
             .current_dir(repo)
             .args([
+                "--import",
+                "tsx",
                 "scripts/mapgen-dump.ts",
                 "--geometry-stages",
                 "--seed",
@@ -37,7 +39,7 @@ fn dump(seed: i32) -> PathBuf {
             ])
             .arg(&path)
             .output()
-            .expect("run bun TS oracle");
+            .expect("run the Node TS oracle");
         assert!(
             output.status.success(),
             "TS oracle: {}",

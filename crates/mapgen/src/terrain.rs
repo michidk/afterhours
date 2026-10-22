@@ -1,3 +1,4 @@
+use crate::js_math::JsMath;
 use crate::{
     field::{blur, create_field, distance_transform},
     random::{Noise, Rng, clamp, derive, lerp, smoothstep},
@@ -45,10 +46,11 @@ pub fn generate_heightmap_with_tuning(
             let nz = (cz * stride) as f64 / (f.h - 1) as f64 * 2.0 - 1.0;
             let wx = nx + 0.28 * warp.fbm(nx * 1.4 + 11.3, nz * 1.4 + 3.7, 3, 2.0, 0.5);
             let wz = nz + 0.28 * warp.fbm(nx * 1.4 - 7.1, nz * 1.4 + 19.2, 3, 2.0, 0.5);
-            let rx = wx * spin.cos() - wz * spin.sin();
-            let rz = (wx * spin.sin() + wz * spin.cos()) * stretch;
-            let angle = rz.atan2(rx);
-            let radius = rx.hypot(rz) * (1.0 + 0.14 * (angle * lobes as f64 + lobe_phase).sin());
+            let rx = wx * spin.js_cos() - wz * spin.js_sin();
+            let rz = (wx * spin.js_sin() + wz * spin.js_cos()) * stretch;
+            let angle = rz.js_atan2(rx);
+            let radius =
+                rx.js_hypot(rz) * (1.0 + 0.14 * (angle * lobes as f64 + lobe_phase).js_sin());
             let coast = 0.1 * shape.fbm(nx * 3.1 + 5.0, nz * 3.1 - 2.0, 4, 2.0, 0.5);
             let mask = smoothstep(0.98, 0.42, radius + coast);
             let e = clamp(
@@ -151,7 +153,7 @@ pub fn droplet_erosion(f: &mut Field, rng: &mut Rng, count: usize) {
     let mut total = 0.0;
     for dz in -radius..=radius {
         for dx in -radius..=radius {
-            let d = (dx as f64).hypot(dz as f64);
+            let d = (dx as f64).js_hypot(dz as f64);
             if d <= radius as f64 {
                 let weight = 1.0 - d / radius as f64;
                 brush.push((dx, dz, weight));
@@ -193,11 +195,11 @@ pub fn droplet_erosion(f: &mut Field, rng: &mut Rng, count: usize) {
             let (here, gx, gz) = sample(&f.data, px, pz);
             dx = dx * inertia - gx * (1.0 - inertia);
             dz = dz * inertia - gz * (1.0 - inertia);
-            let l = dx.hypot(dz);
+            let l = dx.js_hypot(dz);
             if l < 1e-6 {
                 let angle = rng() * std::f64::consts::PI * 2.0;
-                dx = angle.cos();
-                dz = angle.sin();
+                dx = angle.js_cos();
+                dz = angle.js_sin();
             } else {
                 dx /= l;
                 dz /= l;

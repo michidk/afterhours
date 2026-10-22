@@ -7,6 +7,7 @@ use crate::city_types::{Airport, Building, Harbour, Marking, Racetrack, Road, Sp
 use crate::geom::{
     closest_on_segment, convex_overlap, dist, point_in_polygon, rotated_rect, self_intersects,
 };
+use crate::js_math::JsMath;
 use crate::js_math::{atan2 as js_atan2, cos as js_cos, sin as js_sin};
 use crate::random::{Rng, derive};
 use crate::types::{GeneratedMap, Point};
@@ -228,7 +229,7 @@ fn rp(r: &Road) -> Point {
 }
 fn overlaps_building(ctx: &FeatureContext<'_>, ring: &[Point]) -> bool {
     ctx.buildings.iter().any(|b| {
-        (b.x - ring[0].x).hypot(b.z - ring[0].z) < 400.0
+        (b.x - ring[0].x).js_hypot(b.z - ring[0].z) < 400.0
             && convex_overlap(&rotated_rect(bp(b), b.w, b.d, b.angle.unwrap_or(0.0)), ring)
     })
 }
@@ -244,7 +245,7 @@ fn stamp_rect(
     only: Option<&dyn Fn(Point, f64) -> bool>,
 ) {
     let f = frame(centre, angle);
-    let reach = w.hypot(d) / 2.0 + margin + TERRAIN_STEP;
+    let reach = w.js_hypot(d) / 2.0 + margin + TERRAIN_STEP;
     let z0 = ((centre.z - reach + LIMIT) / TERRAIN_STEP).floor().max(0.0) as usize;
     let z1 = ((centre.z + reach + LIMIT) / TERRAIN_STEP)
         .ceil()
@@ -262,7 +263,7 @@ fn stamp_rect(
             let (u, v) = f.local(p);
             let du = 0.0_f64.max(u.abs() - w / 2.0);
             let dv = 0.0_f64.max(v.abs() - d / 2.0);
-            let out = du.hypot(dv);
+            let out = du.js_hypot(dv);
             if out > TERRAIN_STEP + margin {
                 continue;
             }
@@ -320,7 +321,7 @@ fn try_place_town_hall(ctx: &mut FeatureContext<'_>) -> Result<TownHall, String>
     let mut candidates: Vec<Road> = ctx
         .roads
         .iter()
-        .filter(|r| r.kind != "service" && (r.bx - r.ax).hypot(r.bz - r.az) > 8.0)
+        .filter(|r| r.kind != "service" && (r.bx - r.ax).js_hypot(r.bz - r.az) > 8.0)
         .cloned()
         .collect();
     candidates.sort_by(|a, b| {
@@ -332,7 +333,7 @@ fn try_place_town_hall(ctx: &mut FeatureContext<'_>) -> Result<TownHall, String>
     for slack in [5.0, 8.0, 12.0] {
         for road in &candidates {
             for side in [1, -1] {
-                let length = (road.bx - road.ax).hypot(road.bz - road.az);
+                let length = (road.bx - road.ax).js_hypot(road.bz - road.az);
                 let t = Point {
                     x: (road.bx - road.ax) / length,
                     z: (road.bz - road.az) / length,
@@ -352,7 +353,7 @@ fn try_place_town_hall(ctx: &mut FeatureContext<'_>) -> Result<TownHall, String>
                     continue;
                 }
                 let same_street = |r: &Road| {
-                    let len = (r.bx - r.ax).hypot(r.bz - r.az);
+                    let len = (r.bx - r.ax).js_hypot(r.bz - r.az);
                     let l = if len == 0.0 { 1.0 } else { len };
                     let turn = (t.x * (r.bz - r.az) - t.z * (r.bx - r.ax)).abs() / l;
                     let off_line = (t.x * (r.z - road.z) - t.z * (r.x - road.x)).abs();
@@ -616,7 +617,7 @@ pub fn place_racetrack_with_rng(ctx: &mut FeatureContext<'_>, rng: &mut Rng) -> 
                 ) > TRACK_WIDTH / 2.0 + r.width / 2.0 + 8.0
             })
         }) && !ctx.buildings.iter().any(|b| {
-            (b.x - loop_[0].x).hypot(b.z - loop_[0].z) < 600.0
+            (b.x - loop_[0].x).js_hypot(b.z - loop_[0].z) < 600.0
                 && loop_.iter().enumerate().any(|(i, p)| {
                     i % 4 == 0
                         && point_in_polygon(
@@ -835,7 +836,7 @@ pub fn place_racetrack_with_rng(ctx: &mut FeatureContext<'_>, rng: &mut Rng) -> 
         x: loop_[1].x - loop_[0].x,
         z: loop_[1].z - loop_[0].z,
     };
-    let tl = tangent.x.hypot(tangent.z);
+    let tl = tangent.x.js_hypot(tangent.z);
     let along = Point {
         x: tangent.x / tl,
         z: tangent.z / tl,
@@ -943,7 +944,7 @@ pub fn place_harbours_with_count(ctx: &mut FeatureContext<'_>, count: usize) -> 
                     },
                 ),
             };
-            let gl = g.x.hypot(g.z);
+            let gl = g.x.js_hypot(g.z);
             if gl < 1e-3 {
                 continue;
             }

@@ -1,3 +1,4 @@
+use crate::js_math::JsMath;
 use crate::{
     field::{distance_transform, to_world},
     random::{Noise, derive},
@@ -302,7 +303,7 @@ fn carve(f: &mut Field, rivers: &[River], sea: f64, seed: i32, lakes: &[u8]) {
                     if x < 1 || z < 1 || x >= f.w as i32 - 1 || z >= f.h as i32 - 1 {
                         continue;
                     }
-                    let d = (dx as f64 * f.cell).hypot(dz as f64 * f.cell);
+                    let d = (dx as f64 * f.cell).js_hypot(dz as f64 * f.cell);
                     let i = z as usize * f.w + x as usize;
                     if lakes[i] != 0 {
                         continue;
@@ -458,7 +459,7 @@ pub fn generate_hydrology_in_place(f: &mut Field, seed: i32, sea_level: f64) -> 
                         && z >= 0
                         && x < f.w as i32
                         && z < f.h as i32
-                        && (dx as f64).hypot(dz as f64) * f.cell <= r + f.cell * 0.5
+                        && (dx as f64).js_hypot(dz as f64) * f.cell <= r + f.cell * 0.5
                     {
                         let i = z as usize * f.w + x as usize;
                         river_mask[i] = 1;
@@ -476,10 +477,10 @@ pub fn generate_hydrology_in_place(f: &mut Field, seed: i32, sea_level: f64) -> 
     for d in &mut coast_distance {
         *d = (*d as f64 * f.cell) as f32
     }
-    let max_log = (threshold * 40.0).ln_1p();
+    let max_log = (threshold * 40.0).js_log1p();
     let flow = flux
         .iter()
-        .map(|v| ((f64::from(*v).ln_1p() / max_log).min(1.0)) as f32)
+        .map(|v| ((f64::from(*v).js_log1p() / max_log).min(1.0)) as f32)
         .collect();
     Hydrology {
         rivers,

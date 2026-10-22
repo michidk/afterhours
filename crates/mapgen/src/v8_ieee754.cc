@@ -3034,3 +3034,8 @@ double libm_cos(double x) { return glibc_cos(x); }
 extern "C" double afterhours_v8_sin(double x){return v8::base::ieee754::sin(x);}
 extern "C" double afterhours_v8_cos(double x){return v8::base::ieee754::cos(x);}
 extern "C" double afterhours_v8_atan2(double y,double x){return v8::base::ieee754::atan2(y,x);}
+extern "C" double afterhours_v8_exp(double x){return v8::base::ieee754::exp(x);}
+extern "C" double afterhours_v8_tan(double x){return v8::base::ieee754::tan(x);}
+extern "C" double afterhours_v8_acos(double x){return v8::base::ieee754::acos(x);}
+extern "C" double afterhours_v8_log1p(double x){return v8::base::ieee754::log1p(x);}
+extern "C" double afterhours_v8_pow(double x,double y){return v8::base::ieee754::legacy::pow(x,y);}

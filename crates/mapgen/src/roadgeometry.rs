@@ -1,4 +1,5 @@
 //! Line-for-line port of `mapgen/roadgeometry.ts`; arithmetic stays in f64.
+use crate::js_math::JsMath;
 use crate::{
     field::sample,
     geom::{
@@ -67,7 +68,7 @@ pub fn simplify_polyline(points: &[Point], tolerance: f64) -> Vec<Point> {
 }
 fn distance_to_line(p: Point, a: Point, b: Point) -> f64 {
     let ab = sub(b, a);
-    let l = ab.x.hypot(ab.z);
+    let l = ab.x.js_hypot(ab.z);
     if l < 1e-6 {
         return dist(p, a);
     }
@@ -115,21 +116,24 @@ pub fn round_corners(points: &[Point], radius: f64, min_turn: f64) -> Vec<Point>
         let p = points[i];
         let before = sub(points[i - 1], p);
         let after = sub(points[i + 1], p);
-        let turn = PI - dot(norm(before), norm(after)).clamp(-1., 1.).acos();
+        let turn = PI - dot(norm(before), norm(after)).clamp(-1., 1.).js_acos();
         if turn < min_turn {
             out.push(p);
             continue;
         }
         let half = turn / 2.;
-        let tangent = (radius * half.tan())
-            .min(0.45 * before.x.hypot(before.z))
-            .min(0.45 * after.x.hypot(after.z));
-        let r = tangent / half.tan();
+        let tangent = (radius * half.js_tan())
+            .min(0.45 * before.x.js_hypot(before.z))
+            .min(0.45 * after.x.js_hypot(after.z));
+        let r = tangent / half.js_tan();
         let a = add(p, mul(norm(before), tangent));
         let b = add(p, mul(norm(after), tangent));
-        let centre = add(p, mul(norm(add(norm(before), norm(after))), r / half.cos()));
-        let from = (a.z - centre.z).atan2(a.x - centre.x);
-        let mut to = (b.z - centre.z).atan2(b.x - centre.x);
+        let centre = add(
+            p,
+            mul(norm(add(norm(before), norm(after))), r / half.js_cos()),
+        );
+        let from = (a.z - centre.z).js_atan2(a.x - centre.x);
+        let mut to = (b.z - centre.z).js_atan2(b.x - centre.x);
         while to - from > PI {
             to -= PI * 2.;
         }
@@ -140,8 +144,8 @@ pub fn round_corners(points: &[Point], radius: f64, min_turn: f64) -> Vec<Point>
         for s in 0..=steps {
             let angle = from + ((to - from) * s as f64) / steps as f64;
             out.push(Point {
-                x: centre.x + angle.cos() * r,
-                z: centre.z + angle.sin() * r,
+                x: centre.x + angle.js_cos() * r,
+                z: centre.z + angle.js_sin() * r,
             });
         }
     }
@@ -278,7 +282,7 @@ pub fn bend_radii(points: &[Point]) -> Vec<f64> {
             if dist(a, p) < 1e-6 || dist(p, c) < 1e-6 {
                 return f64::INFINITY;
             }
-            let turn = ((c.z - p.z).atan2(c.x - p.x) - (p.z - a.z).atan2(p.x - a.x)).abs();
+            let turn = ((c.z - p.z).js_atan2(c.x - p.x) - (p.z - a.z).js_atan2(p.x - a.x)).abs();
             let angle = turn.min(PI * 2. - turn);
             if angle > 1e-3 {
                 8. / angle
@@ -368,14 +372,14 @@ fn arc_points(centre: Point, radius: f64, from: f64, to: f64, n: usize) -> Vec<P
         .map(|i| {
             let a = from + ((to - from) * i as f64) / n as f64;
             Point {
-                x: centre.x + a.cos() * radius,
-                z: centre.z + a.sin() * radius,
+                x: centre.x + a.js_cos() * radius,
+                z: centre.z + a.js_sin() * radius,
             }
         })
         .collect()
 }
 fn signed_angle(a: Point, b: Point) -> f64 {
-    (a.x * b.z - a.z * b.x).atan2(a.x * b.x + a.z * b.z)
+    (a.x * b.z - a.z * b.x).js_atan2(a.x * b.x + a.z * b.z)
 }
 fn continuation(arms: &[Arm], graph: &RoadGraph) -> bool {
     arms.len() == 2
@@ -438,7 +442,7 @@ fn layout_road_geometry(graph: &RoadGraph, cuts: Option<&[f64]>) -> RoadGeometry
             dir,
             heading: norm(sub(pts[2.min(pts.len() - 1)], pts[0])),
             hw: e.width / 2.,
-            ang: dir.z.atan2(dir.x),
+            ang: dir.z.js_atan2(dir.x),
             cut_l: 0.,
             cut_r: 0.,
             limit: f64::INFINITY,
@@ -605,7 +609,7 @@ fn layout_road_geometry(graph: &RoadGraph, cuts: Option<&[f64]>) -> RoadGeometry
             let half = turn / 2.;
             let tangent = (curb_radius(graph.edges[a.edge].kind)
                 .min(curb_radius(graph.edges[b.edge].kind))
-                / half.tan())
+                / half.js_tan())
             .min(14.)
             .min(a.limit - 0.3 - t_a)
             .min(b.limit - 0.3 - t_b);
@@ -620,13 +624,13 @@ fn layout_road_geometry(graph: &RoadGraph, cuts: Option<&[f64]>) -> RoadGeometry
                 });
                 continue;
             }
-            let r = tangent * half.tan();
+            let r = tangent * half.js_tan();
             let bisector = norm(add(a_dir, b_dir));
-            let centre = add(hit, mul(bisector, r / half.sin()));
+            let centre = add(hit, mul(bisector, r / half.js_sin()));
             let ta = add(hit, mul(a_dir, tangent));
             let tb = add(hit, mul(b_dir, tangent));
-            let from = (ta.z - centre.z).atan2(ta.x - centre.x);
-            let mut to = (tb.z - centre.z).atan2(tb.x - centre.x);
+            let from = (ta.z - centre.z).js_atan2(ta.x - centre.x);
+            let mut to = (tb.z - centre.z).js_atan2(tb.x - centre.x);
             while to - from > PI {
                 to -= PI * 2.;
             }
@@ -903,7 +907,7 @@ fn layout_road_geometry(graph: &RoadGraph, cuts: Option<&[f64]>) -> RoadGeometry
             arm.is_some_and(|i| {
                 arms.iter()
                     .enumerate()
-                    .any(|(j, o)| j != i && dot(o.dir, arms[i].dir) > SPLIT.cos())
+                    .any(|(j, o)| j != i && dot(o.dir, arms[i].dir) > SPLIT.js_cos())
             })
         };
         let crossing = |node| {
@@ -1023,8 +1027,8 @@ fn sort_around_middle(points: &mut [Point]) {
     );
     points.sort_by(|p, q| {
         (p.z - c.z)
-            .atan2(p.x - c.x)
-            .partial_cmp(&(q.z - c.z).atan2(q.x - c.x))
+            .js_atan2(p.x - c.x)
+            .partial_cmp(&(q.z - c.z).js_atan2(q.x - c.x))
             .unwrap()
     });
 }
@@ -1084,11 +1088,11 @@ fn cul_de_sac(
     let dir = norm(sub(points[1], end));
     let l = perp(dir);
     let centre = sub(end, mul(dir, cut));
-    let radius = cut.hypot(arm.hw);
+    let radius = cut.js_hypot(arm.hw);
     let end_r = add(end, mul(l, -arm.hw));
     let end_l = add(end, mul(l, arm.hw));
-    let from = (end_l.z - centre.z).atan2(end_l.x - centre.x);
-    let mut to = (end_r.z - centre.z).atan2(end_r.x - centre.x);
+    let from = (end_l.z - centre.z).js_atan2(end_l.x - centre.x);
+    let mut to = (end_r.z - centre.z).js_atan2(end_r.x - centre.x);
     while to <= from {
         to += PI * 2.;
     }
@@ -1104,14 +1108,14 @@ fn cul_de_sac(
     });
     let outer_l = add(end_l, mul(l, SIDEWALK));
     let outer_r = add(end_r, mul(l, -SIDEWALK));
-    let outer_from = (outer_l.z - centre.z).atan2(outer_l.x - centre.x);
-    let mut outer_to = (outer_r.z - centre.z).atan2(outer_r.x - centre.x);
+    let outer_from = (outer_l.z - centre.z).js_atan2(outer_l.x - centre.x);
+    let mut outer_to = (outer_r.z - centre.z).js_atan2(outer_r.x - centre.x);
     while outer_to <= outer_from {
         outer_to += PI * 2.;
     }
     let mut outer = arc_points(
         centre,
-        cut.hypot(arm.hw + SIDEWALK),
+        cut.js_hypot(arm.hw + SIDEWALK),
         outer_to,
         outer_from,
         steps,
@@ -1127,7 +1131,13 @@ fn cul_de_sac(
     turns.push(Turn {
         from: band_side(arm, true),
         to: band_side(arm, false),
-        via: arc_points(centre, cut.hypot(arm.hw + WALK), outer_from, outer_to, 16),
+        via: arc_points(
+            centre,
+            cut.js_hypot(arm.hw + WALK),
+            outer_from,
+            outer_to,
+            16,
+        ),
     });
 }
 fn offset_line(centre: &[Point], offset: f64) -> Vec<Point> {
@@ -1481,7 +1491,7 @@ pub fn stamp_roads(f: &mut HeightField, graph: &RoadGraph, geometry: &RoadGeomet
                         if (lx - qx)
                             .max(0.)
                             .max(qx - lx - f.cell)
-                            .hypot((lz - qz).max(0.).max(qz - lz - f.cell))
+                            .js_hypot((lz - qz).max(0.).max(qz - lz - f.cell))
                             <= paved
                         {
                             return true;
@@ -1498,7 +1508,7 @@ pub fn stamp_roads(f: &mut HeightField, graph: &RoadGraph, geometry: &RoadGeomet
                 let t = (((px - a.x) * ab.x + (pz - a.z) * ab.z) / l2).clamp(0., 1.);
                 let cx = a.x + ab.x * t;
                 let cz = a.z + ab.z * t;
-                let d = (px - cx).hypot(pz - cz);
+                let d = (px - cx).js_hypot(pz - cz);
                 let y = ya + (yb - ya) * t;
                 let i = z as usize * w + x as usize;
                 let depth = y - f64::from(original[i]);

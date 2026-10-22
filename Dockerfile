@@ -3,7 +3,7 @@ RUN rustup target add wasm32-unknown-unknown && cargo install wasm-bindgen-cli -
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
-RUN cargo build --release -p afterhours-server \
+RUN cargo build --release -p afterhours-server -p afterhours-mapgen \
  && cargo build --release --target wasm32-unknown-unknown --features wasm -p afterhours-physics \
  && wasm-bindgen --target web --out-dir crates/physics/pkg target/wasm32-unknown-unknown/release/afterhours_physics.wasm
 
@@ -23,6 +23,7 @@ COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --production
 COPY --from=client /app/dist ./dist
 COPY --from=physics /app/target/release/afterhours-server /usr/local/bin/afterhours-server
+COPY --from=physics /app/target/release/generate-city /usr/local/bin/generate-city
 # The server regenerates the city on every boot through scripts/prepare-city.ts, so the
 # generator, converter and the renderer used to bake meshes ship too; data/ must be writable.
 COPY shared ./shared
@@ -31,6 +32,6 @@ COPY scripts ./scripts
 COPY client ./client
 RUN mkdir -p data && chown node:node data
 USER node
-ENV NODE_ENV=production PORT=5173 RUST_LOG=info
+ENV NODE_ENV=production PORT=5173 RUST_LOG=info CITY_GENERATOR=/usr/local/bin/generate-city
 EXPOSE 5173
 CMD ["afterhours-server"]

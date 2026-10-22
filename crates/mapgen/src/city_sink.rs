@@ -1,5 +1,6 @@
 #![allow(clippy::chunks_exact_to_as_chunks)]
 //! Terrain/surface constraint solver from `mapgen/streetfit.ts`.
+use crate::js_math::JsMath;
 use crate::{city_types::Building, geom::ear_clip, types::Point};
 
 pub type Pad = Building;
@@ -125,9 +126,9 @@ pub fn sink_under_streets(
         }
     }
     for b in pads {
-        let c = b.angle.unwrap_or(0.0).cos();
-        let s = b.angle.unwrap_or(0.0).sin();
-        let reach = b.w.hypot(b.d) / 2.0 + 2.0;
+        let c = b.angle.unwrap_or(0.0).js_cos();
+        let s = b.angle.unwrap_or(0.0).js_sin();
+        let reach = b.w.js_hypot(b.d) / 2.0 + 2.0;
         let z0 = ((b.z - reach + half) / step).floor().max(0.0) as usize;
         let z1 = ((b.z + reach + half) / step).ceil().min((side - 1) as f64) as usize;
         let x0 = ((b.x - reach + half) / step).floor().max(0.0) as usize;

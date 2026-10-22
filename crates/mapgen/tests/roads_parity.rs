@@ -15,10 +15,11 @@ fn dumps(seed: i32) -> PathBuf {
     }
     let root = std::env::temp_dir().join(format!("afterhours-roads-{}-{seed}", std::process::id()));
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let output = Command::new("bun")
+    let output = Command::new("node")
         .current_dir(repo)
         .args([
-            "run",
+            "--import",
+            "tsx",
             "scripts/mapgen-dump.ts",
             "--roads-only",
             "--seed",
@@ -27,7 +28,7 @@ fn dumps(seed: i32) -> PathBuf {
         ])
         .arg(&root)
         .output()
-        .expect("bun is required to run the TypeScript oracle");
+        .expect("node with tsx is required to run the TypeScript oracle");
     assert!(
         output.status.success(),
         "oracle failed: {}\n{}",

@@ -1,5 +1,6 @@
 //! Literal port of `mapgen/roads.ts`: least-cost arterials followed by tensor
 //! hyperstreamlines, inserted into the same planar graph and cleaned in place.
+use crate::js_math::JsMath;
 use crate::{
     field::{blur, cell_slope, distance_transform, sample, to_world},
     geom::{Point, dist, hypot, lerp, norm, sub},
@@ -380,9 +381,9 @@ impl<'a> TensorField<'a> {
             if d < 0.1 {
                 continue;
             }
-            let angle = (b.z - a.z).atan2(b.x - a.x);
-            let tx = (2.0 * angle).cos();
-            let tz = (2.0 * angle).sin();
+            let angle = (b.z - a.z).js_atan2(b.x - a.x);
+            let tx = (2.0 * angle).js_cos();
+            let tz = (2.0 * angle).js_sin();
             let steps = (d / self.bcell).ceil().max(1.0) as usize;
             for s in 0..steps {
                 let p = lerp(a, b, s as f64 / steps as f64);
@@ -414,9 +415,9 @@ impl<'a> TensorField<'a> {
         let mut tz = 0.0;
         let dc = dist(p, self.centre);
         // Grid in the core, fading out; radial rings beyond it.
-        let grid_w = 1.2 * (1.0 - dc / (self.core_radius * 1.6)).max(0.0).powf(1.5);
-        tx += grid_w * (2.0 * self.grid_angle).cos();
-        tz += grid_w * (2.0 * self.grid_angle).sin();
+        let grid_w = 1.2 * (1.0 - dc / (self.core_radius * 1.6)).max(0.0).js_pow(1.5);
+        tx += grid_w * (2.0 * self.grid_angle).js_cos();
+        tz += grid_w * (2.0 * self.grid_angle).js_sin();
         let rel = sub(p, self.centre);
         let radial_w = 0.45 * (dc / self.core_radius).min(1.0);
         let rl = or_one(hypot(rel.x, rel.z));
@@ -441,12 +442,12 @@ impl<'a> TensorField<'a> {
         let s = hypot(gx, gz);
         if s > 0.02 {
             let cw = 1.6 * ((s - 0.02) / 0.1).min(1.0);
-            let ca = gz.atan2(gx) + PI / 2.0;
-            tx += cw * (2.0 * ca).cos();
-            tz += cw * (2.0 * ca).sin();
+            let ca = gz.js_atan2(gx) + PI / 2.0;
+            tx += cw * (2.0 * ca).js_cos();
+            tz += cw * (2.0 * ca).js_sin();
         }
         let magnitude = hypot(tx, tz);
-        let mut angle = tz.atan2(tx) / 2.0;
+        let mut angle = tz.js_atan2(tx) / 2.0;
         // Organic drift outside the core.
         let organic = ((dc - self.core_radius * 0.8) / self.core_radius).clamp(0.0, 1.0);
         angle += organic
@@ -456,8 +457,8 @@ impl<'a> TensorField<'a> {
                 .fbm(p.x / 260.0 + 3.0, p.z / 260.0 - 8.0, 2, 2.0, 0.5);
         (
             Point {
-                x: angle.cos(),
-                z: angle.sin(),
+                x: angle.js_cos(),
+                z: angle.js_sin(),
             },
             magnitude,
         )
@@ -1093,7 +1094,7 @@ fn trace_streamline(
                 break;
             }
             turned += (d2.x * prev.z - d2.z * prev.x)
-                .atan2(d2.x * prev.x + d2.z * prev.z)
+                .js_atan2(d2.x * prev.x + d2.z * prev.z)
                 .abs();
             if turned > PI * 1.1 {
                 stop("turned");

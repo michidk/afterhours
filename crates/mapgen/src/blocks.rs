@@ -1,4 +1,5 @@
 //! Stage 4: planar faces, block interiors, zoning, and street-frontage lots.
+use crate::js_math::JsMath;
 use crate::{
     field::{sample, slope},
     geom::{
@@ -287,7 +288,8 @@ fn planar_faces(graph: &RoadGraph) -> Vec<Face> {
             outgoing[index].1.push(h);
         }
     }
-    let angle_of = |h: &Half| (h.points[1].z - h.points[0].z).atan2(h.points[1].x - h.points[0].x);
+    let angle_of =
+        |h: &Half| (h.points[1].z - h.points[0].z).js_atan2(h.points[1].x - h.points[0].x);
     for (_, list) in &mut outgoing {
         list.sort_by(|a, b| (angle_of(a) - angle_of(b)).partial_cmp(&0.).unwrap());
     }
@@ -312,7 +314,7 @@ fn planar_faces(graph: &RoadGraph) -> Vec<Face> {
                 let arrivals = &outgoing[indices[&h.to]].1;
                 let back = h.points[h.points.len() - 2];
                 let tip = h.points[h.points.len() - 1];
-                let incoming = (back.z - tip.z).atan2(back.x - tip.x);
+                let incoming = (back.z - tip.z).js_atan2(back.x - tip.x);
                 let mut next = &arrivals[0];
                 let mut best_delta = f64::INFINITY;
                 for cand in arrivals {

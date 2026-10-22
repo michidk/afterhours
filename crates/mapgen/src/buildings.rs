@@ -17,6 +17,7 @@ fn setback(zone: Zone) -> f64 {
         Zone::Park | Zone::Rural => 0.,
     }
 }
+use crate::js_math::JsMath;
 use crate::{
     field::{sample, slope},
     geom::{
@@ -39,8 +40,8 @@ fn palette(k: BuildingKind) -> &'static [&'static str] {
     }
 }
 fn type_and_height(zone: Zone, dc: f64, footprint: f64, rng: &mut Rng) -> (BuildingKind, f64) {
-    let falloff = (-dc / 420.).exp();
-    let lognormal = range(rng, -0.25, 0.3).exp();
+    let falloff = (-dc / 420.).js_exp();
+    let lognormal = range(rng, -0.25, 0.3).js_exp();
     let (mut kind, mut h) = match zone {
         Zone::Core => {
             if footprint > 450. && rng() < 0.45 + falloff * 0.4 {
@@ -333,7 +334,7 @@ pub fn stamp_pads(f: &mut HeightField, buildings: &[BuildingPlacement], protecte
     let (w, h) = (f.w, f.h);
     for b in buildings {
         let margin = 3.;
-        let r = b.w.hypot(b.d) / 2. + margin;
+        let r = b.w.js_hypot(b.d) / 2. + margin;
         let x0 = (((b.x - r + f.size / 2.) / f.cell).floor().max(0.)) as usize;
         let x1 = (((b.x + r + f.size / 2.) / f.cell)
             .ceil()
@@ -342,14 +343,14 @@ pub fn stamp_pads(f: &mut HeightField, buildings: &[BuildingPlacement], protecte
         let z1 = (((b.z + r + f.size / 2.) / f.cell)
             .ceil()
             .min((h - 1) as f64)) as usize;
-        let (c, s) = ((-b.angle).cos(), (-b.angle).sin());
+        let (c, s) = ((-b.angle).js_cos(), (-b.angle).js_sin());
         for z in z0..=z1 {
             for x in x0..=x1 {
                 let px = x as f64 * f.cell - f.size / 2. - b.x;
                 let pz = z as f64 * f.cell - f.size / 2. - b.z;
                 let lx = (px * c - pz * s).abs();
                 let lz = (px * s + pz * c).abs();
-                let dd = (0f64.max(lx - b.w / 2.)).hypot(0f64.max(lz - b.d / 2.));
+                let dd = (0f64.max(lx - b.w / 2.)).js_hypot(0f64.max(lz - b.d / 2.));
                 if dd > margin {
                     continue;
                 }

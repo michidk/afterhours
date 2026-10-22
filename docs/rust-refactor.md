@@ -50,8 +50,21 @@ Milestone 2.3, gameplay parity (one PR per system, Node code deleted as each lan
 
 ### Phase 3: city generator in Rust
 
-- [ ] port `mapgen/` and `scripts/prepare-city.ts` as `crates/mapgen`; keep the
-      artifact format so the client does not change.
+- [x] port `mapgen/` and the city conversion as `crates/mapgen`; keep the
+      artifact format so the client does not change. `cargo run --release -p
+  afterhours-mapgen --bin generate-city -- --seed 713` takes about 9 s and
+      produces an artifact equal as JSON to the checked-in TypeScript output
+      (`seed_713_artifact_matches_checked_in_city`); every stage also matches the
+      TS oracle with zero delta (see the per-stage sections). `prepare-city.ts`
+      runs the native binary (`CITY_GENERATOR`, default `cargo run`). Mesh baking
+      stays in TypeScript because it renders through the client's Babylon builders.
+      The TS generator stays as the parity oracle only.
+
+      **Oracle engine matters.** Production runs on Node (V8), not Bun (JavaScriptCore).
+      The two differ in the last bit of `sin`, `exp`, `pow` and `hypot`, enough to move
+      lot subdivisions and river traces. The crate therefore routes every transcendental
+      through `js_math` (V8's fdlibm, vendored in `src/v8_ieee754.cc`), and all parity
+      tests use `node --import tsx`.
 
 Step 1 foundations are committed on `t3/rust-mapgen`. The crate now has the
 serializable Rust contracts for every `mapgen/types.ts` stage, the f64 mulberry
@@ -78,7 +91,7 @@ path and maximum absolute and relative numeric deltas. JSON decoding enables
 `float_roundtrip` so the comparison measures generator differences rather than
 parser rounding.
 
-Measured with Bun on this Linux worktree, in both debug and release parity tests:
+Measured on this Linux worktree, in both debug and release parity tests:
 
 | Checkpoint                                                                          | Seed 713 max absolute / relative delta | Seed 42 max absolute / relative delta |
 | ----------------------------------------------------------------------------------- | -------------------------------------- | ------------------------------------- |
@@ -96,7 +109,7 @@ Measured with Bun on this Linux worktree, in both debug and release parity tests
 
 No float-order exception or terrain-stage shortcut is needed for these seeds.
 The tests are enabled by default and finish well below two minutes in debug.
-Bun is a test prerequisite; production `src/` never invokes it. Run:
+Node (with the repo's tsx) is a test prerequisite; production `src/` never invokes it. Run:
 
 ```sh
 export PATH=$HOME/.cargo/bin:$PATH
@@ -107,8 +120,8 @@ cargo clippy -p afterhours-mapgen --all-targets -- -D warnings
 To retain and reuse dumps:
 
 ```sh
-bun run scripts/mapgen-dump.ts --terrain-only --seed 713 --out /tmp/mapgen-dumps/713
-bun run scripts/mapgen-dump.ts --terrain-only --seed 42 --out /tmp/mapgen-dumps/42
+node --import tsx scripts/mapgen-dump.ts --terrain-only --seed 713 --out /tmp/mapgen-dumps/713
+node --import tsx scripts/mapgen-dump.ts --terrain-only --seed 42 --out /tmp/mapgen-dumps/42
 export PATH=$HOME/.cargo/bin:$PATH
 MAPGEN_DUMP_ROOT=/tmp/mapgen-dumps cargo test -p afterhours-mapgen --test terrain_parity -- --nocapture
 ```
@@ -174,7 +187,7 @@ rotated pads, concave surfaces, avoided triangles, and layer-aware sealing.
 Regenerate these fixtures with:
 
 ```sh
-bun scripts/mapgen-geometry-fixtures.ts
+node --import tsx scripts/mapgen-geometry-fixtures.ts
 ```
 
 The full acceptance suite uses seeds **713 and 42**, world size 3072 and cell
@@ -193,8 +206,8 @@ dump. To generate and inspect snapshots separately, or reuse them for a repeat
 run, use:
 
 ```sh
-bun scripts/mapgen-dump.ts --geometry-stages --seed 713 --out /tmp/afterhours-geometry/713
-bun scripts/mapgen-dump.ts --geometry-stages --seed 42 --out /tmp/afterhours-geometry/42
+node --import tsx scripts/mapgen-dump.ts --geometry-stages --seed 713 --out /tmp/afterhours-geometry/713
+node --import tsx scripts/mapgen-dump.ts --geometry-stages --seed 42 --out /tmp/afterhours-geometry/42
 MAPGEN_DUMP_ROOT=/tmp/afterhours-geometry \
   cargo test -p afterhours-mapgen --test geometry_parity -- --ignored --nocapture
 ```
@@ -206,7 +219,7 @@ test also runs smoothing through street polygons directly from the input graph
 without reloading intermediate graphs from TypeScript. Surface helper fixtures
 compare draping, subtraction, merging, welding and sealing numerically too.
 
-The checked Bun oracle and native debug build have **zero absolute and relative
+The checked Node oracle and native debug build have **zero absolute and relative
 delta for every output on both seeds**. No approximate, snapped, or reordered
 comparison is used. The geometry suite uses the exact comparator for floats as well as integer
 IDs, strings, lengths, and booleans. The older shared comparator still supports
@@ -223,5 +236,5 @@ Three arithmetic details are required for that result:
   Rust `powf(0.5)` path changed smoothing by up to 2.27e-13; JavaScript uses the
   square-root path, which matches exactly here.
 
-The native `src/` code never starts Bun, Node, or tsx. Only integration tests start
+The native `src/` code never starts Node or tsx. Only integration tests start
 the oracle, and the ordinary fixture tests require no JavaScript runtime.
