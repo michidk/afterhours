@@ -34,9 +34,9 @@ pub fn sample(field: &HeightField, x: f64, z: f64) -> f64 {
     let tv = (v - iz as f64).clamp(0.0, 1.0);
     let i = iz * field.w + ix;
     let top =
-        f64::from(field.data[i]) + f64::from(field.data[i + 1]) - f64::from(field.data[i]) * tu;
-    let bottom = f64::from(field.data[i + field.w]) + f64::from(field.data[i + field.w + 1])
-        - f64::from(field.data[i + field.w]) * tu;
+        f64::from(field.data[i]) + (f64::from(field.data[i + 1]) - f64::from(field.data[i])) * tu;
+    let bottom = f64::from(field.data[i + field.w])
+        + (f64::from(field.data[i + field.w + 1]) - f64::from(field.data[i + field.w])) * tu;
     top + (bottom - top) * tv
 }
 
