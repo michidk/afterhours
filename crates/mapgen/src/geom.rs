@@ -3,7 +3,7 @@
 pub use crate::types::Point;
 
 pub fn dist(a: Point, b: Point) -> f64 {
-    (a.x - b.x).hypot(a.z - b.z)
+    crate::js_math::hypot(a.x - b.x, a.z - b.z)
 }
 
 pub fn sub(a: Point, b: Point) -> Point {
@@ -31,14 +31,17 @@ pub fn cross(a: Point, b: Point) -> f64 {
     a.x * b.z - a.z * b.x
 }
 pub fn len(a: Point) -> f64 {
-    a.x.hypot(a.z)
+    crate::js_math::hypot(a.x, a.z)
 }
 pub fn norm(a: Point) -> Point {
     let l = len(a);
     if l == 0.0 {
         Point { x: 0.0, z: 0.0 }
     } else {
-        mul(a, 1.0 / l)
+        Point {
+            x: a.x / l,
+            z: a.z / l,
+        }
     }
 }
 pub fn perp(a: Point) -> Point {
@@ -166,6 +169,19 @@ pub fn clean_ring(poly: &[Point], epsilon: f64) -> Vec<Point> {
     while out.len() > 1 && dist(out[0], *out.last().unwrap()) <= epsilon {
         out.pop();
     }
+    let mut i = 0;
+    while i < out.len() && out.len() > 3 {
+        let a = out[(i + out.len() - 1) % out.len()];
+        let b = out[i];
+        let c = out[(i + 1) % out.len()];
+        let l = dist(a, c);
+        let l = if l == 0.0 { 1.0 } else { l };
+        if cross(sub(b, a), sub(c, a)).abs() / l < epsilon {
+            out.remove(i);
+        } else {
+            i += 1;
+        }
+    }
     out
 }
 pub fn rotated_rect(c: Point, w: f64, d: f64, angle: f64) -> Vec<Point> {
@@ -234,8 +250,8 @@ pub fn oriented_box(poly: &[Point]) -> Option<(f64, f64, f64, Point)> {
     for i in 0..poly.len() {
         let a = poly[i];
         let b = poly[(i + 1) % poly.len()];
-        let angle = (b.z - a.z).atan2(b.x - a.x);
-        let (c, s) = ((-angle).cos(), (-angle).sin());
+        let angle = crate::js_math::atan2(b.z - a.z, b.x - a.x);
+        let (c, s) = (crate::js_math::cos(-angle), crate::js_math::sin(-angle));
         let mut min_x = f64::INFINITY;
         let mut max_x = f64::NEG_INFINITY;
         let mut min_z = f64::INFINITY;
@@ -259,8 +275,8 @@ pub fn oriented_box(poly: &[Point]) -> Option<(f64, f64, f64, Point)> {
                 w,
                 d,
                 Point {
-                    x: mx * angle.cos() - mz * angle.sin(),
-                    z: mx * angle.sin() + mz * angle.cos(),
+                    x: mx * crate::js_math::cos(angle) - mz * crate::js_math::sin(angle),
+                    z: mx * crate::js_math::sin(angle) + mz * crate::js_math::cos(angle),
                 },
             ));
         }
@@ -303,28 +319,136 @@ impl<T: Clone> SpatialHash<T> {
     }
 }
 
-/// Inset a polygon by a conservative axis-aligned amount. The TS implementation
-/// uses offset-line mitres; this equivalent keeps the public contract available
-/// to stages that only receive convex road faces.
+/// Offset edge lines inward, collapsing reversed offset edges in source order.
 pub fn inset_polygon(poly: &[Point], d: f64) -> Option<Vec<Point>> {
     if poly.len() < 3 {
         return None;
     }
-    let c = centroid(poly);
-    let mut out = Vec::with_capacity(poly.len());
-    for &p in poly {
-        let v = sub(p, c);
-        let l = len(v);
-        if l <= d {
+    let ccw = signed_area(poly) > 0.0;
+    let mut ring = poly.to_vec();
+    if !ccw {
+        ring.reverse();
+    }
+    let mut out = Vec::new();
+    for _ in 0..poly.len() {
+        let n = ring.len();
+        if n < 3 {
             return None;
         }
-        out.push(add(c, mul(v, (l - d) / l)));
+        out.clear();
+        for i in 0..n {
+            let prev = ring[(i + n - 1) % n];
+            let cur = ring[i];
+            let next = ring[(i + 1) % n];
+            let d0 = norm(sub(cur, prev));
+            let d1 = norm(sub(next, cur));
+            let p0 = add(cur, mul(perp(d0), d));
+            let p1 = add(cur, mul(perp(d1), d));
+            let Some(hit) = line_intersection(p0, d0, p1, d1) else {
+                out.push(p0);
+                continue;
+            };
+            let limit = d * 2.5;
+            out.push(if dist(hit, cur) > limit {
+                add(cur, mul(norm(sub(hit, cur)), limit))
+            } else {
+                hit
+            });
+        }
+        let mut reversed = None;
+        for i in 0..n {
+            let dir = sub(ring[(i + 1) % n], ring[i]);
+            let a = out[i];
+            let b = out[(i + 1) % n];
+            if (b.x - a.x) * dir.x + (b.z - a.z) * dir.z <= 1e-6 {
+                reversed = Some(i);
+                break;
+            }
+        }
+        let Some(i) = reversed else {
+            break;
+        };
+        let j = (i + 1) % n;
+        let before = dist(ring[(i + n - 1) % n], ring[i]);
+        let after = dist(ring[j], ring[(j + 1) % n]);
+        ring.remove(if before < after { i } else { j });
     }
-    if area(&out) <= 0.0 || area(&out) >= area(poly) || self_intersects(&out) {
+    let mut result = clean_ring(&out, 0.05);
+    if result.len() < 3 {
+        return None;
+    }
+    if !ccw {
+        result.reverse();
+    }
+    if signed_area(&result) * signed_area(poly) <= 0.0
+        || area(&result) >= area(poly)
+        || self_intersects(&result)
+    {
         None
     } else {
-        Some(out)
+        Some(result)
     }
+}
+
+/// Ear clipping follows shared/polygon.ts, including the degenerate fan fallback.
+pub fn ear_clip(poly: &[Point]) -> Vec<[usize; 3]> {
+    let n = poly.len();
+    if n < 3 {
+        return Vec::new();
+    }
+    let mut idx = (0..n).collect::<Vec<_>>();
+    if signed_area(poly) < 0.0 {
+        idx.reverse();
+    }
+    let mut tris = Vec::new();
+    let same = |p: Point, q: Point| (p.x - q.x).abs() < 1e-6 && (p.z - q.z).abs() < 1e-6;
+    let in_triangle = |p: Point, a: Point, b: Point, c: Point| {
+        cross(sub(b, a), sub(p, a)) >= -1e-9
+            && cross(sub(c, b), sub(p, b)) >= -1e-9
+            && cross(sub(a, c), sub(p, c)) >= -1e-9
+    };
+    let mut guard = 0;
+    while idx.len() > 3 && guard < n * n {
+        guard += 1;
+        let mut clipped = false;
+        for i in 0..idx.len() {
+            let ia = idx[(i + idx.len() - 1) % idx.len()];
+            let ib = idx[i];
+            let ic = idx[(i + 1) % idx.len()];
+            let (a, b, c) = (poly[ia], poly[ib], poly[ic]);
+            if cross(sub(b, a), sub(c, b)) <= 1e-9 {
+                continue;
+            }
+            let mut blocked = false;
+            for &j in &idx {
+                if j == ia || j == ib || j == ic {
+                    continue;
+                }
+                let p = poly[j];
+                if same(p, a) || same(p, b) || same(p, c) {
+                    continue;
+                }
+                if in_triangle(p, a, b, c) {
+                    blocked = true;
+                    break;
+                }
+            }
+            if blocked {
+                continue;
+            }
+            tris.push([ia, ib, ic]);
+            idx.remove(i);
+            clipped = true;
+            break;
+        }
+        if !clipped {
+            break;
+        }
+    }
+    for i in 1..idx.len() - 1 {
+        tris.push([idx[0], idx[i], idx[i + 1]]);
+    }
+    tris
 }
 
 #[cfg(test)]

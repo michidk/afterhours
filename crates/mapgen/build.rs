@@ -1,0 +1,7 @@
+fn main() {
+    cc::Build::new()
+        .cpp(true)
+        .file("src/v8_ieee754.cc")
+        .flag_if_supported("-std=c++20")
+        .compile("afterhours_v8_math");
+}

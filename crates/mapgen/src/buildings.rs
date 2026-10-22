@@ -1,3 +1,4 @@
+#![allow(clippy::manual_clamp, clippy::collapsible_if)]
 trait JsRound {
     fn js_round(self) -> f64;
 }
@@ -212,7 +213,7 @@ fn fit_lot(
     let a = lot.polygon[lot.frontage as usize];
     let b = lot.polygon[(lot.frontage as usize + 1) % lot.polygon.len()];
     let angle = (b.z - a.z).atan2(b.x - a.x);
-    let (c, s) = ((-angle).cos(), (-angle).sin());
+    let (c, s) = (crate::js_math::cos(-angle), crate::js_math::sin(-angle));
     let local: Vec<_> = lot
         .polygon
         .iter()
@@ -281,8 +282,8 @@ fn fit_lot(
         let lz = front.z + inward * (setback + dd / 2.);
         let lx = ucentre;
         Point {
-            x: lx * angle.cos() - lz * angle.sin(),
-            z: lx * angle.sin() + lz * angle.cos(),
+            x: lx * crate::js_math::cos(angle) - lz * crate::js_math::sin(angle),
+            z: lx * crate::js_math::sin(angle) + lz * crate::js_math::cos(angle),
         }
     };
     let mut pos = place(w, d);

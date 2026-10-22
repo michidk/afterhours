@@ -168,13 +168,13 @@ fn subdivide(interior: &[Point], zone: Zone, rng: &mut Rng) -> Vec<Lot> {
         let (angle, w, d, centre) = oriented_box(&poly).expect("nonempty polygon");
         let long = if w >= d {
             Point {
-                x: angle.cos(),
-                z: angle.sin(),
+                x: crate::js_math::cos(angle),
+                z: crate::js_math::sin(angle),
             }
         } else {
             Point {
-                x: -angle.sin(),
-                z: angle.cos(),
+                x: -crate::js_math::sin(angle),
+                z: crate::js_math::cos(angle),
             }
         };
         let length = w.max(d);
@@ -359,7 +359,7 @@ fn simplify_polyline(points: &[Point], tolerance: f64) -> Vec<Point> {
                 x: pb.x - pa.x,
                 z: pb.z - pa.z,
             };
-            let l = ab.x.hypot(ab.z);
+            let l = crate::js_math::hypot(ab.x, ab.z);
             let d = if l < 1e-6 {
                 dist(p, pa)
             } else {
