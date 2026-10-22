@@ -47,6 +47,16 @@ pub struct Lake {
     pub level: f64,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Hydrology {
+    pub rivers: Vec<River>,
+    pub lakes: Vec<Lake>,
+    pub river_mask: Vec<u8>,
+    pub water_distance: Vec<f32>,
+    pub coast_distance: Vec<f32>,
+    pub flow: Vec<f32>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Phase {

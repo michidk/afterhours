@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 import { generateMap } from "../mapgen/pipeline.ts";
 import { LIMIT } from "../shared/world.ts";
 import { TERRAIN_STEP } from "../shared/terrain.ts";
+import { cityFromMap } from "./mapgen-city.ts";
+import { packCity } from "../shared/city-pack.ts";
 
 const args = process.argv.slice(2);
 const value = (name: string, fallback: string) => {
@@ -30,4 +32,6 @@ await write("blocks", map.blocks);
 await write("buildings", map.buildings);
 await write("parks", map.parks);
 await write("vegetation", { trees: map.trees, lamps: map.lamps });
+await write("city", cityFromMap(map));
+await write("artifact", { format: "afterhours-city", version: 7, city: packCity(cityFromMap(map)) });
 console.log(`Wrote mapgen stage dumps for seed ${seed} to ${out}`);

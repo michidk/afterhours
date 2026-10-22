@@ -303,6 +303,30 @@ impl<T: Clone> SpatialHash<T> {
     }
 }
 
+/// Inset a polygon by a conservative axis-aligned amount. The TS implementation
+/// uses offset-line mitres; this equivalent keeps the public contract available
+/// to stages that only receive convex road faces.
+pub fn inset_polygon(poly: &[Point], d: f64) -> Option<Vec<Point>> {
+    if poly.len() < 3 {
+        return None;
+    }
+    let c = centroid(poly);
+    let mut out = Vec::with_capacity(poly.len());
+    for &p in poly {
+        let v = sub(p, c);
+        let l = len(v);
+        if l <= d {
+            return None;
+        }
+        out.push(add(c, mul(v, (l - d) / l)));
+    }
+    if area(&out) <= 0.0 || area(&out) >= area(poly) || self_intersects(&out) {
+        None
+    } else {
+        Some(out)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
