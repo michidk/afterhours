@@ -36,6 +36,103 @@ pub fn shuffle<T>(rng: &mut Rng, values: &mut [T]) {
     }
 }
 
+const GRAD: [[f64; 2]; 8] = [
+    [1.0, 1.0],
+    [-1.0, 1.0],
+    [1.0, -1.0],
+    [-1.0, -1.0],
+    [1.0, 0.0],
+    [-1.0, 0.0],
+    [0.0, 1.0],
+    [0.0, -1.0],
+];
+const F2: f64 = 0.3660254037844386;
+const G2: f64 = 0.21132486540518713;
+
+#[derive(Clone, Debug)]
+pub struct Noise {
+    perm: [u8; 512],
+}
+
+impl Noise {
+    pub fn new(rng: &mut Rng) -> Self {
+        let mut p: Vec<u8> = (0..=255).collect();
+        shuffle(rng, &mut p);
+        let mut perm = [0; 512];
+        for (i, value) in perm.iter_mut().enumerate() {
+            *value = p[i & 255];
+        }
+        Self { perm }
+    }
+    pub fn at(&self, x: f64, y: f64) -> f64 {
+        let s = (x + y) * F2;
+        let i = (x + s).floor() as i32;
+        let j = (y + s).floor() as i32;
+        let t = f64::from(i + j) * G2;
+        let x0 = x - (f64::from(i) - t);
+        let y0 = y - (f64::from(j) - t);
+        let (i1, j1) = if x0 > y0 { (1, 0) } else { (0, 1) };
+        let x1 = x0 - f64::from(i1) + G2;
+        let y1 = y0 - f64::from(j1) + G2;
+        let x2 = x0 - 1.0 + 2.0 * G2;
+        let y2 = y0 - 1.0 + 2.0 * G2;
+        let ii = (i & 255) as usize;
+        let jj = (j & 255) as usize;
+        let mut n = 0.0;
+        for (dx, dy, gi) in [
+            (x0, y0, self.perm[ii + self.perm[jj] as usize]),
+            (
+                x1,
+                y1,
+                self.perm[ii + i1 as usize + self.perm[jj + j1 as usize] as usize],
+            ),
+            (x2, y2, self.perm[ii + 1 + self.perm[jj + 1] as usize]),
+        ] {
+            let mut q = 0.5 - dx * dx - dy * dy;
+            if q > 0.0 {
+                q *= q;
+                let g = GRAD[gi as usize & 7];
+                n += q * q * (g[0] * dx + g[1] * dy);
+            }
+        }
+        70.0 * n
+    }
+    pub fn fbm(&self, x: f64, y: f64, octaves: usize, lacunarity: f64, gain: f64) -> f64 {
+        let (mut sum, mut amp, mut norm, mut frequency) = (0.0, 1.0, 0.0, 1.0);
+        for _ in 0..octaves {
+            sum += amp * self.at(x * frequency, y * frequency);
+            norm += amp;
+            amp *= gain;
+            frequency *= lacunarity;
+        }
+        sum / norm
+    }
+    pub fn ridged(&self, x: f64, y: f64, octaves: usize, lacunarity: f64, gain: f64) -> f64 {
+        let (mut sum, mut amp, mut norm, mut frequency, mut weight) = (0.0, 1.0, 0.0, 1.0, 1.0);
+        for _ in 0..octaves {
+            let mut signal = 1.0 - self.at(x * frequency, y * frequency).abs();
+            signal = signal * signal * weight;
+            weight = (signal * 2.0).clamp(0.0, 1.0);
+            sum += amp * signal;
+            norm += amp;
+            amp *= gain;
+            frequency *= lacunarity;
+        }
+        sum / norm
+    }
+}
+
+pub fn smoothstep(a: f64, b: f64, value: f64) -> f64 {
+    let t = ((value - a) / (b - a)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+pub fn lerp(a: f64, b: f64, t: f64) -> f64 {
+    a + (b - a) * t
+}
+pub fn clamp(value: f64, lo: f64, hi: f64) -> f64 {
+    value.max(lo).min(hi)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

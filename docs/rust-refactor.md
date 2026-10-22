@@ -52,28 +52,14 @@ Milestone 2.3, gameplay parity (one PR per system, Node code deleted as each lan
 - [ ] port `mapgen/` and `scripts/prepare-city.ts` as `crates/mapgen`; keep the
       artifact format so the client does not change.
 
-Phase 3 work in progress. `crates/mapgen` owns the Rust crate, the f64 PRNG,
-geometry contracts, height-field operations, and hydrology contracts. The
-`generate-city` binary currently invokes `scripts/generate-city.ts` as the parity
-oracle, so the produced version-7 artifact remains compatible with the client and
-`crates/server`. `scripts/prepare-city.ts` now runs that binary before the
-unchanged TypeScript mesh baker. Set `CITY_GENERATOR` to a built `generate-city`
-path to avoid Cargo startup on repeated preparations.
-
-This is a deliberate shortcut. The stage implementations and city conversion are
-not yet native Rust, and the Phase 3 parity box stays unchecked until a test proves
-the Rust pipeline can generate seed 713 without invoking TypeScript. The next
-upgrade is to replace the oracle bridge one stage at a time, retaining the parity
-test and documenting any float-order deltas per artifact field.
-
-The first parity run generated seed 713 successfully and compared the full JSON
-tree against `data/city.json`. It found 40,967 differing scalar values and a
-maximum numeric delta of 2,497.3. The current checked-in artifact predates the
-oracle output used by this branch and the differences include packed street
-surface bytes, props, and buildings. The test records these numbers while it
-continues to enforce the format, version, seed, and packed terrain length; the
-Phase 3 box remains unchecked until the native Rust pipeline has zero unexplained
-field deltas.
+Step 1 foundations are committed on `t3/rust-mapgen`. The crate now has the
+serializable Rust contracts for every `mapgen/types.ts` stage, the f64 mulberry
+PRNG and seeded simplex noise, field sampling and distance transforms, the full
+geometry primitive set, and a first-difference stage dump comparator. The
+`scripts/mapgen-dump.ts` oracle writes terrain, erosion, hydrology, site, roads,
+shaped terrain, blocks, buildings, parks, and vegetation snapshots. The Rust
+`generate-city` binary intentionally exits until the native pipeline is complete;
+it contains no TypeScript or shell bridge.
 
 ## Protocol decisions
 

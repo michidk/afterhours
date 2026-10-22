@@ -5,21 +5,11 @@
 //! these contracts in Rust first makes the eventual stage-by-stage port explicit
 //! without changing the versioned artifact.
 
-pub mod blocks;
-pub mod buildings;
 pub mod field;
 pub mod geom;
-pub mod hydrology;
-pub mod packing;
+pub mod parity;
 pub mod random;
-pub mod roadgeometry;
-pub mod roads;
-pub mod shoreline;
-pub mod site;
-pub mod streetfit;
-pub mod terrain;
 pub mod types;
-pub mod vegetation;
 
 pub use geom::Point;
 pub use random::{Rng, derive, mulberry};
