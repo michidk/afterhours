@@ -18,8 +18,19 @@ fn compare(expected: &Value, actual: &Value, path: &str) -> Option<Difference> {
         (Value::Number(a), Value::Number(b)) => {
             let af = a.as_f64()?;
             let bf = b.as_f64()?;
-            let tolerance = 1e-9 * af.abs().max(bf.abs()).max(1.0);
-            if (af - bf).abs() <= tolerance {
+            let a_integer = a.as_i64().is_some() || a.as_u64().is_some();
+            let b_integer = b.as_i64().is_some() || b.as_u64().is_some();
+            let equal = if a_integer || b_integer {
+                if a_integer && b_integer {
+                    a == b
+                } else {
+                    af == bf
+                }
+            } else {
+                let tolerance = 1e-9 * af.abs().max(bf.abs()).max(1.0);
+                af == bf || (af - bf).abs() <= tolerance
+            };
+            if equal {
                 None
             } else {
                 Some(Difference {

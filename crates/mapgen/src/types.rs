@@ -29,6 +29,7 @@ pub struct HeightField {
 }
 pub type Field = HeightField;
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TerrainTuning {
     pub land_fraction: f64,
     pub max_hill: f64,

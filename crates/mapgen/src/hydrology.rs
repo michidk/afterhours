@@ -147,7 +147,7 @@ fn lakes_from_fill(f: &Field, depth: &[f32], sea: f64) -> Vec<u8> {
     let n = depth.len();
     let mut cand = vec![false; n];
     for i in 0..n {
-        cand[i] = depth[i] > 0.4;
+        cand[i] = f64::from(depth[i]) > 0.4;
     }
     let mut seen = vec![false; n];
     let mut mask = vec![0u8; n];
@@ -419,7 +419,14 @@ fn lake_outlines(f: &Field, mask: &[u8]) -> Vec<Lake> {
         .collect()
 }
 
-pub fn generate_hydrology(f: &mut Field, seed: i32, sea_level: f64) -> Hydrology {
+/// Generate drainage from a field without changing the caller's field.
+pub fn generate_hydrology(f: &Field, seed: i32, sea_level: f64) -> Hydrology {
+    let mut copy = f.clone();
+    generate_hydrology_in_place(&mut copy, seed, sea_level)
+}
+
+/// Mutating form used by the native pipeline, matching the TypeScript stage.
+pub fn generate_hydrology_in_place(f: &mut Field, seed: i32, sea_level: f64) -> Hydrology {
     let depth = fill_depressions(f, sea_level, 0.002);
     let lake_mask = lakes_from_fill(f, &depth, sea_level);
     let (dir, mut flux) = flow_accumulation(f, sea_level);
