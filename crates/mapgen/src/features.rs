@@ -7,6 +7,7 @@ use crate::city_types::{Airport, Building, Harbour, Marking, Racetrack, Road, Sp
 use crate::geom::{
     closest_on_segment, convex_overlap, dist, point_in_polygon, rotated_rect, self_intersects,
 };
+use crate::js_math::{atan2 as js_atan2, cos as js_cos, sin as js_sin};
 use crate::random::{Rng, derive};
 use crate::types::{GeneratedMap, Point};
 use std::f64::consts::PI;
@@ -136,8 +137,8 @@ struct Frame {
 fn frame(centre: Point, angle: f64) -> Frame {
     Frame {
         centre,
-        c: angle.cos(),
-        s: angle.sin(),
+        c: js_cos(angle),
+        s: js_sin(angle),
     }
 }
 impl Frame {
@@ -154,7 +155,7 @@ impl Frame {
         )
     }
     fn facing(&self, sign: f64) -> f64 {
-        (-self.s * sign).atan2(self.c * sign)
+        js_atan2(-self.s * sign, self.c * sign)
     }
 }
 fn flat(points: &[Point], y: f64) -> Vec<f64> {
@@ -336,10 +337,10 @@ fn try_place_town_hall(ctx: &mut FeatureContext<'_>) -> Result<TownHall, String>
                     x: (road.bx - road.ax) / length,
                     z: (road.bz - road.az) / length,
                 };
-                let angle = t.z.atan2(t.x) + if side < 0 { PI } else { 0.0 };
+                let angle = js_atan2(t.z, t.x) + if side < 0 { PI } else { 0.0 };
                 let n = Point {
-                    x: -angle.sin(),
-                    z: angle.cos(),
+                    x: -js_sin(angle),
+                    z: js_cos(angle),
                 };
                 let setback = road.width / 2.0 + SIDEWALK + 1.5 + depth / 2.0;
                 let middle = Point {
@@ -449,7 +450,7 @@ fn try_place_town_hall(ctx: &mut FeatureContext<'_>) -> Result<TownHall, String>
                     d: 28.0,
                     y: Some(level),
                     h: round(level + 15.0),
-                    angle: Some(round(angle.sin().atan2(angle.cos()))),
+                    angle: Some(round(js_atan2(js_sin(angle), js_cos(angle)))),
                     asset: "civic-hall".into(),
                     facing: 0.0,
                     color: "#d9cfb8".into(),
@@ -570,8 +571,8 @@ pub fn place_racetrack_with_rng(ctx: &mut FeatureContext<'_>, rng: &mut Rng) -> 
                 0.7 + rng() * 0.3
             };
             controls.push(Point {
-                x: site.x + theta.cos() * rx * r,
-                z: site.z + theta.sin() * rz * r,
+                x: site.x + js_cos(theta) * rx * r,
+                z: site.z + js_sin(theta) * rz * r,
             });
         }
         let mut candidate = resample(&closed_spline(&controls, 1.0), 6.0);
@@ -872,7 +873,7 @@ pub fn place_racetrack_with_rng(ctx: &mut FeatureContext<'_>, rng: &mut Rng) -> 
         .map(|(slot, back)| {
             let k = (n - back as usize / STEP as usize) % n;
             let p = offset(k, if slot != 0 { 2.6 } else { -2.6 });
-            let heading = along.x.atan2(along.z);
+            let heading = js_atan2(along.x, along.z);
             Spot {
                 x: round(p.x),
                 z: round(p.z),
@@ -950,7 +951,7 @@ pub fn place_harbours_with_count(ctx: &mut FeatureContext<'_>, count: usize) -> 
                 x: -g.x / gl,
                 z: -g.z / gl,
             };
-            let angle = js_round((-sea.x).atan2(sea.z) / (PI / 2.0)) * (PI / 2.0);
+            let angle = js_round(js_atan2(-sea.x, sea.z) / (PI / 2.0)) * (PI / 2.0);
             let f = frame(p, angle);
             let (mut ok, mut depth) = (true, 0.0);
             for u in [-quay / 2.0, 0.0, quay / 2.0] {
@@ -1081,7 +1082,7 @@ pub fn place_harbours_with_count(ctx: &mut FeatureContext<'_>, count: usize) -> 
                 d: 9.0,
                 y: Some(level),
                 h: round(level + 6.0),
-                angle: Some(round(c.angle.sin().atan2(c.angle.cos()))),
+                angle: Some(round(js_atan2(js_sin(c.angle), js_cos(c.angle)))),
                 asset: "warehouse".into(),
                 facing: 0.0,
                 color: "#b9b3a2".into(),
@@ -1100,7 +1101,7 @@ pub fn place_harbours_with_count(ctx: &mut FeatureContext<'_>, count: usize) -> 
                     Spot {
                         x: round(p.x),
                         z: round(p.z),
-                        angle: round(c.angle.cos().atan2(c.angle.sin())),
+                        angle: round(js_atan2(js_cos(c.angle), js_sin(c.angle))),
                     }
                 })
                 .collect();
@@ -1115,7 +1116,7 @@ pub fn place_harbours_with_count(ctx: &mut FeatureContext<'_>, count: usize) -> 
         .collect()
 }
 pub fn compass(p: Point, middle: Point) -> String {
-    let a = (p.x - middle.x).atan2(p.z - middle.z);
+    let a = js_atan2(p.x - middle.x, p.z - middle.z);
     [
         "NORTH",
         "NORTHEAST",

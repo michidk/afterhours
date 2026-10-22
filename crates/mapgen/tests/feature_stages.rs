@@ -31,7 +31,9 @@ fn context<'a>(map: &'a GeneratedMap, input: &Value, initial: &Value) -> Feature
             .chain(&sidewalks)
             .map(|flat| {
                 PavedRing::new(
-                    flat.chunks_exact(3)
+                    flat.as_chunks::<3>()
+                        .0
+                        .iter()
                         .map(|p| Point { x: p[0], z: p[2] })
                         .collect(),
                 )
