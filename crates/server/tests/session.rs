@@ -74,9 +74,9 @@ impl View {
             ..
         } = m
         {
-            // The raw row is a `snapshot()` slice: 5 floats on foot, 13 in a car.
+            // The raw row is a `snapshot()` slice: 5 floats on foot, 15 in a car (pose, velocities, tyre state).
             assert!(
-                you.as_ref().is_some_and(|y| y.len() == 5 || y.len() == 13),
+                you.as_ref().is_some_and(|y| y.len() == 5 || y.len() == 15),
                 "you={you:?}"
             );
             // A delta against base B is valid for any state at or after B.

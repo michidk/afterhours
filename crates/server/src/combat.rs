@@ -76,6 +76,15 @@ pub fn physique_health(character: Option<&serde_json::Value>) -> f32 {
     }
 }
 
+/// shared/character.ts PHYSIQUES speed multiplier (runner 1.2, tank 0.8).
+pub fn physique_speed(character: Option<&serde_json::Value>) -> f32 {
+    match character.and_then(|c| c["physique"].as_str()) {
+        Some("runner") => 1.2,
+        Some("tank") => 0.8,
+        _ => 1.0,
+    }
+}
+
 #[derive(Default)]
 struct Fighter {
     health: f32,

@@ -15,6 +15,7 @@ const ENTER_RANGE: f32 = 6.0;
 const BOARDING_SECONDS: f32 = 1.0;
 /// Rotor lift works against this (`helicopter.ts`).
 const LIFT_GRAVITY: f32 = 18.0;
+const SUBSTEPS: u32 = 4;
 const WORLD_LIMIT: f32 = 1792.0;
 /// Parachute sink rate and approach rate (`movement.ts`).
 pub const PARACHUTE_FALL: f32 = 4.0;
@@ -497,8 +498,21 @@ impl Fleet {
         }
     }
 
-    /// Advances every craft by `dt`. `ground` is the still surface; `terrain` the bed.
+    /// Advances every craft by `dt` in the original's four substeps per tick (its flight
+    /// models integrate with Euler steps, so the step size shows). `ground` is the still
+    /// surface; `terrain` the bed.
     pub fn step(
+        &mut self,
+        dt: f32,
+        ground: &dyn Fn(f32, f32) -> f32,
+        terrain: &dyn Fn(f32, f32) -> f32,
+    ) {
+        for _ in 0..SUBSTEPS {
+            self.substep(dt / SUBSTEPS as f32, ground, terrain);
+        }
+    }
+
+    fn substep(
         &mut self,
         dt: f32,
         ground: &dyn Fn(f32, f32) -> f32,
@@ -528,6 +542,12 @@ impl Fleet {
                     }
                 }
                 Tune::Boat(b) => float(c, b, piloted, terrain, ground, dt),
+            }
+            // The catalogue speed is a hard ceiling for every vehicle, as in the original.
+            let speed = c.vx.hypot(c.vz);
+            if speed > c.spec.speed {
+                c.vx *= c.spec.speed / speed;
+                c.vz *= c.spec.speed / speed;
             }
             c.x = (c.x + c.vx * dt).clamp(-WORLD_LIMIT + 1.0, WORLD_LIMIT - 1.0);
             c.z = (c.z + c.vz * dt).clamp(-WORLD_LIMIT + 1.0, WORLD_LIMIT - 1.0);
@@ -712,6 +732,79 @@ fn float(
     c.vy = 0.0;
 }
 
+/// One sample of [`fly`]: the same fields the handling lab traces.
+#[derive(serde::Serialize)]
+pub struct Flown {
+    pub t: f32,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub yaw: f32,
+    pub speed: f32,
+    pub forward: f32,
+    pub lateral: f32,
+    pub vy: f32,
+}
+
+/// Lab: flies one piloted craft over a flat floor at `height` (boats float on a calm sea) for
+/// a script of `(seconds, controls)`, stepping at the server tick, and returns every tick.
+/// `shortcut`: the bare craft physics only; boarding, roofs and the city are the scene lab's.
+pub fn fly(
+    model: &str,
+    height: f32,
+    speed: f32,
+    script: &[(f32, Controls)],
+) -> Result<Vec<Flown>, String> {
+    if !SPECS.iter().any(|s| s.name == model) {
+        return Err(format!("unknown craft {model:?}"));
+    }
+    let mut fleet = Fleet::default();
+    let boat = matches!(spec(model).tune, Tune::Boat(_));
+    fleet.add(
+        model,
+        0.0,
+        if boat { WATER_LEVEL } else { height },
+        0.0,
+        0.0,
+    );
+    let craft = &mut fleet.craft[0];
+    craft.seats[0] = Some(1);
+    craft.vz = speed;
+    craft.flight = if height > 0.2 {
+        Flight::Cruising
+    } else {
+        Flight::Grounded
+    };
+    let dt = 1.0 / crate::TICK_RATE as f32;
+    let (floor, bed) = if boat {
+        (WATER_LEVEL, -50.0)
+    } else {
+        (0.0, 0.0)
+    };
+    let (mut out, mut t) = (Vec::new(), 0.0);
+    for (seconds, controls) in script {
+        fleet.craft[0].drive = controls.clone();
+        for _ in 0..(seconds / dt).round() as u32 {
+            fleet.step(dt, &|_, _| floor, &|_, _| bed);
+            t += dt;
+            let c = &fleet.craft[0];
+            let (sn, cs) = c.angle.sin_cos();
+            out.push(Flown {
+                t,
+                x: c.x,
+                y: c.y,
+                z: c.z,
+                yaw: c.angle,
+                speed: c.vx.hypot(c.vz),
+                forward: c.vx * sn + c.vz * cs,
+                lateral: c.vx * cs - c.vz * sn,
+                vy: c.vy,
+            });
+        }
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -797,5 +890,38 @@ mod tests {
             f.step(1.0 / 30.0, &land, &land);
         }
         assert!(f.craft[0].vz.abs() < 0.1, "beached hull stops");
+    }
+
+    fn throttle(seconds: f32) -> Vec<(f32, Controls)> {
+        vec![(
+            seconds,
+            Controls {
+                move_y: Some(1.0),
+                ..Default::default()
+            },
+        )]
+    }
+
+    /// Numbers measured on the original game (`scripts/compare-handling.ts`).
+    #[test]
+    fn craft_fly_like_the_original() {
+        let top = |t: &[Flown]| t.iter().map(|s| s.speed).fold(0.0, f32::max);
+        // Planes level off at the catalogue speed instead of accelerating past it.
+        let plane = fly("plane", 0.0, 0.0, &throttle(15.0)).unwrap();
+        assert!((top(&plane) - 40.0).abs() < 0.1, "{}", top(&plane));
+        let aero = fly("aerobatic", 0.0, 0.0, &throttle(15.0)).unwrap();
+        assert!((top(&aero) - 52.0).abs() < 0.1, "{}", top(&aero));
+        // A helicopter and a skiff top out at their catalogue speeds too.
+        let heli = fly("scout", 40.0, 0.0, &throttle(15.0)).unwrap();
+        assert!((top(&heli) - 15.0).abs() < 0.2, "{}", top(&heli));
+        let skiff = fly("boat", 0.0, 0.0, &throttle(15.0)).unwrap();
+        assert!((top(&skiff) - 15.0).abs() < 0.2, "{}", top(&skiff));
+        // The skiff swings at about 0.76 rad/s at full lock and sheds speed doing it.
+        let mut turn = throttle(4.0);
+        turn[0].1.move_x = Some(1.0);
+        let t = fly("boat", 0.0, 8.0, &turn).unwrap();
+        let yaw = (t.last().unwrap().yaw - t[0].yaw).abs() / 4.0;
+        assert!((yaw - 0.76).abs() < 0.1, "yaw rate {yaw}");
+        assert!(t.last().unwrap().speed < 7.0);
     }
 }

@@ -49,6 +49,13 @@ git worktree add --detach ../main-ref origin/main && ln -s "$PWD/node_modules" .
 LEGACY_DIR=../main-ref bunx tsx scripts/compare-handling.ts
 ```
 
+The same script covers walking (`"model": "walker"` in `handling-lab`; steps take `sprint`) and
+helicopters, planes and boats (`craft-lab '{"model":"plane","script":[...]}'`, steps take `throttle`,
+`steer`, `ascend`, `descend`, `brake`; set `CRAFT_LAB` to the built binary for the comparison).
+Walking matches the original's paces (4.5 and 8 m/s, physique scaled), except that the original eases
+to speed over about 0.1 s. Craft match to within a few percent; the server now steps them in the
+original's four substeps per tick and caps every craft at its catalogue speed.
+
 The Rust car applies the original's four-wheel tyre model (per-wheel rolling and lateral damping,
 rate-limited steering, handbrake that locks the rear wheels, hard speed cap) to the Rapier body;
 Rapier only supplies suspension, collisions and terrain. `the_sedan_drives_like_the_original` in

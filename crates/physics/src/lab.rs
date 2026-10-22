@@ -2,7 +2,7 @@
 //! driving script goes in, a trace and summary metrics come out. Built for scripted and AI
 //! use (`cargo run -p afterhours-physics --bin handling-lab -- --list`), and used by the handling
 //! tests, so a problem found by hand is one JSON file away from a regression test.
-use crate::{Drive, TICK, VEHICLE_STRIDE, VehicleSpec, World};
+use crate::{Drive, Move, TICK, VEHICLE_STRIDE, VehicleSpec, World};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -38,6 +38,9 @@ pub struct Step {
     pub steer: f32,
     #[serde(default)]
     pub brake: bool,
+    /// On foot only (`model: "walker"`): `throttle` walks forward, `steer` sidesteps.
+    #[serde(default)]
+    pub sprint: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -110,6 +113,57 @@ pub struct Metrics {
 pub struct Report {
     pub metrics: Metrics,
     pub trace: Vec<Sample>,
+}
+
+/// A walking character on flat ground: `throttle`/`steer` are the stick, `sprint` the run key.
+fn run_walker(scenario: &Scenario) -> Result<Report, String> {
+    let mut w = World::new();
+    w.add_box([0.0, -0.5, 0.0], [200.0, 0.5, 4000.0], 0.0);
+    let who = w.spawn_character([0.0, 1.0, 0.0]);
+    for _ in 0..30 {
+        w.step();
+    }
+    let at = |w: &World| {
+        let s = w.states();
+        [s[1], s[2], s[3]]
+    };
+    let mut last = at(&w);
+    let (mut all, mut t) = (Vec::new(), 0.0);
+    for step in &scenario.script {
+        let speed = if step.sprint { 8.0 } else { 4.5 };
+        w.set_move(
+            who,
+            Move {
+                x: step.steer,
+                z: step.throttle,
+                speed,
+                jump: false,
+            },
+        );
+        for _ in 0..(step.seconds / TICK).round() as u32 {
+            w.step();
+            t += TICK;
+            let p = at(&w);
+            let (dx, dz) = (p[0] - last[0], p[2] - last[2]);
+            let v = dx.hypot(dz) / TICK;
+            all.push(Sample {
+                t,
+                x: p[0],
+                y: p[1],
+                z: p[2],
+                yaw: 0.0,
+                pitch: 0.0,
+                roll: 0.0,
+                speed: v,
+                forward: dz / TICK,
+                lateral: dx / TICK,
+                vy: (p[1] - last[1]) / TICK,
+                q: [0.0, 0.0, 0.0, 1.0],
+            });
+            last = p;
+        }
+    }
+    report(&all, scenario.sample_every)
 }
 
 fn spec(model: &str) -> Result<VehicleSpec, String> {
@@ -205,6 +259,9 @@ fn wobble(all: &[Sample], f: fn(&Sample) -> f32) -> f32 {
 /// Runs a scenario: the car settles for two seconds first, so `t` starts at the first
 /// scripted tick and a parked car's metrics describe the car, not its drop.
 pub fn run(scenario: &Scenario) -> Result<Report, String> {
+    if scenario.model == "walker" {
+        return run_walker(scenario);
+    }
     let mut w = build(&scenario.ground)?;
     let car = w.spawn_vehicle(spec(&scenario.model)?, [0.0, 1.0, 0.0], 0.0);
     for _ in 0..60 {
@@ -213,8 +270,7 @@ pub fn run(scenario: &Scenario) -> Result<Report, String> {
     if scenario.start_speed != 0.0 {
         w.set_vehicle_velocity(car, [0.0, 0.0, scenario.start_speed]);
     }
-    let every = scenario.sample_every.max(1) as usize;
-    let (mut trace, mut all, mut t) = (Vec::new(), Vec::new(), 0.0);
+    let (mut all, mut t) = (Vec::new(), 0.0);
     for step in &scenario.script {
         w.set_drive(
             car,
@@ -229,13 +285,15 @@ pub fn run(scenario: &Scenario) -> Result<Report, String> {
         for _ in 0..(step.seconds / TICK).round() as u32 {
             w.step();
             t += TICK;
-            let s = sample(&w, t);
-            if all.len() % every == 0 {
-                trace.push(s);
-            }
-            all.push(s);
+            all.push(sample(&w, t));
         }
     }
+    report(&all, scenario.sample_every)
+}
+
+/// Trace (every n-th sample) plus summary metrics for a finished run.
+fn report(all: &[Sample], every: u32) -> Result<Report, String> {
+    let trace = all.iter().copied().step_by(every.max(1) as usize).collect();
     let first = all.first().ok_or("the script has no steps")?;
     let last = all.last().unwrap();
     let max = |f: fn(&Sample) -> f32| all.iter().map(f).fold(0.0, f32::max);
@@ -263,8 +321,8 @@ pub fn run(scenario: &Scenario) -> Result<Report, String> {
                 .sum(),
             stopped_after,
             final_vy: last.vy,
-            pitch_wobble: wobble(&all, |s| s.pitch),
-            roll_wobble: wobble(&all, |s| s.roll),
+            pitch_wobble: wobble(all, |s| s.pitch),
+            roll_wobble: wobble(all, |s| s.roll),
         },
         trace,
     })

@@ -10,6 +10,8 @@ import {
   type Input,
 } from "../../shared/world.ts";
 import { wrap } from "../../shared/physics/vehicle.ts";
+import { TUNING } from "../../shared/catalog.ts";
+import { PHYSIQUES } from "../../shared/character.ts";
 
 /** Mirrors the three car `VehicleSpec`s in crates/physics/src/lib.rs. */
 type VehicleSpec = readonly [
@@ -28,8 +30,8 @@ const VEHICLE_SPECS: Record<string, VehicleSpec> = {
   sport: [850, 1.9, 4.1, 1.4, 12500, 1500, 0.55, 0.34, 52],
   van: [1600, 2.2, 5, 1.4, 12500, 1800, 0.55, 0.34, 30],
 } as const;
-const WALK_SPEED = 4.5,
-  SPRINT = 1.6;
+const WALK_SPEED = TUNING.walk,
+  SPRINT = TUNING.sprint;
 export const PRESENTATION = { smoothing: 0.1 };
 
 let ready: Promise<unknown> | undefined;
@@ -66,6 +68,7 @@ export class Prediction {
   offset = { x: 0, y: 0, z: 0, angle: 0 };
   private world = new Physics();
   private kind: "character" | "vehicle" | undefined;
+  private physique: keyof typeof PHYSIQUES | undefined;
   private vehicleModel: string | undefined;
   private vehicleEntity: string | undefined;
   private id = 0;
@@ -131,6 +134,7 @@ export class Prediction {
     ack: number | undefined,
   ) {
     const kind = entity.vehicle ? "vehicle" : "character";
+    this.physique = entity.character?.physique;
     const model = controlledVehicle?.model ?? entity.model;
     const vehicleChanged =
       kind === "vehicle" &&
@@ -190,7 +194,9 @@ export class Prediction {
       y = inputY(input);
     if (this.kind === "vehicle") this.world.set_drive(this.id, y, x, input.brake);
     else {
-      const speed = WALK_SPEED * (input.sprint ? SPRINT : 1);
+      const speed =
+        (input.sprint || input.brake ? SPRINT : WALK_SPEED) *
+        (this.physique ? PHYSIQUES[this.physique].speed : 1);
       this.world.set_move(this.id, x, y, speed, input.ascend);
       if (x || y) this.facing = Math.atan2(x, y);
     }

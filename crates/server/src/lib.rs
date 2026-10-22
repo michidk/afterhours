@@ -4,7 +4,7 @@
 pub mod citizens;
 pub mod city;
 mod combat;
-mod craft;
+pub mod craft;
 pub mod destruction;
 mod game;
 pub mod lab;

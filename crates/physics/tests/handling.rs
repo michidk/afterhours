@@ -186,3 +186,19 @@ fn the_sedan_drives_like_the_original() {
     assert!(near(lock.max_lateral, 7.6), "slide {}", lock.max_lateral);
     assert!(near(lock.final_speed, 15.7), "lock {}", lock.final_speed);
 }
+
+/// On foot, `main` walks at 4.5 m/s and sprints at 8 (`TUNING.walk` / `TUNING.sprint`).
+#[test]
+fn walking_and_sprinting_match_the_original_paces() {
+    let walk = |sprint: bool| {
+        let scenario = serde_json::from_value(serde_json::json!({
+            "model": "walker",
+            "script": [{ "seconds": 3, "throttle": 1, "sprint": sprint }],
+        }))
+        .unwrap();
+        run(&scenario).unwrap().metrics
+    };
+    assert!((walk(false).top_speed - 4.5).abs() < 0.1);
+    assert!((walk(true).top_speed - 8.0).abs() < 0.1);
+    assert!(walk(false).max_lateral < 0.2, "walked crabwise");
+}

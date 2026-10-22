@@ -29,7 +29,7 @@ const rust = (s: object): Row[] =>
       "cargo",
       "run -q --release -p afterhours-physics --bin handling-lab -- --trace --json"
         .split(" ")
-        .concat(JSON.stringify({ ...s, sample_every: 3 })),
+        .concat(JSON.stringify({ sample_every: 3, ...s })),
       { maxBuffer: 1 << 28 },
     ).toString(),
   ).trace;
@@ -47,6 +47,88 @@ function digest(rows: Row[]) {
     yaw: Math.abs(end.yaw - rows[0].yaw) / (end.t - rows[0].t),
     slide: Math.max(...rows.map((r) => Math.abs(r.lateral))),
   };
+}
+const WALKS: Record<string, object> = {
+  "walk 2 s": { script: [{ seconds: 2, throttle: 1 }] },
+  "sprint 2 s": { script: [{ seconds: 2, throttle: 1, sprint: true }] },
+  "walk then stop": { script: [{ seconds: 1, throttle: 1 }, { seconds: 1 }] },
+  "diagonal walk": { script: [{ seconds: 2, throttle: 1, steer: 1 }] },
+};
+const speedAt = (rows: Row[], t: number) =>
+  rows.reduce((a, r) => (Math.abs(r.t - t) < Math.abs(a.t - t) ? r : a)).speed;
+console.log("\nwalker                  speed@0.1s  speed@1s  speed@1.1s  distance");
+for (const [name, s] of Object.entries(WALKS)) {
+  const scenario = { ...s, model: "walker", sample_every: 1 };
+  for (const [who, rows] of [
+    ["rust", rust(scenario)],
+    ["main", legacy(scenario as never).trace as Row[]],
+  ] as const) {
+    const end = rows.at(-1)!;
+    console.log(
+      `${(who === "rust" ? name : "").padEnd(20)}${who}  ${f(speedAt(rows, 0.1), 2).padStart(8)} ${f(speedAt(rows, 1), 2).padStart(9)} ${f(speedAt(rows, 1.1), 2).padStart(10)} ${f(Math.hypot(end.x, end.z), 1).padStart(10)}`,
+    );
+  }
+}
+const CRAFT = [
+  "scout",
+  "utility",
+  "plane",
+  "aerobatic",
+  "boat",
+  "launch",
+  "jetski",
+  "racer",
+  "speedboat",
+  "offshore",
+];
+const flies = (m: string) => ["scout", "utility", "plane", "aerobatic"].includes(m);
+const craftRust = (s: object): Row[] =>
+  JSON.parse(
+    execFileSync(process.env.CRAFT_LAB ?? "craft-lab", [JSON.stringify(s)], {
+      maxBuffer: 1 << 28,
+    }).toString(),
+  ).trace;
+const run = (model: string, pace: number) => {
+  const h = flies(model) ? 40 : 0;
+  const up = model.includes("plane") || model === "aerobatic";
+  return {
+    "accelerate 15 s": { height: up ? 0 : h, script: [{ seconds: 15, throttle: 1 }] },
+    "turn at pace": {
+      height: h,
+      start_speed: pace,
+      script: [{ seconds: 4, throttle: 1, steer: 1 }],
+    },
+    "coast 10 s": { height: h, start_speed: pace, script: [{ seconds: 10 }] },
+    "brake 5 s": {
+      height: h,
+      start_speed: pace,
+      script: [{ seconds: 5, throttle: -1, brake: true }],
+    },
+    "climb 4 s": {
+      height: h,
+      start_speed: pace,
+      script: [{ seconds: 4, throttle: 1, ascend: true }],
+    },
+  };
+};
+console.log("\ncraft            scenario         top   end  yaw/s slide  y-end  vy");
+for (const model of CRAFT) {
+  const pace =
+    { scout: 10, utility: 10, plane: 35, aerobatic: 40 }[model as never] ?? 8;
+  for (const [name, s] of Object.entries(run(model, pace))) {
+    if (!flies(model) && name === "climb 4 s") continue;
+    const scenario = { ...s, model };
+    for (const [who, rows] of [
+      ["rust", craftRust(scenario)],
+      ["main", legacy(scenario as never).trace as Row[]],
+    ] as const) {
+      const d = digest(rows),
+        end = rows.at(-1) as Row & { y: number; vy: number };
+      console.log(
+        `${(who === "rust" ? model : "").padEnd(10)}${(who === "rust" ? name : "").padEnd(16)} ${who}  ${f(d.top).padStart(5)} ${f(d.end).padStart(5)} ${f(d.yaw, 2).padStart(5)} ${f(d.slide).padStart(5)} ${f(end.y).padStart(6)} ${f(end.vy).padStart(5)}`,
+      );
+    }
+  }
 }
 for (const model of ["sedan", "sport", "van"]) {
   console.log(`\n${model}`);

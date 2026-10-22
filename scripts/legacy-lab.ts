@@ -9,10 +9,11 @@ import { pathToFileURL } from "node:url";
 
 const dir = resolve(process.env.LEGACY_DIR ?? "../main-ref"),
   load = (p: string) => import(pathToFileURL(resolve(dir, p)).href);
-const [{ predictStep }, { generateCity }, { idle }] = await Promise.all([
+const [{ predictStep }, { generateCity }, { idle }, { VEHICLES }] = await Promise.all([
   load("shared/physics/index.ts"),
   load("scripts/city-generator.ts"),
   load("shared/world.ts"),
+  load("shared/catalog.ts"),
 ]);
 
 interface Step {
@@ -20,9 +21,13 @@ interface Step {
   throttle?: number;
   steer?: number;
   brake?: boolean;
+  sprint?: boolean;
+  ascend?: boolean;
+  descend?: boolean;
 }
 interface Scenario {
   model?: string;
+  height?: number;
   start_speed?: number;
   script: Step[];
   sample_every?: number;
@@ -34,20 +39,31 @@ export function run(s: Scenario) {
   city.buildings = [];
   city.props = [];
   city.ramps = [];
-  const e = {
+  const walker = s.model === "walker";
+  // Helicopters, planes and boats: the model's catalogue kind picks the physics.
+  const kind: string = walker
+    ? "player"
+    : (VEHICLES[s.model ?? "sedan"]?.kind ?? "car");
+  const craft = !walker && kind !== "car";
+  // Boats start in open water off the western shore, where the generated city has sea.
+  const sea = craft && ["boat", "jetski", "speedboat"].includes(kind);
+  const e: any = {
     id: "car",
-    kind: "car",
-    model: s.model ?? "sedan",
-    x: 0,
-    y: 0,
-    z: 0,
+    kind,
+    ...(walker
+      ? { character: { physique: "regular" } }
+      : { model: s.model ?? "sedan" }),
+    ...(craft ? { flight: (s.height ?? 0) > 0.2 ? "cruising" : "grounded" } : {}),
+    x: sea ? -1650 : 0,
+    y: s.height ?? 0,
+    z: sea ? -200 : 0,
     vx: 0,
     vy: 0,
     vz: s.start_speed ?? 0,
     angle: 0,
     health: 100,
     color: "#fff",
-    driver: "p",
+    ...(walker ? {} : { driver: "p" }),
   };
   const trace: any[] = [];
   let t = 0,
@@ -57,7 +73,10 @@ export function run(s: Scenario) {
       ...idle(),
       moveY: step.throttle ?? 0,
       moveX: step.steer ?? 0,
-      brake: !!step.brake,
+      brake: !walker && !!step.brake,
+      sprint: !!step.sprint,
+      ascend: !!step.ascend,
+      descend: !!step.descend,
     };
     for (let i = 0; i < Math.round(step.seconds / TICK); i++) {
       predictStep(e, input, city, [], TICK);

@@ -16,8 +16,9 @@ use tokio::sync::mpsc::UnboundedSender;
 
 pub const SNAPSHOT_EVERY: u32 = 2;
 const HISTORY: usize = 64;
+/// `TUNING.walk` / `TUNING.sprint` in `shared/catalog.ts`.
 const WALK_SPEED: f32 = 4.5;
-const SPRINT: f32 = 1.6;
+const SPRINT_SPEED: f32 = 8.0;
 
 pub enum Event {
     Connect(u32, UnboundedSender<Vec<u8>>),
@@ -95,6 +96,16 @@ fn terrain_at(terrain: &Option<Vec<f32>>, x: f32, z: f32) -> f32 {
             + (1.0 - u) * (h[i + TERRAIN_SIDE] - h[i + TERRAIN_SIDE + 1])
             + (1.0 - v) * (h[i + 1] - h[i + TERRAIN_SIDE + 1])
     }
+}
+
+/// Walking pace: Space also sprints on foot, and the physique scales both paces.
+fn walk_speed(c: &Controls, character: Option<&serde_json::Value>) -> f32 {
+    let pace = if c.sprint || c.brake {
+        SPRINT_SPEED
+    } else {
+        WALK_SPEED
+    };
+    pace * crate::combat::physique_speed(character)
 }
 
 impl Game {
@@ -590,7 +601,7 @@ impl Game {
                 }
             }
             Ok(body) => {
-                let speed = WALK_SPEED * if c.sprint { SPRINT } else { 1.0 };
+                let speed = walk_speed(&c, p.character.as_ref());
                 self.world.set_move(
                     body,
                     Move {
@@ -672,9 +683,9 @@ impl Game {
                 angle: p.held.x().atan2(p.held.y()),
                 pitch: 0.0,
                 roll: 0.0,
-                vx: p.held.x() * WALK_SPEED,
+                vx: p.held.x() * walk_speed(&p.held, p.character.as_ref()),
                 vy: 0.0,
-                vz: p.held.y() * WALK_SPEED,
+                vz: p.held.y() * walk_speed(&p.held, p.character.as_ref()),
                 color: p.color.clone(),
                 health: 100.0,
                 name: Some(p.name.clone()),
