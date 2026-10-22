@@ -38,7 +38,7 @@ pub fn desirability_field(f: &Field, hydro: &Hydrology, seed: i32) -> Vec<f32> {
     let top = sorted[((sorted.len() as f64 * 0.995).floor() as usize).min(sorted.len() - 1)];
     let top = if top == 0.0 { 1.0 } else { top };
     for v in &mut blurred {
-        *v = (*v / top).min(1.0);
+        *v = (f64::from(*v) / f64::from(top)).min(1.0) as f32;
     }
     blurred
 }
@@ -49,7 +49,7 @@ pub fn choose_centre(f: &Field, desirability: &[f32]) -> Point {
     let mut best = 0usize;
     let mut best_value = -1f32;
     for i in 0..wide.len() {
-        if desirability[i] > 0.05 && wide[i] > best_value {
+        if f64::from(desirability[i]) > 0.05 && wide[i] > best_value {
             best_value = wide[i];
             best = i;
         }
