@@ -1,0 +1,9 @@
+ts	phase	decision	why	evidence	result
+2026-10-22T09:34:30Z	frame	checkpointed the prior incomplete implementation	the existing algorithms omitted required TS cases	9eafbce	not verified
+2026-10-22T09:34:30Z	verification	capture every stage input before mutation through an optional observer	final map fields cannot reconstruct pre-pad and pre-street-fit inputs	mapgen/pipeline.ts	oracle capture in progress
+2026-10-22T09:42:35Z	oracle	use Node with tsx for the reference runtime	Node seed713 exactly equals checked-in data/city.json; Bun JSC output differs in surface bytes	/tmp/afterhours-node-dumps/713/artifact.json	baseline matches checked-in artifact
+2026-10-22T10:12:31Z	math	replace platform trig and hypot with the Node algorithms	one-ulp differences change strict oriented-box tie decisions and recursive lot splitting	crates/mapgen/src/js_math.rs	both-seed lot outputs exactly equal
+2026-10-22T10:12:31Z	conversion	complete all converter geometry feature and packing code	compare every output field from identical TS map inputs	crates/mapgen/tests/city_conversion.rs	both-seed city and artifact max delta 0
+2026-10-22T10:12:31Z	integration	preserve full pipeline stage order behind explicitly failing adapters	terrain and roads branches are merged by the user; no fabricated output may escape	crates/mapgen/src/pipeline.rs	native full pipeline acceptance remains ignored
+2026-10-22T10:12:31Z	checks	run clippy with warnings denied and build the TypeScript app	source hooks must compile and native port must be warning free	/tmp/afterhours-city-build.log	build and clippy green
+2026-10-22T10:14:27Z	checks	run the repository build and type check	standalone tsc needs generated physics bindings; the supported build generates them first	/tmp/afterhours-city-build.log	bun run build green; standalone tsc failed before physics generation
