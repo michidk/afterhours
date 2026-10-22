@@ -24,21 +24,21 @@ JSON output rather than the internal sign bit of zero.
 
 Both seeds 713 and 42 have these measured maximum absolute and relative deltas:
 
-| Output | Seed 713 abs / relative | Seed 42 abs / relative |
-| --- | --- | --- |
-| Blocks and lots | 0 / 0 | 0 / 0 |
-| Building placements | 0 / 0 | 0 / 0 |
-| Terrain after pad stamping | 0 / 0 | 0 / 0 |
-| Parks | 0 / 0 | 0 / 0 |
-| Trees and lamps | 0 / 0 | 0 / 0 |
-| Town hall context and return value | 0 / 0 | 0 / 0 |
-| Airport dressing, both airports | 0 / 0 | 0 / 0 |
-| Racetrack context and return value | 0 / 0 | 0 / 0 |
-| Harbour context and return value | 0 / 0 | 0 / 0 |
-| Terrain after street fitting | 0 / 0 | 0 / 0 |
-| Complete city from the TS map | 0 / 0 | 0 / 0 |
-| Complete packed artifact from the TS map | 0 / 0 | 0 / 0 |
-| Packing independently from the TS city | 0 / 0 | 0 / 0 |
+| Output                                   | Seed 713 abs / relative | Seed 42 abs / relative |
+| ---------------------------------------- | ----------------------- | ---------------------- |
+| Blocks and lots                          | 0 / 0                   | 0 / 0                  |
+| Building placements                      | 0 / 0                   | 0 / 0                  |
+| Terrain after pad stamping               | 0 / 0                   | 0 / 0                  |
+| Parks                                    | 0 / 0                   | 0 / 0                  |
+| Trees and lamps                          | 0 / 0                   | 0 / 0                  |
+| Town hall context and return value       | 0 / 0                   | 0 / 0                  |
+| Airport dressing, both airports          | 0 / 0                   | 0 / 0                  |
+| Racetrack context and return value       | 0 / 0                   | 0 / 0                  |
+| Harbour context and return value         | 0 / 0                   | 0 / 0                  |
+| Terrain after street fitting             | 0 / 0                   | 0 / 0                  |
+| Complete city from the TS map            | 0 / 0                   | 0 / 0                  |
+| Complete packed artifact from the TS map | 0 / 0                   | 0 / 0                  |
+| Packing independently from the TS city   | 0 / 0                   | 0 / 0                  |
 
 These checks establish exact output given oracle inputs. They do not establish
 that the unmerged native stages form an exact full pipeline.

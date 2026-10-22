@@ -52,7 +52,7 @@ await write("vegetation", { trees: map.trees, lamps: map.lamps });
 await write("map", map);
 const city = cityFromMap(map, (name, context, extra) => {
   const { map: _map, paved: _paved, ...fields } = context;
-  snapshots.set(`feature-${name}`, json({ ...fields, ...extra as object }));
+  snapshots.set(`feature-${name}`, json({ ...fields, ...(extra as object) }));
 });
 for (const [name, value] of snapshots)
   if (name.startsWith("feature-"))
