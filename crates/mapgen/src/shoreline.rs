@@ -35,6 +35,7 @@ pub fn lake_shorelines(
     }
     let mut points: HashMap<String, Point> = HashMap::new();
     let mut links: HashMap<String, Vec<String>> = HashMap::new();
+    let mut keys = Vec::new();
     let crossing = |a: usize, b: usize, points: &mut HashMap<String, Point>| -> String {
         let (a, b) = if a > b { (b, a) } else { (a, b) };
         let key = format!("{}:{}", a, b);
@@ -69,14 +70,20 @@ pub fn lake_shorelines(
                 }
                 let a = cuts[0].clone();
                 let b = cuts[1].clone();
-                links.entry(a.clone()).or_default().push(b.clone());
-                links.entry(b).or_default().push(a);
+                for (key, neighbour) in [(a.clone(), b.clone()), (b, a)] {
+                    links
+                        .entry(key.clone())
+                        .or_insert_with(|| {
+                            keys.push(key);
+                            Vec::new()
+                        })
+                        .push(neighbour);
+                }
             }
         }
     }
     let mut rings = Vec::new();
     let mut seen = HashSet::new();
-    let keys: Vec<String> = links.keys().cloned().collect();
     for start in keys {
         if seen.contains(&start) {
             continue;
