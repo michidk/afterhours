@@ -26,6 +26,17 @@ speed), `max_height`, `max_lateral` (sideways slide), `mean_yaw_rate`, `distance
 2 s: ~0 once settled). `crates/physics/tests/handling.rs` asserts these per model; add a preset to
 `PRESETS` in `src/lab.rs` and a test there when you find a new problem.
 
+### Watching it
+
+`/lab.html` replays any scenario in the browser, in the same wasm physics the client predicts with
+(`bun run build`, then open it on the running server; `bun run dev` also serves it):
+
+- `/lab.html?scenario=corner-15&model=van` picks a named scenario and car.
+- `/lab.html?json={"ground":{"kind":"wall","distance":30},"start_speed":20,"script":[{"seconds":4}]}`
+  runs a custom one. The page shows the metrics next to the playback; orbit with the mouse.
+
+The ground drawing in `client/lab.ts` mirrors `build` in `src/lab.rs`: keep them in step.
+
 ## Scene lab: the real city and game loop (`crates/server`)
 
 `scene-lab` boots `data/city.json` exactly like `main.rs` (world, parked fleet, props), joins

@@ -79,6 +79,8 @@ pub struct Sample {
     /// Speed across the nose: the car sliding sideways.
     pub lateral: f32,
     pub vy: f32,
+    /// Body orientation (x, y, z, w), for drawing the car as the physics sees it.
+    pub q: [f32; 4],
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -187,6 +189,7 @@ fn sample(w: &World, t: f32) -> Sample {
         forward: s[8] * sn + s[10] * cs,
         lateral: s[8] * cs - s[10] * sn,
         vy: s[9],
+        q: [s[4], s[5], s[6], s[7]],
     }
 }
 

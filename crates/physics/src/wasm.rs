@@ -149,3 +149,17 @@ impl Default for Physics {
         Self::new()
     }
 }
+
+/// Runs a handling-lab scenario (JSON in, `{metrics, trace}` JSON out) for the browser lab page.
+#[wasm_bindgen]
+pub fn run_lab(scenario: &str) -> Result<String, JsError> {
+    let scenario = serde_json::from_str(scenario).map_err(|e| JsError::new(&e.to_string()))?;
+    let report = crate::lab::run(&scenario).map_err(|e| JsError::new(&e))?;
+    serde_json::to_string(&report).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// The named scenarios as `[[name, about, scenario JSON], ...]`.
+#[wasm_bindgen]
+pub fn lab_presets() -> String {
+    serde_json::to_string(crate::lab::PRESETS).expect("presets serialise")
+}
