@@ -36,6 +36,12 @@ const seed = Number(value("--seed", "713"));
 const out = resolve(value("--out", ".mapgen-dump"));
 if (!Number.isInteger(seed)) throw Error("--seed must be an integer");
 await mkdir(out, { recursive: true });
+if (args.includes("--geometry-stages")) {
+  const { dumpGeometry } = await import("./mapgen-geometry-dump.ts");
+  await dumpGeometry(seed, out);
+  console.log(`Wrote isolated geometry dumps for seed ${seed} to ${out}`);
+  process.exit(0);
+}
 const json = (v: unknown) =>
   JSON.stringify(v, (_k, nested: unknown) =>
     nested instanceof Float32Array ||

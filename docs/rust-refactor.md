@@ -157,3 +157,71 @@ full artifact parity can be assessed.
   no acked base gets a full snapshot.
 - The TypeScript client never hand-mirrors server movement; it calls the wasm
   physics with the same inputs.
+
+### Phase 3 road geometry and street fitting parity
+
+`crates/mapgen/src/roadgeometry.rs` and `streetfit.rs` now port all functions and
+helpers from the corresponding TypeScript files. The port preserves the junction
+layout passes, arm and marking order, pedestrian links, profile relaxation,
+Float32Array rounding at each array write, terrain triangle constraints, draping,
+clipping, merging, welding, and T-junction sealing. `graph.rs` and `roads.rs` are
+outside this change; tests load their inputs from the TypeScript oracle.
+
+The default `cargo test -p afterhours-mapgen` runs committed, small TypeScript
+fixtures covering each public operation and the helpers, including a ring edge,
+acute junction, bridge, cul-de-sac, duplicate centreline points, crossed trims,
+rotated pads, concave surfaces, avoided triangles, and layer-aware sealing.
+Regenerate these fixtures with:
+
+```sh
+bun scripts/mapgen-geometry-fixtures.ts
+```
+
+The full acceptance suite uses seeds **713 and 42**, world size 3072 and cell
+size 8. It compares every value of each output, reports the first differing JSON
+path, and prints the maximum absolute and relative delta per output. This suite
+is ignored by default because its debug run takes more than two minutes:
+
+```sh
+export PATH=$HOME/.cargo/bin:$PATH
+cargo test -p afterhours-mapgen --test geometry_parity -- --ignored --nocapture
+```
+
+Without `MAPGEN_DUMP_ROOT`, the tests generate fresh TypeScript dumps into a
+process-specific temporary directory. Tests within that process share each seed's
+dump. To generate and inspect snapshots separately, or reuse them for a repeat
+run, use:
+
+```sh
+bun scripts/mapgen-dump.ts --geometry-stages --seed 713 --out /tmp/afterhours-geometry/713
+bun scripts/mapgen-dump.ts --geometry-stages --seed 42 --out /tmp/afterhours-geometry/42
+MAPGEN_DUMP_ROOT=/tmp/afterhours-geometry \
+  cargo test -p afterhours-mapgen --test geometry_parity -- --ignored --nocapture
+```
+
+The isolated stages compare smoothing, densification, geometry, profiles, stamped
+terrain, road-cell weights, bridge decks, street polygons, fitted terrain after
+real building pad stamping, and street queries at margins 0, 0.25 and 2. A chained
+test also runs smoothing through street polygons directly from the input graph
+without reloading intermediate graphs from TypeScript. Surface helper fixtures
+compare draping, subtraction, merging, welding and sealing numerically too.
+
+The checked Bun oracle and native debug build have **zero absolute and relative
+delta for every output on both seeds**. No approximate, snapped, or reordered
+comparison is used. The geometry suite uses the exact comparator for floats as well as integer
+IDs, strings, lengths, and booleans. The older shared comparator still supports
+`1e-9 * max(1, |a|, |b|)` for other ports. The geometry suite does not use it.
+
+Three arithmetic details are required for that result:
+
+- Read JSON with serde_json's `float_roundtrip` feature. Its default parser can
+  move coordinates by an ULP and change which of two equally near road segments
+  supplies a street polygon's height.
+- Field samples subtract f32 values only after promotion to f64. Normalization
+  divides each component by the length, matching JavaScript's operation order.
+- Use `sqrt` for JavaScript's `Math.pow(x, 0.5)` knot calculation. The general
+  Rust `powf(0.5)` path changed smoothing by up to 2.27e-13; JavaScript uses the
+  square-root path, which matches exactly here.
+
+The native `src/` code never starts Bun, Node, or tsx. Only integration tests start
+the oracle, and the ordinary fixture tests require no JavaScript runtime.
