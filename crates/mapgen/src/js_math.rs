@@ -31,3 +31,15 @@ pub fn hypot(x: f64, z: f64) -> f64 {
     }
     (a / m * (a / m) + b / m * (b / m)).sqrt() * m
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn node26_math_keeps_oriented_box_ties() {
+        assert_eq!(sin(-2.6623118036400992), -0.4611411737423962);
+        assert_eq!(cos(2.18403598161692), -0.5755198258855536);
+        assert_eq!(atan2(1.23456789, 9.87654321), 0.12435499342522296);
+        assert_eq!(hypot(1.23456789, 9.87654321), 9.9534046262581);
+    }
+}
