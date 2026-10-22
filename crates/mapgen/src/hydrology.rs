@@ -9,10 +9,10 @@ const N: [(i32, i32, f64); 8] = [
     (-1, 0, 1.0),
     (0, 1, 1.0),
     (0, -1, 1.0),
-    (1, 1, 1.4142135623730951),
-    (1, -1, 1.4142135623730951),
-    (-1, 1, 1.4142135623730951),
-    (-1, -1, 1.4142135623730951),
+    (1, 1, std::f64::consts::SQRT_2),
+    (1, -1, std::f64::consts::SQRT_2),
+    (-1, 1, std::f64::consts::SQRT_2),
+    (-1, -1, std::f64::consts::SQRT_2),
 ];
 struct Heap {
     v: Vec<(f64, usize)>,
@@ -63,7 +63,7 @@ impl Heap {
     }
 }
 
-pub fn fill_depressions(f: &mut Field, sea: f32, eps: f32) -> Vec<f32> {
+pub fn fill_depressions(f: &mut Field, sea: f64, eps: f64) -> Vec<f32> {
     let n = f.data.len();
     let mut closed = vec![false; n];
     let mut depth = vec![0f32; n];
@@ -71,7 +71,7 @@ pub fn fill_depressions(f: &mut Field, sea: f32, eps: f32) -> Vec<f32> {
     for z in 0..f.h {
         for x in 0..f.w {
             let i = z * f.w + x;
-            if f.data[i] <= sea || x == 0 || z == 0 || x == f.w - 1 || z == f.h - 1 {
+            if f.data[i] as f64 <= sea || x == 0 || z == 0 || x == f.w - 1 || z == f.h - 1 {
                 closed[i] = true;
                 heap.push(f.data[i] as f64, i);
             }
@@ -80,7 +80,7 @@ pub fn fill_depressions(f: &mut Field, sea: f32, eps: f32) -> Vec<f32> {
     while let Some((_, c)) = heap.pop() {
         let cx = c % f.w;
         let cz = c / f.w;
-        let hc = f.data[c];
+        let hc = f.data[c] as f64;
         for &(dx, dz, _) in &N {
             let nx = cx as i32 + dx;
             let nz = cz as i32 + dz;
@@ -92,9 +92,9 @@ pub fn fill_depressions(f: &mut Field, sea: f32, eps: f32) -> Vec<f32> {
                 continue;
             }
             closed[i] = true;
-            if f.data[i] < hc + eps {
-                depth[i] = hc + eps - f.data[i];
-                f.data[i] = hc + eps;
+            if (f.data[i] as f64) < hc + eps {
+                depth[i] = (hc + eps - f.data[i] as f64) as f32;
+                f.data[i] = (hc + eps) as f32;
             }
             heap.push(f.data[i] as f64, i);
         }
@@ -102,14 +102,14 @@ pub fn fill_depressions(f: &mut Field, sea: f32, eps: f32) -> Vec<f32> {
     depth
 }
 
-pub fn flow_accumulation(f: &Field, sea: f32) -> (Vec<i32>, Vec<f32>) {
+pub fn flow_accumulation(f: &Field, sea: f64) -> (Vec<i32>, Vec<f32>) {
     let n = f.data.len();
     let mut dir = vec![-1i32; n];
     let mut flux = vec![0f32; n];
     for z in 0..f.h {
         for x in 0..f.w {
             let i = z * f.w + x;
-            if f.data[i] <= sea {
+            if f.data[i] as f64 <= sea {
                 continue;
             }
             let mut best = -1;
@@ -121,7 +121,7 @@ pub fn flow_accumulation(f: &Field, sea: f32) -> (Vec<i32>, Vec<f32>) {
                     continue;
                 }
                 let j = nz as usize * f.w + nx as usize;
-                let s = (f.data[i] - f.data[j]) as f64 / d;
+                let s = (f.data[i] as f64 - f.data[j] as f64) / d;
                 if s > steep {
                     steep = s;
                     best = j as i32;
@@ -133,7 +133,7 @@ pub fn flow_accumulation(f: &Field, sea: f32) -> (Vec<i32>, Vec<f32>) {
     let mut order: Vec<usize> = (0..n).collect();
     order.sort_by(|a, b| f.data[*b].total_cmp(&f.data[*a]).then(a.cmp(b)));
     for (i, h) in f.data.iter().enumerate() {
-        flux[i] = if *h > sea { 1. } else { 0. };
+        flux[i] = if *h as f64 > sea { 1. } else { 0. };
     }
     for i in order {
         if dir[i] >= 0 {
@@ -143,7 +143,7 @@ pub fn flow_accumulation(f: &Field, sea: f32) -> (Vec<i32>, Vec<f32>) {
     (dir, flux)
 }
 
-fn lakes_from_fill(f: &Field, depth: &[f32], sea: f32) -> Vec<u8> {
+fn lakes_from_fill(f: &Field, depth: &[f32], sea: f64) -> Vec<u8> {
     let n = depth.len();
     let mut cand = vec![false; n];
     for i in 0..n {
@@ -164,7 +164,7 @@ fn lakes_from_fill(f: &Field, depth: &[f32], sea: f32) -> Vec<u8> {
             maxd = maxd.max(depth[c]);
             let x = c % f.w;
             let z = c / f.w;
-            for (dx, dz) in [(1, -0), (-1, 0), (0, 1), (0, -1)] {
+            for (dx, dz) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
                 let nx = x as i32 + dx;
                 let nz = z as i32 + dz;
                 if nx >= 0 && nz >= 0 && nx < f.w as i32 && nz < f.h as i32 {
@@ -176,7 +176,7 @@ fn lakes_from_fill(f: &Field, depth: &[f32], sea: f32) -> Vec<u8> {
                 }
             }
         }
-        if maxd > 3.5 && cells.len() >= 30 && f.data[cells[0]] > sea {
+        if maxd > 3.5 && cells.len() >= 30 && f.data[cells[0]] as f64 > sea {
             for c in cells {
                 mask[c] = 1;
             }
@@ -208,10 +208,10 @@ fn trace_rivers(
     dir: &[i32],
     flux: &[f32],
     lake: &[u8],
-    threshold: f32,
-    sea: f32,
+    threshold: f64,
+    sea: f64,
 ) -> Vec<River> {
-    let isriver = |i: usize| flux[i] >= threshold && f.data[i] > sea && lake[i] == 0;
+    let isriver = |i: usize| flux[i] as f64 >= threshold && f.data[i] as f64 > sea && lake[i] == 0;
     let mut upstream = vec![false; f.data.len()];
     for i in 0..f.data.len() {
         if isriver(i) && dir[i] >= 0 {
@@ -227,7 +227,10 @@ fn trace_rivers(
     for s in src {
         let mut i = s as i32;
         let mut cells = Vec::new();
-        while i >= 0 && claimed[i as usize] < 0 && f.data[i as usize] > sea && lake[i as usize] == 0
+        while i >= 0
+            && claimed[i as usize] < 0
+            && f.data[i as usize] as f64 > sea
+            && lake[i as usize] == 0
         {
             cells.push(i as usize);
             i = dir[i as usize];
@@ -250,15 +253,13 @@ fn trace_rivers(
             .collect();
         let widths: Vec<f64> = cells
             .iter()
-            .map(|c| {
-                (3.5f64 + 1.1 * ((flux[*c] as f64) / (threshold as f64)).sqrt() * 3.0).min(30.0)
-            })
+            .map(|c| (3.5f64 + 1.1 * ((flux[*c] as f64) / threshold).sqrt() * 3.0).min(30.0))
             .collect();
         let length = cells.len() as f64 * f.cell;
         let peak = flux[*cells
             .get(cells.len().saturating_sub(2))
             .unwrap_or(&cells[0])];
-        let order = if peak > threshold * 12. {
+        let order = if peak as f64 > threshold * 12. {
             RiverOrder::Main
         } else if length > 900. {
             RiverOrder::River
@@ -274,7 +275,7 @@ fn trace_rivers(
     rivers
 }
 
-fn carve(f: &mut Field, rivers: &[River], sea: f32, seed: i32, lakes: &[u8]) {
+fn carve(f: &mut Field, rivers: &[River], sea: f64, seed: i32, lakes: &[u8]) {
     let noise = Noise::new(&mut derive(seed, "banks"));
     for river in rivers {
         let mut bed = f64::INFINITY;
@@ -288,8 +289,8 @@ fn carve(f: &mut Field, rivers: &[River], sea: f32, seed: i32, lakes: &[u8]) {
             }
             let here = f.data[iz as usize * f.w + ix as usize] as f64;
             bed = (bed - 0.03).min(here - depth);
-            if bed < sea as f64 - 1.5 {
-                bed = sea as f64 - 1.5
+            if bed < sea - 1.5 {
+                bed = sea - 1.5
             }
             let half = width / 2. + f.cell * 0.6;
             let bank = half + f.cell * 1.5;
@@ -361,7 +362,7 @@ pub fn mask_outlines(f: &Field, mask: &[u8]) -> Vec<Vec<Point>> {
         while edges[start] != 0 {
             let mut ring = Vec::new();
             let mut corner = start;
-            let mut dir = 31 - edges[start].leading_zeros();
+            let mut dir = 7 - edges[start].leading_zeros();
             let mut guard = 0;
             loop {
                 edges[corner] &= !(1 << dir);
@@ -418,11 +419,11 @@ fn lake_outlines(f: &Field, mask: &[u8]) -> Vec<Lake> {
         .collect()
 }
 
-pub fn generate_hydrology(f: &mut Field, seed: i32, sea_level: f32) -> Hydrology {
+pub fn generate_hydrology(f: &mut Field, seed: i32, sea_level: f64) -> Hydrology {
     let depth = fill_depressions(f, sea_level, 0.002);
     let lake_mask = lakes_from_fill(f, &depth, sea_level);
     let (dir, mut flux) = flow_accumulation(f, sea_level);
-    let land = flux.iter().filter(|v| **v > 0.).count() as f32;
+    let land = flux.iter().filter(|v| **v > 0.).count() as f64;
     let threshold = (land * 0.011).max(40.);
     let rivers = trace_rivers(f, &dir, &flux, &lake_mask, threshold, sea_level);
     carve(f, &rivers, sea_level, seed, &lake_mask);
@@ -433,7 +434,7 @@ pub fn generate_hydrology(f: &mut Field, seed: i32, sea_level: f32) -> Hydrology
     let mut water = vec![0u8; f.data.len()];
     let mut sea = vec![0u8; f.data.len()];
     for i in 0..f.data.len() {
-        sea[i] = (f.data[i] <= sea_level) as u8;
+        sea[i] = (f.data[i] as f64 <= sea_level) as u8;
         water[i] = (sea[i] != 0 || lake_mask[i] != 0) as u8;
     }
     for river in &rivers {
@@ -463,15 +464,15 @@ pub fn generate_hydrology(f: &mut Field, seed: i32, sea_level: f32) -> Hydrology
     let mut water_distance = distance_transform(&water, f.w, f.h);
     let mut coast_distance = distance_transform(&sea, f.w, f.h);
     for d in &mut water_distance {
-        *d *= f.cell as f32
+        *d = (*d as f64 * f.cell) as f32
     }
     for d in &mut coast_distance {
-        *d *= f.cell as f32
+        *d = (*d as f64 * f.cell) as f32
     }
-    let max_log = (1. + threshold as f64 * 40.).ln() as f32;
+    let max_log = (threshold * 40.0).ln_1p();
     let flow = flux
         .iter()
-        .map(|v| ((1. + *v).ln() as f32 / max_log).min(1.))
+        .map(|v| ((f64::from(*v).ln_1p() / max_log).min(1.0)) as f32)
         .collect();
     Hydrology {
         rivers,

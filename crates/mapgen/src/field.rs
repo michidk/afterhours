@@ -95,11 +95,11 @@ pub fn distance_transform(inside: &[u8], w: usize, h: usize) -> Vec<f32> {
             z[k + 1] = INF;
         }
         k = 0;
-        for q in 0..n {
+        for (q, value) in out.iter_mut().enumerate().take(n) {
             while z[k + 1] < q as f64 {
                 k += 1;
             }
-            out[q] = (q as f64 - v[k] as f64).powi(2) + src[v[k]];
+            *value = (q as f64 - v[k] as f64).powi(2) + src[v[k]];
         }
         out
     }

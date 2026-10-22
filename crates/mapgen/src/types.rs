@@ -61,6 +61,7 @@ pub struct Lake {
     pub level: f64,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Hydrology {
     pub rivers: Vec<River>,
     pub lakes: Vec<Lake>,

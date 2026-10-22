@@ -29,12 +29,12 @@ pub fn generate_heightmap_with_tuning(
     let ridges = Noise::new(&mut derive(seed, "ridges"));
     let detail = Noise::new(&mut derive(seed, "detail"));
     let mut rng = derive(seed, "island");
-    let spin = rng() * std::f64::consts::TAU;
+    let spin = rng() * std::f64::consts::PI * 2.0;
     let stretch = 0.8 + rng() * 0.45;
     let lobes = 2 + (rng() * 3.0).floor() as i32;
-    let lobe_phase = rng() * std::f64::consts::TAU;
+    let lobe_phase = rng() * std::f64::consts::PI * 2.0;
     let stride = 4usize;
-    let cw = ((f.w - 1 + stride - 1) / stride) + 1;
+    let cw = (f.w - 1).div_ceil(stride) + 1;
     let mut cmask = vec![0f32; cw * cw];
     let mut cflat = vec![0f32; cw * cw];
     let mut cbase = vec![0f32; cw * cw];
@@ -69,14 +69,14 @@ pub fn generate_heightmap_with_tuning(
             csea[i] = (-4.0 - 32.0 * smoothstep(0.4, 0.9, radius)) as f32;
         }
     }
-    let bilinear = |g: &Vec<f32>, u: f64, v: f64| {
+    let bilinear = |g: &[f32], u: f64, v: f64| {
         let x0 = (u.floor() as usize).min(cw - 2);
         let z0 = (v.floor() as usize).min(cw - 2);
         let tu = u - x0 as f64;
         let tv = v - z0 as f64;
         let i = z0 * cw + x0;
-        let top = g[i] as f64 + (g[i + 1] - g[i]) as f64 * tu;
-        let bot = g[i + cw] as f64 + (g[i + cw + 1] - g[i + cw]) as f64 * tu;
+        let top = g[i] as f64 + (g[i + 1] as f64 - g[i] as f64) * tu;
+        let bot = g[i + cw] as f64 + (g[i + cw + 1] as f64 - g[i + cw] as f64) * tu;
         top + (bot - top) * tv
     };
     let mut flatness = vec![0f32; f.w * f.h];
@@ -99,7 +99,7 @@ pub fn generate_heightmap_with_tuning(
     sorted.sort_by(|a, b| a.total_cmp(b));
     let sea = sorted[(sorted.len() as f64 * (1.0 - tuning.land_fraction)).floor() as usize];
     for h in &mut f.data {
-        *h -= sea;
+        *h = (*h as f64 - sea as f64) as f32;
     }
     HeightmapResult { field: f, flatness }
 }
@@ -111,7 +111,7 @@ impl From<HeightmapResult> for (Field, Vec<f32>) {
 }
 
 pub fn thermal_erosion(f: &mut Field, iterations: usize, talus_angle: f64) {
-    let talus = (talus_angle * f.cell) as f32;
+    let talus = talus_angle * f.cell;
     for _ in 0..iterations {
         for z in 1..f.h - 1 {
             for x in 1..f.w - 1 {
@@ -125,11 +125,11 @@ pub fn thermal_erosion(f: &mut Field, iterations: usize, talus_angle: f64) {
                         low = n;
                     }
                 }
-                let diff = f.data[i] - f.data[low];
+                let diff = f.data[i] as f64 - f.data[low] as f64;
                 if diff > talus {
                     let m = (diff - talus) * 0.25;
-                    f.data[i] -= m;
-                    f.data[low] += m;
+                    f.data[i] = (f.data[i] as f64 - m) as f32;
+                    f.data[low] = (f.data[low] as f64 + m) as f32;
                 }
             }
         }
@@ -151,7 +151,7 @@ pub fn droplet_erosion(f: &mut Field, rng: &mut Rng, count: usize) {
     let mut total = 0.0;
     for dz in -radius..=radius {
         for dx in -radius..=radius {
-            let d = ((dx * dx + dz * dz) as f64).sqrt();
+            let d = (dx as f64).hypot(dz as f64);
             if d <= radius as f64 {
                 let weight = 1.0 - d / radius as f64;
                 brush.push((dx, dz, weight));
@@ -195,7 +195,7 @@ pub fn droplet_erosion(f: &mut Field, rng: &mut Rng, count: usize) {
             dz = dz * inertia - gz * (1.0 - inertia);
             let l = dx.hypot(dz);
             if l < 1e-6 {
-                let angle = rng() * std::f64::consts::TAU;
+                let angle = rng() * std::f64::consts::PI * 2.0;
                 dx = angle.cos();
                 dz = angle.sin();
             } else {
@@ -221,10 +221,10 @@ pub fn droplet_erosion(f: &mut Field, rng: &mut Rng, count: usize) {
                 };
                 sediment -= amount;
                 let i = iz * w + ix;
-                f.data[i] += (amount * (1.0 - u) * (1.0 - v)) as f32;
-                f.data[i + 1] += (amount * u * (1.0 - v)) as f32;
-                f.data[i + w] += (amount * (1.0 - u) * v) as f32;
-                f.data[i + w + 1] += (amount * u * v) as f32;
+                f.data[i] = (f.data[i] as f64 + amount * (1.0 - u) * (1.0 - v)) as f32;
+                f.data[i + 1] = (f.data[i + 1] as f64 + amount * u * (1.0 - v)) as f32;
+                f.data[i + w] = (f.data[i + w] as f64 + amount * (1.0 - u) * v) as f32;
+                f.data[i + w + 1] = (f.data[i + w + 1] as f64 + amount * u * v) as f32;
             } else {
                 let amount = ((capacity - sediment) * erode_speed).min(-dh);
                 for &(bdx, bdz, weight) in &brush {
@@ -236,7 +236,7 @@ pub fn droplet_erosion(f: &mut Field, rng: &mut Rng, count: usize) {
                     let j = bz as usize * w + bx as usize;
                     let take = ((f.data[j] as f64) - 0.2).min(amount * weight);
                     if take > 0.0 {
-                        f.data[j] -= take as f32;
+                        f.data[j] = (f.data[j] as f64 - take) as f32;
                         sediment += take;
                     }
                 }
@@ -257,11 +257,11 @@ pub fn settle(f: &mut Field, radius: usize) {
         }
     }
 }
-pub fn keep_main_island(f: &mut Field, sea_level: f32) {
+pub fn keep_main_island(f: &mut Field, sea_level: f64) {
     let mut labels = vec![-1i32; f.data.len()];
     let mut sizes = Vec::new();
     for i in 0..f.data.len() {
-        if f.data[i] <= sea_level || labels[i] >= 0 {
+        if f.data[i] as f64 <= sea_level || labels[i] >= 0 {
             continue;
         }
         let id = sizes.len() as i32;
@@ -272,12 +272,12 @@ pub fn keep_main_island(f: &mut Field, sea_level: f32) {
             sizes[id as usize] += 1;
             let x = c % f.w;
             let z = c / f.w;
-            for (dx, dz) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
+            for (dx, dz) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
                 let nx = x as i32 + dx;
                 let nz = z as i32 + dz;
                 if nx >= 0 && nz >= 0 && nx < f.w as i32 && nz < f.h as i32 {
                     let j = nz as usize * f.w + nx as usize;
-                    if f.data[j] > sea_level && labels[j] < 0 {
+                    if f.data[j] as f64 > sea_level && labels[j] < 0 {
                         labels[j] = id;
                         stack.push(j);
                     }
@@ -291,16 +291,16 @@ pub fn keep_main_island(f: &mut Field, sea_level: f32) {
     let main = (1..sizes.len()).fold(0, |a, i| if sizes[i] > sizes[a] { i } else { a });
     for (i, label) in labels.into_iter().enumerate() {
         if label >= 0 && label as usize != main {
-            f.data[i] = sea_level - 0.6 - (f.data[i] - sea_level) * 0.1;
+            f.data[i] = (sea_level - 0.6 - (f.data[i] as f64 - sea_level) * 0.1) as f32;
         }
     }
 }
 
-pub fn shape_coast(f: &mut Field, sea_level: f32) {
+pub fn shape_coast(f: &mut Field, sea_level: f64) {
     let mut sea = vec![0u8; f.data.len()];
     let mut land = vec![0u8; f.data.len()];
     for (i, h) in f.data.iter().enumerate() {
-        if *h > sea_level {
+        if *h as f64 > sea_level {
             land[i] = 1
         } else {
             sea[i] = 1
@@ -311,9 +311,9 @@ pub fn shape_coast(f: &mut Field, sea_level: f32) {
     let signed: Vec<f32> = (0..f.data.len())
         .map(|i| {
             if land[i] != 0 {
-                (a[i] - 0.5) * f.cell as f32
+                ((a[i] as f64 - 0.5) * f.cell) as f32
             } else {
-                -(b[i] - 0.5) * f.cell as f32
+                (-(b[i] as f64 - 0.5) * f.cell) as f32
             }
         })
         .collect();
@@ -322,7 +322,7 @@ pub fn shape_coast(f: &mut Field, sea_level: f32) {
         let m = smooth[i] as f64;
         let weight = 1.0 - smoothstep(20.0, 60.0, m.abs());
         if weight > 0.0 {
-            let profile = sea_level as f64 + if m > 0.0 { 0.06 } else { 0.1 } * m;
+            let profile = sea_level + if m > 0.0 { 0.06 } else { 0.1 } * m;
             *h = lerp(*h as f64, profile, weight) as f32;
         }
     }
