@@ -20,6 +20,37 @@ fn round(v: f64) -> f64 {
 }
 const TILE: f64 = 16.0;
 
+/// Bounds captured before feature placement, exactly as in cityFromMap.
+pub struct PavedRing {
+    pub ring: Vec<Point>,
+    pub x0: f64,
+    pub x1: f64,
+    pub z0: f64,
+    pub z1: f64,
+}
+impl PavedRing {
+    pub fn new(ring: Vec<Point>) -> Self {
+        let (mut x0, mut x1, mut z0, mut z1) = (
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+        );
+        for p in &ring {
+            x0 = x0.min(p.x);
+            x1 = x1.max(p.x);
+            z0 = z0.min(p.z);
+            z1 = z1.max(p.z);
+        }
+        Self {
+            ring,
+            x0,
+            x1,
+            z0,
+            z1,
+        }
+    }
+}
 pub struct FeatureContext<'a> {
     pub map: &'a GeneratedMap,
     pub heights: Vec<f64>,
@@ -29,14 +60,14 @@ pub struct FeatureContext<'a> {
     pub sidewalks: Vec<Vec<f64>>,
     pub markings: Vec<Marking>,
     pub taken: Vec<Vec<Point>>,
-    pub paved_rings: Vec<Vec<Point>>,
+    pub paved_rings: Vec<PavedRing>,
     pub wet: Vec<u8>,
 }
 impl FeatureContext<'_> {
     pub fn paved(&self, p: Point) -> bool {
-        self.paved_rings
-            .iter()
-            .any(|ring| point_in_polygon(p, ring))
+        self.paved_rings.iter().any(|a| {
+            p.x >= a.x0 && p.x <= a.x1 && p.z >= a.z0 && p.z <= a.z1 && point_in_polygon(p, &a.ring)
+        })
     }
     fn wet_at(&self, p: Point) -> bool {
         grid_index(p)
