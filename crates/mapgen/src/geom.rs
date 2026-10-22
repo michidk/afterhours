@@ -204,6 +204,105 @@ pub fn convex_overlap(a: &[Point], b: &[Point]) -> bool {
     true
 }
 
+pub fn split_polygon(poly: &[Point], p: Point, direction: Point) -> (Vec<Point>, Vec<Point>) {
+    let normal = perp(direction);
+    let mut left = Vec::new();
+    let mut right = Vec::new();
+    for i in 0..poly.len() {
+        let a = poly[i];
+        let b = poly[(i + 1) % poly.len()];
+        let sa = dot(sub(a, p), normal);
+        let sb = dot(sub(b, p), normal);
+        if sa >= 0.0 {
+            left.push(a);
+        }
+        if sa <= 0.0 {
+            right.push(a);
+        }
+        if (sa > 0.0 && sb < 0.0) || (sa < 0.0 && sb > 0.0) {
+            let t = sa / (sa - sb);
+            let hit = lerp(a, b, t);
+            left.push(hit);
+            right.push(hit);
+        }
+    }
+    (clean_ring(&left, 0.05), clean_ring(&right, 0.05))
+}
+
+pub fn oriented_box(poly: &[Point]) -> Option<(f64, f64, f64, Point)> {
+    let mut best: Option<(f64, f64, f64, Point)> = None;
+    for i in 0..poly.len() {
+        let a = poly[i];
+        let b = poly[(i + 1) % poly.len()];
+        let angle = (b.z - a.z).atan2(b.x - a.x);
+        let (c, s) = ((-angle).cos(), (-angle).sin());
+        let mut min_x = f64::INFINITY;
+        let mut max_x = f64::NEG_INFINITY;
+        let mut min_z = f64::INFINITY;
+        let mut max_z = f64::NEG_INFINITY;
+        for p in poly {
+            let x = p.x * c - p.z * s;
+            let z = p.x * s + p.z * c;
+            min_x = min_x.min(x);
+            max_x = max_x.max(x);
+            min_z = min_z.min(z);
+            max_z = max_z.max(z);
+        }
+        let w = max_x - min_x;
+        let d = max_z - min_z;
+        let box_area = w * d;
+        if best.as_ref().is_none_or(|v| box_area < v.1 * v.2) {
+            let mx = (min_x + max_x) / 2.0;
+            let mz = (min_z + max_z) / 2.0;
+            best = Some((
+                angle,
+                w,
+                d,
+                Point {
+                    x: mx * angle.cos() - mz * angle.sin(),
+                    z: mx * angle.sin() + mz * angle.cos(),
+                },
+            ));
+        }
+    }
+    best
+}
+
+#[derive(Clone, Debug)]
+pub struct SpatialHash<T> {
+    cell: f64,
+    cells: std::collections::HashMap<(i64, i64), Vec<T>>,
+}
+impl<T: Clone> SpatialHash<T> {
+    pub fn new(cell: f64) -> Self {
+        Self {
+            cell,
+            cells: std::collections::HashMap::new(),
+        }
+    }
+    pub fn insert(&mut self, point: Point, value: T) {
+        let key = (
+            (point.x / self.cell).floor() as i64,
+            (point.z / self.cell).floor() as i64,
+        );
+        self.cells.entry(key).or_default().push(value);
+    }
+    pub fn near(&self, x: f64, z: f64, radius: f64) -> Vec<T> {
+        let r = (radius / self.cell).ceil() as i64;
+        let cx = (x / self.cell).floor() as i64;
+        let cz = (z / self.cell).floor() as i64;
+        let mut out = Vec::new();
+        for dx in -r..=r {
+            for dz in -r..=r {
+                if let Some(v) = self.cells.get(&(cx + dx, cz + dz)) {
+                    out.extend(v.iter().cloned());
+                }
+            }
+        }
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

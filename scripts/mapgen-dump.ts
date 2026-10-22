@@ -15,7 +15,10 @@ const out = resolve(value("--out", ".mapgen-dump"));
 if (!Number.isInteger(seed)) throw Error("--seed must be an integer");
 await mkdir(out, { recursive: true });
 const map = generateMap({ seed, size: LIMIT * 2, cell: TERRAIN_STEP });
-const json = (value: unknown) => JSON.stringify(value);
+const json = (value: unknown) =>
+  JSON.stringify(value, (_key, nested) =>
+    nested instanceof Float32Array ? Array.from(nested) : nested,
+  );
 const write = (name: string, value: unknown) => writeFile(resolve(out, `${name}.json`), `${json(value)}\n`);
 await write("terrain", map.terrain);
 await write("erosion", map.terrain);
