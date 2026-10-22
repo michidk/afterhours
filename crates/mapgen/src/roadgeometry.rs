@@ -5,6 +5,7 @@ use crate::{
         add, dist, dot, lerp as lerp_point, line_intersection, mul, norm, perp, polyline_length,
         segment_intersection, self_intersects, signed_area, sub,
     },
+    random::smoothstep,
     types::*,
 };
 use std::collections::{HashMap, HashSet};
@@ -1238,134 +1239,349 @@ fn paint_markings(
     }
 }
 
-use crate::{field::to_world, geom};
-fn kind_grade(k: RoadKind) -> f64 {
-    if k == RoadKind::Highway { 0.07 } else { 0.1 }
-}
+const NEIGHBOUR: f64 = 50.;
+const NEIGHBOUR_STEP: f64 = 1.;
 pub fn solve_profiles(graph: &mut RoadGraph, f: &HeightField, trims: &[(f64, f64)]) {
+    let terrain_at = |p: Point| sample(f, p.x, p.z).max(0.6);
+    let max_grade = |kind| if kind == RoadKind::Highway { 0.07 } else { 0.1 };
     for n in &mut graph.nodes {
-        let mut s = 0.;
+        let mut sum = 0.;
+        let mut count = 0;
         for dx in [-6., 0., 6.] {
             for dz in [-6., 0., 6.] {
-                s += sample(f, n.x + dx, n.z + dz).max(0.6);
+                sum += terrain_at(Point {
+                    x: n.x + dx,
+                    z: n.z + dz,
+                });
+                count += 1;
             }
         }
-        n.y = s / 9.;
+        n.y = sum / count as f64;
+    }
+    let free: Vec<_> = graph
+        .edges
+        .iter()
+        .map(|e| {
+            let length = polyline_length(&e.points);
+            let (t0, t1) = trims[e.id];
+            (length - length.min(t0 + t1)).max(0.5)
+        })
+        .collect();
+    let climb: Vec<_> = graph
+        .edges
+        .iter()
+        .map(|e| {
+            let grades = bend_grades(&e.points, max_grade(e.kind));
+            let length = polyline_length(&e.points);
+            let (t0, t1) = trims[e.id];
+            let mut capacity = 0.;
+            let mut covered = 0.;
+            let mut start: f64 = 0.;
+            for i in 1..e.points.len() {
+                let run = dist(e.points[i - 1], e.points[i]);
+                let overlap = ((start + run).min(length - t1) - start.max(t0)).max(0.);
+                capacity += grades[i - 1] * overlap;
+                covered += overlap;
+                start += run;
+            }
+            capacity + max_grade(e.kind) * (free[e.id] - covered).max(0.)
+        })
+        .collect();
+    let joined: HashSet<_> = graph
+        .edges
+        .iter()
+        .map(|e| e.a * graph.nodes.len() + e.b)
+        .collect();
+    let mut close = Vec::new();
+    for a in &graph.nodes {
+        for b in &graph.nodes {
+            if a.id < b.id
+                && dist(Point { x: a.x, z: a.z }, Point { x: b.x, z: b.z }) < NEIGHBOUR
+                && !joined.contains(&(a.id * graph.nodes.len() + b.id))
+                && !joined.contains(&(b.id * graph.nodes.len() + a.id))
+            {
+                close.push((a.id, b.id));
+            }
+        }
+    }
+    for _ in 0..200 {
+        let mut worst: f64 = 0.;
+        for &(i, j) in &close {
+            let excess = (graph.nodes[i].y - graph.nodes[j].y).abs() - NEIGHBOUR_STEP;
+            if excess <= 0. {
+                continue;
+            }
+            worst = worst.max(excess);
+            let step = ((graph.nodes[i].y - graph.nodes[j].y).signum() * excess) / 2.;
+            graph.nodes[i].y -= step;
+            graph.nodes[j].y += step;
+        }
+        for e in &graph.edges {
+            if e.bridge || e.a == e.b {
+                continue;
+            }
+            let excess = (graph.nodes[e.a].y - graph.nodes[e.b].y).abs() - 0.95 * climb[e.id];
+            if excess <= 0. {
+                continue;
+            }
+            worst = worst.max(excess);
+            let step = ((graph.nodes[e.a].y - graph.nodes[e.b].y).signum() * excess) / 2.;
+            graph.nodes[e.a].y -= step;
+            graph.nodes[e.b].y += step;
+        }
+        if worst < 0.01 {
+            break;
+        }
     }
     for e in &mut graph.edges {
-        let len = geom::polyline_length(&e.points);
-        let (t0, t1) = trims.get(e.id).copied().unwrap_or((0., 0.));
+        let length = polyline_length(&e.points);
+        let (mut t0, mut t1) = trims[e.id];
+        if t0 + t1 > length {
+            t0 = (length * t0) / (t0 + t1);
+            t1 = length - t0;
+        }
+        for s in [t0, length - t1] {
+            if s <= 0.05 || s >= length - 0.05 {
+                continue;
+            }
+            let mut run = 0.;
+            for i in 1..e.points.len() {
+                let d = dist(e.points[i - 1], e.points[i]);
+                if run + d > s {
+                    if s - run > 0.05 && run + d - s > 0.05 {
+                        let p = lerp_point(e.points[i - 1], e.points[i], (s - run) / d);
+                        e.points.insert(i, p);
+                    }
+                    break;
+                }
+                run += d;
+            }
+        }
+        let pts = &e.points;
+        let n = pts.len();
         let mut along = vec![0.];
-        for w in e.points.windows(2) {
-            along.push(along.last().unwrap() + geom::dist(w[0], w[1]));
+        for i in 1..n {
+            along.push(along[i - 1] + dist(pts[i - 1], pts[i]));
         }
         let ya = graph.nodes[e.a].y;
         let yb = graph.nodes[e.b].y;
+        let pin = |h: &mut [f64]| {
+            for i in 0..n {
+                if along[i] <= t0 + 0.05 {
+                    h[i] = ya;
+                } else if along[i] >= length - t1 - 0.05 {
+                    h[i] = yb;
+                }
+            }
+        };
         if e.bridge {
-            let span = (len - t0 - t1).max(1e-6);
+            let span = (length - t0 - t1).max(1e-6);
             e.heights = along
                 .iter()
                 .map(|s| ya + (yb - ya) * ((s - t0) / span).clamp(0., 1.))
                 .collect();
-        } else {
-            let mut h = along.iter().map(|_| 0.).collect::<Vec<_>>();
-            for (i, p) in e.points.iter().enumerate() {
-                h[i] = sample(f, p.x, p.z).max(0.6);
-            }
-            for _ in 0..2 {
-                let old = h.clone();
-                for i in 1..h.len() - 1 {
-                    h[i] = (old[i - 2.max(i.saturating_sub(2))]
-                        + old[i - 1]
-                        + old[i]
-                        + old[i + 1]
-                        + old[(i + 2).min(h.len() - 1)])
-                        / 5.;
-                }
-            }
-            for i in 0..h.len() {
-                if along[i] <= t0 + 0.05 {
-                    h[i] = ya;
-                } else if along[i] >= len - t1 - 0.05 {
-                    h[i] = yb;
-                }
-            }
-            let grade = kind_grade(e.kind);
-            for _ in 0..60 {
-                let mut changed = false;
-                for i in 1..h.len() {
-                    let d = (along[i] - along[i - 1]).max(1.);
-                    if (h[i] - h[i - 1]).abs() > grade * d {
-                        h[i] = h[i - 1] + (h[i] - h[i - 1]).signum() * grade * d;
-                        changed = true;
-                    }
-                }
-                for i in (0..h.len().saturating_sub(1)).rev() {
-                    let d = (along[i + 1] - along[i]).max(1.);
-                    if (h[i + 1] - h[i]).abs() > grade * d {
-                        h[i] = h[i + 1] - (h[i + 1] - h[i]).signum() * grade * d;
-                        changed = true;
-                    }
-                }
-                if !changed {
-                    break;
-                }
-            }
-            e.heights = h;
+            continue;
         }
+        let heights: Vec<_> = pts.iter().map(|&p| terrain_at(p)).collect();
+        let mut smooth = heights.clone();
+        for _ in 0..2 {
+            for i in 1..n - 1 {
+                smooth[i] = (heights[i.saturating_sub(2)]
+                    + heights[i - 1]
+                    + heights[i]
+                    + heights[i + 1]
+                    + heights[(n - 1).min(i + 2)])
+                    / 5.;
+            }
+        }
+        pin(&mut smooth);
+        let grades = bend_grades(pts, max_grade(e.kind));
+        for _ in 0..60 {
+            let mut clamped = false;
+            for i in 1..n {
+                let d = along[i] - along[i - 1];
+                let d = if d != 0. { d } else { 1. };
+                let delta = smooth[i] - smooth[i - 1];
+                let limit = grades[i - 1];
+                if delta.abs() > limit * d {
+                    smooth[i] = smooth[i - 1] + delta.signum() * limit * d;
+                    clamped = true;
+                }
+            }
+            pin(&mut smooth);
+            for i in (0..n - 1).rev() {
+                let d = along[i + 1] - along[i];
+                let d = if d != 0. { d } else { 1. };
+                let delta = smooth[i] - smooth[i + 1];
+                let limit = grades[i];
+                if delta.abs() > limit * d {
+                    smooth[i] = smooth[i + 1] + delta.signum() * limit * d;
+                    clamped = true;
+                }
+            }
+            pin(&mut smooth);
+            if !clamped {
+                break;
+            }
+        }
+        e.heights = smooth;
     }
 }
 pub fn stamp_roads(f: &mut HeightField, graph: &RoadGraph, geometry: &RoadGeometry) -> Vec<f32> {
+    let (w, h) = (f.w, f.h);
     let original = f.data.clone();
-    let mut best = vec![0f32; f.data.len()];
+    let mut acc = vec![0_f32; w * h];
+    let mut weight = vec![0_f32; w * h];
+    let mut best = vec![0_f32; w * h];
+    let mut edge = vec![f32::INFINITY; w * h];
+    let shoulder = SIDEWALK + 4.;
+    let mut contribute = |i: usize, wgt: f64, y: f64, kerb: f64| {
+        let flat = wgt >= 1. - 1e-6;
+        if wgt > f64::from(best[i]) + 1e-6
+            || (flat && f64::from(best[i]) >= 1. - 1e-6 && kerb < f64::from(edge[i]) - 0.25)
+        {
+            best[i] = wgt as f32;
+            edge[i] = kerb as f32;
+            acc[i] = (wgt * y) as f32;
+            weight[i] = wgt as f32;
+        } else if wgt >= f64::from(best[i]) - 1e-6 && (!flat || kerb < f64::from(edge[i]) + 0.25) {
+            edge[i] = f64::from(edge[i]).min(kerb) as f32;
+            acc[i] = (f64::from(acc[i]) + wgt * y) as f32;
+            weight[i] = (f64::from(weight[i]) + wgt) as f32;
+        }
+    };
+    let mut stamp_segment = |a: Point, b: Point, ya: f64, yb: f64, hw: f64, kerb: f64| {
+        let reach_max = hw + shoulder + 16.;
+        let x0 = ((a.x.min(b.x) - reach_max + f.size / 2.) / f.cell)
+            .floor()
+            .max(0.) as i64;
+        let x1 = ((a.x.max(b.x) + reach_max + f.size / 2.) / f.cell)
+            .ceil()
+            .min((w - 1) as f64) as i64;
+        let z0 = ((a.z.min(b.z) - reach_max + f.size / 2.) / f.cell)
+            .floor()
+            .max(0.) as i64;
+        let z1 = ((a.z.max(b.z) + reach_max + f.size / 2.) / f.cell)
+            .ceil()
+            .min((h - 1) as f64) as i64;
+        let ab = sub(b, a);
+        let l2 = ab.x * ab.x + ab.z * ab.z;
+        let l2 = if l2 != 0. { l2 } else { 1. };
+        let paved = hw + SIDEWALK;
+        let samples = l2.sqrt().ceil() as usize + 1;
+        let touched = |gx: i64, gz: i64| {
+            for cz in [gz - 1, gz] {
+                for cx in [gx - 1, gx] {
+                    let lx = cx as f64 * f.cell - f.size / 2.;
+                    let lz = cz as f64 * f.cell - f.size / 2.;
+                    for s in 0..=samples {
+                        let qx = a.x + (ab.x * s as f64) / samples as f64;
+                        let qz = a.z + (ab.z * s as f64) / samples as f64;
+                        if (lx - qx)
+                            .max(0.)
+                            .max(qx - lx - f.cell)
+                            .hypot((lz - qz).max(0.).max(qz - lz - f.cell))
+                            <= paved
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            false
+        };
+        for z in z0..=z1 {
+            for x in x0..=x1 {
+                let px = x as f64 * f.cell - f.size / 2.;
+                let pz = z as f64 * f.cell - f.size / 2.;
+                let t = (((px - a.x) * ab.x + (pz - a.z) * ab.z) / l2).clamp(0., 1.);
+                let cx = a.x + ab.x * t;
+                let cz = a.z + ab.z * t;
+                let d = (px - cx).hypot(pz - cz);
+                let y = ya + (yb - ya) * t;
+                let i = z as usize * w + x as usize;
+                let depth = y - f64::from(original[i]);
+                let bank = (2.2 * depth.abs()).clamp(3., 16.);
+                let flat = hw + shoulder;
+                let level = d <= flat || (d <= paved + 2. * f.cell && touched(x, z));
+                if !level && d > flat + bank {
+                    continue;
+                }
+                let wgt = if level {
+                    1.
+                } else {
+                    1. - smoothstep(0., 1., (d - flat) / bank)
+                };
+                contribute(i, wgt, y, d - kerb);
+            }
+        }
+    };
     for e in &graph.edges {
         if e.bridge {
             continue;
         }
-        for (segment, w) in e.points.windows(2).enumerate() {
-            let ab = geom::sub(w[1], w[0]);
-            let l2 = geom::dot(ab, ab).max(1.);
-            let reach = e.width / 2. + SIDEWALK + 4.;
-            for z in 0..f.h {
-                for x in 0..f.w {
-                    let p = to_world(f, x, z);
-                    let t = (geom::dot(geom::sub(p, w[0]), ab) / l2).clamp(0., 1.);
-                    let q = geom::lerp(w[0], w[1], t);
-                    let d = geom::dist(p, q);
-                    if d > reach {
-                        continue;
-                    }
-                    let ya = e.heights.get(segment).copied().unwrap_or(0.);
-                    let yb = e.heights.get(segment + 1).copied().unwrap_or(ya);
-                    let yi = ya + (yb - ya) * t;
-                    let wt = if d <= e.width / 2. + SIDEWALK + 4. {
-                        1.
-                    } else {
-                        (1. - (d - reach) / reach).max(0.) as f32
-                    };
-                    let i = z * f.w + x;
-                    if wt > best[i] {
-                        best[i] = wt;
-                        f.data[i] = original[i] + (yi as f32 - original[i]) * wt;
-                    }
-                }
-            }
+        for i in 1..e.points.len() {
+            stamp_segment(
+                e.points[i - 1],
+                e.points[i],
+                e.heights[i - 1],
+                e.heights[i],
+                e.width / 2.,
+                e.width / 2.,
+            );
         }
     }
-    let _ = geometry;
+    for j in &geometry.junctions {
+        let n = &graph.nodes[j.node];
+        let p = Point { x: n.x, z: n.z };
+        let mut r: f64 = 0.;
+        let mut mouth = f64::INFINITY;
+        for &q in &j.polygon {
+            r = r.max(dist(p, q));
+        }
+        for &id in &n.edges {
+            let e = &graph.edges[id];
+            if e.a == n.id {
+                mouth = mouth.min(geometry.trims[id].0);
+            }
+            if e.b == n.id {
+                mouth = mouth.min(geometry.trims[id].1);
+            }
+        }
+        stamp_segment(
+            p,
+            Point {
+                x: n.x + 0.01,
+                z: n.z,
+            },
+            n.y,
+            n.y,
+            r,
+            r.min(mouth),
+        );
+    }
+    for i in 0..w * h {
+        if weight[i] <= 0. {
+            continue;
+        }
+        let target = f64::from(acc[i]) / f64::from(weight[i]);
+        let wgt = f64::from(best[i]).min(1.);
+        f.data[i] =
+            (f64::from(original[i]) + (target - 0.04 - f64::from(original[i])) * wgt) as f32;
+    }
     best
 }
 pub fn bridge_decks(graph: &RoadGraph) -> Vec<Bridge> {
-    graph
-        .edges
-        .iter()
-        .filter(|e| e.bridge)
-        .map(|e| {
-            let (l, r) = offset_polyline(&e.points, e.width / 2. + 1.2);
-            Bridge {
-                edge: e.id,
-                polygon: l.into_iter().chain(r.into_iter().rev()).collect(),
-            }
-        })
-        .collect()
+    let mut out = Vec::new();
+    for e in &graph.edges {
+        if !e.bridge {
+            continue;
+        }
+        let (left, right) = offset_polyline(&e.points, e.width / 2. + 1.2);
+        out.push(Bridge {
+            edge: e.id,
+            polygon: left.into_iter().chain(right.into_iter().rev()).collect(),
+        });
+    }
+    out
 }
