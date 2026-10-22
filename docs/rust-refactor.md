@@ -42,7 +42,8 @@ Milestone 2.3, gameplay parity (one PR per system, Node code deleted as each lan
 - [x] combat, inventory, pickups, grenades
 - [x] destruction and debris
 - [x] AI: traffic, citizens, pedestrians
-- [ ] aircraft, watercraft, flooding, day/night
+- [x] aircraft, watercraft, flooding, day/night (kinematic craft in `craft.rs`; no
+      roof or bystander collision, calm sea only, no AI boats yet)
 - [x] debug commands and admin tools (the Dev tools drawer; always on, see README)
 - [x] delete `server/`; gameplay tests are now Rust integration tests under
       `crates/server/tests`, the Dockerfile and README are updated

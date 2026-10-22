@@ -71,6 +71,11 @@ pub struct Spot {
 }
 
 #[derive(Deserialize)]
+pub struct Harbour {
+    pub berths: Vec<Spot>,
+}
+
+#[derive(Deserialize)]
 pub struct TownHall {
     pub parking: Vec<Spot>,
 }
@@ -126,6 +131,8 @@ pub struct City {
     pub landmarks: Value,
     pub ramps: Value,
     pub racetrack: Value,
+    #[serde(default)]
+    pub harbours: Vec<Harbour>,
     #[serde(default, rename = "townHall")]
     pub town_hall: Option<TownHall>,
     pub buildings: Vec<Building>,

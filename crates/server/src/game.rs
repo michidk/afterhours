@@ -1,7 +1,8 @@
 //! The authoritative simulation: one owner task, no locks. Sessions feed it `Event`s and
 //! it writes encoded `ServerMessage`s back through each session's channel.
-use crate::city::{City, LIMIT, TERRAIN_SIDE, TERRAIN_STEP};
+use crate::city::{City, LIMIT, TERRAIN_SIDE, TERRAIN_STEP, WATER_LEVEL};
 use crate::combat::Combat;
+use crate::craft::{Fleet, PARACHUTE_FALL};
 use crate::destruction::{Destructible, Destruction};
 use crate::vehicles::{INTEREST_RADIUS, Vehicles};
 use crate::{citizens::Citizens, traffic::Traffic};
@@ -57,6 +58,7 @@ pub struct Game {
     citizens: Citizens,
     pub destruction: Destruction,
     pub combat: Combat,
+    craft: Fleet,
     terrain: Option<Vec<f32>>,
 }
 
@@ -76,6 +78,23 @@ pub(crate) fn rows<'a>(
 ) -> (&'a [[f32; VEHICLE_STRIDE]], &'a [[f32; CHARACTER_STRIDE]]) {
     let (v, c) = s.split_at(world.counts().0 * VEHICLE_STRIDE);
     (v.as_chunks().0, c.as_chunks().0)
+}
+
+fn terrain_at(terrain: &Option<Vec<f32>>, x: f32, z: f32) -> f32 {
+    let Some(h) = terrain else { return 0.0 };
+    let gx = (x + LIMIT) / TERRAIN_STEP as f32;
+    let gz = (z + LIMIT) / TERRAIN_STEP as f32;
+    let ix = gx.floor().clamp(0.0, (TERRAIN_SIDE - 2) as f32) as usize;
+    let iz = gz.floor().clamp(0.0, (TERRAIN_SIDE - 2) as f32) as usize;
+    let (u, v) = (gx - ix as f32, gz - iz as f32);
+    let i = iz * TERRAIN_SIDE + ix;
+    if u + v <= 1.0 {
+        h[i] + u * (h[i + 1] - h[i]) + v * (h[i + TERRAIN_SIDE] - h[i])
+    } else {
+        h[i + TERRAIN_SIDE + 1]
+            + (1.0 - u) * (h[i + TERRAIN_SIDE] - h[i + TERRAIN_SIDE + 1])
+            + (1.0 - v) * (h[i + 1] - h[i + TERRAIN_SIDE + 1])
+    }
 }
 
 impl Game {
@@ -98,6 +117,7 @@ impl Game {
             citizens: Citizens::default(),
             destruction: Destruction::new(),
             combat: Combat::default(),
+            craft: Fleet::default(),
             terrain: None,
         }
     }
@@ -110,20 +130,7 @@ impl Game {
     }
 
     fn ground_height(&self, x: f32, z: f32) -> f32 {
-        let Some(h) = &self.terrain else { return 0.0 };
-        let gx = (x + LIMIT) / TERRAIN_STEP as f32;
-        let gz = (z + LIMIT) / TERRAIN_STEP as f32;
-        let ix = gx.floor().clamp(0.0, (TERRAIN_SIDE - 2) as f32) as usize;
-        let iz = gz.floor().clamp(0.0, (TERRAIN_SIDE - 2) as f32) as usize;
-        let (u, v) = (gx - ix as f32, gz - iz as f32);
-        let i = iz * TERRAIN_SIDE + ix;
-        if u + v <= 1.0 {
-            h[i] + u * (h[i + 1] - h[i]) + v * (h[i + TERRAIN_SIDE] - h[i])
-        } else {
-            h[i + TERRAIN_SIDE + 1]
-                + (1.0 - u) * (h[i + TERRAIN_SIDE] - h[i + TERRAIN_SIDE + 1])
-                + (1.0 - v) * (h[i + 1] - h[i + TERRAIN_SIDE + 1])
-        }
+        terrain_at(&self.terrain, x, z)
     }
 
     /// Live AI counts: (cars, pedestrians).
@@ -140,6 +147,9 @@ impl Game {
     /// Parks the city's starter fleet in place of the no-city placeholders.
     pub fn park(&mut self, city: &City) {
         self.vehicles.park(&mut self.world, city);
+        let terrain = &self.terrain;
+        self.craft
+            .park(city, &|x, z| terrain_at(terrain, x, z).max(WATER_LEVEL));
     }
 
     /// Breakable props (see `destruction.rs`), added to the physics world as static boxes.
@@ -156,6 +166,9 @@ impl Game {
                 self.pending.remove(&id);
                 self.destruction.forget(id);
                 self.combat.forget(id);
+                let terrain = &self.terrain;
+                self.craft
+                    .leave(id, &|x, z| terrain_at(terrain, x, z).max(WATER_LEVEL));
                 if let Some(p) = self.players.remove(&id) {
                     match p.body {
                         Ok(c) => {
@@ -464,7 +477,14 @@ impl Game {
             self.spawn,
             self.tick as f64 / TICK_RATE as f64,
         );
+        let terrain = &self.terrain;
+        self.craft.step(
+            1.0 / TICK_RATE as f32,
+            &|x, z| terrain_at(terrain, x, z).max(WATER_LEVEL),
+            &|x, z| terrain_at(terrain, x, z),
+        );
         self.world.step();
+        self.carry_riders();
         // Keep bodies on terrain when a vehicle starts inside a baked mesh seam.
         // Rapier's vehicle ray casts can miss a triangle at spawn; recover before
         // the next snapshot instead of letting a parked car fall through the city.
@@ -491,7 +511,13 @@ impl Game {
                 );
             }
         }
-        self.vehicles.update(&self.world);
+        let terrain = &self.terrain;
+        let flood = self.vehicles.update(
+            &self.world,
+            &|x, z| WATER_LEVEL - terrain_at(terrain, x, z),
+            1.0 / TICK_RATE as f32,
+        );
+        self.events.extend(flood);
         self.destruction.step(&mut self.world, self.tick);
         self.tick += 1;
         let entities = self.entities();
@@ -501,6 +527,32 @@ impl Game {
         self.history.push_back((self.tick, entities));
         if self.tick.is_multiple_of(SNAPSHOT_EVERY) {
             self.broadcast();
+        }
+    }
+
+    /// Seated players' characters follow their craft; parachutists sink slowly.
+    fn carry_riders(&mut self) {
+        for (player, at) in self.craft.rider_positions() {
+            if let Some(Ok(body)) = self.players.get(&player).map(|p| p.body) {
+                self.world.set_character_position(body, at);
+                self.world.set_vertical(body, 0.0);
+            }
+        }
+        let s = self.world.states();
+        let (_, chars) = rows(&self.world, &s);
+        for player in self.craft.chutes() {
+            let Some(Ok(body)) = self.players.get(&player).map(|p| p.body) else {
+                self.craft.close_parachute(player);
+                continue;
+            };
+            let Some(r) = chars.iter().find(|r| r[0] as u32 == body) else {
+                continue;
+            };
+            if r[5] != 0.0 {
+                self.craft.close_parachute(player);
+            } else if r[4] < -PARACHUTE_FALL {
+                self.world.set_vertical(body, -PARACHUTE_FALL);
+            }
         }
     }
 
@@ -516,6 +568,22 @@ impl Game {
         let c = p.held.clone();
         self.combat.control(id, &c, p.character.as_ref());
         match p.body {
+            Ok(body) if self.craft.is_rider(id) => {
+                self.craft.control(id, &c);
+                self.world.set_move(body, Move::default());
+                if c.interact {
+                    let terrain = &self.terrain;
+                    if let Some(exit) = self
+                        .craft
+                        .leave(id, &|x, z| terrain_at(terrain, x, z).max(WATER_LEVEL))
+                    {
+                        self.world.set_character_position(body, exit.position);
+                        if exit.parachute {
+                            self.craft.open_parachute(id);
+                        }
+                    }
+                }
+            }
             Ok(body) => {
                 let speed = WALK_SPEED * if c.sprint { SPRINT } else { 1.0 };
                 self.world.set_move(
@@ -532,6 +600,11 @@ impl Game {
                 {
                     self.world.remove_character(body);
                     self.players.get_mut(&id).unwrap().body = Err(car);
+                } else if c.interact {
+                    let s = self.world.states();
+                    if let Some(r) = rows(&self.world, &s).1.iter().find(|r| r[0] as u32 == body) {
+                        self.craft.enter(id, [r[1], r[2], r[3]]);
+                    }
                 }
             }
             Err(car) => {
@@ -571,6 +644,7 @@ impl Game {
         let (cars, chars) = rows(&self.world, &s);
         let mut out = HashMap::new();
         self.vehicles.entities(&self.world, self.day, &mut out);
+        self.craft.entities(&mut out);
         for (car, entity) in self.vehicles.pairs() {
             if let Some(e) = out.get_mut(&entity) {
                 self.combat.car_fields(car, e);
@@ -608,6 +682,8 @@ impl Game {
                     if let Some(r) = chars.get(&body) {
                         (e.x, e.y, e.z, e.vy) = (r[1], r[2], r[3], r[4]);
                     }
+                    self.craft.decorate(id, &mut e);
+                    self.craft.decorate_chute(id, &mut e);
                 }
                 Err(car) => {
                     let r = car_rows[&car];
@@ -684,7 +760,7 @@ impl Game {
                 players: self.players.len() as u32,
                 // shortcut: no day cycle yet; `day` holds until the clock lands.
                 day: self.day,
-                day_rate: 0.0,
+                day_rate: self.day_rate,
                 events,
                 pickups: self.combat.pickups_near(me[0], me[1]),
                 grenades: self.combat.grenades_near(me[0], me[1]),

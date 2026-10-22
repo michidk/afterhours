@@ -18,6 +18,9 @@ const ENTER_RANGE: f32 = 6.0;
 const SKID_ANGLE: f32 = 0.267_949_2;
 const SKID_RELEASE: f32 = 0.176_327;
 const SKID_SPEED: f32 = 3.0;
+/// `FLOOD` in `shared/physics/flooding.ts`.
+const FLOOD_DEPTH: f32 = 0.8;
+const FLOOD_SECONDS: f32 = 10.0;
 
 /// `shared/catalog.ts` VEHICLES, cars only.
 pub struct Model {
@@ -67,6 +70,10 @@ struct Car {
     skid: bool,
     /// Attack was held last tick: the horn sounds once per press.
     honking: bool,
+    /// Seconds left before a swamped car explodes; its engine is dead meanwhile.
+    flooded: Option<f32>,
+    /// A wrecked car stays where it is (`shortcut`: Node removes it after 180 s).
+    wreck: bool,
 }
 
 /// Every car in the world, keyed by physics id.
@@ -83,7 +90,7 @@ fn slip(r: &[f32; VEHICLE_STRIDE]) -> (f32, f32, f32) {
 
 /// `server/simulation.ts` roadside(): nearest street lane point 3.5 m right of the
 /// centreline, moved along the lane until clear of every point in `avoid`.
-fn roadside(city: &City, x: f64, z: f64, avoid: &[(f64, f64)]) -> (f64, f64) {
+pub(crate) fn roadside(city: &City, x: f64, z: f64, avoid: &[(f64, f64)]) -> (f64, f64) {
     let (mut best, mut along, mut best_distance) = ((x, z), (0.0, 0.0), f64::INFINITY);
     for r in &city.roads {
         let (dx, dz) = (r.bx - r.ax, r.bz - r.az);
@@ -172,6 +179,8 @@ impl Vehicles {
                 steer: 0.0,
                 skid: false,
                 honking: false,
+                flooded: None,
+                wreck: false,
             },
         );
     }
@@ -274,7 +283,15 @@ impl Vehicles {
             && c.seats.first() == Some(&Some(who))
         {
             c.steer = drive.steer.clamp(-1.0, 1.0);
-            world.set_drive(car, drive);
+            // No drive reaches the wheels of a swamped or wrecked car.
+            world.set_drive(
+                car,
+                if c.flooded.is_some() || c.wreck {
+                    Drive::default()
+                } else {
+                    drive
+                },
+            );
         }
     }
 
@@ -313,12 +330,41 @@ impl Vehicles {
 
     /// Skid detection after physics: `shared/physics/vehicle.ts` rear-tyre hysteresis on
     /// the body's slip, since the shared physics core does not expose per-wheel slip.
-    pub fn update(&mut self, world: &World) {
+    /// `shared/physics/flooding.ts`: a car in water deeper than FLOOD.depth floods, and
+    /// FLOOD.seconds later explodes. `depth` is the water depth above the bed at a point.
+    pub fn update(
+        &mut self,
+        world: &World,
+        depth: &dyn Fn(f32, f32) -> f32,
+        dt: f32,
+    ) -> Vec<WorldEvent> {
+        let mut events = Vec::new();
         let s = world.states();
         for r in rows(world, &s).0 {
             let Some(c) = self.cars.get_mut(&(r[0] as u32)) else {
                 continue;
             };
+            if c.flooded.is_none() && !c.wreck && depth(r[1], r[3]) > FLOOD_DEPTH {
+                c.flooded = Some(FLOOD_SECONDS);
+            }
+            if let Some(t) = c.flooded.as_mut() {
+                *t -= dt;
+                if *t <= 0.0 {
+                    c.flooded = None;
+                    c.wreck = true;
+                    events.push(WorldEvent {
+                        kind: "explosion".into(),
+                        x: r[1],
+                        y: r[2],
+                        z: r[3],
+                        angle: None,
+                        length: None,
+                        target: None,
+                        source: None,
+                        sound: None,
+                    });
+                }
+            }
             let (_, rolling, lateral) = slip(r);
             let sideways = lateral.abs();
             let ratio = sideways / rolling.abs().max(1.0);
@@ -328,6 +374,7 @@ impl Vehicles {
                 sideways > SKID_SPEED && ratio > SKID_ANGLE
             };
         }
+        events
     }
 
     /// Adds one entity per car. Headlights follow `simulation.ts` night(): 18:00 to 06:00.
@@ -362,6 +409,8 @@ impl Vehicles {
                     skidding: Some(c.skid),
                     wheel_skids: Some(vec![false, false, c.skid, c.skid]),
                     lights_on: Some(!(6.0..18.0).contains(&day)),
+                    flooded: c.flooded,
+                    wreck: c.wreck.then_some(180.0),
                     ..Default::default()
                 },
             );
@@ -377,6 +426,29 @@ mod tests {
         let mut w = World::new();
         w.add_box([0.0, -0.5, 0.0], [400.0, 0.5, 400.0], 0.0);
         w
+    }
+
+    #[test]
+    fn a_car_in_deep_water_floods_then_explodes_into_a_wreck() {
+        let mut w = slab();
+        let mut v = Vehicles::new(&mut w, [0.0, 1.0, 0.0]);
+        let dry = |_: f32, _: f32| 0.0;
+        let deep = |_: f32, _: f32| 2.0;
+        assert!(v.update(&w, &dry, 1.0).is_empty());
+        let mut booms = 0;
+        for _ in 0..12 {
+            booms += v.update(&w, &deep, 1.0).len();
+        }
+        assert_eq!(
+            booms, 3,
+            "each of the three starter cars explodes once, after 10 s"
+        );
+        let mut out = HashMap::new();
+        v.entities(&w, 12.0, &mut out);
+        assert!(
+            out.values()
+                .all(|e| e.wreck.is_some() && e.flooded.is_none())
+        );
     }
 
     #[test]
