@@ -176,7 +176,22 @@ impl Vehicles {
         );
     }
 
-    pub fn spawn_debug(&mut self, world: &mut World, model: &str, at: [f32; 3]) -> Result<(), String> {
+    /// Width and length of a debug-spawnable model's footprint.
+    pub fn footprint(&self, model: &str) -> Result<(f32, f32), String> {
+        match model {
+            "sedan" => Ok((SEDAN.spec.width, SEDAN.spec.length)),
+            "sport" => Ok((SPORT.spec.width, SPORT.spec.length)),
+            "van" => Ok((VAN.spec.width, VAN.spec.length)),
+            _ => Err(format!("Unsupported debug vehicle: {model}")),
+        }
+    }
+
+    pub fn spawn_debug(
+        &mut self,
+        world: &mut World,
+        model: &str,
+        at: [f32; 3],
+    ) -> Result<(), String> {
         let model = match model {
             "sedan" => &SEDAN,
             "sport" => &SPORT,

@@ -8,8 +8,8 @@ use afterhours_physics::{CHARACTER_STRIDE, Drive, Move, VEHICLE_STRIDE, World};
 use afterhours_protocol::{
     ClientMessage, Controls, Entity, Kind, ServerMessage, TICK_RATE, VERSION, WorldEvent, encode,
 };
-use std::collections::{BTreeMap, HashMap, VecDeque};
 use serde_json::{Value, json};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use tokio::sync::mpsc::UnboundedSender;
 
 pub const SNAPSHOT_EVERY: u32 = 2;
@@ -233,7 +233,13 @@ impl Game {
                     let _ = p.out.send(msg.clone());
                 }
             }
-            Event::Message(id, ClientMessage::DebugCommand { request_id, command }) => {
+            Event::Message(
+                id,
+                ClientMessage::DebugCommand {
+                    request_id,
+                    command,
+                },
+            ) => {
                 let result = self.execute_debug(id, &command);
                 let message = match result {
                     Ok(state) => ServerMessage::DebugResult {
@@ -265,11 +271,19 @@ impl Game {
         if !self.players.contains_key(&id) {
             return Err("Not joined".to_string());
         }
-        let kind = command.get("kind").and_then(Value::as_str).unwrap_or_default();
+        let kind = command
+            .get("kind")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
         match kind {
             "time" => {
-                let hour = command.get("hour").and_then(Value::as_f64).ok_or_else(|| "Missing hour".to_string())?;
-                if !hour.is_finite() || !(0.0..=24.0).contains(&hour) { return Err("Invalid hour".into()); }
+                let hour = command
+                    .get("hour")
+                    .and_then(Value::as_f64)
+                    .ok_or_else(|| "Missing hour".to_string())?;
+                if !hour.is_finite() || !(0.0..=24.0).contains(&hour) {
+                    return Err("Invalid hour".into());
+                }
                 self.day = (hour as f32).rem_euclid(24.0);
                 if let Some(rate) = command.get("rate").and_then(Value::as_f64) {
                     if !rate.is_finite() || !(0.0..=24.0).contains(&rate) {
@@ -279,28 +293,76 @@ impl Game {
                 }
             }
             "teleport" => {
-                let x = command.get("x").and_then(Value::as_f64).ok_or_else(|| "Missing x".to_string())? as f32;
-                let z = command.get("z").and_then(Value::as_f64).ok_or_else(|| "Missing z".to_string())? as f32;
-                if x.abs() > 1532.0 || z.abs() > 1532.0 { return Err("Teleport is outside the world".into()); }
-                let body = self.players.get(&id).map(|p| p.body).ok_or_else(|| "Not joined".to_string())?;
+                let x = command
+                    .get("x")
+                    .and_then(Value::as_f64)
+                    .ok_or_else(|| "Missing x".to_string())? as f32;
+                let z = command
+                    .get("z")
+                    .and_then(Value::as_f64)
+                    .ok_or_else(|| "Missing z".to_string())? as f32;
+                if x.abs() > 1532.0 || z.abs() > 1532.0 {
+                    return Err("Teleport is outside the world".into());
+                }
+                let body = self
+                    .players
+                    .get(&id)
+                    .map(|p| p.body)
+                    .ok_or_else(|| "Not joined".to_string())?;
                 match body {
-                    Ok(character) => { self.world.set_character_position(character, [x, self.ground_height(x, z) + 1.0, z]); }
+                    Ok(character) => {
+                        self.world.set_character_position(
+                            character,
+                            [x, self.ground_height(x, z) + 1.0, z],
+                        );
+                    }
                     Err(car) => {
-                        let row = rows(&self.world, &self.world.states()).0.iter().find(|r| r[0] as u32 == car).copied().ok_or_else(|| "Vehicle not found".to_string())?;
-                        self.world.set_vehicle_position(car, [x, self.ground_height(x, z) + 1.0, z], euler([row[4], row[5], row[6], row[7]]).0);
+                        let row = rows(&self.world, &self.world.states())
+                            .0
+                            .iter()
+                            .find(|r| r[0] as u32 == car)
+                            .copied()
+                            .ok_or_else(|| "Vehicle not found".to_string())?;
+                        self.world.set_vehicle_position(
+                            car,
+                            [x, self.ground_height(x, z) + 1.0, z],
+                            euler([row[4], row[5], row[6], row[7]]).0,
+                        );
                     }
                 }
             }
             "spawn" => {
-                let model = command.get("model").and_then(Value::as_str).ok_or_else(|| "Missing vehicle model".to_string())?;
+                let model = command
+                    .get("model")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| "Missing vehicle model".to_string())?;
                 let (x, z) = self.player_position(id)?;
-                // The player start sits beside the town-hall wall. Put debug cars
-                // behind the player so their body and suspension do not spawn inside
-                // that wall; keep the five-metre interaction reach intact.
-                let spawn_x = x + 8.0;
-                let spawn_z = z - 5.5;
+                // Start where the first car always went, then widen the search ring by ring
+                // until the footprint touches no wall, prop or other car.
+                let (width, length) = self.vehicles.footprint(model)?;
+                let spot = std::iter::once((8.0, -5.5))
+                    .chain((1..=6).flat_map(|ring| {
+                        let r = 6.0 + 4.0 * ring as f32;
+                        (0..12).map(move |k| {
+                            let a = k as f32 * std::f32::consts::TAU / 12.0;
+                            (r * a.cos(), r * a.sin())
+                        })
+                    }))
+                    .map(|(dx, dz)| (x + dx, z + dz))
+                    .find(|&(cx, cz)| {
+                        let cy = self.ground_height(cx, cz) + 1.0;
+                        // Raised 0.3 m so the wheels' ground contact is not an obstacle.
+                        self.world.is_clear(
+                            [cx, cy + 0.3, cz],
+                            [width / 2.0, 0.5, length / 2.0],
+                            std::f32::consts::PI,
+                        )
+                    })
+                    .ok_or_else(|| "No clear space near you for a vehicle".to_string())?;
+                let (spawn_x, spawn_z) = spot;
                 let y = self.ground_height(spawn_x, spawn_z) + 1.0;
-                self.vehicles.spawn_debug(&mut self.world, model, [spawn_x, y, spawn_z])?;
+                self.vehicles
+                    .spawn_debug(&mut self.world, model, [spawn_x, y, spawn_z])?;
             }
             "gotoPlayer" | "bringPlayer" => {
                 let target = command
@@ -322,22 +384,35 @@ impl Game {
                     .get(&mover)
                     .map(|p| p.body)
                     .ok_or_else(|| "Player not found".to_string())?;
-                let position = [anchor_x + 3.0, self.ground_height(anchor_x + 3.0, anchor_z) + 1.0, anchor_z];
+                let position = [
+                    anchor_x + 3.0,
+                    self.ground_height(anchor_x + 3.0, anchor_z) + 1.0,
+                    anchor_z,
+                ];
                 if let Ok(character) = body {
                     self.world.set_character_position(character, position);
                 } else {
                     return Err("Moving seated players is not supported yet".into());
                 }
             }
-            "destroyProp" => return Err("Prop destruction is not available in the Rust debug adapter".into()),
+            "destroyProp" => {
+                return Err("Prop destruction is not available in the Rust debug adapter".into());
+            }
             "state" | "observe" => {}
             _ => return Err(format!("Unknown debug command: {kind}")),
         }
-        Ok(self.debug_state(id, kind == "observe", command.get("id").and_then(Value::as_str)))
+        Ok(self.debug_state(
+            id,
+            kind == "observe",
+            command.get("id").and_then(Value::as_str),
+        ))
     }
 
     fn player_position(&self, id: u32) -> Result<(f32, f32), String> {
-        self.entities().get(&id).map(|e| (e.x, e.z)).ok_or_else(|| "Player not found".into())
+        self.entities()
+            .get(&id)
+            .map(|e| (e.x, e.z))
+            .ok_or_else(|| "Player not found".into())
     }
 
     fn debug_state(&self, id: u32, inspect: bool, inspected: Option<&str>) -> Value {
@@ -392,7 +467,11 @@ impl Game {
                 let (x, z, ground) = if in_world && ground > 0.0 {
                     (row[1], row[3], ground)
                 } else {
-                    (self.spawn[0], self.spawn[2], self.ground_height(self.spawn[0], self.spawn[2]))
+                    (
+                        self.spawn[0],
+                        self.spawn[2],
+                        self.ground_height(self.spawn[0], self.spawn[2]),
+                    )
                 };
                 self.world.set_vehicle_position(
                     row[0] as u32,

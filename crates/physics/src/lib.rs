@@ -18,6 +18,8 @@ pub const GRAVITY: f32 = -9.81;
 /// Floats per vehicle and per character in [`World::states`].
 pub const VEHICLE_STRIDE: usize = 11;
 pub const CHARACTER_STRIDE: usize = 6;
+/// Below this speed with no throttle the parking brake holds the car (m/s).
+const HOLD_SPEED: f32 = 2.0;
 const JUMP_SPEED: f32 = 5.5;
 const CHARACTER_RADIUS: f32 = 0.35;
 const CHARACTER_HALF_HEIGHT: f32 = 0.55;
@@ -368,6 +370,25 @@ impl World {
     }
 
     /// Moves a vehicle to an administrative destination and clears its motion.
+    /// True when a box of half extents `half` at `center`, turned by `yaw`, touches no
+    /// collider except the terrain mesh and the world floor (walls, props, cars and
+    /// characters all count). Spawn tools use it to find a free spot.
+    pub fn is_clear(&self, center: [f32; 3], half: [f32; 3], yaw: f32) -> bool {
+        let shape = Cuboid::new(Vector::from(half));
+        let pose = Pose::from_parts(Vector::from(center), Rotation::from_rotation_y(yaw));
+        // The ground is meant to be touched; trimeshes and the huge floor slabs are ground.
+        let not_ground = |_: ColliderHandle, c: &Collider| {
+            c.shape().as_trimesh().is_none()
+                && c.shape()
+                    .as_cuboid()
+                    .is_none_or(|b| b.half_extents.x < 100.0)
+        };
+        self.physics
+            .intersect_shape(pose, &shape, QueryFilter::default().predicate(&not_ground))
+            .next()
+            .is_none()
+    }
+
     pub fn set_vehicle_position(&mut self, id: u32, position: [f32; 3], yaw: f32) -> bool {
         let Some(v) = self.vehicles.iter().find(|v| v.id == id) else {
             return false;
@@ -516,7 +537,10 @@ impl World {
             // Steering lock halves at 30 m/s so fast turns stay gripped (as the old model).
             let lock = v.spec.steer / (1.0 + speed / 30.0);
             // Rapier takes a per-wheel, per-update brake impulse, so convert the total force.
-            let brake = if v.drive.brake {
+            // An unpowered car near standstill is held by the parking brake, so it cannot
+            // roll off a slope (`shared/physics/vehicle.ts` CAR.holdSpeed).
+            let hold = v.drive.throttle == 0.0 && speed < HOLD_SPEED;
+            let brake = if v.drive.brake || hold {
                 v.spec.brake * dt / 4.0
             } else {
                 0.0
