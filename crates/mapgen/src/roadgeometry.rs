@@ -1,18 +1,37 @@
-//! Road centreline, profile and surface geometry.
+//! Line-for-line port of `mapgen/roadgeometry.ts`; arithmetic stays in f64.
 use crate::{
-    field::{sample, to_world},
-    geom::{self, Point},
-    types::{Band, Bridge, HeightField, Junction, RoadGeometry, RoadGraph, Sidewalk, Walkways},
+    field::sample,
+    geom::{add, dist, dot, lerp as lerp_point, mul, norm, perp, polyline_length, sub},
+    types::*,
 };
+use std::collections::HashSet;
+use std::f64::consts::PI;
+
 pub const SIDEWALK: f64 = 2.5;
-fn kind_grade(k: crate::types::RoadKind) -> f64 {
-    if k == crate::types::RoadKind::Highway {
-        0.07
-    } else {
-        0.1
+fn curb_radius(kind: RoadKind) -> f64 {
+    match kind {
+        RoadKind::Highway => 14.,
+        RoadKind::Avenue => 11.,
+        RoadKind::Street => 7.,
+        RoadKind::Lane => 4.,
     }
 }
-pub fn simplify_polyline(points: &[Point], tol: f64) -> Vec<Point> {
+fn lanes(kind: RoadKind) -> usize {
+    match kind {
+        RoadKind::Highway | RoadKind::Avenue => 4,
+        RoadKind::Street | RoadKind::Lane => 2,
+    }
+}
+pub fn road_rank_by_kind(kind: RoadKind) -> usize {
+    match kind {
+        RoadKind::Highway => 3,
+        RoadKind::Avenue => 2,
+        RoadKind::Street => 1,
+        RoadKind::Lane => 0,
+    }
+}
+
+pub fn simplify_polyline(points: &[Point], tolerance: f64) -> Vec<Point> {
     if points.len() < 3 {
         return points.to_vec();
     }
@@ -22,26 +41,18 @@ pub fn simplify_polyline(points: &[Point], tol: f64) -> Vec<Point> {
     let mut stack = vec![(0, points.len() - 1)];
     while let Some((a, b)) = stack.pop() {
         let mut worst = 0.;
-        let mut idx = None;
+        let mut index = None;
         for i in a + 1..b {
-            let ab = geom::sub(points[b], points[a]);
-            let l = geom::len(ab);
-            let d = if l < 1e-6 {
-                geom::dist(points[i], points[a])
-            } else {
-                ((ab.x * (points[i].z - points[a].z) - ab.z * (points[i].x - points[a].x)) / l)
-                    .abs()
-            };
+            let d = distance_to_line(points[i], points[a], points[b]);
             if d > worst {
                 worst = d;
-                idx = Some(i);
+                index = Some(i);
             }
         }
-        if worst > tol {
-            let i = idx.unwrap();
-            keep[i] = true;
-            stack.push((a, i));
-            stack.push((i, b));
+        if let Some(index) = index.filter(|_| worst > tolerance) {
+            keep[index] = true;
+            stack.push((a, index));
+            stack.push((index, b));
         }
     }
     points
@@ -50,37 +61,41 @@ pub fn simplify_polyline(points: &[Point], tol: f64) -> Vec<Point> {
         .filter_map(|(i, p)| keep[i].then_some(*p))
         .collect()
 }
+fn distance_to_line(p: Point, a: Point, b: Point) -> f64 {
+    let ab = sub(b, a);
+    let l = ab.x.hypot(ab.z);
+    if l < 1e-6 {
+        return dist(p, a);
+    }
+    (ab.x * (p.z - a.z) - ab.z * (p.x - a.x)).abs() / l
+}
 pub fn catmull_rom(points: &[Point], step: f64) -> Vec<Point> {
     if points.len() < 3 {
         return points.to_vec();
     }
-    let mut p = Vec::with_capacity(points.len() + 2);
-    p.push(geom::sub(geom::mul(points[0], 2.), points[1]));
+    let mut p = vec![sub(mul(points[0], 2.), points[1])];
     p.extend_from_slice(points);
-    p.push(geom::sub(
-        geom::mul(*points.last().unwrap(), 2.),
+    p.push(sub(
+        mul(points[points.len() - 1], 2.),
         points[points.len() - 2],
     ));
-    let knot = |a: Point, b: Point| geom::dist(a, b).max(1e-4).powf(0.5);
     let mut out = vec![points[0]];
+    let knot = |a, b| dist(a, b).max(1e-4).powf(0.5);
     for i in 1..p.len() - 2 {
         let (p0, p1, p2, p3) = (p[i - 1], p[i], p[i + 1], p[i + 2]);
-        let (t0, t1, t2, t3) = (
-            0.,
-            knot(p0, p1),
-            knot(p0, p1) + knot(p1, p2),
-            knot(p0, p1) + knot(p1, p2) + knot(p2, p3),
-        );
-        let n = (geom::dist(p1, p2) / step).ceil().max(1.) as usize;
-        for s in 1..=n {
-            let t = t1 + (t2 - t1) * s as f64 / n as f64;
-            let l = |a: Point, b: Point, u: f64| geom::lerp(a, b, u);
-            let a1 = l(p0, p1, (t - t0) / (t1 - t0));
-            let a2 = l(p1, p2, (t - t1) / (t2 - t1));
-            let a3 = l(p2, p3, (t - t2) / (t3 - t2));
-            let b1 = l(a1, a2, (t - t0) / (t2 - t0));
-            let b2 = l(a2, a3, (t - t1) / (t3 - t1));
-            out.push(l(b1, b2, (t - t1) / (t2 - t1)));
+        let t0 = 0.;
+        let t1 = t0 + knot(p0, p1);
+        let t2 = t1 + knot(p1, p2);
+        let t3 = t2 + knot(p2, p3);
+        let samples = (dist(p1, p2) / step).ceil().max(1.) as usize;
+        for s in 1..=samples {
+            let t = t1 + ((t2 - t1) * s as f64) / samples as f64;
+            let a1 = lerp_point(p0, p1, (t - t0) / (t1 - t0));
+            let a2 = lerp_point(p1, p2, (t - t1) / (t2 - t1));
+            let a3 = lerp_point(p2, p3, (t - t2) / (t3 - t2));
+            let b1 = lerp_point(a1, a2, (t - t0) / (t2 - t0));
+            let b2 = lerp_point(a2, a3, (t - t1) / (t3 - t1));
+            out.push(lerp_point(b1, b2, (t - t1) / (t2 - t1)));
         }
     }
     *out.last_mut().unwrap() = *points.last().unwrap();
@@ -93,150 +108,212 @@ pub fn round_corners(points: &[Point], radius: f64, min_turn: f64) -> Vec<Point>
     let mut out = vec![points[0]];
     for i in 1..points.len() - 1 {
         let p = points[i];
-        let before = geom::sub(points[i - 1], p);
-        let after = geom::sub(points[i + 1], p);
-        let turn = std::f64::consts::PI
-            - geom::dot(geom::norm(before), geom::norm(after))
-                .clamp(-1., 1.)
-                .acos();
+        let before = sub(points[i - 1], p);
+        let after = sub(points[i + 1], p);
+        let turn = PI - dot(norm(before), norm(after)).clamp(-1., 1.).acos();
         if turn < min_turn {
             out.push(p);
             continue;
         }
         let half = turn / 2.;
         let tangent = (radius * half.tan())
-            .min(0.45 * geom::len(before))
-            .min(0.45 * geom::len(after));
+            .min(0.45 * before.x.hypot(before.z))
+            .min(0.45 * after.x.hypot(after.z));
         let r = tangent / half.tan();
-        let a = geom::add(p, geom::mul(geom::norm(before), tangent));
-        let b = geom::add(p, geom::mul(geom::norm(after), tangent));
-        let centre = geom::add(
-            p,
-            geom::mul(
-                geom::norm(geom::add(geom::norm(before), geom::norm(after))),
-                r / half.cos(),
-            ),
-        );
+        let a = add(p, mul(norm(before), tangent));
+        let b = add(p, mul(norm(after), tangent));
+        let centre = add(p, mul(norm(add(norm(before), norm(after))), r / half.cos()));
         let from = (a.z - centre.z).atan2(a.x - centre.x);
         let mut to = (b.z - centre.z).atan2(b.x - centre.x);
-        while to - from > std::f64::consts::PI {
-            to -= 2. * std::f64::consts::PI;
+        while to - from > PI {
+            to -= PI * 2.;
         }
-        while to - from < -std::f64::consts::PI {
-            to += 2. * std::f64::consts::PI;
+        while to - from < -PI {
+            to += PI * 2.;
         }
-        let n = ((to - from).abs() * r / 3.).ceil().max(2.) as usize;
-        for s in 0..=n {
-            let q = from + (to - from) * s as f64 / n as f64;
+        let steps = (((to - from).abs() * r) / 3.).ceil().max(2.) as usize;
+        for s in 0..=steps {
+            let angle = from + ((to - from) * s as f64) / steps as f64;
             out.push(Point {
-                x: centre.x + q.cos() * r,
-                z: centre.z + q.sin() * r,
+                x: centre.x + angle.cos() * r,
+                z: centre.z + angle.sin() * r,
             });
         }
-        let _ = b;
     }
     out.push(*points.last().unwrap());
     out
 }
+pub fn smooth_centrelines(graph: &mut RoadGraph) {
+    for e in &mut graph.edges {
+        let simplified = round_corners(&simplify_polyline(&e.points, 0.9), e.width * 2., 0.4);
+        e.points = if e.bridge {
+            simplified
+        } else {
+            widen_bends(&catmull_rom(&simplified, 4.), e.width / 2. + SIDEWALK + 1.)
+        };
+    }
+}
+
+pub fn offset_polyline(points: &[Point], half_width: f64) -> (Vec<Point>, Vec<Point>) {
+    if points.len() == 1 {
+        return (vec![points[0]], vec![points[0]]);
+    }
+    let mut left = Vec::new();
+    let mut right = Vec::new();
+    for (i, &p) in points.iter().enumerate() {
+        let d_in = if i > 0 {
+            norm(sub(p, points[i - 1]))
+        } else {
+            norm(sub(points[1], p))
+        };
+        let d_out = if i < points.len() - 1 {
+            norm(sub(points[i + 1], p))
+        } else {
+            d_in
+        };
+        let mut n = norm(add(perp(d_in), perp(d_out)));
+        let cos = n.x * perp(d_in).x + n.z * perp(d_in).z;
+        let scale = (1. / cos.max(0.35)).min(2.5);
+        n = mul(n, scale);
+        left.push(add(p, mul(n, half_width)));
+        right.push(add(p, mul(n, -half_width)));
+    }
+    for side in [&mut left, &mut right] {
+        for i in 1..side.len() {
+            if dot(sub(side[i], side[i - 1]), sub(points[i], points[i - 1])) <= 0. {
+                side[i] = side[i - 1];
+            }
+        }
+    }
+    (left, right)
+}
+pub fn trim_polyline(points: &[Point], start_cut: f64, end_cut: f64) -> Vec<Point> {
+    let total = polyline_length(points);
+    if start_cut + end_cut >= total - 0.1 {
+        let from = (total - end_cut).max(0.);
+        let to = start_cut.min(total);
+        if to - from >= 0.05 {
+            let mut overlap = vec![point_at(points, from)];
+            let mut along = 0.;
+            for i in 1..points.len() - 1 {
+                along += dist(points[i - 1], points[i]);
+                if along > from + 0.5 && along < to - 0.5 {
+                    overlap.push(points[i]);
+                }
+            }
+            overlap.push(point_at(points, to));
+            return overlap;
+        }
+        return vec![
+            point_at(points, start_cut.min(total / 2. - 0.5)),
+            point_at(points, (total - end_cut).max(total / 2. + 0.5)),
+        ];
+    }
+    let mut out = vec![point_at(points, start_cut)];
+    let mut s = 0.;
+    for i in 1..points.len() - 1 {
+        s += dist(points[i - 1], points[i]);
+        if s > start_cut + 0.5 && s < total - end_cut - 0.5 {
+            out.push(points[i]);
+        }
+    }
+    out.push(point_at(points, total - end_cut));
+    out
+}
+pub fn point_at(points: &[Point], distance: f64) -> Point {
+    let mut s = 0.;
+    for i in 1..points.len() {
+        let d = dist(points[i - 1], points[i]);
+        if s + d >= distance {
+            return lerp_point(
+                points[i - 1],
+                points[i],
+                if d != 0. { (distance - s) / d } else { 0. },
+            );
+        }
+        s += d;
+    }
+    *points.last().unwrap()
+}
+pub fn densify_centrelines(graph: &mut RoadGraph) {
+    for e in &mut graph.edges {
+        let mut dense = Vec::new();
+        for i in 1..e.points.len() {
+            let a = e.points[i - 1];
+            let b = e.points[i];
+            let steps = (dist(a, b) / 8.).ceil().max(1.) as usize;
+            for s in 0..steps {
+                dense.push(lerp_point(a, b, s as f64 / steps as f64));
+            }
+        }
+        dense.push(*e.points.last().unwrap());
+        e.points = dense;
+    }
+}
+pub fn bend_grades(points: &[Point], base: f64) -> Vec<f64> {
+    let radius = bend_radii(points);
+    (0..points.len() - 1)
+        .map(|i| {
+            let r = radius[i].min(radius[i + 1]);
+            base * (0.4 + (0.6 * (r - 8.)) / 32.).clamp(0.4, 1.)
+        })
+        .collect()
+}
+pub fn bend_radii(points: &[Point]) -> Vec<f64> {
+    let mut along = vec![0.];
+    for i in 1..points.len() {
+        along.push(along[i - 1] + dist(points[i - 1], points[i]));
+    }
+    points
+        .iter()
+        .enumerate()
+        .map(|(i, &p)| {
+            let a = point_at(points, (along[i] - 8.).max(0.));
+            let c = point_at(points, (along[points.len() - 1]).min(along[i] + 8.));
+            if dist(a, p) < 1e-6 || dist(p, c) < 1e-6 {
+                return f64::INFINITY;
+            }
+            let turn = ((c.z - p.z).atan2(c.x - p.x) - (p.z - a.z).atan2(p.x - a.x)).abs();
+            let angle = turn.min(PI * 2. - turn);
+            if angle > 1e-3 {
+                8. / angle
+            } else {
+                f64::INFINITY
+            }
+        })
+        .collect()
+}
 pub fn widen_bends(points: &[Point], min_radius: f64) -> Vec<Point> {
     let mut out = points.to_vec();
     for _ in 0..80 {
+        let radius = bend_radii(&out);
         let mut tight = Vec::new();
-        for i in 1..out.len().saturating_sub(1) {
-            let a = geom::norm(geom::sub(out[i - 1], out[i]));
-            let b = geom::norm(geom::sub(out[i + 1], out[i]));
-            let r = geom::len(geom::sub(out[i], geom::lerp(out[i - 1], out[i + 1], 0.5))) * 2.;
-            if r < min_radius {
-                tight.push(i);
-                let _ = (a, b);
+        let mut seen = HashSet::new();
+        for (i, &r) in radius.iter().enumerate() {
+            if r < min_radius && i > 0 && i < out.len() - 1 {
+                for k in 1.max(i.saturating_sub(2))..=(out.len() - 2).min(i + 2) {
+                    if seen.insert(k) {
+                        tight.push(k);
+                    }
+                }
             }
         }
         if tight.is_empty() {
             break;
         }
-        let old = out.clone();
+        let mut next = out.clone();
         for i in tight {
-            out[i] = Point {
-                x: (old[i - 1].x + 2. * old[i].x + old[i + 1].x) / 4.,
-                z: (old[i - 1].z + 2. * old[i].z + old[i + 1].z) / 4.,
-            };
+            next[i].x = (out[i - 1].x + 2. * out[i].x + out[i + 1].x) / 4.;
+            next[i].z = (out[i - 1].z + 2. * out[i].z + out[i + 1].z) / 4.;
         }
+        out = next;
     }
     out
 }
-pub fn smooth_centrelines(graph: &mut RoadGraph) {
-    for e in &mut graph.edges {
-        let p = round_corners(&simplify_polyline(&e.points, 0.9), e.width * 2., 0.4);
-        e.points = if e.bridge {
-            p
-        } else {
-            widen_bends(&catmull_rom(&p, 4.), e.width / 2. + SIDEWALK + 1.)
-        };
-    }
-}
-pub fn point_at(points: &[Point], distance: f64) -> Point {
-    if points.is_empty() {
-        return Point::default();
-    }
-    let mut d = distance.max(0.);
-    for w in points.windows(2) {
-        let l = geom::dist(w[0], w[1]);
-        if d <= l {
-            return geom::lerp(w[0], w[1], if l == 0. { 0. } else { d / l });
-        }
-        d -= l;
-    }
-    *points.last().unwrap()
-}
-pub fn trim_polyline(points: &[Point], start: f64, end: f64) -> Vec<Point> {
-    let total = geom::polyline_length(points);
-    let a = start.clamp(0., total);
-    let b = (total - end).clamp(a, total);
-    let mut out = vec![point_at(points, a)];
-    let mut run = 0.;
-    for w in points.windows(2) {
-        let l = geom::dist(w[0], w[1]);
-        if run + l > a && run + l < b {
-            out.push(w[1]);
-        }
-        run += l;
-    }
-    if b > a {
-        out.push(point_at(points, b));
-    }
-    out
-}
-pub fn offset_polyline(points: &[Point], half: f64) -> (Vec<Point>, Vec<Point>) {
-    let mut l = Vec::with_capacity(points.len());
-    let mut r = Vec::with_capacity(points.len());
-    for i in 0..points.len() {
-        let t = if i == 0 {
-            geom::norm(geom::sub(points[1], points[0]))
-        } else if i + 1 == points.len() {
-            geom::norm(geom::sub(points[i], points[i - 1]))
-        } else {
-            geom::norm(geom::add(
-                geom::norm(geom::sub(points[i], points[i - 1])),
-                geom::norm(geom::sub(points[i + 1], points[i])),
-            ))
-        };
-        let n = geom::perp(t);
-        l.push(geom::add(points[i], geom::mul(n, half)));
-        r.push(geom::add(points[i], geom::mul(n, -half)));
-    }
-    (l, r)
-}
-pub fn densify_centrelines(graph: &mut RoadGraph) {
-    for e in &mut graph.edges {
-        let mut out = vec![e.points[0]];
-        for w in e.points.windows(2) {
-            let n = (geom::dist(w[0], w[1]) / 8.).ceil() as usize;
-            for i in 1..=n {
-                out.push(geom::lerp(w[0], w[1], i as f64 / n as f64));
-            }
-        }
-        e.points = out;
-    }
+
+use crate::{field::to_world, geom};
+fn kind_grade(k: RoadKind) -> f64 {
+    if k == RoadKind::Highway { 0.07 } else { 0.1 }
 }
 pub fn build_road_geometry(graph: &RoadGraph) -> RoadGeometry {
     let mut g = RoadGeometry {
@@ -296,9 +373,6 @@ pub fn build_road_geometry(graph: &RoadGraph) -> RoadGeometry {
         }
     }
     g
-}
-pub fn bend_grades(points: &[Point], base: f64) -> Vec<f64> {
-    vec![base; points.len().saturating_sub(1)]
 }
 pub fn solve_profiles(graph: &mut RoadGraph, f: &HeightField, trims: &[(f64, f64)]) {
     for n in &mut graph.nodes {

@@ -38,7 +38,10 @@ pub fn norm(a: Point) -> Point {
     if l == 0.0 {
         Point { x: 0.0, z: 0.0 }
     } else {
-        mul(a, 1.0 / l)
+        Point {
+            x: a.x / l,
+            z: a.z / l,
+        }
     }
 }
 pub fn perp(a: Point) -> Point {
