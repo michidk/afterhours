@@ -154,3 +154,56 @@ export class FrameWindow {
     };
   }
 }
+
+/**
+ * Lowers the render resolution while frames stay slow. A machine that draws 15 fps waits a frame
+ * for every key press and shows each snapshot late, however good the link: the only lever left
+ * is fewer pixels. The level is the engine's hardware scaling (1 = one pixel per CSS pixel, higher
+ * = fewer pixels). It steps up when the median frame of the last two seconds is over `slowMs`
+ * (under about 26 fps, which a 30 Hz display never reaches) and steps back after a cooldown at
+ * vsync speed; a step back that is slow again within 10 s doubles the cooldown (up to 160 s).
+ */
+export class RenderScale {
+  level: number;
+  private frames: { at: number; ms: number }[] = [];
+  private changed = 0;
+  private cooldown = 20_000;
+  private raisedAt = -Infinity;
+  constructor(
+    readonly base: number,
+    readonly max = base * 2,
+    private slowMs = 38,
+    private step = 1.25,
+  ) {
+    this.level = base;
+  }
+  /** One drawn frame; returns the new level when it changed. */
+  frame(now: number, ms: number): number | undefined {
+    // A stall this long is a hidden tab or a paused debugger, not the machine's speed.
+    if (ms > 2000) {
+      this.frames = [];
+      return;
+    }
+    this.frames.push({ at: now, ms });
+    while (this.frames[0] && this.frames[0].at < now - 2000) this.frames.shift();
+    if (this.frames.length < 3 || now - this.changed < 2000) return;
+    const sorted = this.frames.map((f) => f.ms).sort((a, b) => a - b);
+    const median = sorted[sorted.length >> 1];
+    if (median > this.slowMs && this.level < this.max) {
+      // Slow again soon after stepping back: the lower resolution was the right one.
+      if (now - this.raisedAt < 10_000)
+        this.cooldown = Math.min(this.cooldown * 2, 160_000);
+      return this.move(now, Math.min(this.max, this.level * this.step));
+    }
+    if (median <= 20 && this.level > this.base && now - this.changed >= this.cooldown) {
+      this.raisedAt = now;
+      return this.move(now, Math.max(this.base, this.level / this.step));
+    }
+  }
+  private move(now: number, level: number) {
+    this.level = level;
+    this.changed = now;
+    this.frames = [];
+    return level;
+  }
+}

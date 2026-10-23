@@ -4,6 +4,7 @@ export function updateNetworkStats(
   element: HTMLElement,
   network: GameNetwork,
   frames: { fps: number; p95Ms: number; worstMs: number },
+  scale?: { level: number; base: number },
 ) {
   const s = network.stats();
   const ms = (value: number | undefined) =>
@@ -15,6 +16,12 @@ export function updateNetworkStats(
     [
       "Frame rate (5 s)",
       `${Math.round(frames.fps)} fps, 95% under ${Math.round(frames.p95Ms)} ms, worst ${Math.round(frames.worstMs)} ms`,
+    ],
+    [
+      "Render resolution",
+      scale
+        ? `${Math.round((scale.base / scale.level) * 100)}%${scale.level > scale.base ? " (lowered: frames were slow)" : ""}`
+        : "—",
     ],
     ["Server ping (RTT)", ms(s.rtt)],
     ["Ping variation", ms(s.jitter)],

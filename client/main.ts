@@ -28,7 +28,12 @@ import { prepareFirstFrame } from "./startup.ts";
 import { meshGroupSchema } from "../shared/city-mesh.ts";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { CityScene } from "./scene";
-import { FrameProfiler, FrameWindow, profileNetwork } from "./performance/index.ts";
+import {
+  FrameProfiler,
+  FrameWindow,
+  RenderScale,
+  profileNetwork,
+} from "./performance/index.ts";
 import { AgentInterface } from "./debug/index.ts";
 import { CityStream, SCENERY_RADIUS } from "./world/stream.ts";
 import { CityRenderer } from "./world/render.ts";
@@ -455,10 +460,13 @@ function pumpInput(now = performance.now(), transition = false) {
   if (transition) inputClock.transition(now, send);
 }
 const frames = new FrameWindow();
+// `?fixedscale` keeps the resolution where it starts (for comparing renders).
+const fixedScale = new URLSearchParams(location.search).has("fixedscale");
+const renderScale = new RenderScale(Math.max(1, devicePixelRatio / 1.6));
 setInterval(pumpInput, 1000 / 30);
 setInterval(() => {
   if (debugAllowed && network && !$("#debug").classList.contains("hidden"))
-    updateNetworkStats($("#network-stats"), network, frames.stats);
+    updateNetworkStats($("#network-stats"), network, frames.stats, renderScale);
 }, 250);
 function debugPanelOpen(id: string) {
   const panel = $(`#debug-${id}`);
@@ -681,6 +689,7 @@ async function boot() {
           particles: scene.effects.effects.length,
           gpu: scene.engine.getGlInfo(),
           fps: scene.engine.getFps(),
+          renderScale: renderScale.level,
           frameP95Ms: profiler!.stats.frameP95Ms,
           frameMaxMs: profiler!.stats.frameMaxMs,
           frameStages: profiler!.stats.stagesP95Ms,
@@ -719,6 +728,11 @@ async function boot() {
         dt = Math.min(0.05, (now - last) / 1000);
       const interval = now - last;
       frames.record(now, interval);
+      const level = renderScale.frame(now, interval);
+      if (level !== undefined && !fixedScale) {
+        scene.engine.setHardwareScalingLevel(level);
+        scene.engine.resize();
+      }
       last = now;
       if (!joined) return;
       pumpInput(now);
