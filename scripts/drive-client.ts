@@ -404,6 +404,7 @@ const started = performance.now();
 const circle = Math.min(1, Math.atan(2.7 / radius) / CAR.steer);
 const steer = (t: number): Partial<Input> => {
   if (pattern === "straight") return {};
+  // Sitting in the vehicle with the pedals up: handled where the controls are assembled.
   // Two seconds of steering, two of none: clear onsets for the turn-response timer.
   if (pattern === "weave") return { moveX: Math.floor(t / 2) % 2 ? 0.8 : 0 };
   if (pattern === "track") {
@@ -480,6 +481,9 @@ const cost = (values: number[]) => {
 };
 const summary = {
   frames: 0,
+  /** Frames where the seated vehicle was not drawn / not in the client's entity map. */
+  missingFrames: 0,
+  missingEntityFrames: 0,
   /** Frames whose drawn speed differs from the body's speed by over 10%. */
   hitches: 0,
   /** 95th percentile and worst relative error of the drawn per-frame speed. */
@@ -528,6 +532,11 @@ const sampler = setInterval(() => {
   drawCosts.push(performance.now() - drawStart);
   recordCorrection();
   const pose = rendered.find((e) => e.id === bodyId);
+  // The vehicle this bot sits in must stay in the draw list: it once vanished while idle.
+  if (bodyId !== network.playerId) {
+    if (!pose) summary.missingFrames++;
+    if (!network.entities.has(bodyId)) summary.missingEntityFrames++;
+  }
   const p = network.prediction;
   if (strikeTarget && p?.impacts.has(strikeTarget.id)) strikePredictedAt ??= now;
   // The nose of the predicted car (2.2 m ahead of its centre, facing -z) meets the prop.
@@ -813,7 +822,9 @@ while (performance.now() - started < seconds * 1000) {
       : flying
         ? // Climb clear of the roofs, then full speed straight ahead (north).
           { ...idle(), up: t >= climbSeconds, ascend: t < climbSeconds }
-        : { ...idle(), up: true, sprint: model === "none", ...steer(t) };
+        : pattern === "still"
+          ? idle()
+          : { ...idle(), up: true, sprint: model === "none", ...steer(t) };
   await pause(50);
 }
 await finish();

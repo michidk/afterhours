@@ -20,6 +20,7 @@ import type { InputClock } from "../input/clock.ts";
 import { TUNING } from "../../shared/catalog.ts";
 import { InputStamper } from "./lead.ts";
 import { ActionLatency, type Drawn } from "./latency.ts";
+import { SeatWatch } from "./seat-watch.ts";
 import { Piloted } from "./piloted.ts";
 import { Prediction, loadPhysics, withPredicted } from "./prediction.ts";
 import { SnapshotTimeline } from "./timeline.ts";
@@ -87,6 +88,9 @@ export class GameNetwork {
   readonly actions = new ActionLatency();
   /** The craft the player flies (not predicted), drawn from the newest snapshot. */
   private piloted = new Piloted();
+  /** When the vehicle the player sits in vanished or they were dropped out of it, and why. */
+  readonly seat = new SeatWatch();
+  private interactAt = -Infinity;
   /** What the last drawn frame showed of the controlled body. */
   private seated = false;
   private drawn: Drawn | undefined;
@@ -220,6 +224,7 @@ export class GameNetwork {
     if (m.base === null) this.entities.clear();
     for (const id of m.removed) this.entities.delete(id);
     for (const e of m.entities) this.entities.set(e.id, e as Entity);
+    this.seat.update(now, this.playerId, this.entities, this.interactAt);
     this.serverTick = m.tick;
     this.serverTime = m.time;
     this.ack = m.ack ?? undefined;
@@ -283,7 +288,10 @@ export class GameNetwork {
         // Edge actions ride on the next input frame instead of a separate message.
         this.edge[message.type] = true;
         if (message.type === "interact")
-          this.actions.pressInteract(performance.now(), this.seated);
+          this.actions.pressInteract(
+            (this.interactAt = performance.now()),
+            this.seated,
+          );
         return true;
       case "equip":
         this.edge.equip = message.slot as number;
@@ -401,6 +409,7 @@ export class GameNetwork {
       connected: this.welcomed && this.socket?.readyState === WebSocket.OPEN,
       lastDisconnect: this.lastDisconnect,
       reconnects: this.reconnects,
+      seatLoss: this.seat.loss,
       enterMs: this.actions.enterMs,
       steerMs: this.actions.steerMs,
       controlled: this.controlled,

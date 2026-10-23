@@ -32,6 +32,12 @@ export function updateNetworkStats(
     ["Interpolation delay", ms(s.interpolationDelay)],
     ["Enter / exit vehicle", ms(s.enterMs)],
     [
+      "Dropped from vehicle",
+      s.seatLoss
+        ? `${s.seatLoss.reason} (${Math.round((performance.now() - s.seatLoss.at) / 1000)} s ago)`
+        : "never",
+    ],
+    [
       "Turn response",
       s.steerMs === undefined
         ? "—"
