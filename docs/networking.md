@@ -374,3 +374,14 @@ copy, interpolated). The predicted body advances on 30 Hz input ticks, so `Predi
 carries its last step forward by the time since that step, capped at one tick, instead of drawing a
 stall and a double jump on a faster screen. A walker's predicted velocity comes from the same step
 (the physics row has none).
+
+Cars within 16 m of you are drawn the same way, not from the server copy: the prediction already
+simulates them (restored from each snapshot and replayed through your unacknowledged inputs, so
+they are time-aligned with your own body), and a collision is decided in that world. The server
+copy is an interpolation delay behind, so a car passing at 10 m/s was drawn about three metres from
+where the predicted body met it. Each such car carries its own correction easing and between-tick
+step, and fades between the two over 0.4 s at the 16 m edge so nothing pops. Cars further out, and
+other people, are still interpolated from snapshots.
+
+The server also sends `roster` (who is in the city, on every join and leave) and `positions` (where
+everyone is, about twice a second); the player list, nameplates and island map read them.

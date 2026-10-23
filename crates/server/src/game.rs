@@ -11,7 +11,8 @@ use afterhours_physics::{
     vehicle_contact_y,
 };
 use afterhours_protocol::{
-    ClientMessage, Controls, Entity, Kind, ServerMessage, TICK_RATE, VERSION, WorldEvent, encode,
+    ClientMessage, Controls, Entity, Kind, PlayerPosition, PlayerSummary, ServerMessage, TICK_RATE,
+    VERSION, WorldEvent, encode,
 };
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, HashMap, VecDeque};
@@ -201,6 +202,7 @@ impl Game {
                         }
                     }
                 }
+                self.send_roster();
             }
             Event::Message(
                 id,
@@ -241,6 +243,7 @@ impl Game {
                         lead: 0,
                     },
                 );
+                self.send_roster();
             }
             Event::Message(
                 id,
@@ -752,12 +755,48 @@ impl Game {
         Some(snap[at..at + len].to_vec())
     }
 
+    /// Tells everyone who is in the city; sent whenever someone joins or leaves.
+    fn send_roster(&self) {
+        let players: Vec<PlayerSummary> = self
+            .players
+            .iter()
+            .map(|(id, p)| PlayerSummary {
+                id: id.to_string(),
+                name: p.name.clone(),
+                color: p.color.clone(),
+            })
+            .collect();
+        let bytes = encode(&ServerMessage::Roster { players });
+        for p in self.players.values() {
+            let _ = p.out.send(bytes.clone());
+        }
+    }
+
     fn broadcast(&mut self) {
         let mut events = std::mem::take(&mut self.events);
         events.append(&mut self.destruction.events);
         events.append(&mut self.combat.take_events());
         let (tick, current) = self.history.back().unwrap();
+        // Where everyone is, whatever the interest radius: the island map draws from it.
+        let positions = (*tick % 16 == 0).then(|| {
+            encode(&ServerMessage::Positions {
+                players: self
+                    .players
+                    .keys()
+                    .filter_map(|id| current.get(id).map(|e| (id, e)))
+                    .map(|(id, e)| PlayerPosition {
+                        id: id.to_string(),
+                        x: e.x,
+                        z: e.z,
+                        angle: e.angle,
+                    })
+                    .collect(),
+            })
+        });
         for (id, p) in &self.players {
+            if let Some(bytes) = &positions {
+                let _ = p.out.send(bytes.clone());
+            }
             let broken = self.destruction.broken_for(*id, *tick);
             let me = current.get(id).map_or([0.0, 0.0], |e| [e.x, e.z]);
             let events = events

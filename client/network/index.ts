@@ -141,6 +141,8 @@ export class GameNetwork {
       this.lastResponse = performance.now();
       if (m.type === "welcome") this.welcome(m);
       else if (m.type === "state") this.state(m);
+      else if (m.type === "roster") this.hooks.roster?.(m.players);
+      else if (m.type === "positions") this.hooks.positions?.(m.players);
       else if (m.type === "chat") this.hooks.chat(m.name, m.text);
       else if (m.type === "debugResult") {
         const pending = this.debugRequests.get(m.requestId);
@@ -328,7 +330,9 @@ export class GameNetwork {
   renderEntities(now: number, _input?: Input): Entity[] {
     const frame = this.timeline.sample(now);
     const me = this.prediction?.render(now);
-    return me ? withPredicted(frame, me, this.playerId) : frame;
+    return me
+      ? withPredicted(frame, me, this.playerId, this.prediction?.drawnCars)
+      : frame;
   }
   stats(now = performance.now()) {
     const p = this.prediction;

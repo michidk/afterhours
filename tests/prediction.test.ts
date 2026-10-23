@@ -245,3 +245,54 @@ test("the drawn body keeps moving between input ticks, by at most one tick", asy
   assert.ok(at(16) - at(0) < speed / 30, "more than one tick of carry");
   assert.ok(at(1000) - at(33) < 0.05, "carry is not capped at one tick");
 });
+
+// Collisions are simulated against the predicted world, so the cars you can hit must be drawn
+// from it: the server copy is a quarter of a second behind, and a car passing at 10 m/s was
+// drawn about three metres from where the predicted body actually met it.
+test("cars within reach are drawn from the predicted world, far ones from the server", async () => {
+  await loadPhysics();
+  const [driver, car] = player("sedan");
+  const passer = (id: string, x: number): Entity =>
+    ({ ...car, id, driver: undefined, ai: true, x, y: 0, z: 0, vz: 10 }) as Entity;
+  const near = passer("near", 8),
+    far = passer("far", 30);
+  const prediction = new Prediction({});
+  const idle = {
+    up: false,
+    down: false,
+    left: false,
+    right: false,
+    brake: false,
+    sprint: false,
+    ascend: false,
+    descend: false,
+    attack: false,
+  };
+  prediction.reconcile(driver, car, snapshot, undefined, [car, near, far]);
+  // Eight unacknowledged ticks: the world is replayed to "now" on the next snapshot.
+  for (let tick = 1; tick <= 8; tick++) prediction.input(tick, idle);
+  prediction.reconcile(driver, car, snapshot, 0, [car, near, far]);
+  const t = performance.now();
+  let me: Entity | undefined;
+  for (let i = 0; i < 8; i++) me = prediction.render(t + i * 100);
+  const frame = [driver, car, near, far];
+  const drawn = withPredicted(frame, me!, "player-1", prediction.drawnCars);
+  const z = (id: string) => drawn.find((e) => e.id === id)!.z;
+  // Eight ticks at about 10 m/s: 2.5 m ahead of the snapshot the server copy is still at.
+  assert.ok(z("near") > 2 && z("near") < 3.2, `near car drawn at z=${z("near")}`);
+  assert.equal(z("far"), 0, "a car beyond reach stays on its server copy");
+  // Driving on, the passer leaves the 16 m ring: it fades back instead of jumping.
+  const gone = { ...near, x: 20 };
+  prediction.reconcile(driver, car, snapshot, 0, [car, gone, far]);
+  prediction.render(t + 800 + 50);
+  const half = withPredicted(frame, me!, "player-1", prediction.drawnCars).find(
+    (e) => e.id === "near",
+  )!;
+  assert.ok(half.z > 0.2 && half.z < z("near"), `no fade: z=${half.z}`);
+  for (let i = 0; i < 6; i++) prediction.render(t + 900 + i * 100);
+  assert.equal(
+    prediction.drawnCars.has("near"),
+    false,
+    "the faded car is still swapped",
+  );
+});

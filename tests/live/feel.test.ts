@@ -30,7 +30,10 @@ interface Report {
   correctionsOver1m: number;
   maxPending: number;
   topSpeed: number;
+  drawnGapMean: number;
   drawnGapMax: number;
+  rosterSize: number;
+  positionsSeen: number;
   groundClearanceP95: number;
   server?: { tickCpuP95Ms: number; tickP95Ms: number; late: number };
 }
@@ -91,15 +94,21 @@ async function drive(name: string, args: string[]): Promise<Report> {
 
 const share = (count: number, report: Report) => count / Math.max(1, report.frames);
 
-function feels(r: Report, minSpeed: number) {
+function feels(r: Report, minSpeed: number, spiky = false) {
   assert.ok(r.frames > seconds * 20, `only ${r.frames} frames measured`);
   assert.ok(r.topSpeed > minSpeed, `never got moving: top speed ${r.topSpeed}`);
-  // The draw carries the body on by up to one 30 Hz tick of travel, plus a small correction that
-  // is still easing out; anything beyond is lag.
+  // The draw carries the body on by up to one 30 Hz tick, so a healthy mean is about half a
+  // tick of travel; the bug that drew the server copy had a mean of about 4 m. A 150 ms spike
+  // makes the server hold the last controls and the late inputs correct the prediction by up to
+  // a metre, so only the clean link is held to the worst case.
   const tickOfTravel = r.topSpeed / 30;
   assert.ok(
-    r.drawnGapMax < tickOfTravel + 0.25,
-    `drawn ${r.drawnGapMax} m from the predicted body (one tick is ${tickOfTravel.toFixed(2)} m)`,
+    r.drawnGapMean < tickOfTravel,
+    `drawn ${r.drawnGapMean} m from the predicted body on average (one tick is ${tickOfTravel.toFixed(2)} m)`,
+  );
+  assert.ok(
+    r.drawnGapMax < (spiky ? 2 : tickOfTravel + 0.25),
+    `drawn ${r.drawnGapMax} m from the predicted body at worst`,
   );
   assert.ok(share(r.freezes, r) < 0.08, `${r.freezes}/${r.frames} frames stalled`);
   assert.ok(share(r.forwardLurches, r) < 0.08, `${r.forwardLurches} lurches`);
@@ -108,9 +117,15 @@ function feels(r: Report, minSpeed: number) {
     r.groundClearanceP95 < 0.6,
     `drawn ${r.groundClearanceP95} m off the ground`,
   );
-  assert.ok(r.corrections <= 3, `${r.corrections} prediction corrections`);
+  assert.ok(
+    r.corrections <= (spiky ? 15 : 3),
+    `${r.corrections} prediction corrections`,
+  );
   assert.equal(r.correctionsOver1m, 0, "the prediction was off by over a metre");
   assert.ok(r.maxPending <= 20, `${r.maxPending} inputs waiting for the server`);
+  // The player list reads "Connecting…" until the roster arrives.
+  assert.ok(r.rosterSize >= 1, "no player roster reached the client");
+  assert.ok(r.positionsSeen >= 1, "no player positions reached the client");
   assert.ok(r.server, "no server diagnostics (is debug enabled?)");
   assert.ok(
     r.server.tickCpuP95Ms < 20,
@@ -145,6 +160,7 @@ for (const [label, model, speed] of [
         ...laggy,
       ]),
       model === "none" ? 4 : 12,
+      true,
     );
   });
 }

@@ -219,3 +219,41 @@ async fn the_ack_follows_the_simulated_tick_even_when_no_input_arrived() {
         }
     }
 }
+
+/// The player list, nameplates and island map hang on these two messages.
+#[tokio::test]
+async fn everyone_gets_a_roster_when_players_come_and_go_and_their_positions() {
+    let url = start().await;
+    let (mut a, a_id) = join(&url, "Ada").await;
+    let roster = |m: &ServerMessage| match m {
+        ServerMessage::Roster { players } => {
+            Some(players.iter().map(|p| p.name.clone()).collect::<Vec<_>>())
+        }
+        _ => None,
+    };
+    let (mut b, _) = join(&url, "Bo").await;
+    let (mut names, mut positioned) = (None, false);
+    for _ in 0..200 {
+        let m = recv(&mut a).await;
+        if let Some(n) = roster(&m) {
+            names = Some(n);
+        }
+        if let ServerMessage::Positions { players } = &m {
+            positioned |= players.iter().any(|p| p.id == a_id);
+        }
+        if names.as_ref().is_some_and(|n| n.len() == 2) && positioned {
+            break;
+        }
+    }
+    let mut both = names.expect("no roster arrived");
+    both.sort();
+    assert_eq!(both, ["Ada", "Bo"]);
+    assert!(positioned, "no positions arrived");
+    b.close(None).await.unwrap();
+    for _ in 0..200 {
+        if roster(&recv(&mut a).await).is_some_and(|n| n == ["Ada"]) {
+            return;
+        }
+    }
+    panic!("no roster without the player who left");
+}

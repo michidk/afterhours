@@ -69,7 +69,16 @@ async fn drive(
     entities: &mut HashMap<String, Entity>,
     controls: &Controls,
 ) -> ServerMessage {
-    let m = recv(ws).await;
+    // The roster and positions arrive between states; this wants the next state.
+    let m = loop {
+        let m = recv(ws).await;
+        if !matches!(
+            m,
+            ServerMessage::Roster { .. } | ServerMessage::Positions { .. }
+        ) {
+            break m;
+        }
+    };
     if let ServerMessage::State {
         tick,
         base,

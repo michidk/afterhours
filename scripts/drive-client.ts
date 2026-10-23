@@ -138,6 +138,9 @@ const oneWay = () => delay + rand() * jitter + (rand() < spikeRate ? spike : 0);
 let recording = false;
 let serverMap = "",
   debugAllowed = false;
+/** What the player list and the island map would show. */
+let rosterSize = 0,
+  positionsSeen = 0;
 const network = new GameNetwork(
   {
     welcome(m) {
@@ -146,6 +149,12 @@ const network = new GameNetwork(
     },
     state() {},
     chat() {},
+    roster(players) {
+      rosterSize = players.length;
+    },
+    positions(players) {
+      positionsSeen = players.length;
+    },
     status(state) {
       console.error(`[status] ${state}: ${network.stats().lastDisconnect ?? ""}`);
       if (recording && output)
@@ -577,6 +586,8 @@ const finish = async () => {
     limit,
     ...summary,
     maxInputLagMs: +maxInputLag.toFixed(1),
+    rosterSize,
+    positionsSeen,
     server,
     health,
   };
@@ -592,6 +603,8 @@ const finish = async () => {
         limit,
         ...summary,
         maxInputLagMs: +maxInputLag.toFixed(1),
+        rosterSize,
+        positionsSeen,
         server,
         health,
       },

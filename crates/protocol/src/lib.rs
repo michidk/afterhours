@@ -345,6 +345,25 @@ pub struct DebrisState {
     pub expires_at: f64,
 }
 
+/// Who is in the city, for the player list and nameplates.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export, rename_all = "camelCase")]
+pub struct PlayerSummary {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+}
+
+/// Where a player is, whatever the network interest radius, for the island map.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export, rename_all = "camelCase")]
+pub struct PlayerPosition {
+    pub id: String,
+    pub x: f32,
+    pub z: f32,
+    pub angle: f32,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(
     tag = "type",
@@ -393,6 +412,14 @@ pub enum ServerMessage {
         #[serde(skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         broken: Option<Vec<String>>,
+    },
+    /// Sent to everyone whenever a player joins or leaves.
+    Roster {
+        players: Vec<PlayerSummary>,
+    },
+    /// Every player's position, a couple of times a second.
+    Positions {
+        players: Vec<PlayerPosition>,
     },
     Chat {
         name: String,
