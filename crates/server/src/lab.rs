@@ -32,7 +32,7 @@ impl Lab {
         let spawn = [at[0], loaded.height(at[0], at[1]) + 1.0, at[1]];
         let mut game = Game::new(world, spawn);
         game.set_city(&loaded);
-        game.park(&loaded);
+        game.stock(&loaded).expect("city fleet");
         if std::env::var("SCENE_NO_PROPS").is_err() {
             game.add_props(destruction::destructibles(&loaded));
         }

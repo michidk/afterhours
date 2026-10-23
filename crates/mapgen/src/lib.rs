@@ -23,6 +23,7 @@ pub mod shoreline;
 pub mod site;
 pub mod streetfit;
 pub mod terrain;
+pub mod testworld;
 pub mod types;
 pub mod vegetation;
 

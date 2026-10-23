@@ -10,3 +10,5 @@ dist-explorer/
 target/
 crates/physics/pkg/
 crates/physics/pkg-node/
+data/test-world.json
+data/test-world-meshes.msgpack

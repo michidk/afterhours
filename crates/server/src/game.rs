@@ -162,12 +162,47 @@ impl Game {
         self.traffic.vacate_car(car)
     }
 
+    /// Fills the world with what the city calls for: the showroom when it carries one (the test
+    /// world), otherwise the parked fleet.
+    pub fn stock(&mut self, city: &City) -> Result<(), String> {
+        if crate::showroom::layout(city).is_some() {
+            self.showroom(city)
+        } else {
+            self.park(city);
+            Ok(())
+        }
+    }
+
     /// Parks the city's starter fleet in place of the no-city placeholders.
     pub fn park(&mut self, city: &City) {
         self.vehicles.park(&mut self.world, city);
         let terrain = &self.terrain;
         self.craft
             .park(city, &|x, z| terrain_at(terrain, x, z).max(WATER_LEVEL));
+    }
+
+    /// The test world: one of every vehicle and item beside the spawn, in place of the parked
+    /// fleet (see `showroom.rs`). Traffic and pedestrians still spawn from the streets.
+    pub fn showroom(&mut self, city: &City) -> Result<(), String> {
+        let layout = crate::showroom::layout(city)
+            .ok_or("the city has no SHOWROOM and BOAT POND landmarks")?;
+        self.vehicles.clear(&mut self.world);
+        for &(model, x, z, yaw) in &layout.cars {
+            let y = self.ground_height(x, z) + 1.0;
+            self.vehicles
+                .spawn_facing(&mut self.world, model, [x, y, z], yaw)?;
+        }
+        let terrain = &self.terrain;
+        for &(model, x, z, yaw) in &layout.craft {
+            let y = terrain_at(terrain, x, z);
+            self.craft.place(model, x, y, z, yaw);
+        }
+        for &(model, x, z, yaw) in &layout.boats {
+            self.craft.place(model, x, WATER_LEVEL, z, yaw);
+        }
+        self.combat
+            .showcase(&layout.items, |x, z| terrain_at(terrain, x, z));
+        Ok(())
     }
 
     /// Where each parked craft model stands; see `Fleet::spots`.

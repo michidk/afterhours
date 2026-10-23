@@ -24,6 +24,8 @@ const run = (script: string, args: string[]) =>
 
 // The generator is the native Rust binary (crates/mapgen). Deployments set CITY_GENERATOR to a
 // built binary; development compiles and runs it through cargo.
+// CITY_WORLD=test builds the hand-made test world instead (docs/test-world.md).
+const testWorld = process.env.CITY_WORLD === "test";
 const generator = process.env.CITY_GENERATOR;
 const native = (args: string[]) =>
   new Promise<void>((resolve, reject) => {
@@ -37,7 +39,7 @@ const native = (args: string[]) =>
           "-p",
           "afterhours-mapgen",
           "--bin",
-          "generate-city",
+          testWorld ? "generate-test-world" : "generate-city",
           "--",
         ];
     const child = spawn(command, [...prefix, ...args], { stdio: "inherit" });
@@ -48,7 +50,7 @@ const native = (args: string[]) =>
   });
 
 const started = performance.now();
-await native(["--seed", seed, "--out", city]);
+await native(testWorld ? ["--out", city] : ["--seed", seed, "--out", city]);
 await run("./bake-city-meshes.ts", ["--city", city, "--out", meshes]);
 console.log(
   `City ${seed} prepared in ${((performance.now() - started) / 1000).toFixed(1)} s`,

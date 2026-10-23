@@ -36,6 +36,7 @@ dependencies = [
 name = "afterhours-server"
 version = "0.1.0"
 dependencies = [
+ "afterhours-mapgen",
  "afterhours-physics",
  "afterhours-protocol",
  "axum",

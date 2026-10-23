@@ -138,10 +138,15 @@ impl Vehicles {
 
     /// Replaces the fleet with the city's: starter cars in the town hall bays (or on the
     /// streets near the centre), plus a sport car on every racetrack grid slot.
-    pub fn park(&mut self, world: &mut World, city: &City) {
+    /// Removes every car, the no-city placeholders included.
+    pub fn clear(&mut self, world: &mut World) {
         for id in std::mem::take(&mut self.cars).into_keys() {
             world.remove_vehicle(id);
         }
+    }
+
+    pub fn park(&mut self, world: &mut World, city: &City) {
+        self.clear(world);
         let at = |x: f64, z: f64| [x as f32, city.height(x as f32, z as f32) + 1.0, z as f32];
         let starters = [&SEDAN, &SPORT, &VAN, &SEDAN, &SPORT, &SEDAN];
         match city.town_hall.as_ref().filter(|h| !h.parking.is_empty()) {
@@ -211,15 +216,26 @@ impl Vehicles {
         model: &str,
         at: [f32; 3],
     ) -> Result<(), String> {
+        // Debug cars are placed behind the player; face them back down the lane so
+        // the first throttle input drives away from the wall at the default spawn.
+        self.spawn_facing(world, model, at, std::f32::consts::PI)
+    }
+
+    /// A car of the given model standing at `at`, nose along `yaw`.
+    pub fn spawn_facing(
+        &mut self,
+        world: &mut World,
+        model: &str,
+        at: [f32; 3],
+        yaw: f32,
+    ) -> Result<(), String> {
         let model = match model {
             "sedan" => &SEDAN,
             "sport" => &SPORT,
             "van" => &VAN,
             _ => return Err(format!("Unsupported debug vehicle: {model}")),
         };
-        // Debug cars are placed behind the player; face them back down the lane so
-        // the first throttle input drives away from the wall at the default spawn.
-        self.spawn(world, model, at, std::f32::consts::PI);
+        self.spawn(world, model, at, yaw);
         Ok(())
     }
 

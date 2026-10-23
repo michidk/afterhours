@@ -290,6 +290,11 @@ impl Fleet {
         });
     }
 
+    /// One craft of `model` standing at the given place, in addition to whatever is parked.
+    pub fn place(&mut self, model: &str, x: f32, y: f32, z: f32, angle: f32) {
+        self.add(model, x, y, z, angle);
+    }
+
     /// `simulation.ts` constructor: two helicopters near downtown, a plane and an
     /// aerobatic plane at every airport, and the moored boats.
     /// `ground` is the still surface (terrain or sea) at a point.

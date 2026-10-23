@@ -9,6 +9,7 @@ pub mod destruction;
 mod diagnostics;
 mod game;
 pub mod lab;
+pub mod showroom;
 pub mod traffic;
 pub mod vehicles;
 

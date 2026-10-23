@@ -302,6 +302,28 @@ impl Combat {
         }
     }
 
+    /// One pad for every weapon, ammo kind and the jetpack, at the given spots in order
+    /// (the test world's showroom). Spots beyond the 13 items stay empty.
+    pub fn showcase(&mut self, spots: &[(f32, f32)], height: impl Fn(f32, f32) -> f32) {
+        let mut payloads: Vec<PickupPayload> = WEAPONS
+            .iter()
+            .filter(|s| s.kind != "fists")
+            .map(|s| PickupPayload::Weapon {
+                item: self.item(s.kind),
+            })
+            .collect();
+        payloads.extend(["handgun", "light", "rifle", "fuel", "grenade"].map(|k| {
+            PickupPayload::Ammo {
+                ammo_kind: k.into(),
+                amount: if k == "grenade" { 3 } else { 60 },
+            }
+        }));
+        payloads.push(PickupPayload::Jetpack { fuel: 30.0 });
+        for (&(x, z), payload) in spots.iter().zip(payloads) {
+            self.add_source([x, height(x, z), z], payload);
+        }
+    }
+
     fn cleanup(&mut self, time: f64) {
         self.pickups.retain(|p| p.expires >= time);
         for i in 0..self.sources.len() {
