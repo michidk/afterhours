@@ -609,8 +609,10 @@ export function withPredicted(
   me: Entity,
   playerId: string,
   cars?: ReadonlyMap<string, { pose: CarPose; weight: number }>,
+  /** The car the newest snapshot says the player drives; the delayed copy shows it later. */
+  driving?: string,
 ): Entity[] {
-  const vehicle = frame.find((e) => e.id === playerId)?.vehicle;
+  const vehicle = me.vehicle;
   const { x, y, z, vx, vy, vz, angle, pitch, roll, steering } = me;
   const pose = { x, y, z, vx, vy, vz, angle, pitch, roll, steering };
   /** A nearby car between its delayed server copy and the predicted one, by `weight`. */
@@ -638,7 +640,7 @@ export function withPredicted(
     if (
       e.id === vehicle &&
       e.kind === "car" &&
-      e.driver === playerId &&
+      (e.driver === playerId || e.id === driving) &&
       pitch !== undefined
     )
       return { ...e, ...pose };

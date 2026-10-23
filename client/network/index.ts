@@ -9,10 +9,18 @@ import type { DebugCommand, DebugState } from "../../shared/debug.ts";
 import type { DebrisState, PredictedImpacts } from "../../shared/destruction.ts";
 import type { GrenadeState } from "../../shared/grenades.ts";
 import type { DebrisClock } from "../world/destruction.ts";
-import type { City, Entity, Input, WorldEvent } from "../../shared/world.ts";
+import {
+  inputX,
+  type City,
+  type Entity,
+  type Input,
+  type WorldEvent,
+} from "../../shared/world.ts";
 import type { InputClock } from "../input/clock.ts";
 import { TUNING } from "../../shared/catalog.ts";
 import { InputStamper } from "./lead.ts";
+import { ActionLatency, type Drawn } from "./latency.ts";
+import { Piloted } from "./piloted.ts";
 import { Prediction, loadPhysics, withPredicted } from "./prediction.ts";
 import { SnapshotTimeline } from "./timeline.ts";
 
@@ -75,6 +83,14 @@ export class GameNetwork {
   seq = 0;
   /** The controls of the newest sent input, which the server holds through ticks with none. */
   private lastInput: Input | undefined;
+  /** How long entering a car and starting a turn take to show on screen. */
+  readonly actions = new ActionLatency();
+  /** The craft the player flies (not predicted), drawn from the newest snapshot. */
+  private piloted = new Piloted();
+  /** What the last drawn frame showed of the controlled body. */
+  private seated = false;
+  private drawn: Drawn | undefined;
+  private controlled: string | undefined;
   serverTime = 0;
   received = 0;
   latency = 0;
@@ -266,6 +282,8 @@ export class GameNetwork {
       case "jetpack":
         // Edge actions ride on the next input frame instead of a separate message.
         this.edge[message.type] = true;
+        if (message.type === "interact")
+          this.actions.pressInteract(performance.now(), this.seated);
         return true;
       case "equip":
         this.edge.equip = message.slot as number;
@@ -310,6 +328,7 @@ export class GameNetwork {
       !this.prediction
     )
       return;
+    this.actions.controls(performance.now(), inputX(input), this.drawn);
     const tick = this.stamper.stamp(this.serverTickAt(timestamp));
     // Already a tick or more ahead of the aim: the server runs one input per tick, so an
     // extra one would only queue. The next slot carries the current controls.
@@ -350,9 +369,27 @@ export class GameNetwork {
   renderEntities(now: number, _input?: Input): Entity[] {
     const frame = this.timeline.sample(now);
     const me = this.prediction?.render(now);
-    return me
-      ? withPredicted(frame, me, this.playerId, this.prediction?.drawnCars)
+    // What the newest snapshot says the player drives, ahead of the interpolated copy's driver.
+    const mine = this.entities.get(this.playerId)?.vehicle,
+      latest = mine ? this.entities.get(mine) : undefined,
+      driving = latest?.driver === this.playerId ? mine : undefined;
+    let out = me
+      ? withPredicted(frame, me, this.playerId, this.prediction?.drawnCars, driving)
       : frame;
+    if (driving && latest && latest.kind !== "car") {
+      // Aircraft and boats are not predicted: drawing them from the interpolation timeline would
+      // add its whole delay to the round trip, so the newest snapshot is carried on instead.
+      const flown = this.piloted.render(latest, this.received, now, this.latency);
+      out = out.map((e) => (e.id === driving ? flown : e));
+    }
+    const player = out.find((e) => e.id === this.playerId),
+      car = driving ? out.find((e) => e.id === driving) : undefined,
+      body = car ?? player;
+    this.seated = !!car;
+    this.controlled = car?.kind;
+    this.drawn = body && { angle: body.angle, speed: Math.hypot(body.vx, body.vz) };
+    this.actions.frame(now, this.seated, this.drawn);
+    return out;
   }
   stats(now = performance.now()) {
     const p = this.prediction;
@@ -364,6 +401,9 @@ export class GameNetwork {
       connected: this.welcomed && this.socket?.readyState === WebSocket.OPEN,
       lastDisconnect: this.lastDisconnect,
       reconnects: this.reconnects,
+      enterMs: this.actions.enterMs,
+      steerMs: this.actions.steerMs,
+      controlled: this.controlled,
       rtt: this.rtt,
       jitter: this.jitter,
       snapshotAge: this.received ? Math.max(0, now - this.received) : undefined,

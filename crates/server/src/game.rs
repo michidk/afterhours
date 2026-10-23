@@ -49,6 +49,9 @@ pub struct Game {
     world: World,
     spawn: [f32; 3],
     tick: u32,
+    /// Set when a player acted (entered or left a vehicle, ...): the next snapshot goes out this
+    /// tick instead of waiting for the regular cadence, so the result is not up to 66 ms late.
+    urgent: bool,
     players: HashMap<u32, Player>,
     pending: HashMap<u32, UnboundedSender<Vec<u8>>>,
     vehicles: Vehicles,
@@ -122,6 +125,7 @@ impl Game {
             world,
             spawn,
             tick: 0,
+            urgent: false,
             players: HashMap::new(),
             pending: HashMap::new(),
             vehicles,
@@ -587,7 +591,7 @@ impl Game {
             self.history.pop_front();
         }
         self.history.push_back((self.tick, entities));
-        if self.tick.is_multiple_of(SNAPSHOT_EVERY) {
+        if self.tick.is_multiple_of(SNAPSHOT_EVERY) || std::mem::take(&mut self.urgent) {
             self.broadcast();
         }
     }
@@ -698,6 +702,7 @@ impl Game {
         }
         // Edge actions fire once per frame, never while the frame is held.
         let held = &mut self.players.get_mut(&id).unwrap().held;
+        self.urgent |= held.interact || held.jetpack || held.drop;
         (
             held.interact,
             held.drop,

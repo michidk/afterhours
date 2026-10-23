@@ -57,15 +57,26 @@ if (
   );
 // `--hitch 40` blocks the main thread for that many ms about every 0.7 s, like a garbage-collection
 // pause: frames come late and the input clock steps several slots at once.
+const median = (values: number[]) =>
+  values.length ? [...values].sort((a, b) => a - b)[values.length >> 1] : undefined;
 const hitch = Number(arg("hitch", "0"));
 if (hitch > 0)
   setInterval(() => {
     const until = performance.now() + hitch;
     while (performance.now() < until);
   }, 700);
+// `--board` climbs into a parked craft of `--model` (the test world's showroom has every one)
+// instead of spawning a car, which is how a plane or helicopter is flown here.
+const board = process.argv.includes("--board");
 const spawnCommand =
-  model === "none" ? undefined : debugCommandSchema.parse({ kind: "spawn", model });
-const vehicleModel = spawnCommand?.kind === "spawn" ? spawnCommand.model : undefined;
+  model === "none" || board
+    ? undefined
+    : debugCommandSchema.parse({ kind: "spawn", model });
+const vehicleModel = board
+  ? (model as keyof typeof VEHICLES)
+  : spawnCommand?.kind === "spawn"
+    ? spawnCommand.model
+    : undefined;
 const kind = vehicleModel ? VEHICLES[vehicleModel].kind : "none";
 if (kind !== "none" && kind !== "car" && kind !== "helicopter" && kind !== "plane")
   throw Error(
@@ -338,6 +349,35 @@ if (spawnCommand) {
   );
   bodyId = car.id;
 }
+if (board) {
+  if (!debugAllowed)
+    throw Error("Boarding a craft needs a debug-enabled server (ALLOW_DEBUG=1)");
+  // The nearest one: an earlier flight may have left another far away.
+  const craft = () => {
+    const me = network.entities.get(network.playerId);
+    return [...network.entities.values()]
+      .filter((e) => e.model === model && me)
+      .sort(
+        (a, b) =>
+          Math.hypot(a.x - me!.x, a.z - me!.z) - Math.hypot(b.x - me!.x, b.z - me!.z),
+      )[0];
+  };
+  await until(() => !!craft(), `see a parked ${model}`);
+  const target = craft()!;
+  await debug({ kind: "teleport", x: target.x + 3, z: target.z });
+  // Let the teleport reach the snapshots, so the one key press below is a clean enter sample.
+  await pause(1200);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    network.send({ type: "interact" });
+    await pause(1500);
+    if (network.entities.get(network.playerId)?.vehicle === target.id) break;
+  }
+  await until(
+    () => network.entities.get(network.playerId)?.vehicle === target.id,
+    `board the ${model}`,
+  );
+  bodyId = target.id;
+}
 // Setup teleports are hard resets; measure only the drive.
 await pause(300);
 network.prediction!.corrections = 0;
@@ -359,6 +399,8 @@ const started = performance.now();
 const circle = Math.min(1, Math.atan(2.7 / radius) / CAR.steer);
 const steer = (t: number): Partial<Input> => {
   if (pattern === "straight") return {};
+  // Two seconds of steering, two of none: clear onsets for the turn-response timer.
+  if (pattern === "weave") return { moveX: Math.floor(t / 2) % 2 ? 0.8 : 0 };
   if (pattern === "track") {
     const body = network.prediction?.body;
     if (!body) return {};
@@ -663,6 +705,13 @@ const finish = async () => {
     maxInputLagMs: +maxInputLag.toFixed(1),
     rosterSize,
     positionsSeen,
+    actions: {
+      controlled: network.stats().controlled,
+      enterMs: median(network.actions.samples.enter),
+      steerMs: median(network.actions.samples.steer),
+      enterSamples: network.actions.samples.enter.length,
+      steerSamples: network.actions.samples.steer.length,
+    },
     strike: strikeTarget && {
       id: strikeTarget.id,
       predicted: strikePredictedAt !== undefined,
@@ -700,6 +749,7 @@ const finish = async () => {
         maxInputLagMs: +maxInputLag.toFixed(1),
         rosterSize,
         positionsSeen,
+        actions: report.actions,
         strike: report.strike,
         server,
         health,
@@ -711,10 +761,29 @@ const finish = async () => {
   process.exit(0);
 };
 process.on("SIGINT", () => void finish());
+// `--cycle 5` gets out and back in five times for clean enter/exit samples. A plane puts you
+// well away from it, so each time the bot steps back beside the vehicle and waits for that to
+// reach the snapshots before the key press, which is then the only thing being timed.
+for (let i = 0; i < Number(arg("cycle", "0")); i++) {
+  const seated = () => network.entities.get(network.playerId)?.vehicle === bodyId;
+  await pause(1000);
+  network.send({ type: "interact" });
+  await until(() => !seated(), "get out");
+  await pause(800);
+  const at = network.entities.get(bodyId)!;
+  await debug({ kind: "teleport", x: at.x + 3, z: at.z });
+  await pause(1200);
+  network.send({ type: "interact" });
+  await until(seated, "get back in");
+}
 let takeoffComplete = false;
 while (performance.now() - started < seconds * 1000) {
   const t = (performance.now() - started) / 1000;
-  const body = network.prediction?.body;
+  // Aircraft are not predicted: their altitude is the server's.
+  const body =
+    kind === "plane" || flying
+      ? network.entities.get(bodyId)
+      : network.prediction?.body;
   const clearance = body ? body.y - groundLevel(body.x, body.z, city) : 0;
   if (clearance > 40) takeoffComplete = true;
   control =

@@ -22,6 +22,14 @@ export function updateNetworkStats(
     ["Snapshots / inputs", `${s.snapshotsPerSecond} / ${s.inputsPerSecond} per second`],
     ["Sent / applied input", `${s.seq} / ${s.ack}`],
     ["Applied input age", ms(s.ackAge)],
+    ["Interpolation delay", ms(s.interpolationDelay)],
+    ["Enter / exit vehicle", ms(s.enterMs)],
+    [
+      "Turn response",
+      s.steerMs === undefined
+        ? "—"
+        : `${ms(s.steerMs)} (${s.controlled === "car" ? "predicted" : "from the server"})`,
+    ],
     ["Pending replay", `${s.pending} inputs`],
     [
       "Server input buffer",
