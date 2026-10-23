@@ -42,6 +42,12 @@ interface Report {
     showsLateMs?: number;
     leadMs?: number;
   };
+  actions?: {
+    enterMs?: number;
+    steerMs?: number;
+    enterSamples: number;
+    steerSamples: number;
+  };
   server?: { tickCpuP95Ms: number; tickP95Ms: number; late: number };
 }
 
@@ -239,5 +245,33 @@ for (const [kind, skip, args] of [
       r.maxCorrection < 1.5,
       `the hit corrected the car by ${r.maxCorrection} m`,
     );
+  });
+}
+
+// What the player waits for after a key press, measured on the drawn frames (the Networking
+// panel's Enter / exit and Turn response rows). A plane is not predicted, so these include the
+// link and the whole snapshot path: before the urgent snapshot after enter/exit and drawing the
+// piloted craft from the newest snapshot they were 202/193 ms clean and 368/445 ms laggy; the
+// limits sit just above today's 145 and 160 ms clean, 245 and 245 ms laggy. Drawing the craft from
+// the interpolated copy again gives a 225 and 380 ms turn, which fails them.
+// Each plane is flown away by its run, so the two links use the two showroom planes.
+for (const [label, model, args, enterLimit, steerLimit] of [
+  ["clean", "plane", [], 200, 190],
+  ["laggy", "aerobatic", laggy, 330, 320],
+] as const) {
+  test(`entering, leaving and turning a plane on a ${label} link show on screen quickly`, async () => {
+    const r = await bot(
+      `actions-${label}`,
+      [
+        ...["--city", worldFile, "--model", model, "--board", "--cycle", "3"],
+        ...["--pattern", "weave", "--seconds", "55", ...args],
+      ],
+      world,
+    );
+    const a = r.actions!;
+    assert.ok(a.enterSamples >= 5, `only ${a.enterSamples} enter/exit samples`);
+    assert.ok(a.steerSamples >= 3, `only ${a.steerSamples} turn samples`);
+    assert.ok(a.enterMs! <= enterLimit, `enter/exit took ${a.enterMs} ms`);
+    assert.ok(a.steerMs! <= steerLimit, `the turn showed after ${a.steerMs} ms`);
   });
 }

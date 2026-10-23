@@ -71,7 +71,8 @@ JSON reproduction as driving ones (`docs/lab.md`).
 No test runs a GPU-backed browser at a real frame rate or over the real public route (the preview
 gateway and shared ingress stalled for seconds in `docs/lag-routing.md`), so a latency complaint that
 passes here still needs the Networking panel from the player's session. Boats are drawn from the interpolated server copy; a piloted plane or
-helicopter is drawn from the newest snapshot carried forward (`client/network/piloted.ts`) and is only
-measured by the bot (`--board --cycle N` reports enter/exit and turn latency), not by the feel suite.
+helicopter is drawn from the newest snapshot carried forward (`client/network/piloted.ts`) and is covered by
+two feel tests (`--board --cycle N` reports enter/exit and turn latency; limits 200/190 ms clean, 330/320 ms
+laggy). The enter/exit limit has not been mutation-checked against removing the urgent snapshot.
 `docs/movement-testing.md` describes the older TypeScript-server harness; `test:network`,
 `probe:drive` and the five-client acceptance there no longer exist except as `lag.yml`.
