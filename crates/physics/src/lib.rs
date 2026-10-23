@@ -22,6 +22,8 @@ pub const CHARACTER_STRIDE: usize = 6;
 /// Floats per vehicle in [`World::snapshot`]: pose, velocities, then the tyre state
 /// (steering angle, rear grip lost to the handbrake).
 pub const SNAPSHOT_VEHICLE: usize = 15;
+/// How close (m) a vehicle and a prop must be after a step for the pair to count as struck.
+const IMPACT_REACH: f32 = 0.05;
 /// Below this speed with no throttle the parking brake holds the car (m/s).
 const HOLD_SPEED: f32 = 2.0;
 /// The four-wheel tyre model of the original game (`shared/physics/vehicle.ts` CAR and
@@ -573,7 +575,9 @@ impl World {
                 let Some((m, c)) = pair.find_deepest_contact() else {
                     continue;
                 };
-                if c.dist > 0.0 {
+                // The solver stops a fast car on a speculative contact before the shapes touch, so
+                // by now the gap is a few millimetres, not a penetration.
+                if c.dist > IMPACT_REACH {
                     continue;
                 }
                 // The manifold normal points from collider1 to collider2.

@@ -256,3 +256,39 @@ fn one_body_restores_and_reads_without_touching_the_others() {
     assert!(w.restore_entity(999, &row).is_err());
     assert!(w.state_of(999).is_none());
 }
+
+/// The solver stops a fast car on a speculative contact a few millimetres before the shapes touch,
+/// so a strike recorded only for overlapping shapes saw 0.1 m/s where the car came in at 24: cars
+/// stopped dead at every tree and lamp instead of breaking them.
+#[test]
+fn a_fast_car_registers_the_speed_it_hits_a_prop_at() {
+    for speed in [6.0_f32, 12.0, 18.0, 24.0, 30.0] {
+        let mut w = flat_world();
+        // A lamp-sized post straight ahead (the car faces +z).
+        let prop = w.add_prop([0.0, 3.0, 18.0], [0.19, 3.0, 0.19], 0.0);
+        let car = w.spawn_vehicle(VehicleSpec::SEDAN, [0.0, 1.0, 0.0], 0.0);
+        for _ in 0..30 {
+            w.step();
+        }
+        w.set_vehicle_velocity(car, [0.0, 0.0, speed]);
+        let mut seen: f32 = 0.0;
+        for _ in 0..200 {
+            w.set_drive(
+                car,
+                Drive {
+                    throttle: 1.0,
+                    ..Drive::default()
+                },
+            );
+            w.step();
+            for i in w.impacts() {
+                assert_eq!(i.prop, prop);
+                seen = seen.max(i.speed);
+            }
+        }
+        assert!(
+            seen > speed * 0.8,
+            "driven in at {speed} m/s, the strike registered {seen} m/s"
+        );
+    }
+}
