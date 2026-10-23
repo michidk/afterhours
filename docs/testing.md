@@ -40,6 +40,16 @@ frames, no corrections, gap 0.02 m beyond the carry.
 Mutation-checked: drawing the delayed server car fails with "drawn 3.99 m from the predicted
 body"; removing the between-tick carry fails with "636/1236 frames stalled".
 
+## Collisions with props
+
+The feel suite also boots the test world on its own server and drives the sedan into a lamp, a tree
+and a palm of its prop alley (`--strike`), on a clean and on the spiky link. It checks that the
+server breaks the prop (a car at speed used to stop dead at it), that the client predicted the break
+and showed it within 60 ms of the car reaching it (it showed 109-226 ms late before), that the
+prediction led the server's confirmation, and that the hit corrected the car by under 1.5 m.
+`--hitch 40` makes the bot block its main thread like a garbage-collection pause, to see late frames:
+with it the drawn forward hops fell from 2.5% of frames to 0.3-0.6%.
+
 ## Real-city scenes
 
 `cars_driven_at_the_real_buildings_never_end_up_inside_one` (`crates/server/tests/lab.rs`) drives a

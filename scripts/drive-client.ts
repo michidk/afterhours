@@ -55,6 +55,14 @@ if (
   throw Error(
     "Durations and speed must be positive; link delays nonnegative; spike-rate in [0, 1]",
   );
+// `--hitch 40` blocks the main thread for that many ms about every 0.7 s, like a garbage-collection
+// pause: frames come late and the input clock steps several slots at once.
+const hitch = Number(arg("hitch", "0"));
+if (hitch > 0)
+  setInterval(() => {
+    const until = performance.now() + hitch;
+    while (performance.now() < until);
+  }, 700);
 const spawnCommand =
   model === "none" ? undefined : debugCommandSchema.parse({ kind: "spawn", model });
 const vehicleModel = spawnCommand?.kind === "spawn" ? spawnCommand.model : undefined;
@@ -120,10 +128,67 @@ const trackPath = racetrack
       z: racetrack.path[2 * i + 1],
     }))
   : [];
-const center = {
-  x: Number(arg("x", String(racetrack?.grid[0].x ?? origin.x))),
-  z: Number(arg("z", String(racetrack?.grid[0].z ?? origin.z))),
-};
+// `--strike lamp|tree|palm` aims the car at a prop of that kind with a clear 50 m run-up and
+// reports when the break was predicted and when the server confirmed it.
+const strikeKind = arg("strike", "");
+const strikeTarget = strikeKind
+  ? (() => {
+      // The streamed client city has no props until their chunks arrive; the file has them all.
+      const source = JSON.parse(readFileSync(arg("city", "data/city.json"), "utf8"))
+        .city as {
+        props: { kind: string; x: number; z: number; h: number }[];
+        buildings: { x: number; z: number; w: number; d: number }[];
+      };
+      // Props by 8 m cell, so the run-up check does not compare every pair.
+      const cells = new Map<string, typeof source.props>();
+      for (const o of source.props) {
+        const key = `${Math.floor(o.x / 8)},${Math.floor(o.z / 8)}`;
+        cells.set(key, [...(cells.get(key) ?? []), o]);
+      }
+      const near = (x: number, z: number, radius: number, except: object) => {
+        for (
+          let cx = Math.floor((x - radius) / 8);
+          cx <= Math.floor((x + radius) / 8);
+          cx++
+        )
+          for (
+            let cz = Math.floor((z - radius) / 8);
+            cz <= Math.floor((z + radius) / 8);
+            cz++
+          )
+            for (const o of cells.get(`${cx},${cz}`) ?? [])
+              if (o !== except && Math.hypot(o.x - x, o.z - z) < radius) return true;
+        return false;
+      };
+      // Points along the car's 40 m run-up (it comes from +z): nothing may stand on them.
+      const clear = (p: (typeof source.props)[number]) =>
+        Array.from({ length: 11 }, (_, i) => ({ x: p.x, z: p.z + 4 + i * 4 })).every(
+          (q) =>
+            !near(q.x, q.z, 2.4, p) &&
+            !source.buildings.some(
+              (b) => Math.hypot(b.x - q.x, b.z - q.z) < Math.max(b.w, b.d) / 2 + 3,
+            ),
+        );
+      const found = source.props
+        .filter((p) => p.kind === strikeKind && clear(p))
+        .at(Number(arg("strike-skip", "0")));
+      if (!found) throw Error(`no ${strikeKind} with a clear run-up`);
+      return {
+        ...found,
+        id: `${found.kind}:${found.x.toFixed(4)},${found.z.toFixed(4)}`,
+      };
+    })()
+  : undefined;
+let strikePredictedAt: number | undefined,
+  strikeConfirmedAt: number | undefined,
+  strikeReachedAt: number | undefined;
+// The car stands 8 m east and 5.5 m north of the player: start so it faces the prop 40 m away.
+const center = strikeTarget
+  ? { x: strikeTarget.x - 8, z: strikeTarget.z + 45.5 }
+  : {
+      x: Number(arg("x", String(racetrack?.grid[0].x ?? origin.x))),
+      z: Number(arg("z", String(racetrack?.grid[0].z ?? origin.z))),
+    };
 await stream.prepare(spawnOrigin(city));
 await stream.prepare(center);
 const mapId = map.mapId;
@@ -151,6 +216,10 @@ const network = new GameNetwork(
     chat() {},
     roster(players) {
       rosterSize = players.length;
+    },
+    destruction(ids) {
+      if (strikeTarget && ids.includes(strikeTarget.id))
+        strikeConfirmedAt ??= performance.now();
     },
     positions(players) {
       positionsSeen = players.length;
@@ -403,6 +472,12 @@ const sampler = setInterval(() => {
   recordCorrection();
   const pose = rendered.find((e) => e.id === bodyId);
   const p = network.prediction;
+  if (strikeTarget && p?.impacts.has(strikeTarget.id)) strikePredictedAt ??= now;
+  // The nose of the predicted car (2.2 m ahead of its centre, facing -z) meets the prop.
+  if (strikeTarget && p?.body && p.body.z - 2.2 <= strikeTarget.z + 0.3)
+    strikeReachedAt ??= now;
+  // A strike run ends 1.2 s after the impact, so its corrections belong to that one hit.
+  if (strikeReachedAt && now - strikeReachedAt > 1200 && !finished) void finish();
   if (now - lastSample >= 100) {
     lastSample = now;
     const s = network.stats(now);
@@ -588,6 +663,26 @@ const finish = async () => {
     maxInputLagMs: +maxInputLag.toFixed(1),
     rosterSize,
     positionsSeen,
+    strike: strikeTarget && {
+      id: strikeTarget.id,
+      predicted: strikePredictedAt !== undefined,
+      confirmed: strikeConfirmedAt !== undefined,
+      /** How late the break showed before: from the nose meeting the prop to the server's word. */
+      wasLateMs:
+        strikeReachedAt !== undefined && strikeConfirmedAt !== undefined
+          ? Math.round(strikeConfirmedAt - strikeReachedAt)
+          : undefined,
+      /** How late it shows now: from the nose meeting the prop to the predicted break. */
+      showsLateMs:
+        strikeReachedAt !== undefined && strikePredictedAt !== undefined
+          ? Math.round(strikePredictedAt - strikeReachedAt)
+          : undefined,
+      /** How much earlier the break shows than the server's word for it. */
+      leadMs:
+        strikePredictedAt !== undefined && strikeConfirmedAt !== undefined
+          ? Math.round(strikeConfirmedAt - strikePredictedAt)
+          : undefined,
+    },
     server,
     health,
   };
@@ -605,6 +700,7 @@ const finish = async () => {
         maxInputLagMs: +maxInputLag.toFixed(1),
         rosterSize,
         positionsSeen,
+        strike: report.strike,
         server,
         health,
       },

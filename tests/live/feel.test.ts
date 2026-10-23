@@ -35,11 +35,23 @@ interface Report {
   rosterSize: number;
   positionsSeen: number;
   groundClearanceP95: number;
+  maxCorrection: number;
+  strike?: {
+    predicted: boolean;
+    confirmed: boolean;
+    showsLateMs?: number;
+    leadMs?: number;
+  };
   server?: { tickCpuP95Ms: number; tickP95Ms: number; late: number };
 }
 
-let server: ChildProcess;
-let url: string;
+interface Booted {
+  child: ChildProcess;
+  url: string;
+}
+let city: Booted;
+let world: Booted;
+let worldFile: string;
 let dir: string;
 
 const freePort = () =>
@@ -50,40 +62,56 @@ const freePort = () =>
     });
   });
 
-before(async () => {
-  dir = mkdtempSync(join(tmpdir(), "afterhours-feel-"));
+/** Starts the Rust server on a free port and waits until it answers. */
+async function boot(env: Record<string, string>): Promise<Booted> {
   const port = await freePort();
-  url = `http://127.0.0.1:${port}`;
-  server = spawn("cargo", ["run", "-q", "--release", "-p", "afterhours-server"], {
-    env: { ...process.env, PORT: String(port), CITY_REGENERATE: "0", ALLOW_DEBUG: "1" },
+  const child = spawn("cargo", ["run", "-q", "--release", "-p", "afterhours-server"], {
+    env: { ...process.env, PORT: String(port), ALLOW_DEBUG: "1", ...env },
     stdio: "ignore",
   });
+  const url = `http://127.0.0.1:${port}`;
   const deadline = Date.now() + 600_000;
   for (;;) {
     try {
-      if ((await fetch(`${url}/health`)).ok) break;
+      if ((await fetch(`${url}/health`)).ok) return { child, url };
     } catch {
-      // still compiling or booting
+      // still compiling, generating or booting
     }
     if (Date.now() > deadline) throw new Error("server did not come up");
     await new Promise((r) => setTimeout(r, 500));
   }
+}
+
+before(async () => {
+  dir = mkdtempSync(join(tmpdir(), "afterhours-feel-"));
+  worldFile = join(dir, "world.json");
+  // The real city serves the files on disk; the test world is generated on boot into `dir`.
+  [city, world] = await Promise.all([
+    boot({ CITY_REGENERATE: "0" }),
+    boot({
+      TEST_WORLD: "1",
+      CITY_PATH: worldFile,
+      CITY_MESH_PATH: join(dir, "world.msgpack"),
+    }),
+  ]);
 });
 
 after(() => {
-  server?.kill();
+  city?.child.kill();
+  world?.child.kill();
   if (dir) rmSync(dir, { recursive: true, force: true });
 });
 
-async function drive(name: string, args: string[]): Promise<Report> {
+/** Runs the bot with `argv` against a server and returns its report. */
+async function bot(name: string, argv: string[], target: Booted): Promise<Report> {
   const json = join(dir, `${name}.json`);
   await run(
     "bunx",
     [
       "tsx",
       "scripts/drive-client.ts",
-      ...["--url", url, "--pattern", "track", "--seconds", String(seconds)],
-      ...["--json", json, ...args],
+      ...["--url", target.url, "--json", json],
+      ...argv,
     ],
     { timeout: (seconds + 90) * 1000, maxBuffer: 1 << 24 },
   );
@@ -91,6 +119,10 @@ async function drive(name: string, args: string[]): Promise<Report> {
   console.log(name, JSON.stringify(report));
   return report;
 }
+
+/** A lap of the city's racetrack on foot or in a car. */
+const drive = (name: string, args: string[]) =>
+  bot(name, ["--pattern", "track", "--seconds", String(seconds), ...args], city);
 
 const share = (count: number, report: Report) => count / Math.max(1, report.frames);
 
@@ -161,6 +193,51 @@ for (const [label, model, speed] of [
       ]),
       model === "none" ? 4 : 12,
       true,
+    );
+  });
+}
+
+// Trees, palms and lamps stood only on the server: the prediction drove through them and showed
+// the break a round trip late, and the physics stopped a fast car dead instead of breaking them.
+// The test world's prop alley has a clear run-up to each, so the hit is the same every time.
+for (const [kind, skip, args] of [
+  ["lamp", 0, []],
+  ["tree", 0, []],
+  ["lamp", 1, laggy],
+  ["palm", 0, laggy],
+] as const) {
+  test(`driving into a ${kind}${args.length ? " on the laggy link" : ""} breaks it at the impact`, async () => {
+    const r = await bot(
+      `strike-${kind}-${skip}${args.length ? "-laggy" : ""}`,
+      [
+        ...["--city", worldFile, "--model", "sedan", "--pattern", "straight"],
+        ...[
+          "--strike",
+          kind,
+          "--strike-skip",
+          String(skip),
+          "--seconds",
+          "14",
+          ...args,
+        ],
+      ],
+      world,
+    );
+    assert.ok(r.strike?.confirmed, "the server never broke it: the car stopped dead?");
+    assert.ok(r.strike.predicted, "the client did not predict the break");
+    // It showed 100-230 ms after the car reached it before: now at the impact.
+    assert.ok(
+      r.strike.showsLateMs! <= 60,
+      `shown ${r.strike.showsLateMs} ms after the impact`,
+    );
+    assert.ok(
+      r.strike.leadMs! > 30,
+      `predicted only ${r.strike.leadMs} ms ahead of the server`,
+    );
+    assert.ok(r.corrections <= 5, `${r.corrections} corrections around the hit`);
+    assert.ok(
+      r.maxCorrection < 1.5,
+      `the hit corrected the car by ${r.maxCorrection} m`,
     );
   });
 }

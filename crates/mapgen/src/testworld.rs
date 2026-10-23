@@ -145,6 +145,51 @@ pub fn generate_test_map() -> GeneratedMap {
     }
 }
 
+/// The prop alley: lamps, trees and palms in a row to drive into, each with open ground to run
+/// up from the south (+z, the way a spawned car faces).
+const ALLEY: [&str; 6] = ["lamp", "tree", "lamp", "palm", "lamp", "tree"];
+const ALLEY_GAP: f64 = 14.0;
+const RUN_UP: f64 = 60.0;
+
+/// Whether a point is within the showroom's rectangle (plus a margin), in its own frame.
+fn in_showroom(p: (f64, f64), centre: (f64, f64), heading: f64) -> bool {
+    let (dx, dz) = (p.0 - centre.0, p.1 - centre.1);
+    let u = dx * heading.cos() - dz * heading.sin();
+    let v = dx * heading.sin() + dz * heading.cos();
+    u.abs() < SIDE_REACH + 6.0 && v > -BEHIND - 6.0 && v < FRONT + 6.0
+}
+
+/// Where the alley's first prop stands: beside the showroom, away from the track and the pond,
+/// with its whole run-up clear.
+fn prop_alley(
+    track: &[(f64, f64)],
+    centre: (f64, f64),
+    pond: (f64, f64),
+    heading: f64,
+) -> Option<(f64, f64)> {
+    let (rx, rz) = (heading.cos(), -heading.sin());
+    for off in [70.0, 100.0, 140.0, 190.0] {
+        for side in [1.0, -1.0] {
+            let base = (centre.0 + rx * side * off, centre.1 + rz * side * off);
+            let clear = (-1..=ALLEY.len() as i32 + 1).all(|i| {
+                (0..=12).all(|k| {
+                    let p = (
+                        base.0 + ALLEY_GAP * i as f64,
+                        base.1 + RUN_UP * k as f64 / 12.0,
+                    );
+                    track_distance(track, p.0, p.1) > 18.0
+                        && (p.0 - pond.0).hypot(p.1 - pond.1) > POND_RADIUS + 10.0
+                        && !in_showroom(p, centre, heading)
+                })
+            });
+            if clear {
+                return Some(base);
+            }
+        }
+    }
+    None
+}
+
 /// Metres from the spawn to the showroom's centre, along the start line's heading.
 pub const AHEAD: f64 = 50.0;
 /// The showroom spans this far to each side and from `BEHIND` to `FRONT` along its heading.
@@ -215,6 +260,18 @@ pub fn test_world_city() -> Result<Value, String> {
     }
     let (spawn, centre, pond) = found.ok_or("no clear ground beside the racetrack")?;
     carve_pond(&mut city, pond);
+    let alley =
+        prop_alley(&track, centre, pond, heading).ok_or("no clear ground for the prop alley")?;
+    let props = city["props"].as_array_mut().expect("props");
+    for (i, kind) in ALLEY.iter().enumerate() {
+        let h = match *kind {
+            "lamp" => 6.0,
+            "palm" => 9.0,
+            _ => 8.0,
+        };
+        props
+            .push(json!({"x": alley.0 + ALLEY_GAP * i as f64, "z": alley.1, "h": h, "kind": kind}));
+    }
     city["spawn"] = json!({"x": spawn.0, "z": spawn.1});
     let district = (
         DISTRICT.0 + DISTRICT.2 * (DISTRICT.3 - 1) as f64 / 2.0,
@@ -225,6 +282,7 @@ pub fn test_world_city() -> Result<Value, String> {
         ("SHOWROOM", "plaza", centre),
         ("BOAT POND", "harbour", pond),
         ("AI STREETS", "plaza", district),
+        ("PROP ALLEY", "plaza", alley),
     ] {
         landmarks.push(json!({"x": p.0.round(), "z": p.1.round(), "name": name, "kind": kind}));
     }

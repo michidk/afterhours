@@ -390,3 +390,26 @@ The drawn car also carries a velocity: the suspension springs (heave, pitch, rol
 fast it changes between frames. The prediction only steps at 30 Hz, so the velocity is ramped from the
 previous step's value to the new one across each tick; as a step it was 0 on one 60 fps frame and
 double on the next, and the body rocked (frame-to-frame pitch jerk 8.6e-4 against 3.7e-5 ramped).
+
+## Props and collisions
+
+Trees, palms and lamps (`city.props`, about 7,400 in the city) are colliders on the server and, within
+45 m of you, in the predicted world too (`Prediction.syncProps`). On each _live_ input step (not on
+a replay, or one hit would count again at every snapshot) the server's strike rule runs: above
+2 m/s a hit does `(speed - 2) * 14` damage, and at the prop's health (palm 65, tree 90, lamp 45) it
+breaks, keeps 96% of the car's speed and flies off. A predicted break goes into `predictedImpacts`, so
+the scene throws the debris at the impact instead of when the server's `broken` list arrives (a
+round trip later: 109-226 ms measured). The server confirming it keeps the prop out; one it does not
+confirm within 1.2 s stands again, and so does one the server's debris has expired. People and the
+benches, signals and hydrants the original game had are not colliders here.
+
+The server's strike detection used to ignore any contact with a positive gap. Rapier stops a fast
+car on a speculative contact a few millimetres before it touches, so a car at speed registered an
+impact of 0.1 m/s and stopped dead at every tree and lamp. `IMPACT_REACH` (5 cm) counts those
+contacts; the approach speed is read from before the step. `a_fast_car_registers_the_speed_it_hits_a_prop_at`
+(physics) and the strike tests in the feel suite pin it.
+
+The carry between ticks is measured from the input's own scheduled slot, not from when `input()` ran,
+and capped at two ticks. When a frame is late and the input clock steps several slots at once, the
+drawn body still moves by exactly the elapsed time; with 40 ms stalls every 0.7 s the visible forward
+hops fell from 2.5% of frames to 0.3-0.6%.

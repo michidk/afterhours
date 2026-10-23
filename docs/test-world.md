@@ -20,9 +20,10 @@ city; they are not committed). Open the page with `?play` to skip the character 
 | Items      | 13 pads in a row in front of the showroom: every weapon (bat, pistol, smg, knife, machinegun, flamethrower, grenade), every ammo kind (handgun, light, rifle, fuel, grenade) and the jetpack; each restocks 20 s after you take it | between spawn and the showroom    |
 | BOAT POND  | the 6 watercraft (boat, launch, jetski, racer, speedboat, offshore) afloat                                                                                                                                                         | about 85 m beside the showroom    |
 | Racetrack  | the generated loop, tarmac with a start grid                                                                                                                                                                                       | next to the spawn                 |
+| PROP ALLEY | 6 props in a row to drive into (lamp, tree, lamp, palm, lamp, tree), on flat ground with 60 m of clear run-up to the south, so every hit is the same                                                                               | about 180 m south of the showroom |
 | AI STREETS | a 4 x 4 grid of streets with junctions, signals and sidewalks; traffic drives and pedestrians walk                                                                                                                                 | about 800 m east, a separate area |
 
-SHOWROOM, BOAT POND and AI STREETS are landmarks, so they appear in the dev tools' places list
+SHOWROOM, BOAT POND, PROP ALLEY and AI STREETS are landmarks, so they appear in the dev tools' places list
 (F1) and on the map: teleport between them. Nothing else spawns near the showroom, so what you see
 there is exactly the list above (AI only appears within range of a player, around the streets).
 
@@ -39,7 +40,8 @@ other. The scene lab does the same (`scene-lab data/test-world.json`).
 Tests: `crates/server/tests/test_world.rs` generates the world and checks that every vehicle model
 is within 160 m of the spawn exactly once, that boats float over deep water on the pond, that nothing
 is in the water that should not be, and that the AI streets are a separate area where cars and
-pedestrians appear. The live feel suite drives the world's racetrack with the real client.
+pedestrians appear. The live feel suite drives the world's racetrack with the real client and
+rams the prop alley (`--strike lamp|tree|palm`), checking that the break shows at the impact.
 
 ## Changing it
 
