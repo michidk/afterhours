@@ -23,7 +23,7 @@ use axum::{
         State,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
-    response::IntoResponse,
+    response::{IntoResponse, Response},
     routing::get,
 };
 use futures_util::{SinkExt, StreamExt};
@@ -82,7 +82,30 @@ pub fn router(game: Game, city: Option<Arc<CityStore>>, dist: PathBuf) -> Router
         Some(store) => app.merge(city::routes(store)),
         None => app,
     }
-    .fallback_service(ServeDir::new(dist))
+    .fallback_service(
+        Router::new()
+            .fallback_service(ServeDir::new(dist))
+            .layer(axum::middleware::from_fn(cache_policy)),
+    )
+}
+
+/// Vite names everything under `/assets/` by content hash, so those files never change; the page
+/// that points at them must be checked on every load, or a browser keeps running the previous
+/// deploy's client for minutes (it only has `Last-Modified` to guess a lifetime from).
+async fn cache_policy(request: axum::extract::Request, next: axum::middleware::Next) -> Response {
+    let hashed = request.uri().path().starts_with("/assets/");
+    let mut response = next.run(request).await;
+    if response.status().is_success() {
+        response.headers_mut().insert(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static(if hashed {
+                "public, max-age=31536000, immutable"
+            } else {
+                "no-cache"
+            }),
+        );
+    }
+    response
 }
 
 /// Serves until the listener closes.
