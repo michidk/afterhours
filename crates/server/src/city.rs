@@ -425,7 +425,8 @@ pub fn world(city: &City) -> World {
         world.add_box(
             [b.x, (y + b.h) / 2.0, b.z],
             [b.w / 2.0, (b.h - y) / 2.0, b.d / 2.0],
-            b.angle.unwrap_or(0.0),
+            // The footprint frame is local x -> (cos a, sin a): a right-handed yaw of -a.
+            -b.angle.unwrap_or(0.0),
         );
     }
     world

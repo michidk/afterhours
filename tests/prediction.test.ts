@@ -136,3 +136,34 @@ test("neighbour poses round-trip through the quaternion the physics reads back",
     assert.ok(Math.abs(back.roll - roll) < 0.01, `roll ${back.roll} vs ${roll}`);
   }
 });
+
+// The footprint frame has local x along (cos a, sin a) (see `insideBuilding` and `buildBuilding`);
+// the predicted collider must sit exactly there or cars drive through rotated buildings.
+test("prediction blocks where a rotated building is drawn", async () => {
+  await loadPhysics();
+  const angle = 0.7,
+    prediction = new Prediction({}) as unknown as {
+      world: { step(): void; cast_ray(...a: number[]): number[] };
+      syncStatic(c: { buildings: unknown[]; parks: unknown[] }): void;
+    };
+  prediction.syncStatic({
+    buildings: [{ x: 100, z: 200, w: 40, d: 6, h: 30, y: 0, angle }],
+    parks: [],
+  });
+  prediction.world.step();
+  const at = (u: number, v: number) => ({
+    x: 100 + u * Math.cos(angle) - v * Math.sin(angle),
+    z: 200 + u * Math.sin(angle) + v * Math.cos(angle),
+  });
+  // A ray from 60 m up meets a 30 m wall at 30 m, open ground at 60 m.
+  const top = (x: number, z: number) => {
+    const [, t] = prediction.world.cast_ray(x, 60, z, 0, -1, 0, 100, 0);
+    return t < 45 ? [t] : [];
+  };
+  for (const u of [-18, 18]) {
+    const drawn = at(u, 0),
+      mirror = { x: drawn.x, z: 400 - drawn.z };
+    assert.ok(top(drawn.x, drawn.z).length, `no wall at footprint offset ${u}`);
+    assert.equal(top(mirror.x, mirror.z).length, 0, `wall at the mirrored spot of ${u}`);
+  }
+});

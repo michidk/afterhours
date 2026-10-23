@@ -123,7 +123,8 @@ export class Prediction {
         building.w / 2,
         Math.max(0, (building.h - y) / 2),
         building.d / 2,
-        building.angle ?? 0,
+        // Footprint frame: local x -> (cos a, sin a), a right-handed yaw of -a.
+        -(building.angle ?? 0),
       );
       this.buildingColliders.add(building);
     }
