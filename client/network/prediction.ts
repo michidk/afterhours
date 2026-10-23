@@ -16,6 +16,13 @@ import {
 import { wrap } from "../../shared/physics/vehicle.ts";
 import { TUNING } from "../../shared/catalog.ts";
 import { PHYSIQUES } from "../../shared/character.ts";
+import {
+  PROP_HEALTH,
+  strikeDamage,
+  strikeVelocity,
+  type PredictedImpacts,
+} from "../../shared/destruction.ts";
+import { terrainHeight } from "../../shared/terrain.ts";
 
 /** Mirrors the three car `VehicleSpec`s in crates/physics/src/lib.rs. */
 type VehicleSpec = readonly [
@@ -40,6 +47,16 @@ export const PRESENTATION = { smoothing: 0.1 };
 /** Cars within this many metres (at most `NEIGHBOURS` of them) join the predicted world. */
 const NEIGHBOUR_RANGE = 40,
   NEIGHBOURS = 8;
+/** Props within `PROP_RANGE` join the predicted world as colliders and leave beyond `PROP_KEEP`. */
+const PROP_RANGE = 45,
+  PROP_KEEP = 70;
+/** The server's strike rule (`destruction.rs`): above this approach speed, 96% of it is kept. */
+const STRIKE_MIN_SPEED = 2,
+  STRIKE_RETENTION = 0.96;
+/** A predicted break the server has not confirmed by then stands the prop up again. */
+const STRIKE_CONFIRM_MS = 1200,
+  STRIKE_KEEP_MS = 1500;
+type Standing = { body: number; kind: keyof typeof PROP_HEALTH; x: number; z: number };
 /** Cars this close are drawn from the predicted world, fading in and out over `SHOWN_FADE` s. */
 const SHOWN_RANGE = 16,
   SHOWN_FADE = 0.4;
@@ -135,6 +152,14 @@ export class Prediction {
   private facing = 0;
   private lastRender = 0;
   private shown = new Map<string, Shown>();
+  /** Props standing in the predicted world, by fixture id, and by physics id. */
+  private props = new Map<string, Standing>();
+  private propIds = new Map<number, string>();
+  private propDamage = new Map<string, number>();
+  /** Props the predicted car broke and when; the server confirms them with its `broken` list. */
+  private strikes = new Map<string, { at: number; confirmed: boolean }>();
+  /** Fixtures this prediction broke, with the strike velocity: the scene throws them at once. */
+  impacts: PredictedImpacts = new Map();
   /** Nearby cars as drawn this frame (predicted, corrections eased), with how much to trust them. */
   drawnCars = new Map<string, { pose: CarPose; weight: number }>();
   /** How fast the body moved in its last step (per second) and when that step ran. */
@@ -146,7 +171,7 @@ export class Prediction {
   private neighbours = new Map<string, number>();
   private buildingColliders = new WeakSet<object>();
   private parkColliders = new WeakSet<object>();
-  constructor(map: Pick<City, "terrain">) {
+  constructor(private map: Pick<City, "terrain">) {
     // Terrain and water are available immediately; streamed buildings and parks are
     // added once their neighborhood arrives.
     if (map.terrain) {
@@ -186,6 +211,81 @@ export class Prediction {
       this.parkColliders.add(park);
     }
   }
+  /**
+   * The trees, palms and lamps around the local body as colliders, like the server has them, so a
+   * hit is felt and shown at once instead of a round trip later. `broken` is the server's list
+   * of broken fixtures; those leave the predicted world and return when it drops them.
+   */
+  syncProps(
+    props: City["props"],
+    broken: ReadonlySet<string>,
+    now = performance.now(),
+  ) {
+    for (const [id, strike] of this.strikes) {
+      strike.confirmed ||= broken.has(id);
+      const age = now - strike.at;
+      if (age > STRIKE_KEEP_MS || (!strike.confirmed && age > STRIKE_CONFIRM_MS)) {
+        // Unconfirmed: the server did not break it, so it stands again below.
+        this.strikes.delete(id);
+        this.impacts.delete(id);
+      }
+    }
+    for (const [id, prop] of this.props) if (broken.has(id)) this.dropProp(id, prop);
+    const body = this.body;
+    if (!body) return;
+    for (const [id, prop] of this.props)
+      if (Math.hypot(prop.x - body.x, prop.z - body.z) > PROP_KEEP)
+        this.dropProp(id, prop);
+    for (const p of props) {
+      if (Math.hypot(p.x - body.x, p.z - body.z) > PROP_RANGE) continue;
+      const id = `${p.kind}:${p.x.toFixed(4)},${p.z.toFixed(4)}`;
+      if (this.props.has(id) || broken.has(id) || this.strikes.has(id)) continue;
+      const w = (p.kind === "tree" ? 0.5 : 0.38) / 2,
+        y = terrainHeight(p.x, p.z, this.map);
+      const handle = this.world.add_prop(
+        p.x,
+        y + p.h / 2,
+        p.z,
+        w,
+        p.h / 2,
+        w,
+        p.angle ?? 0,
+      );
+      this.props.set(id, { body: handle, kind: p.kind, x: p.x, z: p.z });
+      this.propIds.set(handle, id);
+    }
+  }
+  private dropProp(id: string, prop: Standing) {
+    this.world.remove_prop(prop.body);
+    this.props.delete(id);
+    this.propIds.delete(prop.body);
+  }
+  /**
+   * After a live step: the server's strike rule for the local car. Enough damage breaks the prop,
+   * which keeps 96% of the car's speed and flies off. Replayed steps do not count again.
+   */
+  private strike(now: number) {
+    const rows = this.world.impacts();
+    for (let i = 0; i < rows.length; i += 6) {
+      const [vehicle, handle, speed, vx, vy, vz] = rows.subarray(i, i + 6);
+      if (vehicle !== this.id || speed <= STRIKE_MIN_SPEED) continue;
+      const id = this.propIds.get(handle),
+        prop = id === undefined ? undefined : this.props.get(id);
+      if (id === undefined || !prop) continue;
+      const damage = (this.propDamage.get(id) ?? 0) + strikeDamage(speed);
+      this.propDamage.set(id, damage);
+      if (damage < PROP_HEALTH[prop.kind]) continue;
+      this.dropProp(id, prop);
+      this.world.set_vehicle_velocity(
+        this.id,
+        vx * STRIKE_RETENTION,
+        vy,
+        vz * STRIKE_RETENTION,
+      );
+      this.impacts.set(id, strikeVelocity({ vx, vz }));
+      this.strikes.set(id, { at: now, confirmed: false });
+    }
+  }
   reset() {
     this.pending = [];
     this.body = undefined;
@@ -196,6 +296,10 @@ export class Prediction {
     this.shown.clear();
     this.drawnCars.clear();
     this.speeds = undefined;
+    for (const [id, prop] of this.props) this.dropProp(id, prop);
+    this.propDamage.clear();
+    this.strikes.clear();
+    this.impacts.clear();
   }
   /**
    * Keeps the cars around the local body in the predicted world, as the server has them, so
@@ -374,12 +478,18 @@ export class Prediction {
     }
     this.body = after;
   }
-  input(tick: number, input: Input) {
+  /**
+   * Steps the local body one tick. `at` is the slot the input was due in (ms): the drawn body is
+   * carried on from there, so a late frame that steps several slots at once still moves it by
+   * exactly the elapsed time instead of stalling and then hopping.
+   */
+  input(tick: number, input: Input, at = performance.now()) {
     if (!this.kind || !this.body) return;
     this.pending.push({ tick, input });
     const before = this.body,
       carsBefore = this.neighbourPoses();
     this.step(input);
+    if (this.kind === "vehicle") this.strike(performance.now());
     this.body = this.read(this.body);
     const rate = 1 / TUNING.tick;
     for (const [id, pose] of this.neighbourPoses()) {
@@ -406,7 +516,7 @@ export class Prediction {
     if (this.kind === "character")
       this.body = { ...this.body, vx: this.drift.x, vz: this.drift.z };
     this.speeds = { from: velocityOf(before), to: velocityOf(this.body) };
-    this.stepAt = performance.now();
+    this.stepAt = at;
   }
   private step(input: Input) {
     const x = inputX(input),
@@ -440,8 +550,9 @@ export class Prediction {
       angle: o.angle * keep,
     };
     // The body only advances on input ticks (30 Hz); carry its last step on to this frame so a
-    // faster screen sees steady motion instead of a stall and a double jump.
-    const ahead = Math.min(TUNING.tick, Math.max(0, (now - this.stepAt) / 1000)),
+    // faster screen sees steady motion instead of a stall and a double jump. Two ticks at most:
+    // past that the input has stopped, and running on would overshoot a stop.
+    const ahead = Math.min(2 * TUNING.tick, Math.max(0, (now - this.stepAt) / 1000)),
       d = this.drift,
       b = this.body;
     // The cars around it get the same treatment: drawn where the predicted world has them, which

@@ -17,6 +17,7 @@ import { Prediction, loadPhysics, withPredicted } from "./prediction.ts";
 import { SnapshotTimeline } from "./timeline.ts";
 
 export const VERSION = 1;
+const NO_IMPACTS: PredictedImpacts = new Map();
 /** Ticks an input should arrive before the server simulates it. */
 
 export interface Welcome {
@@ -57,8 +58,18 @@ export class GameNetwork {
   entities = new Map<string, Entity>();
   prediction: Prediction | undefined;
   playerId = "";
-  predictedImpacts: PredictedImpacts = new Map();
-  debrisClock: DebrisClock | undefined;
+  /** Fixtures the predicted car has broken, for the scene to throw at once. */
+  get predictedImpacts(): PredictedImpacts {
+    return this.prediction?.impacts ?? NO_IMPACTS;
+  }
+  /** Server times on screen: remote bodies in the past, the predicted car at its own tick. */
+  get debrisClock(): DebrisClock | undefined {
+    if (!this.prediction?.body) return undefined;
+    const remote = this.timeline.renderTime ?? this.serverTime;
+    return { remote, local: this.seq * TUNING.tick };
+  }
+  /** Fixtures the server has broken, as it last reported them. */
+  private broken: ReadonlySet<string> = new Set();
   clock: InputClock | undefined;
   worldReady = (_point: { x: number; z: number }) => true;
   seq = 0;
@@ -203,7 +214,11 @@ export class GameNetwork {
     this.snapshotTimes = this.snapshotTimes.filter((at) => at >= now - 1000);
     const entities = [...this.entities.values()];
     this.timeline.push(m.time, entities, now);
-    if (this.city) this.prediction?.syncStatic(this.city);
+    if (m.broken) this.broken = new Set(m.broken);
+    if (this.city) {
+      this.prediction?.syncStatic(this.city);
+      this.prediction?.syncProps(this.city.props, this.broken);
+    }
     const me = this.entities.get(this.playerId);
     const controlledVehicle = me?.vehicle ? this.entities.get(me.vehicle) : undefined;
     if (me && m.you)
@@ -228,6 +243,7 @@ export class GameNetwork {
     this.socket = undefined;
     clearInterval(this.heartbeat);
     this.welcomed = false;
+    this.broken = new Set();
     this.prediction?.reset();
     this.timeline.reset();
     if (reason) this.lastDisconnect = reason;
@@ -319,10 +335,14 @@ export class GameNetwork {
     // predicted body must step through them too or it trails the server by a tick or two.
     if (this.lastInput && tick > this.seq + 1 && tick - this.seq <= 8)
       for (let held = this.seq + 1; held < tick; held++)
-        this.prediction.input(held, this.lastInput);
+        this.prediction.input(
+          held,
+          this.lastInput,
+          timestamp - (tick - held) * TUNING.tick * 1000,
+        );
     this.seq = tick;
     this.lastInput = input;
-    this.prediction.input(tick, input);
+    this.prediction.input(tick, input, timestamp);
     this.inputTimes.push(timestamp);
     this.inputTimes = this.inputTimes.filter((at) => at >= timestamp - 1000);
   }

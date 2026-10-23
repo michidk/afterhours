@@ -221,7 +221,7 @@ test("the driven car is drawn at the predicted pose, other vehicles are left alo
 });
 
 // The body advances on 30 Hz input ticks; a 60 Hz screen drew a stall and a double jump.
-test("the drawn body keeps moving between input ticks, by at most one tick", async () => {
+test("the drawn body keeps moving between input ticks, by at most two", async () => {
   await loadPhysics();
   const [driver, car] = player("sport");
   const prediction = new Prediction({});
@@ -242,8 +242,8 @@ test("the drawn body keeps moving between input ticks, by at most one tick", asy
     at = (ms: number) => prediction.render(t + ms)!.z;
   assert.ok(at(16) > at(0), "no movement between ticks");
   const speed = prediction.body!.vz;
-  assert.ok(at(16) - at(0) < speed / 30, "more than one tick of carry");
-  assert.ok(at(1000) - at(33) < 0.05, "carry is not capped at one tick");
+  assert.ok(at(16) - at(0) < speed / 30, "more than a tick of carry in 16 ms");
+  assert.ok(at(1000) - at(67) < 0.05, "carry is not capped at two ticks");
 });
 
 // Collisions are simulated against the predicted world, so the cars you can hit must be drawn
@@ -278,8 +278,9 @@ test("cars within reach are drawn from the predicted world, far ones from the se
   const frame = [driver, car, near, far];
   const drawn = withPredicted(frame, me!, "player-1", prediction.drawnCars);
   const z = (id: string) => drawn.find((e) => e.id === id)!.z;
-  // Eight ticks at about 10 m/s: 2.5 m ahead of the snapshot the server copy is still at.
-  assert.ok(z("near") > 2 && z("near") < 3.2, `near car drawn at z=${z("near")}`);
+  // Eight ticks at about 10 m/s, plus up to two ticks of carry: 2.5 to 3.5 m ahead of the
+  // snapshot the server copy is still at.
+  assert.ok(z("near") > 2 && z("near") < 3.6, `near car drawn at z=${z("near")}`);
   assert.equal(z("far"), 0, "a car beyond reach stays on its server copy");
   // Driving on, the passer leaves the 16 m ring: it fades back instead of jumping.
   const gone = { ...near, x: 20 };
@@ -403,4 +404,82 @@ test("the drawn body's pitch and roll do not jitter at 60 fps", async () => {
   } finally {
     mocked.mock.restore();
   }
+});
+
+// Trees, palms and lamps exist only on the server. Without them in the predicted world the car
+// drove through a prop and its break showed a round trip later; the server's own rule runs here.
+const driveInto = (
+  prop: { kind: "lamp" | "tree" | "palm"; x: number; z: number; h: number },
+  ticks: number,
+) => {
+  const [driver, car] = player("sedan");
+  const prediction = new Prediction({});
+  prediction.reconcile(driver, car, snapshot, undefined);
+  const props = [prop];
+  const id = `${prop.kind}:${prop.x.toFixed(4)},${prop.z.toFixed(4)}`;
+  prediction.syncProps(props, new Set(), 0);
+  const throttle = {
+    up: true,
+    down: false,
+    left: false,
+    right: false,
+    brake: false,
+    sprint: false,
+    ascend: false,
+    descend: false,
+    attack: false,
+  };
+  for (let tick = 1; tick <= ticks; tick++) prediction.input(tick, throttle);
+  return { prediction, props, id };
+};
+
+test("a fast hit breaks a lamp at once and the car keeps its speed", async () => {
+  await loadPhysics();
+  // 15 m/s into a lamp (45 health breaks above about 5 m/s).
+  const lamp = { kind: "lamp" as const, x: 0, z: 40, h: 6 };
+  const { prediction, id } = driveInto(lamp, 100);
+  assert.ok(prediction.impacts.has(id), "no predicted break");
+  const launch = prediction.impacts.get(id)!;
+  assert.ok(launch.z > 5 && launch.y > 2.5, `launch ${JSON.stringify(launch)}`);
+  assert.ok(prediction.body!.z > 40, `the car stopped at z=${prediction.body!.z}`);
+  assert.ok(prediction.body!.vz > 8, `the car lost its speed: ${prediction.body!.vz}`);
+});
+
+test("a slow hit leaves a tree standing and the car stops at it", async () => {
+  await loadPhysics();
+  // Two metres from the nose a sedan has not reached the 8 m/s a tree needs to break.
+  const tree = { kind: "tree" as const, x: 0, z: 4, h: 9 };
+  const { prediction, id } = driveInto(tree, 36);
+  assert.equal(prediction.impacts.has(id), false, "a slow hit broke the tree");
+  assert.ok(prediction.body!.z < 4.5, `drove through: z=${prediction.body!.z}`);
+});
+
+test("a break the server never confirms stands the prop up again, a confirmed one does not", async () => {
+  await loadPhysics();
+  const lamp = { kind: "lamp" as const, x: 0, z: 40, h: 6 };
+  const standing = (p: Prediction, id: string) =>
+    (p as unknown as { props: Map<string, unknown> }).props.has(id);
+  const { prediction, props, id } = driveInto(lamp, 100);
+  assert.equal(standing(prediction, id), false, "the broken prop still stands");
+  const t = performance.now();
+  // Just after: neither confirmed nor expired, so it stays broken.
+  prediction.syncProps(props, new Set(), t + 300);
+  assert.equal(standing(prediction, id), false);
+  // The server confirms it: it stays out, and so does the cosmetic launch's cue after a while.
+  prediction.syncProps(props, new Set([id]), t + 400);
+  prediction.syncProps(props, new Set([id]), t + 5000);
+  assert.equal(standing(prediction, id), false, "a confirmed break came back");
+  assert.equal(prediction.impacts.size, 0, "the launch cue was never withdrawn");
+  // The server's debris expires: the fixture stands again.
+  prediction.syncProps(props, new Set(), t + 40000);
+  assert.equal(standing(prediction, id), true, "the prop did not come back");
+
+  const second = driveInto(lamp, 100);
+  second.prediction.syncProps(second.props, new Set(), performance.now() + 2000);
+  assert.equal(second.prediction.impacts.size, 0, "an unconfirmed strike was kept");
+  assert.equal(
+    standing(second.prediction, second.id),
+    true,
+    "the unconfirmed prop stays gone",
+  );
 });
