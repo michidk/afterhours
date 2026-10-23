@@ -17,6 +17,7 @@ import { mapPlayers, swatch } from "./ui/map-players.ts";
 import { CityMap } from "./ui/city-map.ts";
 import { updateNetworkStats } from "./ui/network-stats.ts";
 import { claimsKey, typingIn } from "./input/focus.ts";
+import { quickStart } from "./ui/quick-start.ts";
 import { PlayerList } from "./ui/player-list.ts";
 import { Nameplates } from "./ui/nameplates.ts";
 import { GameNetwork } from "./network/index.ts";
@@ -119,6 +120,8 @@ function loading(text: string) {
   const status = document.querySelector("#boot-status") ?? $("#loading");
   status.textContent = text;
 }
+// The character screen is skipped, so do not flash it while the city loads.
+if (quickStart(location.search)) document.documentElement.classList.add("quick");
 $("#join").addEventListener("submit", (event) => {
   event.preventDefault();
   if (!scene) return;
@@ -654,6 +657,11 @@ async function boot() {
     $("#app").removeAttribute("inert");
     document.querySelector("#boot")?.remove();
     characterMenu.ready();
+    const quick = quickStart(location.search);
+    if (quick) {
+      if (quick.name) $<HTMLInputElement>("#name").value = quick.name;
+      $<HTMLFormElement>("#join").requestSubmit();
+    }
     const profileEnabled =
       import.meta.env.DEV ||
       new URLSearchParams(location.search).get("profile") === "1";
