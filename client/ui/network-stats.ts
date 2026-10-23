@@ -1,12 +1,21 @@
 import type { GameNetwork } from "../network/index.ts";
 
-export function updateNetworkStats(element: HTMLElement, network: GameNetwork) {
+export function updateNetworkStats(
+  element: HTMLElement,
+  network: GameNetwork,
+  frames: { fps: number; p95Ms: number; worstMs: number },
+) {
   const s = network.stats();
   const ms = (value: number | undefined) =>
     value === undefined ? "—" : `${Math.round(value)} ms`;
   const rows = [
     ["Connection", s.connected ? "Connected" : "Disconnected"],
     ["Last disconnect", s.lastDisconnect ?? "None"],
+    ["Reconnects", String(s.reconnects)],
+    [
+      "Frame rate (5 s)",
+      `${Math.round(frames.fps)} fps, 95% under ${Math.round(frames.p95Ms)} ms, worst ${Math.round(frames.worstMs)} ms`,
+    ],
     ["Server ping (RTT)", ms(s.rtt)],
     ["Ping variation", ms(s.jitter)],
     ["Snapshot age / gap", `${ms(s.snapshotAge)} / ${ms(s.snapshotInterval)}`],

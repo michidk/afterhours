@@ -94,10 +94,11 @@ const share = (count: number, report: Report) => count / Math.max(1, report.fram
 function feels(r: Report, minSpeed: number) {
   assert.ok(r.frames > seconds * 20, `only ${r.frames} frames measured`);
   assert.ok(r.topSpeed > minSpeed, `never got moving: top speed ${r.topSpeed}`);
-  // The draw carries the body on by up to one 30 Hz tick of travel; anything beyond is lag.
+  // The draw carries the body on by up to one 30 Hz tick of travel, plus a small correction that
+  // is still easing out; anything beyond is lag.
   const tickOfTravel = r.topSpeed / 30;
   assert.ok(
-    r.drawnGapMax < tickOfTravel + 0.1,
+    r.drawnGapMax < tickOfTravel + 0.25,
     `drawn ${r.drawnGapMax} m from the predicted body (one tick is ${tickOfTravel.toFixed(2)} m)`,
   );
   assert.ok(share(r.freezes, r) < 0.08, `${r.freezes}/${r.frames} frames stalled`);

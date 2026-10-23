@@ -16,6 +16,7 @@ import { loadoutHTML } from "./ui/loadout.ts";
 import { mapPlayers, swatch } from "./ui/map-players.ts";
 import { CityMap } from "./ui/city-map.ts";
 import { updateNetworkStats } from "./ui/network-stats.ts";
+import { claimsKey, typingIn } from "./input/focus.ts";
 import { PlayerList } from "./ui/player-list.ts";
 import { Nameplates } from "./ui/nameplates.ts";
 import { GameNetwork } from "./network/index.ts";
@@ -26,7 +27,7 @@ import { prepareFirstFrame } from "./startup.ts";
 import { meshGroupSchema } from "../shared/city-mesh.ts";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { CityScene } from "./scene";
-import { FrameProfiler, profileNetwork } from "./performance/index.ts";
+import { FrameProfiler, FrameWindow, profileNetwork } from "./performance/index.ts";
 import { AgentInterface } from "./debug/index.ts";
 import { CityStream, SCENERY_RADIUS } from "./world/stream.ts";
 import { CityRenderer } from "./world/render.ts";
@@ -233,26 +234,28 @@ $("#join").addEventListener("submit", (event) => {
   network.connect();
 });
 window.addEventListener("keydown", (event) => {
-  const typing = ["INPUT", "SELECT", "TEXTAREA"].includes(
-    document.activeElement?.tagName || "",
-  );
-  if (typing) {
-    if (event.code === "Enter" && document.activeElement?.id === "chat") {
-      event.preventDefault();
-      const chat = $<HTMLInputElement>("#chat");
-      if (chat.value.trim()) send({ type: "chat", text: chat.value });
-      chat.value = "";
-      chat.blur();
+  const active = document.activeElement;
+  // A field nobody can see must not keep the keyboard from the game.
+  if (
+    active instanceof HTMLElement &&
+    !typingIn(active) &&
+    active.matches("input, select, textarea")
+  )
+    active.blur();
+  if (typingIn(document.activeElement)) {
+    if (document.activeElement?.id === "chat") {
+      if (event.code === "Enter") {
+        event.preventDefault();
+        const chat = $<HTMLInputElement>("#chat");
+        if (chat.value.trim()) send({ type: "chat", text: chat.value });
+        chat.value = "";
+        chat.blur();
+      } else if (event.code === "Escape") $<HTMLInputElement>("#chat").blur();
     }
     return;
   }
   if (!joined) return;
-  if (
-    ["Space", "F1", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(
-      event.code,
-    )
-  )
-    event.preventDefault();
+  if (claimsKey(event)) event.preventDefault();
   // Finish overdue slots with the controls held before this event.
   pumpInput();
   controls.press(event.code);
@@ -439,9 +442,7 @@ function pumpInput(now = performance.now(), transition = false) {
     const input = controls.sample();
     handleGamepadActions();
     network?.input(
-      cityMap?.open ||
-        scene.debugCamera.active ||
-        ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName || "")
+      cityMap?.open || scene.debugCamera.active || typingIn(document.activeElement)
         ? idle()
         : automation?.input || input,
       timestamp,
@@ -450,10 +451,11 @@ function pumpInput(now = performance.now(), transition = false) {
   inputClock.advance(now, send);
   if (transition) inputClock.transition(now, send);
 }
+const frames = new FrameWindow();
 setInterval(pumpInput, 1000 / 30);
 setInterval(() => {
   if (debugAllowed && network && !$("#debug").classList.contains("hidden"))
-    updateNetworkStats($("#network-stats"), network);
+    updateNetworkStats($("#network-stats"), network, frames.stats);
 }, 250);
 function debugPanelOpen(id: string) {
   const panel = $(`#debug-${id}`);
@@ -706,12 +708,12 @@ async function boot() {
       const now = performance.now(),
         dt = Math.min(0.05, (now - last) / 1000);
       const interval = now - last;
+      frames.record(now, interval);
       last = now;
       if (!joined) return;
       pumpInput(now);
       const cameraInput =
-        cityMap?.open ||
-        ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName || "")
+        cityMap?.open || typingIn(document.activeElement)
           ? idle()
           : automation?.input || controls.read();
       const rendered =

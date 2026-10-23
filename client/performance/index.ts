@@ -124,3 +124,20 @@ export class FrameProfiler {
     };
   }
 }
+
+/** Always-on frame timing for the Networking panel: the last five seconds of frame intervals. */
+export class FrameWindow {
+  private frames: { at: number; ms: number }[] = [];
+  record(now: number, ms: number) {
+    this.frames.push({ at: now, ms });
+    while (this.frames[0] && this.frames[0].at < now - 5000) this.frames.shift();
+  }
+  get stats() {
+    const ms = this.frames.map((f) => f.ms).sort((a, b) => a - b);
+    return {
+      fps: ms.length ? 1000 / ms[ms.length >> 1] : 0,
+      p95Ms: ms[Math.floor(ms.length * 0.95)] ?? 0,
+      worstMs: ms.at(-1) ?? 0,
+    };
+  }
+}

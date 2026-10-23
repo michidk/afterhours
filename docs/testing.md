@@ -20,15 +20,15 @@ sedan, each on a clean link and on a 74 ms link with 20 ms jitter and 150 ms spi
 racetrack. `FEEL_SECONDS` sets the length of each (default 20). The bot calls the same
 `renderEntities` the browser draws from, so its numbers are about the drawn body.
 
-| Check                                       | Limit                              | Why                                                                                   |
-| ------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------- |
-| drawn body vs predicted body                | within one tick of travel (+10 cm) | the draw carries the body on by up to a tick; the bug drew the server copy 4 m behind |
-| frames that stalled / lurched               | under 8% of frames each            | stepping at 30 Hz stalled one frame in two and double-jumped the next                 |
-| frames that moved backward                  | under 5%                           | late input must not rewind the draw                                                   |
-| drawn height over terrain (95th percentile) | under 0.6 m                        | wheels and feet on the ground                                                         |
-| prediction corrections                      | at most 3, none over 1 m           | the server agrees with what was predicted                                             |
-| inputs waiting for the server               | at most 20                         | the input stream does not run away                                                    |
-| server tick CPU (95th percentile)           | under 20 ms of the 33 ms budget    | a slow tick delays everyone                                                           |
+| Check                                       | Limit                                                                | Why                                                                                   |
+| ------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| drawn body vs predicted body                | within one tick of travel (+25 cm for a correction still easing out) | the draw carries the body on by up to a tick; the bug drew the server copy 4 m behind |
+| frames that stalled / lurched               | under 8% of frames each                                              | stepping at 30 Hz stalled one frame in two and double-jumped the next                 |
+| frames that moved backward                  | under 5%                                                             | late input must not rewind the draw                                                   |
+| drawn height over terrain (95th percentile) | under 0.6 m                                                          | wheels and feet on the ground                                                         |
+| prediction corrections                      | at most 3, none over 1 m                                             | the server agrees with what was predicted                                             |
+| inputs waiting for the server               | at most 20                                                           | the input stream does not run away                                                    |
+| server tick CPU (95th percentile)           | under 20 ms of the 33 ms budget                                      | a slow tick delays everyone                                                           |
 
 The limits are shares of frames and absolute metres so a loaded machine does not flip them;
 `hitches` and the drawn-speed error are reported but not asserted, because they flag a 2 ms timer

@@ -79,6 +79,7 @@ export class GameNetwork {
   private retry: ReturnType<typeof setTimeout> | undefined;
   private heartbeat: ReturnType<typeof setInterval> | undefined;
   private lastDisconnect: string | undefined;
+  private reconnects = 0;
   private lastResponse = 0;
   private snapshotTimes: number[] = [];
   private inputTimes: number[] = [];
@@ -229,6 +230,7 @@ export class GameNetwork {
     this.timeline.reset();
     if (reason) this.lastDisconnect = reason;
     if (this.closed) return;
+    this.reconnects++;
     this.hooks.status("reconnecting");
     this.retry = setTimeout(() => this.connect(), 1000);
   }
@@ -337,6 +339,7 @@ export class GameNetwork {
     return {
       connected: this.welcomed && this.socket?.readyState === WebSocket.OPEN,
       lastDisconnect: this.lastDisconnect,
+      reconnects: this.reconnects,
       rtt: this.rtt,
       jitter: this.jitter,
       snapshotAge: this.received ? Math.max(0, now - this.received) : undefined,
