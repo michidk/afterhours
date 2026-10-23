@@ -18,7 +18,11 @@
     "audio:prepare": "tsx scripts/prepare-audio.ts",
     "format": "prettier --write .",
     "check": "scripts/build-physics.sh && prettier --check . && tsx scripts/check-boundaries.ts && tsc --noEmit",
-    "server": "cargo run -p afterhours-server"
+    "server": "cargo run -p afterhours-server",
+    "test:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace --release",
+    "test:parity": "scripts/check-parity.sh",
+    "test:feel": "tsx --test --test-concurrency=1 tests/live/*.test.ts",
+    "bot:drive": "tsx scripts/drive-client.ts"
   },
   "dependencies": {
     "@babylonjs/core": "^8.0.0",

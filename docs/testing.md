@@ -1,0 +1,64 @@
+# Testing
+
+Each layer exists because something a player saw got past the one below it. CI runs all of them
+(`.github/workflows/ci.yml`); run the same commands locally.
+
+| Command                | What it runs                                                                    | What it catches                                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `bun run test:rust`    | `cargo fmt --check`, clippy `-D warnings`, every Rust test (release)            | handling parity with the original, scene and session behaviour, collider orientation, ground heights, ack and held ticks, cache headers |
+| `bun run test:parity`  | native and wasm physics hash of one scripted run (`scripts/check-parity.sh`)    | client prediction drifting from the server                                                                                              |
+| `bun run test`         | JS unit tests (prediction, input clock, stamper, rendering helpers)             | prediction pose, input stamping, drawn-pose swap                                                                                        |
+| `bun run test:feel`    | a real server and the real client stack, bot-driven (`tests/live/feel.test.ts`) | what the player sees: drawn position, smoothness, ground contact, corrections, server tick                                              |
+| `bun run test:browser` | real Chromium renders the city and gameplay                                     | rendering failures (not latency; software GL is slow)                                                                                   |
+
+## The feel suite
+
+`test:feel` boots `afterhours-server` on a free port with the saved city, then runs
+`scripts/drive-client.ts` (the browser's `GameNetwork`, prediction and input clock, with one-way
+delay, jitter and spikes on its own socket) for six scenarios: walking, sprinting and driving a
+sedan, each on a clean link and on a 74 ms link with 20 ms jitter and 150 ms spikes, along the
+racetrack. `FEEL_SECONDS` sets the length of each (default 20). The bot calls the same
+`renderEntities` the browser draws from, so its numbers are about the drawn body.
+
+| Check                                       | Limit                              | Why                                                                                   |
+| ------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------- |
+| drawn body vs predicted body                | within one tick of travel (+10 cm) | the draw carries the body on by up to a tick; the bug drew the server copy 4 m behind |
+| frames that stalled / lurched               | under 8% of frames each            | stepping at 30 Hz stalled one frame in two and double-jumped the next                 |
+| frames that moved backward                  | under 5%                           | late input must not rewind the draw                                                   |
+| drawn height over terrain (95th percentile) | under 0.6 m                        | wheels and feet on the ground                                                         |
+| prediction corrections                      | at most 3, none over 1 m           | the server agrees with what was predicted                                             |
+| inputs waiting for the server               | at most 20                         | the input stream does not run away                                                    |
+| server tick CPU (95th percentile)           | under 20 ms of the 33 ms budget    | a slow tick delays everyone                                                           |
+
+The limits are shares of frames and absolute metres so a loaded machine does not flip them;
+`hitches` and the drawn-speed error are reported but not asserted, because they flag a 2 ms timer
+wobble at walking pace. Observed on a host at load 15-35: stalls about 1% of frames, no backward
+frames, no corrections, gap 0.02 m beyond the carry.
+
+Mutation-checked: drawing the delayed server car fails with "drawn 3.99 m from the predicted
+body"; removing the between-tick carry fails with "636/1236 frames stalled".
+
+## Real-city scenes
+
+`cars_driven_at_the_real_buildings_never_end_up_inside_one` (`crates/server/tests/lab.rs`) drives a
+sedan flat out at 16 rotated buildings of `data/city.json` and requires that no recorded position
+lies inside a drawn footprint and that walls stop the cars. With the colliders mirrored it fails at
+the first building. The scene lab can also walk (`drive` on foot), so on-foot problems have the same
+JSON reproduction as driving ones (`docs/lab.md`).
+
+## When a player reports a problem
+
+1. Reproduce it with a number: `scene-lab` or `handling-lab` for the world and the car, the bot for
+   latency and drawing (`bun run bot:drive -- --url ... --model none|sedan --pattern track`).
+2. Keep that reproduction as a test in the layer where it fails, and check it fails on the old code.
+3. Prefer measuring what is drawn (`renderEntities`) over the predicted body or the server state:
+   three "fixes" in a row passed on the prediction while the screen showed the server copy.
+
+## Known gaps
+
+No test runs a GPU-backed browser at a real frame rate or over the real public route (the preview
+gateway and shared ingress stalled for seconds in `docs/lag-routing.md`), so a latency complaint that
+passes here still needs the Networking panel from the player's session. Helicopters, planes and boats
+are drawn from the interpolated server copy, not predicted, and are not covered by the feel suite.
+`docs/movement-testing.md` describes the older TypeScript-server harness; `test:network`,
+`probe:drive` and the five-client acceptance there no longer exist except as `lag.yml`.

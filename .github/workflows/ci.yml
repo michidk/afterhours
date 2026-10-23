@@ -28,15 +28,18 @@ jobs:
           bun-version: 1.4.2
       - run: rustup target add wasm32-unknown-unknown
       - run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
+      - uses: Swatinem/rust-cache@v2
       - run: bun install --frozen-lockfile
       - run: bun run check
+      - run: bun run test:rust
+      - run: bun run test:parity
       - run: bun run test
       - run: bun run build
 
-  network:
+  feel:
     needs: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,9 +50,10 @@ jobs:
           bun-version: 1.4.2
       - run: rustup target add wasm32-unknown-unknown
       - run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
+      - uses: Swatinem/rust-cache@v2
       - run: bun install --frozen-lockfile
       - run: bun run build
-      - run: bun run test:network
+      - run: bun run test:feel
 
   browser:
     needs: verify

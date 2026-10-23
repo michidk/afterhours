@@ -1,5 +1,6 @@
 //! The JSON command interface of the scene lab (`scene-lab`), driven the way a script or an
 //! AI agent would: commands in, replies out, one scene across several commands.
+use afterhours_server::City;
 use afterhours_server::lab::{COMMANDS, Lab};
 use serde_json::{Value, json};
 
@@ -76,4 +77,65 @@ fn the_pursuit_bot_laps_the_track_and_bad_input_is_an_error_not_a_panic() {
     );
     assert_eq!(lab.exec(&json!({"cmd": "spawn"}))["ok"], false);
     assert_eq!(lab.exec(&json!({"cmd": "debug"}))["ok"], false);
+}
+
+/// The footprint test of the original game's `insideBuilding`: local x runs along `(cos a, sin a)`.
+fn inside(b: &afterhours_server::city::Building, x: f32, z: f32) -> bool {
+    let (a, dx, dz) = (b.angle.unwrap_or(0.0), x - b.x, z - b.z);
+    let (u, v) = (dx * a.cos() + dz * a.sin(), -dx * a.sin() + dz * a.cos());
+    u.abs() < b.w / 2.0 && v.abs() < b.d / 2.0
+}
+
+/// A car driven flat out at rotated buildings of the real city stops at them. With the
+/// colliders mirrored (the bug), cars drove through the drawn walls and stopped at open air.
+#[test]
+fn cars_driven_at_the_real_buildings_never_end_up_inside_one() {
+    let city = City::load(concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/city.json")).unwrap();
+    let wide: Vec<_> = city
+        .buildings
+        .iter()
+        .filter(|b| {
+            b.w > 18.0 && b.h - b.y.unwrap_or(0.0) > 15.0 && b.angle.unwrap_or(0.0).abs() > 0.2
+        })
+        .collect();
+    let picked: Vec<_> = wide
+        .iter()
+        .step_by((wide.len() / 16).max(1))
+        .take(16)
+        .collect();
+    let (mut driven, mut stopped) = (0, 0);
+    for b in picked {
+        let mut lab = lab();
+        lab.exec(&json!({"cmd": "teleport", "x": b.x, "z": b.z + 40.0}));
+        lab.exec(&json!({"cmd": "spawn", "model": "sedan"}));
+        if lab.exec(&json!({"cmd": "board"}))["ok"] != true {
+            continue;
+        }
+        let run = lab.exec(&json!({"cmd": "drive", "ticks": 200, "throttle": 1, "every": 4}));
+        let Some(trace) = run["trace"].as_array() else {
+            continue;
+        };
+        driven += 1;
+        stopped += (run["metrics"]["final_speed"].as_f64().unwrap() < 1.0) as u32;
+        for t in trace {
+            let (x, y, z) = (
+                t["x"].as_f64().unwrap() as f32,
+                t["y"].as_f64().unwrap() as f32,
+                t["z"].as_f64().unwrap() as f32,
+            );
+            for other in &city.buildings {
+                assert!(
+                    !(y < other.h && y + 1.0 > other.y.unwrap_or(0.0) && inside(other, x, z)),
+                    "a car drove into the building at ({}, {}): it is at ({x}, {z})",
+                    other.x,
+                    other.z
+                );
+            }
+        }
+    }
+    assert!(driven >= 10, "only {driven} drives reached a building");
+    assert!(
+        stopped >= driven / 2,
+        "only {stopped}/{driven} cars were stopped by a wall"
+    );
 }

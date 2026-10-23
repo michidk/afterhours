@@ -10,7 +10,7 @@ import { WebSocket as NodeWebSocket } from "ws";
 import { GameNetwork } from "../client/network/index.ts";
 import { InputClock } from "../client/input/clock.ts";
 import { OrderedDelay } from "./ordered-delay.ts";
-import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { CityStream } from "../client/world/stream.ts";
 import {
   mapManifestSchema,
@@ -366,8 +366,17 @@ const summary = {
   maxCorrection: 0,
   maxPending: 0,
   topSpeed: 0,
+  /** Drawn body to predicted body (m): above a few cm the player sees something late. */
+  drawnGapMean: 0,
+  drawnGapMax: 0,
+  /** Drawn height over the terrain (m): feet and wheel contact. */
+  groundClearanceP95: 0,
+  groundClearanceMax: 0,
 };
 let previousPose: { x: number; y: number; z: number; at: number } | undefined;
+/** Distance from the drawn body to the predicted one, and the drawn height over the ground. */
+const drawnGaps: number[] = [],
+  clearances: number[] = [];
 const speedErrors: number[] = [],
   speedJitters: number[] = [];
 let previousError: number | undefined;
@@ -421,6 +430,10 @@ const sampler = setInterval(() => {
       );
   }
   if (!pose || !p) return;
+  if (p.body && (kind === "none" || kind === "car") && now - started > 1000) {
+    drawnGaps.push(Math.hypot(pose.x - p.body.x, pose.z - p.body.z));
+    clearances.push(Math.abs(pose.y - groundLevel(pose.x, pose.z, city)));
+  }
   const speed = Math.hypot(pose.vx, pose.vz);
   summary.topSpeed = Math.max(summary.topSpeed, speed);
   const measuring = (now - started) / 1000 >= warmup;
@@ -513,6 +526,25 @@ const finish = async () => {
   ).toFixed(3);
   summary.speedJitterMax = +(speedJitters.at(-1) ?? 0).toFixed(3);
   summary.verticalWobbleMax = +summary.verticalWobbleMax.toFixed(3);
+  const sorted = (values: number[]) => [...values].sort((a, b) => a - b);
+  const gaps = sorted(drawnGaps),
+    heights = sorted(clearances);
+  summary.drawnGapMean = +(
+    gaps.reduce((a, b) => a + b, 0) / (gaps.length || 1)
+  ).toFixed(3);
+  summary.drawnGapMax = +(gaps.at(-1) ?? 0).toFixed(3);
+  summary.groundClearanceP95 = +(
+    heights[Math.floor(heights.length * 0.95)] ?? 0
+  ).toFixed(3);
+  summary.groundClearanceMax = +(heights.at(-1) ?? 0).toFixed(3);
+  let server: unknown;
+  if (debugAllowed)
+    try {
+      server = ((await debug({ kind: "observe" } as never)) as { server?: unknown })
+        ?.server;
+    } catch (error) {
+      server = String(error);
+    }
   let health: unknown;
   try {
     health = await (
@@ -536,6 +568,19 @@ const finish = async () => {
         health,
       }) + "\n",
     );
+  const report = {
+    url: url.href,
+    model,
+    pattern,
+    link: { delay, jitter, spike, spikeRate },
+    regulate,
+    limit,
+    ...summary,
+    maxInputLagMs: +maxInputLag.toFixed(1),
+    server,
+    health,
+  };
+  if (arg("json", "")) writeFileSync(arg("json", ""), JSON.stringify(report, null, 1));
   console.log(
     JSON.stringify(
       {
@@ -547,6 +592,7 @@ const finish = async () => {
         limit,
         ...summary,
         maxInputLagMs: +maxInputLag.toFixed(1),
+        server,
         health,
       },
       null,

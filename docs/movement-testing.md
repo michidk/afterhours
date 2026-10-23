@@ -1,3 +1,7 @@
+> **Status:** this describes the harness of the TypeScript server. `bun run test:network` and
+> `probe:drive` no longer exist; `bun run bot:drive` is `scripts/drive-client.ts` and
+> `bun run test:feel` is the live suite. See [testing](testing.md) for what runs now.
+
 # Movement regression tests
 
 `bun run test:network` runs two real clients against a separate production server
