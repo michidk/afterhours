@@ -51,6 +51,20 @@ fn a_scripted_drive_reports_a_trace_and_metrics() {
 }
 
 #[test]
+fn walking_and_sprinting_on_foot_cover_the_original_paces() {
+    let mut lab = lab();
+    ok(&lab.exec(&json!({"cmd": "track"})));
+    let walk = lab.exec(&json!({"cmd": "drive", "ticks": 90, "throttle": 1}));
+    assert_eq!(ok(&walk)["on_foot"], true);
+    // Three seconds from rest, easing in: close to 4.5 m/s.
+    let pace = walk["metrics"]["mean_speed"].as_f64().unwrap();
+    assert!((3.8..4.6).contains(&pace), "walked at {pace} m/s");
+    let run = lab.exec(&json!({"cmd": "drive", "ticks": 90, "throttle": 1, "sprint": true}));
+    let pace = ok(&run)["metrics"]["mean_speed"].as_f64().unwrap();
+    assert!((7.0..8.2).contains(&pace), "sprinted at {pace} m/s");
+}
+
+#[test]
 fn the_pursuit_bot_laps_the_track_and_bad_input_is_an_error_not_a_panic() {
     let mut lab = lab();
     ok(&lab.exec(&json!({"cmd": "track"})));

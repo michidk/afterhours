@@ -76,7 +76,9 @@ printf '%s\n' '{"cmd":"track"}' '{"cmd":"spawn","model":"sedan"}' '{"cmd":"board
 Send `{"cmd":"help"}` for the command list: `track`, `teleport`, `spawn`, `board`, `leave`,
 `drive` (hold controls for N ticks, 30/s), `follow` (pursuit bot on the racetrack), `idle`,
 `state`, `debug` (any raw debug command). `drive`, `follow` and `idle` reply with the car's
-trace and metrics (`top_speed`, `max_tilt`, `max_hop`, `max_height`, `displacement`).
+trace and metrics (`top_speed`, `max_tilt`, `max_hop`, `max_height`, `displacement`). On foot,
+`drive` walks (`throttle` forward, `steer` sideways, `"sprint": true` to run) and replies with the
+walker's trace plus `displacement`, `mean_speed` and `longest_step`.
 Errors come back as `{"ok":false,"error":...}`; nothing panics on bad input.
 
 The same world is a Rust API for tests (`afterhours_server::lab::Lab`): see
@@ -93,6 +95,14 @@ pure-pursuit driver while injecting one-way delay, jitter and spikes on its own 
 bunx tsx scripts/drive-client.ts --url http://localhost:5174 --pattern track --speed 18 \
   --seconds 60 --delay 37 --jitter 20 --spike 150
 ```
+
+`--model none` walks instead (`--pattern track --speed 4.5` walks the racetrack, above 5 sprints;
+the move keys are a world direction on foot, so it heads straight for the next track point).
+
+What the bot reports is what the browser draws: `renderEntities` is the same call, so the drawn
+car (not only the predicted body) is what `freezes`, `forwardLurches` and `backward` count. Judge
+smoothness by those three; `hitches` flags any frame 10% off the expected step, which a 2 ms timer
+wobble on a loaded host trips at walking pace.
 
 It prints the per-second link counters and a summary: corrections (count, over 1 m, worst),
 pending replay, drawn-speed error and hitches, lurches, freezes and the worst input delay. A good

@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Prediction, loadPhysics, yawPitchRoll } from "../client/network/prediction.ts";
+import {
+  Prediction,
+  loadPhysics,
+  withPredicted,
+  yawPitchRoll,
+} from "../client/network/prediction.ts";
 import type { Entity } from "../shared/world.ts";
 
 const player = (model: string): [Entity, Entity] => {
@@ -164,6 +169,79 @@ test("prediction blocks where a rotated building is drawn", async () => {
     const drawn = at(u, 0),
       mirror = { x: drawn.x, z: 400 - drawn.z };
     assert.ok(top(drawn.x, drawn.z).length, `no wall at footprint offset ${u}`);
-    assert.equal(top(mirror.x, mirror.z).length, 0, `wall at the mirrored spot of ${u}`);
+    assert.equal(
+      top(mirror.x, mirror.z).length,
+      0,
+      `wall at the mirrored spot of ${u}`,
+    );
   }
+});
+
+// The mesh and the camera follow the car entity. Swapping the predicted body into the player
+// alone left them on the server copy, 4 m behind a car at 18 m/s.
+test("the driven car is drawn at the predicted pose, other vehicles are left alone", () => {
+  const [driver, car] = player("sedan");
+  const other: Entity = { ...car, id: "car-2", driver: "player-2", z: 50 };
+  const heli: Entity = { ...car, id: "heli-1", kind: "helicopter", driver: "player-1" };
+  const me: Entity = {
+    ...driver,
+    x: 5,
+    y: 1.5,
+    z: 20,
+    vz: 18,
+    angle: 0.3,
+    pitch: 0.01,
+    roll: 0.02,
+    steering: 0.1,
+  };
+  const out = withPredicted([driver, car, other, heli], me, "player-1");
+  const drawn = out.find((e) => e.id === "car-1")!;
+  assert.deepEqual(
+    [drawn.x, drawn.z, drawn.vz, drawn.angle, drawn.pitch, drawn.steering],
+    [5, 20, 18, 0.3, 0.01, 0.1],
+  );
+  assert.equal(drawn.model, "sedan");
+  assert.equal(drawn.driver, "player-1");
+  assert.equal(
+    out.find((e) => e.id === "car-2"),
+    other,
+  );
+  assert.equal(
+    out.find((e) => e.id === "heli-1"),
+    heli,
+  );
+  assert.equal(out.find((e) => e.id === "player-1")!.z, 20);
+  // Still boarding: the predicted body has no pitch yet, so the car keeps the server pose.
+  const boarding = withPredicted(
+    [driver, car],
+    { ...driver, pitch: undefined },
+    "player-1",
+  );
+  assert.equal(boarding.find((e) => e.id === "car-1")!.z, car.z);
+});
+
+// The body advances on 30 Hz input ticks; a 60 Hz screen drew a stall and a double jump.
+test("the drawn body keeps moving between input ticks, by at most one tick", async () => {
+  await loadPhysics();
+  const [driver, car] = player("sport");
+  const prediction = new Prediction({});
+  prediction.reconcile(driver, car, snapshot, undefined);
+  const input = {
+    up: true,
+    down: false,
+    left: false,
+    right: false,
+    brake: false,
+    sprint: false,
+    ascend: false,
+    descend: false,
+    attack: false,
+  };
+  for (let tick = 1; tick <= 60; tick++) prediction.input(tick, input);
+  const t = performance.now(),
+    at = (ms: number) => prediction.render(t + ms)!.z;
+  assert.ok(at(16) > at(0), "no movement between ticks");
+  const speed = prediction.body!.vz;
+  assert.ok(at(16) - at(0) < speed / 30, "more than one tick of carry");
+  assert.ok(at(1000) - at(33) < 0.05, "carry is not capped at one tick");
 });

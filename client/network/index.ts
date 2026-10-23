@@ -13,7 +13,7 @@ import type { City, Entity, Input, WorldEvent } from "../../shared/world.ts";
 import type { InputClock } from "../input/clock.ts";
 import { TUNING } from "../../shared/catalog.ts";
 import { InputStamper } from "./lead.ts";
-import { Prediction, loadPhysics } from "./prediction.ts";
+import { Prediction, loadPhysics, withPredicted } from "./prediction.ts";
 import { SnapshotTimeline } from "./timeline.ts";
 
 export const VERSION = 1;
@@ -326,9 +326,7 @@ export class GameNetwork {
   renderEntities(now: number, _input?: Input): Entity[] {
     const frame = this.timeline.sample(now);
     const me = this.prediction?.render(now);
-    return me
-      ? frame.map((e) => (e.id === this.playerId ? { ...e, ...me } : e))
-      : frame;
+    return me ? withPredicted(frame, me, this.playerId) : frame;
   }
   stats(now = performance.now()) {
     const p = this.prediction;

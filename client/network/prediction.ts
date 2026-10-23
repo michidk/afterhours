@@ -98,6 +98,9 @@ export class Prediction {
   private id = 0;
   private facing = 0;
   private lastRender = 0;
+  /** How fast the body moved in its last step (per second) and when that step ran. */
+  private drift = { x: 0, y: 0, z: 0, angle: 0 };
+  private stepAt = 0;
   /** Nearby cars simulated alongside the local body: entity id -> physics body id. */
   private neighbours = new Map<string, number>();
   private buildingColliders = new WeakSet<object>();
@@ -204,6 +207,7 @@ export class Prediction {
     if (this.kind === "vehicle") this.world.remove_vehicle(this.id);
     else if (this.kind === "character") this.world.remove_character(this.id);
     this.kind = undefined;
+    this.drift = { x: 0, y: 0, z: 0, angle: 0 };
   }
   /** Authoritative state for the local body plus its raw physics row. */
   reconcile(
@@ -267,8 +271,21 @@ export class Prediction {
   input(tick: number, input: Input) {
     if (!this.kind || !this.body) return;
     this.pending.push({ tick, input });
+    const before = this.body;
     this.step(input);
     this.body = this.read(this.body);
+    const rate = 1 / TUNING.tick;
+    this.drift = {
+      x: (this.body.x - before.x) * rate,
+      y: (this.body.y - before.y) * rate,
+      z: (this.body.z - before.z) * rate,
+      // A walker turns on the spot; only a vehicle's heading carries on between steps.
+      angle: this.kind === "vehicle" ? wrap(this.body.angle - before.angle) * rate : 0,
+    };
+    // The row carries no horizontal speed for a walker; without this it keeps the snapshot's.
+    if (this.kind === "character")
+      this.body = { ...this.body, vx: this.drift.x, vz: this.drift.z };
+    this.stepAt = performance.now();
   }
   private step(input: Input) {
     const x = inputX(input),
@@ -321,9 +338,40 @@ export class Prediction {
       z: o.z * keep,
       angle: o.angle * keep,
     };
-    const b = this.body;
-    return { ...b, x: b.x + o.x, y: b.y + o.y, z: b.z + o.z, angle: b.angle + o.angle };
+    // The body only advances on input ticks (30 Hz); carry its last step on to this frame so a
+    // faster screen sees steady motion instead of a stall and a double jump.
+    const ahead = Math.min(TUNING.tick, Math.max(0, (now - this.stepAt) / 1000)),
+      d = this.drift,
+      b = this.body;
+    return {
+      ...b,
+      x: b.x + o.x + d.x * ahead,
+      y: b.y + o.y + d.y * ahead,
+      z: b.z + o.z + d.z * ahead,
+      angle: b.angle + o.angle + d.angle * ahead,
+    };
   }
+}
+
+/**
+ * The sampled frame with the local body swapped for the predicted one: the player, and the car it
+ * drives. Without the car the camera and the mesh follow the delayed server copy by the whole
+ * interpolation delay, whatever the prediction does.
+ */
+export function withPredicted(frame: Entity[], me: Entity, playerId: string): Entity[] {
+  const vehicle = frame.find((e) => e.id === playerId)?.vehicle;
+  const { x, y, z, vx, vy, vz, angle, pitch, roll, steering } = me;
+  const pose = { x, y, z, vx, vy, vz, angle, pitch, roll, steering };
+  return frame.map((e) =>
+    e.id === playerId
+      ? { ...e, ...me }
+      : e.id === vehicle &&
+          e.kind === "car" &&
+          e.driver === playerId &&
+          pitch !== undefined
+        ? { ...e, ...pose }
+        : e,
+  );
 }
 
 export function interpolate(

@@ -236,7 +236,7 @@ pub const COMMANDS: &[(&str, &str, &str)] = &[
     (
         "drive",
         "ticks, throttle -1..1, steer -1..1, brake, every",
-        "hold these controls for `ticks` ticks (30 per second); returns the car's trace and metrics",
+        "hold these controls for `ticks` ticks (30 per second); returns the car's (or on foot the walker's) trace and metrics",
     ),
     (
         "follow",
@@ -273,6 +273,29 @@ impl Lab {
             "forward": r(car.vx * sn + car.vz * cs), "lateral": r(car.vx * cs - car.vz * sn),
             "vy": r(car.vy),
         })
+    }
+
+    /// Holds `controls` for `ticks` ticks on foot; returns the walker's trace and how far and
+    /// how fast it got (`longest_step` is the biggest move in one tick).
+    fn walk_ticks(&mut self, ticks: u32, every: u32, controls: Controls) -> Value {
+        let (start, mut trace, mut longest) = (self.me(1), Vec::new(), 0.0f32);
+        let mut last = start.clone();
+        for i in 0..ticks {
+            self.input(1, controls.clone());
+            self.step();
+            let now = self.me(1);
+            longest = longest.max((now.x - last.x).hypot(now.z - last.z));
+            last = now.clone();
+            if i % every.max(1) == 0 {
+                trace.push(self.sample(&now));
+            }
+        }
+        let end = self.me(1);
+        json!({"ok": true, "on_foot": true, "metrics": {
+            "displacement": (end.x - start.x).hypot(end.z - start.z),
+            "mean_speed": (end.x - start.x).hypot(end.z - start.z) / (ticks as f32 / 30.0),
+            "longest_step": longest,
+        }, "trace": trace})
     }
 
     /// Runs `ticks` ticks feeding `controls(self)` each tick; returns the driven car's trace
@@ -382,8 +405,15 @@ impl Lab {
                         .and_then(Value::as_bool)
                         .unwrap_or(false),
                     up: f("throttle", 0.0) > 0.0,
+                    sprint: command
+                        .get("sprint")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false),
                     ..Default::default()
                 };
+                if self.driven().is_none() {
+                    return self.walk_ticks(u("ticks", 30), u("every", 5), c);
+                }
                 self.run_ticks(u("ticks", 30), u("every", 5), |_, _| c.clone())
             }
             "follow" => {

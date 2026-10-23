@@ -364,3 +364,13 @@ contact pair of every car on every substep, now a reverse map, and the tyre mode
 parked car awake. Sleeping cars with the pedals up now skip suspension and tyre work. The Server
 stats window shows tick CPU, late ticks and dropped time; `cargo run --release -p
 afterhours-server --example tick-cost` measures the cost as cars accumulate (about 5 ms with 50).
+
+## What is drawn
+
+The mesh and the camera follow the entity of the thing you control. `withPredicted` swaps the
+predicted body into the player and, when the player drives a car, into that car too; before, only
+the player was swapped and a car at 18 m/s was drawn about 4 m behind the prediction (the server
+copy, interpolated). The predicted body advances on 30 Hz input ticks, so `Prediction.render`
+carries its last step forward by the time since that step, capped at one tick, instead of drawing a
+stall and a double jump on a faster screen. A walker's predicted velocity comes from the same step
+(the physics row has none).

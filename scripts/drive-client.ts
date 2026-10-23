@@ -302,6 +302,15 @@ const steer = (t: number): Partial<Input> => {
       );
       i = next;
     }
+    // On foot the move keys are a world direction, not a turn: head straight for the point.
+    if (kind === "none") {
+      const heading = Math.atan2(trackPath[i].x - body.x, trackPath[i].z - body.z);
+      return {
+        moveX: Math.sin(heading),
+        moveY: Math.cos(heading),
+        sprint: targetSpeed > 5,
+      };
+    }
     const err = wrap(
         Math.atan2(trackPath[i].x - body.x, trackPath[i].z - body.z) - body.angle,
       ),
@@ -415,7 +424,7 @@ const sampler = setInterval(() => {
   const speed = Math.hypot(pose.vx, pose.vz);
   summary.topSpeed = Math.max(summary.topSpeed, speed);
   const measuring = (now - started) / 1000 >= warmup;
-  if (previousPose && speed > 5 && measuring) {
+  if (previousPose && speed > 2 && measuring) {
     const dt = (now - previousPose.at) / 1000;
     const along =
       ((pose.x - previousPose.x) * pose.vx + (pose.z - previousPose.z) * pose.vz) /
