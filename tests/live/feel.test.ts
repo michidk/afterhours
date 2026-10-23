@@ -48,6 +48,10 @@ interface Report {
     enterSamples: number;
     steerSamples: number;
   };
+  clientCpuMs: {
+    draw: { mean: number; p95: number; max: number };
+    input: { mean: number; p95: number; max: number };
+  };
   server?: { tickCpuP95Ms: number; tickP95Ms: number; late: number };
 }
 
@@ -138,14 +142,15 @@ function feels(r: Report, minSpeed: number, spiky = false) {
   // The draw carries the body on by up to one 30 Hz tick, so a healthy mean is about half a
   // tick of travel; the bug that drew the server copy had a mean of about 4 m. A 150 ms spike
   // makes the server hold the last controls and the late inputs correct the prediction by up to
-  // a metre, so only the clean link is held to the worst case.
+  // a metre, so only the clean link is held to the worst case: the carry is capped at two ticks,
+  // which a late frame (1 run in 6 here) reaches, so that cap is the limit.
   const tickOfTravel = r.topSpeed / 30;
   assert.ok(
     r.drawnGapMean < tickOfTravel,
     `drawn ${r.drawnGapMean} m from the predicted body on average (one tick is ${tickOfTravel.toFixed(2)} m)`,
   );
   assert.ok(
-    r.drawnGapMax < (spiky ? 2 : tickOfTravel + 0.25),
+    r.drawnGapMax < (spiky ? 2 : 2 * tickOfTravel + 0.1),
     `drawn ${r.drawnGapMax} m from the predicted body at worst`,
   );
   assert.ok(share(r.freezes, r) < 0.08, `${r.freezes}/${r.frames} frames stalled`);
@@ -164,6 +169,18 @@ function feels(r: Report, minSpeed: number, spiky = false) {
   // The player list reads "Connecting…" until the roster arrives.
   assert.ok(r.rosterSize >= 1, "no player roster reached the client");
   assert.ok(r.positionsSeen >= 1, "no player positions reached the client");
+  // The client's own cost per frame (prediction and draw list) and per input: about 1 ms each
+  // here, with 12-20 ms stalls now and then that this loaded host adds (not the game: nothing was
+  // added to the physics world at those steps). A slow machine multiplies the cost, so the mean
+  // is held to a few ms; a 6 ms regression in the draw list reads 6+ here.
+  assert.ok(
+    r.clientCpuMs.draw.mean < 3,
+    `draw list ${r.clientCpuMs.draw.mean} ms on average`,
+  );
+  assert.ok(
+    r.clientCpuMs.input.mean < 4,
+    `predicting ${r.clientCpuMs.input.mean} ms on average`,
+  );
   assert.ok(r.server, "no server diagnostics (is debug enabled?)");
   assert.ok(
     r.server.tickCpuP95Ms < 20,

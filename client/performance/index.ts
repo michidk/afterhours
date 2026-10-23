@@ -48,7 +48,15 @@ export async function profileNetwork<T>(
   }
 }
 
-type Frame = { interval: number; update: number; render: number; ui: number };
+type Parts = { net: number; scene: number; rest: number };
+type Frame = {
+  interval: number;
+  update: number;
+  render: number;
+  ui: number;
+  /** Where the update stage went: prediction and draw list, scene update, everything else. */
+  parts?: Parts;
+};
 function p95(values: number[]) {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.floor(sorted.length * 0.95)] ?? 0;
@@ -64,6 +72,11 @@ function summarize(frames: Frame[]) {
       update: p95(frames.map((f) => f.update)),
       render: p95(frames.map((f) => f.render)),
       ui: p95(frames.filter((f) => f.ui > 0).map((f) => f.ui)),
+    },
+    updatePartsP95Ms: {
+      net: p95(frames.map((f) => f.parts?.net ?? 0)),
+      scene: p95(frames.map((f) => f.parts?.scene ?? 0)),
+      rest: p95(frames.map((f) => f.parts?.rest ?? 0)),
     },
   };
 }

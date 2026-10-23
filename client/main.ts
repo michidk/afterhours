@@ -684,6 +684,7 @@ async function boot() {
           frameP95Ms: profiler!.stats.frameP95Ms,
           frameMaxMs: profiler!.stats.frameMaxMs,
           frameStages: profiler!.stats.stagesP95Ms,
+          updateParts: profiler!.stats.updatePartsP95Ms,
           trailUploads: scene.effects.trails.uploads,
           trailTiles: scene.effects.trails.residentTiles,
           cityStreaming: cityStream.diagnostics,
@@ -709,6 +710,7 @@ async function boot() {
           destruction: scene.destruction.diagnostics,
         }),
       });
+    let parts: { net: number; scene: number; rest: number } | undefined;
     let last = performance.now(),
       ui = 0,
       streamClock = 0;
@@ -724,14 +726,17 @@ async function boot() {
         cityMap?.open || typingIn(document.activeElement)
           ? idle()
           : automation?.input || controls.read();
+      const t0 = profiler ? performance.now() : 0;
       const rendered =
         network?.renderEntities(now, scene.debugCamera.active ? idle() : cameraInput) ||
         entities;
+      const t1 = profiler ? performance.now() : 0;
       scene.destruction.setPredictedImpacts(
         network?.predictedImpacts ?? new Map(),
         network?.debrisClock,
       );
       scene.update(rendered, playerId, dt, cameraInput);
+      const t2 = profiler ? performance.now() : 0;
       cityRenderer?.fadeOccluders(
         scene.camera.position,
         scene.target,
@@ -775,6 +780,7 @@ async function boot() {
         input: cameraInput,
       });
       const updated = profiler ? performance.now() : 0;
+      parts = { net: t1 - t0, scene: t2 - t1, rest: updated - t2 };
       scene.scene.render();
       nameplates.update(scene, rendered, playerId);
       const renderedAt = profiler ? performance.now() : 0;
@@ -894,6 +900,7 @@ async function boot() {
       profiler?.record({
         interval,
         update: updated - now,
+        parts,
         render: renderedAt - updated,
         ui: performance.now() - renderedAt,
       });

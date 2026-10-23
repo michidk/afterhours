@@ -58,6 +58,13 @@ lies inside a drawn footprint and that walls stop the cars. With the colliders m
 the first building. The scene lab can also walk (`drive` on foot), so on-foot problems have the same
 JSON reproduction as driving ones (`docs/lab.md`).
 
+The bot's report also carries `clientCpuMs`: what the client spends per frame on the prediction and
+the draw list (about 0.4 ms mean, 0.9 ms p95) and per input (0.6 ms mean, 1.2 ms p95). The feel suite
+holds the means to 3 and 4 ms, because a slow machine multiplies them (per-frame p95 is noisy on a loaded host). In a browser
+with `?profile=1`, `window.afterhours.updateParts` splits the update stage into prediction, scene
+update and the rest. The headless browser here renders in software (about 2 fps), so its frame times
+describe the renderer, not a player's machine; use the Networking panel's Frame rate row there.
+
 ## When a player reports a problem
 
 1. Reproduce it with a number: `scene-lab` or `handling-lab` for the world and the car, the bot for

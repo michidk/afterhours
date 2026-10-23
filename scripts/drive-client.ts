@@ -305,13 +305,18 @@ function recordCorrection() {
 let control: Input = idle();
 let maxInputLag = 0;
 let lastPump = performance.now();
+/** CPU time the client spends per frame on the prediction and the draw list, and per input. */
+const drawCosts: number[] = [];
+const inputCosts: number[] = [];
 const pump = setInterval(() => {
   const now = performance.now();
   maxInputLag = Math.max(maxInputLag, now - lastPump - 5);
   lastPump = now;
   clock.advance(now, (timestamp) => {
     maxInputLag = Math.max(maxInputLag, now - timestamp);
+    const inputStart = performance.now();
     network.input(control, timestamp);
+    inputCosts.push(performance.now() - inputStart);
     recordCorrection();
   });
 }, 5);
@@ -465,6 +470,14 @@ const steer = (t: number): Partial<Input> => {
     moveY: kind === "plane" ? 1 : clamp((targetSpeed - speed) * 0.3, -0.5, 1),
   };
 };
+const cost = (values: number[]) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  return {
+    mean: +(sorted.reduce((a, b) => a + b, 0) / (sorted.length || 1)).toFixed(3),
+    p95: +(sorted[Math.floor(sorted.length * 0.95)] ?? 0).toFixed(3),
+    max: +(sorted.at(-1) ?? 0).toFixed(3),
+  };
+};
 const summary = {
   frames: 0,
   /** Frames whose drawn speed differs from the body's speed by over 10%. */
@@ -510,7 +523,9 @@ const sampler = setInterval(() => {
   lastFrame = now;
   const controlled = network.prediction?.body;
   if (controlled) stream.setView(controlled, controlled);
+  const drawStart = performance.now();
   const rendered = network.renderEntities(now);
+  drawCosts.push(performance.now() - drawStart);
   recordCorrection();
   const pose = rendered.find((e) => e.id === bodyId);
   const p = network.prediction;
@@ -703,6 +718,7 @@ const finish = async () => {
     limit,
     ...summary,
     maxInputLagMs: +maxInputLag.toFixed(1),
+    clientCpuMs: { draw: cost(drawCosts), input: cost(inputCosts) },
     rosterSize,
     positionsSeen,
     actions: {
