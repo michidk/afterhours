@@ -56,8 +56,18 @@ export interface CarPose {
   vz: number;
   steering: number;
 }
+type Velocity = { vx: number; vy: number; vz: number };
+const velocityOf = ({ vx, vy, vz }: Velocity): Velocity => ({ vx, vy, vz });
+/** The velocity a fraction `f` of the way from `a` to `b`. */
+const ramp = (a: Velocity, b: Velocity, f: number): Velocity => ({
+  vx: a.vx + (b.vx - a.vx) * f,
+  vy: a.vy + (b.vy - a.vy) * f,
+  vz: a.vz + (b.vz - a.vz) * f,
+});
 interface Shown {
   pose: CarPose;
+  /** Velocity at the step before, so the drawn one ramps over a tick instead of jumping. */
+  from: Velocity;
   /** Per second, from the last step, carried on between input ticks. */
   rate: { x: number; y: number; z: number; angle: number };
   /** Snapshot correction still easing out. */
@@ -130,6 +140,8 @@ export class Prediction {
   /** How fast the body moved in its last step (per second) and when that step ran. */
   private drift = { x: 0, y: 0, z: 0, angle: 0 };
   private stepAt = 0;
+  /** The drawn velocity ramps from the step before to the last one: the suspension springs read its change. */
+  private speeds: { from: Velocity; to: Velocity } | undefined;
   /** Nearby cars simulated alongside the local body: entity id -> physics body id. */
   private neighbours = new Map<string, number>();
   private buildingColliders = new WeakSet<object>();
@@ -183,6 +195,7 @@ export class Prediction {
     this.neighbours.clear();
     this.shown.clear();
     this.drawnCars.clear();
+    this.speeds = undefined;
   }
   /**
    * Keeps the cars around the local body in the predicted world, as the server has them, so
@@ -269,7 +282,14 @@ export class Prediction {
       const near = Math.hypot(pose.x - local.x, pose.z - local.z) < SHOWN_RANGE;
       let car = this.shown.get(id);
       if (!car) {
-        car = { pose, rate: still(), offset: still(), weight: 0, live: near };
+        car = {
+          pose,
+          from: velocityOf(pose),
+          rate: still(),
+          offset: still(),
+          weight: 0,
+          live: near,
+        };
         this.shown.set(id, car);
       }
       const was = before.get(id);
@@ -337,6 +357,7 @@ export class Prediction {
     const before = this.body,
       after = this.read(entity);
     this.settle(carsBefore, this.neighbourPoses(), after);
+    if (this.speeds) this.speeds.to = velocityOf(after);
     if (before) {
       const distance = Math.hypot(after.x - before.x, after.z - before.z),
         angle = wrap(after.angle - before.angle);
@@ -366,6 +387,7 @@ export class Prediction {
         was = carsBefore.get(id);
       if (!car || !was) continue;
       car.pose = pose;
+      car.from = velocityOf(was);
       car.rate = {
         x: (pose.x - was.x) * rate,
         y: (pose.y - was.y) * rate,
@@ -383,6 +405,7 @@ export class Prediction {
     // The row carries no horizontal speed for a walker; without this it keeps the snapshot's.
     if (this.kind === "character")
       this.body = { ...this.body, vx: this.drift.x, vz: this.drift.z };
+    this.speeds = { from: velocityOf(before), to: velocityOf(this.body) };
     this.stepAt = performance.now();
   }
   private step(input: Input) {
@@ -444,6 +467,7 @@ export class Prediction {
         weight: car.weight,
         pose: {
           ...p,
+          ...ramp(car.from, p, ahead / TUNING.tick),
           x: p.x + e.x + r.x * ahead,
           y: p.y + e.y + r.y * ahead,
           z: p.z + e.z + r.z * ahead,
@@ -453,6 +477,9 @@ export class Prediction {
     }
     return {
       ...b,
+      ...(this.speeds
+        ? ramp(this.speeds.from, this.speeds.to, ahead / TUNING.tick)
+        : {}),
       x: b.x + o.x + d.x * ahead,
       y: b.y + o.y + d.y * ahead,
       z: b.z + o.z + d.z * ahead,

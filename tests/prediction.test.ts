@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test, mock } from "node:test";
 import assert from "node:assert/strict";
 import {
   Prediction,
@@ -295,4 +295,112 @@ test("cars within reach are drawn from the predicted world, far ones from the se
     false,
     "the faded car is still swapped",
   );
+});
+
+// The car's drawn suspension springs are driven by how fast the drawn velocity changes from one
+// frame to the next. A velocity that only moves on 30 Hz ticks is 0 on one 60 fps frame and double
+// on the next, which kicks heave, pitch and roll back and forth: a micro-stutter.
+test("the drawn velocity changes evenly from frame to frame, not once per tick", async () => {
+  await loadPhysics();
+  const [driver, car] = player("sedan");
+  const prediction = new Prediction({});
+  prediction.reconcile(driver, car, snapshot, undefined);
+  const throttle = {
+    up: true,
+    down: false,
+    left: false,
+    right: false,
+    brake: false,
+    sprint: false,
+    ascend: false,
+    descend: false,
+    attack: false,
+  };
+  let clock = 1000;
+  const mocked = mock.method(performance, "now", () => clock);
+  try {
+    const speeds: number[] = [];
+    for (let tick = 1; tick <= 60; tick++) {
+      prediction.input(tick, throttle);
+      // Two 60 fps frames per 30 Hz tick.
+      for (const offset of [0, 1000 / 60])
+        speeds.push(prediction.render(clock + offset)!.vz);
+      clock += 1000 / 30;
+    }
+    const steps = speeds
+      .slice(20, 100)
+      .map((v, i, all) => (i ? v - all[i - 1] : 0))
+      .slice(1);
+    assert.ok(
+      Math.min(...steps) > 0,
+      `speed stalled between frames: ${Math.min(...steps)}`,
+    );
+    assert.ok(
+      Math.max(...steps) < 2 * Math.min(...steps),
+      `frame-to-frame speed change ranges ${Math.min(...steps).toFixed(4)} to ${Math.max(...steps).toFixed(4)}`,
+    );
+  } finally {
+    mocked.mock.restore();
+  }
+});
+
+// The same through the real suspension springs: this is what the player sees as the body rocking.
+test("the drawn body's pitch and roll do not jitter at 60 fps", async () => {
+  const { CarSuspension } = await import("../client/world/car-suspension.ts");
+  await loadPhysics();
+  const [driver, car] = player("sedan");
+  const prediction = new Prediction({});
+  prediction.reconcile(
+    driver,
+    car,
+    [0, 1.3, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+    undefined,
+  );
+  const suspension = new CarSuspension();
+  let clock = 1000;
+  const mocked = mock.method(performance, "now", () => clock);
+  try {
+    const pitch: number[] = [],
+      roll: number[] = [];
+    for (let tick = 1; tick <= 240; tick++) {
+      prediction.input(tick, {
+        up: tick < 120 || tick > 150,
+        down: false,
+        left: false,
+        right: false,
+        moveX: tick > 120 ? 0.5 * Math.sin(tick / 15) : 0,
+        moveY: 1,
+        brake: false,
+        sprint: false,
+        ascend: false,
+        descend: false,
+        attack: false,
+      });
+      for (const offset of [0, 1000 / 60]) {
+        const body = suspension.update(
+          prediction.render(clock + offset)!,
+          1 / 60,
+          true,
+          () => 0,
+          (clock + offset) / 1000,
+        );
+        pitch.push(body.pitch.value);
+        roll.push(body.roll.value);
+      }
+      clock += 1000 / 30;
+    }
+    // Mean frame-to-frame change of the change (jerk); stepwise velocity measured 9e-4 here.
+    const jerk = (v: number[]) =>
+      v
+        .slice(80, -1)
+        .reduce(
+          (sum, _, i) => sum + Math.abs(v[80 + i + 1] - 2 * v[80 + i] + v[80 + i - 1]),
+          0,
+        ) /
+      (v.length - 81);
+    assert.ok(jerk(pitch) < 2e-4, `pitch jerk ${jerk(pitch).toExponential(2)}`);
+    assert.ok(jerk(roll) < 3e-4, `roll jerk ${jerk(roll).toExponential(2)}`);
+  } finally {
+    mocked.mock.restore();
+  }
 });

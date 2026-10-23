@@ -385,3 +385,8 @@ other people, are still interpolated from snapshots.
 
 The server also sends `roster` (who is in the city, on every join and leave) and `positions` (where
 everyone is, about twice a second); the player list, nameplates and island map read them.
+
+The drawn car also carries a velocity: the suspension springs (heave, pitch, roll) are driven by how
+fast it changes between frames. The prediction only steps at 30 Hz, so the velocity is ramped from the
+previous step's value to the new one across each tick; as a step it was 0 on one 60 fps frame and
+double on the next, and the body rocked (frame-to-frame pitch jerk 8.6e-4 against 3.7e-5 ramped).
