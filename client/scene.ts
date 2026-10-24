@@ -924,7 +924,8 @@ export class CityScene {
     const p = entities.find((e) => e.id === me);
     if (p && !this.debugCamera.active) {
       const n = this.nodes.get(p.vehicle || p.id);
-      if (n) this.target = Vector3.Lerp(this.target, n.position, 1 - Math.exp(-dt * 5));
+      if (n)
+        this.target = Vector3.Lerp(this.target, n.position, 1 - Math.exp(-dt * 10));
     }
     const body = entities.find((e) => e.id === p?.vehicle) || p;
     if (this.debugCamera.active) {
