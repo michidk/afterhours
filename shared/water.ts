@@ -68,7 +68,13 @@ export function waterLevel(x: number, z: number, city?: WaterCity) {
     return WATER_LEVEL;
   const gx = Math.round((x + LIMIT) / TERRAIN_STEP),
     gz = Math.round((z + LIMIT) / TERRAIN_STEP),
-    level = lakeGrid(city.water)[gz * TERRAIN_SIDE + gx];
+    index = gz * TERRAIN_SIDE + gx;
+  // A point on the edge can round one cell outside the grid. Treat it as sea
+  // instead of letting an undefined lake sample turn every downstream height
+  // calculation into NaN.
+  if (gx < 0 || gz < 0 || gx >= TERRAIN_SIDE || gz >= TERRAIN_SIDE)
+    return WATER_LEVEL;
+  const level = lakeGrid(city.water)[index];
   return Number.isNaN(level) ? WATER_LEVEL : level;
 }
 export const isWater = (x: number, z: number, city?: WaterCity) =>
@@ -124,9 +130,16 @@ export const waveTime = () => clock;
 export function surfaceLevel(x: number, z: number, city?: WaterCity, time = clock) {
   const level = waterLevel(x, z, city),
     ground = terrainHeight(x, z, city);
+  // Swell belongs to water, not to dry terrain that happens to sit close to
+  // the shoreline. Keeping this check before the max prevents animated sea
+  // height from lifting cars and other grounded bodies on a dry road.
+  const seaSurface =
+    level === WATER_LEVEL && ground < level
+      ? level + seaWave(x, z, time, level - ground)
+      : level;
   return Math.max(
     ground,
-    level === WATER_LEVEL ? level + seaWave(x, z, time, level - ground) : level,
+    seaSurface,
   );
 }
 /** Surface gradient over a hull-sized span. */
