@@ -22,6 +22,7 @@
     "test:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace --release --no-fail-fast",
     "test:parity": "scripts/check-parity.sh",
     "test:feel": "tsx --test --test-concurrency=1 tests/live/*.test.ts",
+    "test:lag": "tsx --test --test-concurrency=1 tests/live/lag-proof.test.ts",
     "bot:drive": "tsx scripts/drive-client.ts",
     "start:test-world": "TEST_WORLD=1 cargo run --release -p afterhours-server"
   },
