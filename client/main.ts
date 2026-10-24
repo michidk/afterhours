@@ -41,6 +41,7 @@ import { CityRenderer } from "./world/render.ts";
 import {
   cityWaterSchema,
   mapManifestSchema,
+  type CityChunk,
   type ClientMap,
 } from "../shared/city-stream.ts";
 import { unpackHeights } from "../shared/city-pack.ts";
@@ -630,7 +631,23 @@ async function boot() {
       world.water = cityWaterSchema.parse(await water.json());
     }
     let cityRenderer: CityRenderer | undefined;
-    cityStream = new CityStream(world, (chunks) => cityRenderer?.sync(chunks));
+    let streamSync = false;
+    let pendingChunks: CityChunk[] | undefined;
+    const syncStream = (chunks: CityChunk[]) => {
+      pendingChunks = chunks;
+      if (streamSync) return;
+      const run = () => {
+        streamSync = false;
+        const current = pendingChunks;
+        pendingChunks = undefined;
+        if (current) cityRenderer?.sync(current);
+      };
+      if (typeof requestIdleCallback === "function")
+        requestIdleCallback(run, { timeout: 100 });
+      else setTimeout(run, 0);
+      streamSync = true;
+    };
+    cityStream = new CityStream(world, syncStream);
     const base = world.geometryVersion
       ? await fetch(`/city/geometry/${world.mapId}/base`, {
           cache: "no-store",
