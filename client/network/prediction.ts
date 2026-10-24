@@ -167,6 +167,8 @@ export class Prediction {
   private stepAt = 0;
   /** The drawn velocity ramps from the step before to the last one: the suspension springs read its change. */
   private speeds: { from: Velocity; to: Velocity } | undefined;
+  /** Angular velocity gets the same interpolation as linear velocity so curves do not tick. */
+  private turns: { from: number; to: number } | undefined;
   /** Nearby cars simulated alongside the local body: entity id -> physics body id. */
   private neighbours = new Map<string, number>();
   private buildingColliders = new WeakSet<object>();
@@ -520,6 +522,10 @@ export class Prediction {
     if (this.kind === "character")
       this.body = { ...this.body, vx: this.drift.x, vz: this.drift.z };
     this.speeds = { from: velocityOf(before), to: velocityOf(this.body) };
+    this.turns = {
+      from: this.drift.angle,
+      to: wrap(this.body.angle - before.angle) / TUNING.tick,
+    };
     this.stepAt = at;
   }
   private step(input: Input) {
@@ -559,6 +565,10 @@ export class Prediction {
     const ahead = Math.min(2 * TUNING.tick, Math.max(0, (now - this.stepAt) / 1000)),
       d = this.drift,
       b = this.body;
+    const turn = this.turns
+      ? this.turns.from +
+        (this.turns.to - this.turns.from) * Math.min(1, ahead / TUNING.tick)
+      : d.angle;
     // The cars around it get the same treatment: drawn where the predicted world has them, which
     // is where the predicted body collides with them, not where the server had them a moment ago.
     this.drawnCars.clear();
@@ -598,7 +608,7 @@ export class Prediction {
       x: b.x + o.x + d.x * ahead,
       y: b.y + o.y + d.y * ahead,
       z: b.z + o.z + d.z * ahead,
-      angle: b.angle + o.angle + d.angle * ahead,
+      angle: b.angle + o.angle + turn * ahead,
     };
   }
 }
