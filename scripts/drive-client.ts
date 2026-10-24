@@ -492,6 +492,8 @@ const summary = {
   /** 95th percentile and worst change of the drawn speed between consecutive frames: stutter. */
   speedJitterP95: 0,
   speedJitterMax: 0,
+  frameGapP95: 0,
+  frameGapMax: 0,
   /** Drawn vertical movement per frame in metres beyond what the body's climb explains. */
   verticalWobbleMax: 0,
   backward: 0,
@@ -515,7 +517,8 @@ let previousPose: { x: number; y: number; z: number; at: number } | undefined;
 const drawnGaps: number[] = [],
   clearances: number[] = [];
 const speedErrors: number[] = [],
-  speedJitters: number[] = [];
+  speedJitters: number[] = [],
+  frameGaps: number[] = [];
 let previousError: number | undefined;
 let lastCorrections = 0;
 let lastSample = 0;
@@ -523,7 +526,9 @@ let lastFrame = performance.now();
 let maxFrameGapMs = 0;
 const sampler = setInterval(() => {
   const now = performance.now();
-  maxFrameGapMs = Math.max(maxFrameGapMs, now - lastFrame);
+  const frameGap = now - lastFrame;
+  frameGaps.push(frameGap);
+  maxFrameGapMs = Math.max(maxFrameGapMs, frameGap);
   lastFrame = now;
   const controlled = network.prediction?.body;
   if (controlled) stream.setView(controlled, controlled);
@@ -680,6 +685,11 @@ const finish = async () => {
     speedJitters[Math.floor(speedJitters.length * 0.95)] ?? 0
   ).toFixed(3);
   summary.speedJitterMax = +(speedJitters.at(-1) ?? 0).toFixed(3);
+  frameGaps.sort((a, b) => a - b);
+  summary.frameGapP95 = +(frameGaps[Math.floor(frameGaps.length * 0.95)] ?? 0).toFixed(
+    3,
+  );
+  summary.frameGapMax = +(frameGaps.at(-1) ?? maxFrameGapMs).toFixed(3);
   summary.verticalWobbleMax = +summary.verticalWobbleMax.toFixed(3);
   const sorted = (values: number[]) => [...values].sort((a, b) => a - b);
   const gaps = sorted(drawnGaps),

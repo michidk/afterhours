@@ -38,6 +38,8 @@ interface Report {
   maxCorrection: number;
   speedErrorP95: number;
   speedJitterP95: number;
+  frameGapP95: number;
+  frameGapMax: number;
   strike?: {
     predicted: boolean;
     confirmed: boolean;
@@ -81,11 +83,22 @@ async function boot(env: Record<string, string>): Promise<Booted> {
     env: { ...process.env, PORT: String(port), ALLOW_DEBUG: "1", ...env },
     stdio: "ignore",
   });
+  const spawnFailure = new Promise<never>((_, reject) =>
+    {
+      child.once("error", (error) =>
+        reject(new Error(`server failed to start: ${error.message}`)),
+      );
+      child.once("exit", (code, signal) =>
+        reject(new Error(`server exited before health check (code ${code}, signal ${signal})`)),
+      );
+    },
+  );
   const url = `http://127.0.0.1:${port}`;
-  const deadline = Date.now() + 600_000;
+  const deadline = Date.now() + 60_000;
   for (;;) {
     try {
-      if ((await fetch(`${url}/health`)).ok) return { child, url };
+      if ((await Promise.race([fetch(`${url}/health`), spawnFailure])).ok)
+        return { child, url };
     } catch {
       // still compiling, generating or booting
     }
@@ -163,6 +176,11 @@ function feels(r: Report, minSpeed: number, spiky = false) {
   assert.ok(share(r.freezes, r) < 0.08, `${r.freezes}/${r.frames} frames stalled`);
   assert.ok(share(r.forwardLurches, r) < 0.08, `${r.forwardLurches} lurches`);
   assert.ok(share(r.backward, r) < 0.05, `${r.backward} frames moved backward`);
+  assert.ok(r.frameGapP95 < 30, `frame pacing p95 ${r.frameGapP95} ms`);
+  assert.ok(
+    r.frameGapMax < (spiky ? 240 : 120),
+    `frame pacing max ${r.frameGapMax} ms`,
+  );
   assert.ok(
     r.groundClearanceP95 < 0.6,
     `drawn ${r.groundClearanceP95} m off the ground`,
