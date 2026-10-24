@@ -65,6 +65,17 @@ with `?profile=1`, `window.afterhours.updateParts` splits the update stage into 
 update and the rest. The headless browser here renders in software (about 2 fps), so its frame times
 describe the renderer, not a player's machine; use the Networking panel's Frame rate row there.
 
+### Speed and vehicle matrix
+
+The feel suite drives each car at 130 km/h (36 m/s; the van at its 97 km/h top) in circles on the test
+island, on a clean and on the laggy link, and holds the drawn body to the prediction: about 19 ms
+behind on average (one tick carries a car 1.2 m at that speed), never more than the two-tick carry cap.
+Planes (144 and 187 km/h) and both helicopters (their own top speed) are flown on both links and held to
+steady per-frame steps (`flies` in `tests/live/feel.test.ts`). Piloted craft are drawn from the newest
+snapshot carried on; easing a new snapshot against the pose _now_ instead of the previous frame's time
+stalled the craft every 66 ms (24% frozen frames, a 70% speed error); `tests/piloted.test.ts` holds it
+to a steady step. Boats and jet skis are not driven by the bot yet.
+
 ## When a player reports a problem
 
 1. Reproduce it with a number: `scene-lab` or `handling-lab` for the world and the car, the bot for

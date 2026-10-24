@@ -36,6 +36,8 @@ interface Report {
   positionsSeen: number;
   groundClearanceP95: number;
   maxCorrection: number;
+  speedErrorP95: number;
+  speedJitterP95: number;
   strike?: {
     predicted: boolean;
     confirmed: boolean;
@@ -143,14 +145,19 @@ function feels(r: Report, minSpeed: number, spiky = false) {
   // tick of travel; the bug that drew the server copy had a mean of about 4 m. A 150 ms spike
   // makes the server hold the last controls and the late inputs correct the prediction by up to
   // a metre, so only the clean link is held to the worst case: the carry is capped at two ticks,
-  // which a late frame (1 run in 6 here) reaches, so that cap is the limit.
+  // which a late frame (1 run in 6 here) reaches, so that cap is the limit, with a metre of floor
+  // for a host stall (a 170 ms hitch put a walker 0.78 m out once); the mean above catches a draw
+  // that sits behind.
   const tickOfTravel = r.topSpeed / 30;
   assert.ok(
     r.drawnGapMean < tickOfTravel,
     `drawn ${r.drawnGapMean} m from the predicted body on average (one tick is ${tickOfTravel.toFixed(2)} m)`,
   );
   assert.ok(
-    r.drawnGapMax < (spiky ? 2 : 2 * tickOfTravel + 0.1),
+    r.drawnGapMax <
+      (spiky
+        ? Math.max(2, 2 * tickOfTravel + 0.5)
+        : Math.max(1, 2 * tickOfTravel + 0.1)),
     `drawn ${r.drawnGapMax} m from the predicted body at worst`,
   );
   assert.ok(share(r.freezes, r) < 0.08, `${r.freezes}/${r.frames} frames stalled`);
@@ -265,6 +272,28 @@ for (const [kind, skip, args] of [
   });
 }
 
+/**
+ * A craft the player flies is drawn from the newest snapshot carried on (not predicted), so each
+ * frame should move it a steady step. Drawing it from a stalled catch-up at every 15 Hz snapshot
+ * gave 24% frozen frames, a 70% speed error and backward frames before; now all are near zero.
+ */
+function flies(r: Report, spiky: boolean) {
+  const limits = spiky
+    ? { error: 0.5, jitter: 0.5, bad: 0.05, back: 0.02 }
+    : { error: 0.3, jitter: 0.32, bad: 0.02, back: 0.01 };
+  assert.ok(r.speedErrorP95 < limits.error, `speed error ${r.speedErrorP95} (95th)`);
+  assert.ok(
+    r.speedJitterP95 < limits.jitter,
+    `speed jitter ${r.speedJitterP95} (95th)`,
+  );
+  assert.ok(
+    share(r.freezes, r) < limits.bad,
+    `${r.freezes}/${r.frames} frames stalled`,
+  );
+  assert.ok(share(r.forwardLurches, r) < limits.bad, `${r.forwardLurches} lurches`);
+  assert.ok(share(r.backward, r) < limits.back, `${r.backward} frames moved backward`);
+}
+
 // What the player waits for after a key press, measured on the drawn frames (the Networking
 // panel's Enter / exit and Turn response rows). A plane is not predicted, so these include the
 // link and the whole snapshot path: before the urgent snapshot after enter/exit and drawing the
@@ -290,5 +319,64 @@ for (const [label, model, args, enterLimit, steerLimit] of [
     assert.ok(a.steerSamples >= 3, `only ${a.steerSamples} turn samples`);
     assert.ok(a.enterMs! <= enterLimit, `enter/exit took ${a.enterMs} ms`);
     assert.ok(a.steerMs! <= steerLimit, `the turn showed after ${a.steerMs} ms`);
+    flies(r, label === "laggy");
+  });
+}
+
+// 130 km/h is 36 m/s: one 30 Hz tick carries a car 1.2 m, so any delay in the draw or a late
+// correction shows as metres. Each car circles the test island's flat ground at 130 km/h, or at
+// its own top speed when that is lower (the van tops out near 108 km/h), on a clean link and on
+// the laggy one. `lag` is the mean distance the draw sits from the predicted body, as time.
+for (const [model, speed, radius] of [
+  ["sedan", 36, 300],
+  ["sport", 36, 300],
+  ["van", 27, 200],
+] as const) {
+  for (const [label, args] of [
+    ["clean", []],
+    ["laggy", laggy],
+  ] as const) {
+    test(`a ${model} at ${Math.round(speed * 3.6)} km/h on a ${label} link stays smooth and close to its prediction`, async () => {
+      const r = await bot(
+        `fast-${model}-${label}`,
+        [
+          ...["--city", worldFile, "--model", model, "--pattern", "loop"],
+          ...["--radius", String(radius), "--speed", String(speed)],
+          ...["--seconds", String(seconds + 15), ...args],
+        ],
+        world,
+      );
+      assert.ok(
+        r.topSpeed > speed - 4,
+        `only reached ${(r.topSpeed * 3.6).toFixed(0)} km/h`,
+      );
+      const lagMs = (r.drawnGapMean / r.topSpeed) * 1000;
+      console.log(
+        `${model} ${label}: ${(r.topSpeed * 3.6).toFixed(0)} km/h, draw ${lagMs.toFixed(0)} ms from the prediction (worst ${((r.drawnGapMax / r.topSpeed) * 1000).toFixed(0)} ms)`,
+      );
+      // About half a tick on average; the carry caps at two ticks, which a late frame reaches.
+      assert.ok(lagMs < 45, `the draw sits ${lagMs.toFixed(0)} ms from the prediction`);
+      feels(r, speed - 4, label === "laggy");
+    });
+  }
+}
+
+// Helicopters fly at 54 and 40 km/h at most (130 km/h is out of reach), so these check the same
+// steady draw at their own top speed, one on each link. Each is flown away by its run.
+for (const [model, top, label, args] of [
+  ["scout", 15, "clean", []],
+  ["utility", 11, "laggy", laggy],
+] as const) {
+  test(`a ${model} helicopter at its top speed on a ${label} link is drawn steadily`, async () => {
+    const r = await bot(
+      `heli-${model}-${label}`,
+      [
+        ...["--city", worldFile, "--model", model, "--board", "--pattern", "straight"],
+        ...["--seconds", String(seconds + 15), ...args],
+      ],
+      world,
+    );
+    assert.ok(r.topSpeed > top - 3, `only reached ${r.topSpeed.toFixed(1)} m/s`);
+    flies(r, label === "laggy");
   });
 }

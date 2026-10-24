@@ -605,6 +605,11 @@ const sampler = setInterval(() => {
         process.env.FRAME_LOG,
         JSON.stringify({
           at: +now.toFixed(1),
+          x: +pose.x.toFixed(2),
+          z: +pose.z.toFixed(2),
+          y: +pose.y.toFixed(2),
+          vx: +pose.vx.toFixed(2),
+          vz: +pose.vz.toFixed(2),
           dt: +(dt * 1000).toFixed(1),
           error: +((along - expected) / expected).toFixed(3),
           snapshot: network.received > previousPose.at,
@@ -792,13 +797,21 @@ process.on("SIGINT", () => void finish());
 for (let i = 0; i < Number(arg("cycle", "0")); i++) {
   const seated = () => network.entities.get(network.playerId)?.vehicle === bodyId;
   await pause(1000);
-  network.send({ type: "interact" });
+  // A press can be lost on a spiky link, so ask again until it shows (a second press after
+  // the first took effect would climb back in, so give each one time to show first).
+  for (let attempt = 0; attempt < 4 && seated(); attempt++) {
+    network.send({ type: "interact" });
+    await until(() => !seated(), "get out", 2500).catch(() => undefined);
+  }
   await until(() => !seated(), "get out");
   await pause(800);
   const at = network.entities.get(bodyId)!;
   await debug({ kind: "teleport", x: at.x + 3, z: at.z });
   await pause(1200);
-  network.send({ type: "interact" });
+  for (let attempt = 0; attempt < 4 && !seated(); attempt++) {
+    network.send({ type: "interact" });
+    await until(seated, "get back in", 2500).catch(() => undefined);
+  }
   await until(seated, "get back in");
 }
 let takeoffComplete = false;

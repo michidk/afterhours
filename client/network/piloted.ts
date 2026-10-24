@@ -37,12 +37,17 @@ export class Piloted {
       this.offset = { x: 0, y: 0, z: 0, angle: 0 };
       this.last = undefined;
     } else if (this.seen !== latest && this.last) {
-      // A new snapshot: keep the picture where it was and let the difference ease out.
+      // A new snapshot: keep the picture where it was and let the difference ease out. The
+      // difference is taken at the previous frame's time, which `last` was drawn for (the snapshot may be newer than that frame, so the age can be negative); against
+      // the pose now it would hold a whole frame of ordinary motion, stalling every snapshot.
+      const before = Math.min(MAX_AGE, age - dt);
       this.offset = {
-        x: this.last.x - pose.x,
-        y: this.last.y - pose.y,
-        z: this.last.z - pose.z,
-        angle: wrap(this.last.angle - pose.angle),
+        x: this.last.x - (latest.x + latest.vx * before),
+        y: this.last.y - (latest.y + latest.vy * before),
+        z: this.last.z - (latest.z + latest.vz * before),
+        angle: wrap(
+          this.last.angle - (latest.angle + (latest.angularVelocity ?? 0) * before),
+        ),
       };
       if (Math.hypot(this.offset.x, this.offset.z) > 25)
         this.offset = { x: 0, y: 0, z: 0, angle: 0 };

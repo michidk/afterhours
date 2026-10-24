@@ -83,3 +83,28 @@ test("the car swaps to the predicted pose on the newest snapshot's driver, befor
   assert.equal(drawn().z, 0, "swapped with nothing saying the player drives it");
   assert.equal(drawn("car-1").z, 12);
 });
+
+test("consistent snapshots at 15 Hz move a steadily flying craft the same distance every frame", () => {
+  const p = new Piloted();
+  const speed = 40;
+  const server = (ms: number) => plane({ z: speed * (ms / 1000) });
+  let latest = server(0),
+    receivedAt = 0,
+    prev: number | undefined;
+  const steps: number[] = [];
+  // 60 Hz frames over a second; a snapshot of the craft's true position every 66.7 ms.
+  for (let t = 0; t <= 1000; t += 1000 / 60) {
+    const due = Math.floor(t / (1000 / 15)) * (1000 / 15);
+    if (due > receivedAt) [latest, receivedAt] = [server(due), due];
+    const z = p.render(latest, receivedAt, t, 0).z;
+    if (prev !== undefined && t > 200) steps.push(z - prev);
+    prev = z;
+  }
+  const expected = speed / 60;
+  const worst = Math.max(...steps.map((s) => Math.abs(s - expected) / expected));
+  // A stall on each snapshot and the catch-up after it read as 70% errors before.
+  assert.ok(
+    worst < 0.1,
+    `a frame moved ${(worst * 100).toFixed(0)}% off a steady step`,
+  );
+});
