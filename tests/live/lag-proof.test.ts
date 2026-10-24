@@ -9,8 +9,8 @@ const run = promisify(execFile);
 const url = process.env.FEEL_URL ?? "http://127.0.0.1:46725";
 const seconds = Number(process.env.FEEL_SECONDS ?? 8);
 
-test("live lag probe reports bounded frame gaps and motion jitter", async () => {
-  const json = `/tmp/afterhours-lag-${process.pid}.json`;
+async function probe(name: string, link: string[], frameMax: number, gapMax: number) {
+  const json = `/tmp/afterhours-lag-${process.pid}-${name}.json`;
   try {
     await run(
       "bunx",
@@ -27,6 +27,7 @@ test("live lag probe reports bounded frame gaps and motion jitter", async () => 
         String(seconds),
         "--json",
         json,
+        ...link,
       ],
       { timeout: (seconds + 15) * 1000, maxBuffer: 1 << 20 },
     );
@@ -42,8 +43,8 @@ test("live lag probe reports bounded frame gaps and motion jitter", async () => 
       correctionsOver1m: number;
     };
     assert.ok(report.frames >= seconds * 20, `only ${report.frames} frames measured`);
-    assert.ok(report.frameGapP95 < 30, `frame gap p95 ${report.frameGapP95} ms`);
-    assert.ok(report.frameGapMax < 120, `frame gap max ${report.frameGapMax} ms`);
+    assert.ok(report.frameGapP95 < frameMax, `frame gap p95 ${report.frameGapP95} ms`);
+    assert.ok(report.frameGapMax < gapMax, `frame gap max ${report.frameGapMax} ms`);
     assert.ok(report.speedJitterP95 < 0.5, `speed jitter p95 ${report.speedJitterP95}`);
     assert.ok(
       report.freezes / report.frames < 0.08,
@@ -62,4 +63,9 @@ test("live lag probe reports bounded frame gaps and motion jitter", async () => 
   } finally {
     await rm(json, { force: true });
   }
-});
+}
+
+test("live lag probe stays smooth on a clean link", () => probe("clean", [], 30, 120));
+
+test("live lag probe stays bounded through delay, jitter and spikes", () =>
+  probe("laggy", ["--delay", "37", "--jitter", "20", "--spike", "150"], 45, 260));
