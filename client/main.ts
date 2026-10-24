@@ -16,6 +16,8 @@ import { loadoutHTML } from "./ui/loadout.ts";
 import { mapPlayers, swatch } from "./ui/map-players.ts";
 import { CityMap } from "./ui/city-map.ts";
 import { updateNetworkStats } from "./ui/network-stats.ts";
+import { claimsKey, typingIn } from "./input/focus.ts";
+import { quickStart } from "./ui/quick-start.ts";
 import { PlayerList } from "./ui/player-list.ts";
 import { Nameplates } from "./ui/nameplates.ts";
 import { GameNetwork } from "./network/index.ts";
@@ -24,15 +26,22 @@ import { InputClock } from "./input/clock.ts";
 import { GameAudio } from "./audio/index.ts";
 import { prepareFirstFrame } from "./startup.ts";
 import { meshGroupSchema } from "../shared/city-mesh.ts";
+import { SceneInstrumentation } from "@babylonjs/core/Instrumentation/sceneInstrumentation";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { CityScene } from "./scene";
-import { FrameProfiler, profileNetwork } from "./performance/index.ts";
+import {
+  FrameProfiler,
+  FrameWindow,
+  RenderScale,
+  profileNetwork,
+} from "./performance/index.ts";
 import { AgentInterface } from "./debug/index.ts";
 import { CityStream, SCENERY_RADIUS } from "./world/stream.ts";
 import { CityRenderer } from "./world/render.ts";
 import {
   cityWaterSchema,
   mapManifestSchema,
+  type CityChunk,
   type ClientMap,
 } from "../shared/city-stream.ts";
 import { unpackHeights } from "../shared/city-pack.ts";
@@ -94,7 +103,7 @@ function toast(message: string) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => $("#toast").classList.add("hidden"), 4000);
 }
-function send(data: object) {
+function send(data: { type: string; [key: string]: unknown }) {
   network?.send(data);
 }
 function handleGamepadActions() {
@@ -118,6 +127,8 @@ function loading(text: string) {
   const status = document.querySelector("#boot-status") ?? $("#loading");
   status.textContent = text;
 }
+// The character screen is skipped, so do not flash it while the city loads.
+if (quickStart(location.search)) document.documentElement.classList.add("quick");
 $("#join").addEventListener("submit", (event) => {
   event.preventDefault();
   if (!scene) return;
@@ -132,9 +143,11 @@ $("#join").addEventListener("submit", (event) => {
           return;
         }
         playerId = m.id;
-        debugAllowed = m.debug;
-        if (!debugAllowed) $("#debug").classList.add("hidden");
-        document.querySelector(".debug-hint")?.classList.toggle("hidden", !m.debug);
+        // Dev tools stay available in every environment; server commands still decide
+        // which operations are authoritative.
+        debugAllowed = true;
+        $("#debug").classList.remove("hidden");
+        document.querySelector(".debug-hint")?.classList.remove("hidden");
         if (debugAllowed && network) {
           automation = new AgentInterface(
             network,
@@ -231,26 +244,28 @@ $("#join").addEventListener("submit", (event) => {
   network.connect();
 });
 window.addEventListener("keydown", (event) => {
-  const typing = ["INPUT", "SELECT", "TEXTAREA"].includes(
-    document.activeElement?.tagName || "",
-  );
-  if (typing) {
-    if (event.code === "Enter" && document.activeElement?.id === "chat") {
-      event.preventDefault();
-      const chat = $<HTMLInputElement>("#chat");
-      if (chat.value.trim()) send({ type: "chat", text: chat.value });
-      chat.value = "";
-      chat.blur();
+  const active = document.activeElement;
+  // A field nobody can see must not keep the keyboard from the game.
+  if (
+    active instanceof HTMLElement &&
+    !typingIn(active) &&
+    active.matches("input, select, textarea")
+  )
+    active.blur();
+  if (typingIn(document.activeElement)) {
+    if (document.activeElement?.id === "chat") {
+      if (event.code === "Enter") {
+        event.preventDefault();
+        const chat = $<HTMLInputElement>("#chat");
+        if (chat.value.trim()) send({ type: "chat", text: chat.value });
+        chat.value = "";
+        chat.blur();
+      } else if (event.code === "Escape") $<HTMLInputElement>("#chat").blur();
     }
     return;
   }
   if (!joined) return;
-  if (
-    ["Space", "F1", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(
-      event.code,
-    )
-  )
-    event.preventDefault();
+  if (claimsKey(event)) event.preventDefault();
   // Finish overdue slots with the controls held before this event.
   pumpInput();
   controls.press(event.code);
@@ -279,7 +294,7 @@ window.addEventListener("keydown", (event) => {
   }
   if (event.code === "F1") {
     if (debugAllowed) $("#debug").classList.toggle("hidden");
-    else toast("The development garage is disabled on this server.");
+    else toast("Dev tools are unavailable while disconnected.");
   }
   if (event.code === "KeyH") {
     audio.ui();
@@ -437,9 +452,7 @@ function pumpInput(now = performance.now(), transition = false) {
     const input = controls.sample();
     handleGamepadActions();
     network?.input(
-      cityMap?.open ||
-        scene.debugCamera.active ||
-        ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName || "")
+      cityMap?.open || scene.debugCamera.active || typingIn(document.activeElement)
         ? idle()
         : automation?.input || input,
       timestamp,
@@ -448,10 +461,14 @@ function pumpInput(now = performance.now(), transition = false) {
   inputClock.advance(now, send);
   if (transition) inputClock.transition(now, send);
 }
+const frames = new FrameWindow();
+// `?fixedscale` keeps the resolution where it starts (for comparing renders).
+const fixedScale = new URLSearchParams(location.search).has("fixedscale");
+const renderScale = new RenderScale(Math.max(1, devicePixelRatio / 1.6));
 setInterval(pumpInput, 1000 / 30);
 setInterval(() => {
   if (debugAllowed && network && !$("#debug").classList.contains("hidden"))
-    updateNetworkStats($("#network-stats"), network);
+    updateNetworkStats($("#network-stats"), network, frames.stats, renderScale);
 }, 250);
 function debugPanelOpen(id: string) {
   const panel = $(`#debug-${id}`);
@@ -614,7 +631,23 @@ async function boot() {
       world.water = cityWaterSchema.parse(await water.json());
     }
     let cityRenderer: CityRenderer | undefined;
-    cityStream = new CityStream(world, (chunks) => cityRenderer?.sync(chunks));
+    let streamSync = false;
+    let pendingChunks: CityChunk[] | undefined;
+    const syncStream = (chunks: CityChunk[]) => {
+      pendingChunks = chunks;
+      if (streamSync) return;
+      const run = () => {
+        streamSync = false;
+        const current = pendingChunks;
+        pendingChunks = undefined;
+        if (current) cityRenderer?.sync(current);
+      };
+      if (typeof requestIdleCallback === "function")
+        requestIdleCallback(run, { timeout: 100 });
+      else setTimeout(run, 0);
+      streamSync = true;
+    };
+    cityStream = new CityStream(world, syncStream);
     const base = world.geometryVersion
       ? await fetch(`/city/geometry/${world.mapId}/base`, {
           cache: "no-store",
@@ -650,10 +683,27 @@ async function boot() {
     $("#app").removeAttribute("inert");
     document.querySelector("#boot")?.remove();
     characterMenu.ready();
+    const quick = quickStart(location.search);
+    if (quick) {
+      if (quick.name) $<HTMLInputElement>("#name").value = quick.name;
+      $<HTMLFormElement>("#join").requestSubmit();
+    }
     const profileEnabled =
       import.meta.env.DEV ||
       new URLSearchParams(location.search).get("profile") === "1";
     const profiler = profileEnabled ? new FrameProfiler() : undefined;
+    const instrumentation = profileEnabled
+      ? new SceneInstrumentation(scene.scene)
+      : undefined;
+    if (instrumentation) {
+      instrumentation.captureActiveMeshesEvaluationTime = true;
+      instrumentation.captureRenderTargetsRenderTime = true;
+      instrumentation.captureFrameTime = true;
+      instrumentation.captureRenderTime = true;
+      instrumentation.captureCameraRenderTime = true;
+      instrumentation.captureParticlesRenderTime = true;
+      instrumentation.captureSpritesRenderTime = true;
+    }
     if (profileEnabled)
       Object.defineProperty(window, "afterhours", {
         configurable: true,
@@ -669,9 +719,11 @@ async function boot() {
           particles: scene.effects.effects.length,
           gpu: scene.engine.getGlInfo(),
           fps: scene.engine.getFps(),
+          renderScale: renderScale.level,
           frameP95Ms: profiler!.stats.frameP95Ms,
           frameMaxMs: profiler!.stats.frameMaxMs,
           frameStages: profiler!.stats.stagesP95Ms,
+          updateParts: profiler!.stats.updatePartsP95Ms,
           trailUploads: scene.effects.trails.uploads,
           trailTiles: scene.effects.trails.residentTiles,
           cityStreaming: cityStream.diagnostics,
@@ -694,9 +746,25 @@ async function boot() {
             };
           },
           meshes: scene.scene.meshes.length,
+          babylon: scene.scene,
+          shadowGenerator: scene.shadows,
+          scene: instrumentation && {
+            drawCalls: instrumentation.drawCallsCounter.current,
+            activeMeshes: scene.scene.getActiveMeshes().length,
+            activeIndices: scene.scene.getActiveIndices(),
+            shadowCasters: scene.shadows.getShadowMap()?.renderList?.length,
+            lights: scene.scene.lights.length,
+            materials: scene.scene.materials.length,
+            activeMeshesMs: instrumentation.activeMeshesEvaluationTimeCounter.current,
+            shadowPassMs: instrumentation.renderTargetsRenderTimeCounter.current,
+            cameraMs: instrumentation.cameraRenderTimeCounter.current,
+            renderMs: instrumentation.renderTimeCounter.current,
+            frameMs: instrumentation.frameTimeCounter.current,
+          },
           destruction: scene.destruction.diagnostics,
         }),
       });
+    let parts: { net: number; scene: number; rest: number } | undefined;
     let last = performance.now(),
       ui = 0,
       streamClock = 0;
@@ -704,22 +772,30 @@ async function boot() {
       const now = performance.now(),
         dt = Math.min(0.05, (now - last) / 1000);
       const interval = now - last;
+      frames.record(now, interval);
+      const level = renderScale.frame(now, interval);
+      if (level !== undefined && !fixedScale) {
+        scene.engine.setHardwareScalingLevel(level);
+        scene.engine.resize();
+      }
       last = now;
       if (!joined) return;
       pumpInput(now);
       const cameraInput =
-        cityMap?.open ||
-        ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName || "")
+        cityMap?.open || typingIn(document.activeElement)
           ? idle()
           : automation?.input || controls.read();
+      const t0 = profiler ? performance.now() : 0;
       const rendered =
         network?.renderEntities(now, scene.debugCamera.active ? idle() : cameraInput) ||
         entities;
+      const t1 = profiler ? performance.now() : 0;
       scene.destruction.setPredictedImpacts(
         network?.predictedImpacts ?? new Map(),
         network?.debrisClock,
       );
       scene.update(rendered, playerId, dt, cameraInput);
+      const t2 = profiler ? performance.now() : 0;
       cityRenderer?.fadeOccluders(
         scene.camera.position,
         scene.target,
@@ -763,6 +839,7 @@ async function boot() {
         input: cameraInput,
       });
       const updated = profiler ? performance.now() : 0;
+      parts = { net: t1 - t0, scene: t2 - t1, rest: updated - t2 };
       scene.scene.render();
       nameplates.update(scene, rendered, playerId);
       const renderedAt = profiler ? performance.now() : 0;
@@ -882,6 +959,7 @@ async function boot() {
       profiler?.record({
         interval,
         update: updated - now,
+        parts,
         render: renderedAt - updated,
         ui: performance.now() - renderedAt,
       });

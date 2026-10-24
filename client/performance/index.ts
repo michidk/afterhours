@@ -48,7 +48,15 @@ export async function profileNetwork<T>(
   }
 }
 
-type Frame = { interval: number; update: number; render: number; ui: number };
+type Parts = { net: number; scene: number; rest: number };
+type Frame = {
+  interval: number;
+  update: number;
+  render: number;
+  ui: number;
+  /** Where the update stage went: prediction and draw list, scene update, everything else. */
+  parts?: Parts;
+};
 function p95(values: number[]) {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.floor(sorted.length * 0.95)] ?? 0;
@@ -64,6 +72,11 @@ function summarize(frames: Frame[]) {
       update: p95(frames.map((f) => f.update)),
       render: p95(frames.map((f) => f.render)),
       ui: p95(frames.filter((f) => f.ui > 0).map((f) => f.ui)),
+    },
+    updatePartsP95Ms: {
+      net: p95(frames.map((f) => f.parts?.net ?? 0)),
+      scene: p95(frames.map((f) => f.parts?.scene ?? 0)),
+      rest: p95(frames.map((f) => f.parts?.rest ?? 0)),
     },
   };
 }
@@ -122,5 +135,75 @@ export class FrameProfiler {
       // Include pauses at the end of a capture, even if no final frame arrives.
       fps: frames.length / durationSeconds,
     };
+  }
+}
+
+/** Always-on frame timing for the Networking panel: the last five seconds of frame intervals. */
+export class FrameWindow {
+  private frames: { at: number; ms: number }[] = [];
+  record(now: number, ms: number) {
+    this.frames.push({ at: now, ms });
+    while (this.frames[0] && this.frames[0].at < now - 5000) this.frames.shift();
+  }
+  get stats() {
+    const ms = this.frames.map((f) => f.ms).sort((a, b) => a - b);
+    return {
+      fps: ms.length ? 1000 / ms[ms.length >> 1] : 0,
+      p95Ms: ms[Math.floor(ms.length * 0.95)] ?? 0,
+      worstMs: ms.at(-1) ?? 0,
+    };
+  }
+}
+
+/**
+ * Lowers the render resolution while frames stay slow. A machine that draws 15 fps waits a frame
+ * for every key press and shows each snapshot late, however good the link: the only lever left
+ * is fewer pixels. The level is the engine's hardware scaling (1 = one pixel per CSS pixel, higher
+ * = fewer pixels). It steps up when the median frame of the last two seconds is over `slowMs`
+ * (under about 26 fps, which a 30 Hz display never reaches) and steps back after a cooldown at
+ * vsync speed; a step back that is slow again within 10 s doubles the cooldown (up to 160 s).
+ */
+export class RenderScale {
+  level: number;
+  private frames: { at: number; ms: number }[] = [];
+  private changed = 0;
+  private cooldown = 20_000;
+  private raisedAt = -Infinity;
+  constructor(
+    readonly base: number,
+    readonly max = base * 2,
+    private slowMs = 38,
+    private step = 1.25,
+  ) {
+    this.level = base;
+  }
+  /** One drawn frame; returns the new level when it changed. */
+  frame(now: number, ms: number): number | undefined {
+    // A stall this long is a hidden tab or a paused debugger, not the machine's speed.
+    if (ms > 2000) {
+      this.frames = [];
+      return;
+    }
+    this.frames.push({ at: now, ms });
+    while (this.frames[0] && this.frames[0].at < now - 2000) this.frames.shift();
+    if (this.frames.length < 3 || now - this.changed < 2000) return;
+    const sorted = this.frames.map((f) => f.ms).sort((a, b) => a - b);
+    const median = sorted[sorted.length >> 1];
+    if (median > this.slowMs && this.level < this.max) {
+      // Slow again soon after stepping back: the lower resolution was the right one.
+      if (now - this.raisedAt < 10_000)
+        this.cooldown = Math.min(this.cooldown * 2, 160_000);
+      return this.move(now, Math.min(this.max, this.level * this.step));
+    }
+    if (median <= 20 && this.level > this.base && now - this.changed >= this.cooldown) {
+      this.raisedAt = now;
+      return this.move(now, Math.max(this.base, this.level / this.step));
+    }
+  }
+  private move(now: number, level: number) {
+    this.level = level;
+    this.changed = now;
+    this.frames = [];
+    return level;
   }
 }

@@ -17,7 +17,7 @@ import {
   unpackSurfaceChunks,
 } from "../shared/city-pack.ts";
 import { cityChunkSchema } from "../shared/city-stream.ts";
-import { CityStore } from "../server/city-stream.ts";
+import { CityStore } from "../scripts/city-store.ts";
 import { terrainHeight } from "../shared/terrain.ts";
 import { WATER_LEVEL } from "../shared/water.ts";
 

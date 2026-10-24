@@ -11,3 +11,7 @@ dist-explorer
 .serena/
 .agents/
 .gitnexus/
+shared/generated
+target
+crates/physics/pkg
+crates/physics/pkg-node

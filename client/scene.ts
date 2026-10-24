@@ -172,6 +172,16 @@ export class CityScene {
     this.shadows.normalBias = 0.03;
     this.sun.shadowMinZ = 1;
     this.sun.shadowMaxZ = 220;
+    // Refreshing a large PCF map every frame stalls low-end and software renderers.
+    // The scene moves only a little between updates, so reuse it for two frames.
+    const shadowMap = this.shadows.getShadowMap();
+    if (shadowMap) {
+      shadowMap.refreshRate = 2;
+      shadowMap.getSize().width > 512 && this.shadows.getShadowMap()?.resize(512);
+      // Do not render the whole city into the first shadow pass. The nearby list is
+      // populated by update() once the camera has a settled target.
+      shadowMap.renderList = [];
+    }
     this.streetGlow = this.mat("#ffe5a1", true);
     this.lighting = new EnvironmentLighting(
       this.scene,
@@ -685,11 +695,11 @@ export class CityScene {
       const model = VEHICLES[e.model || "sedan"];
       root.scaling.set(
         model.width / 2,
-        e.model === "van" ? 1.35 : e.model === "sport" ? 0.8 : 1,
+        e.model === "van" ? 1.1 : e.model === "sport" ? 0.8 : 1,
         model.length / 4.3,
       );
       if (e.model === "van")
-        this.box("cargo", 0, 1.5, -0.6, 1.9, 1.5, 2.8, e.color, root, true);
+        this.box("cargo", 0, 1.2, -0.65, 1.9, 1.0, 2.55, e.color, root, true);
       if (e.model === "sport")
         this.box("spoiler", 0, 1.1, -1.85, 2, 0.13, 0.4, "#26363b", root, true);
     }
@@ -914,7 +924,8 @@ export class CityScene {
     const p = entities.find((e) => e.id === me);
     if (p && !this.debugCamera.active) {
       const n = this.nodes.get(p.vehicle || p.id);
-      if (n) this.target = Vector3.Lerp(this.target, n.position, 1 - Math.exp(-dt * 5));
+      if (n)
+        this.target = Vector3.Lerp(this.target, n.position, 1 - Math.exp(-dt * 10));
     }
     const body = entities.find((e) => e.id === p?.vehicle) || p;
     if (this.debugCamera.active) {
@@ -959,12 +970,14 @@ export class CityScene {
       this.shadowCandidates = this.shadowCandidates.filter((m) => !m.isDisposed());
       const shadowMap = this.shadows.getShadowMap();
       if (shadowMap)
-        shadowMap.renderList = this.shadowCandidates.filter((m) => {
-          const c = m.getBoundingInfo().boundingSphere.centerWorld;
-          return (
-            m.isEnabled() && Math.hypot(c.x - this.target.x, c.z - this.target.z) < 70
-          );
-        });
+        shadowMap.renderList = this.shadowCandidates
+          .filter((m) => {
+            const c = m.getBoundingInfo().boundingSphere.centerWorld;
+            return (
+              m.isEnabled() && Math.hypot(c.x - this.target.x, c.z - this.target.z) < 70
+            );
+          })
+          .slice(0, 256);
     }
     this.carLights.update(entities, this.nodes, this.target);
     this.lighting.update(this.day, this.target, dt);

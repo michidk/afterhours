@@ -666,6 +666,9 @@ kbd {
 .hidden {
   display: none !important;
 }
+.quick #entry {
+  visibility: hidden;
+}
 .city-map {
   position: absolute;
   inset: 4vh 4vw;

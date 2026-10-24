@@ -65,7 +65,10 @@ const ASSET: Record<string, BuildingAssetId> = {
  * generator's sea level matches the game's water level; roads become dense straight
  * segments for navigation while the drawn streets travel as surface polygons.
  */
-export function cityFromMap(map: GeneratedMap): City {
+export function cityFromMap(
+  map: GeneratedMap,
+  snapshot?: (stage: string, context: FeatureContext, extra?: unknown) => void,
+): City {
   const f = map.shaped,
     shift = WATER_LEVEL - map.seaLevel;
   if (f.w !== TERRAIN_SIDE || f.cell !== TERRAIN_STEP)
@@ -358,7 +361,9 @@ export function cityFromMap(map: GeneratedMap): City {
           pointInPolygon(p, a.ring),
       ),
   };
+  snapshot?.("before-town-hall", features);
   const townHall = placeTownHall(features);
+  snapshot?.("after-town-hall", features);
   // Airports: the flattest free squares away from downtown and from each other.
   const airports: City["airport"][] = [];
   for (let i = 0; i < 2; i++) {
@@ -381,26 +386,34 @@ export function cityFromMap(map: GeneratedMap): City {
       }
     if (!a) throw Error("No site for an airport");
     airports.push(a);
+    snapshot?.(`before-airport-${i}`, features, { airport: a });
     dressAirport(features, a);
+    snapshot?.(`after-airport-${i}`, features);
     features.taken.push(rotatedRect(a, a.w + 60, a.d + 60, 0));
   }
   const airport = airports[0];
+  snapshot?.("after-airports", features);
   const racetrack = placeRacetrack(features);
+  snapshot?.("after-racetrack", features);
   const harbours = placeHarbours(features);
+  snapshot?.("after-harbours", features);
+  const streetPads = [
+    ...buildings,
+    ...airports.map((a) => ({
+      ...a,
+      y: terrainHeight(a.x, a.z, { terrain: { heights } }),
+    })),
+  ];
+  snapshot?.("before-sink", features, { pads: streetPads });
   sinkUnderStreets(
     { heights, side: TERRAIN_SIDE, step: TERRAIN_STEP, half: LIMIT },
     [
       { polygons: asphalt, top: STREET_LIFT },
       { polygons: sidewalks, top: STREET_LIFT + KERB_HEIGHT },
     ],
-    [
-      ...buildings,
-      ...airports.map((a) => ({
-        ...a,
-        y: terrainHeight(a.x, a.z, { terrain: { heights } }),
-      })),
-    ],
+    streetPads,
   );
+  snapshot?.("after-sink", features);
   // Shipped heights are whole centimetres; round down so no surface sample rises.
   for (let i = 0; i < heights.length; i++)
     heights[i] = Math.floor(heights[i] * 100 + 1e-6) / 100 + 0;

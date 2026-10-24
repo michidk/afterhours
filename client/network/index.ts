@@ -1,88 +1,125 @@
-import type { PredictedImpacts } from "../../shared/destruction.ts";
-import type { DebrisClock } from "../world/destruction.ts";
+import { encode, decode } from "@msgpack/msgpack";
 import type { Character } from "../../shared/character.ts";
-import { VERSION } from "../../shared/version.ts";
-import type {
-  Snapshot,
-  Welcome,
-  InputFrame,
-  PlayerPosition,
-  PlayerPositions,
-  PlayerRoster,
-  PlayerSummary,
-} from "../../shared/protocol.ts";
-import type { Entity, Input, City } from "../../shared/world.ts";
-import { decodeSnapshot, applyPatch } from "../../shared/codec.ts";
-import { Prediction, interpolate } from "./prediction.ts";
-import { SnapshotTimeline } from "./timeline.ts";
+import type { ClientMessage } from "../../shared/generated/ClientMessage.ts";
+import type { ServerMessage } from "../../shared/generated/ServerMessage.ts";
+import type { Controls } from "../../shared/generated/Controls.ts";
+import { mapManifestSchema, type MapManifest } from "../../shared/city-stream.ts";
+import type { Pickup, PlayerPosition, PlayerSummary } from "../../shared/protocol.ts";
+import type { DebugCommand, DebugState } from "../../shared/debug.ts";
+import type { DebrisState, PredictedImpacts } from "../../shared/destruction.ts";
+import type { GrenadeState } from "../../shared/grenades.ts";
+import type { DebrisClock } from "../world/destruction.ts";
+import {
+  inputX,
+  type City,
+  type Entity,
+  type Input,
+  type WorldEvent,
+} from "../../shared/world.ts";
 import type { InputClock } from "../input/clock.ts";
-import { emptyCity } from "../../shared/city-stream.ts";
-import { setBrokenProps, setPropDamage } from "../../shared/destruction.ts";
-import type { DebugCommand, DebugResult, DebugState } from "../../shared/debug.ts";
-import { wrap } from "../../shared/physics/vehicle.ts";
+import { TUNING } from "../../shared/catalog.ts";
+import { InputStamper } from "./lead.ts";
+import { ActionLatency, type Drawn } from "./latency.ts";
+import { SeatWatch } from "./seat-watch.ts";
+import { Piloted } from "./piloted.ts";
+import { Prediction, loadPhysics, withPredicted } from "./prediction.ts";
+import { SnapshotTimeline } from "./timeline.ts";
+
+export const VERSION = 1;
+const NO_IMPACTS: PredictedImpacts = new Map();
+/** Ticks an input should arrive before the server simulates it. */
+
+export interface Welcome {
+  id: string;
+  map: MapManifest;
+  debug: boolean;
+}
+export interface StateMessage {
+  entities: Entity[];
+  pickups: Pickup[];
+  events: WorldEvent[];
+  time: number;
+  day: number;
+  dayRate?: number;
+  players: number;
+  grenades?: GrenadeState[];
+  debris?: DebrisState[];
+}
 export interface NetworkHooks {
   welcome: (m: Welcome) => void;
-  state: (m: Omit<Snapshot, "entities"> & { entities: Entity[] }) => void;
+  state: (m: StateMessage) => void;
   chat: (name: string, text: string) => void;
   status: (state: string) => void;
   roster?: (players: PlayerSummary[]) => void;
   positions?: (players: PlayerPosition[]) => void;
   destruction?: (brokenProps: string[]) => void;
 }
+
+type Edge = Pick<Controls, "interact" | "drop" | "reload" | "jetpack" | "equip">;
+
+/**
+ * The browser side of the Rust server's protocol: msgpack over one WebSocket,
+ * tick-stamped inputs sent a little ahead of the server, delta snapshots applied
+ * over the acked base, and local prediction through the shared wasm physics.
+ */
 export class GameNetwork {
   socket: WebSocket | undefined;
   entities = new Map<string, Entity>();
   prediction: Prediction | undefined;
   playerId = "";
-  predictedImpacts: PredictedImpacts = new Map();
-  /** Server times on screen for remote bodies and for this client's predicted body. */
-  debrisClock: DebrisClock | undefined;
+  /** Fixtures the predicted car has broken, for the scene to throw at once. */
+  get predictedImpacts(): PredictedImpacts {
+    return this.prediction?.impacts ?? NO_IMPACTS;
+  }
+  /** Server times on screen: remote bodies in the past, the predicted car at its own tick. */
+  get debrisClock(): DebrisClock | undefined {
+    if (!this.prediction?.body) return undefined;
+    const remote = this.timeline.renderTime ?? this.serverTime;
+    return { remote, local: this.seq * TUNING.tick };
+  }
+  /** Fixtures the server has broken, as it last reported them. */
+  private broken: ReadonlySet<string> = new Set();
+  clock: InputClock | undefined;
+  worldReady = (_point: { x: number; z: number }) => true;
   seq = 0;
-  frame = 0;
+  /** The controls of the newest sent input, which the server holds through ticks with none. */
+  private lastInput: Input | undefined;
+  /** How long entering a car and starting a turn take to show on screen. */
+  readonly actions = new ActionLatency();
+  /** The craft the player flies (not predicted), drawn from the newest snapshot. */
+  private piloted = new Piloted();
+  /** When the vehicle the player sits in vanished or they were dropped out of it, and why. */
+  readonly seat = new SeatWatch();
+  private interactAt = -Infinity;
+  /** What the last drawn frame showed of the controlled body. */
+  private seated = false;
+  private drawn: Drawn | undefined;
+  private controlled: string | undefined;
   serverTime = 0;
   received = 0;
   latency = 0;
   rtt: number | undefined;
   jitter = 0;
-  ack = -1;
-  ackTimestamp: number | undefined;
-  /** Commands the server still had buffered after its last tick. */
-  queued: number | undefined;
-  /** When attached, snapshot buffer reports phase-lock the 30 Hz command schedule. */
-  clock: InputClock | undefined;
-  snapshotInterval = 0;
-  resyncs = 0;
+  ack: number | undefined;
+  lead = 0;
+  private serverTick = 0;
+  private stamper = new InputStamper();
+  private edge: Edge = { interact: false, drop: false, reload: false, jetpack: false };
   private welcomed = false;
-  private authorityPending = false;
-  private lastResponse = 0;
-  private stateProgressAt = 0;
-  private stateRequested = false;
-  private lastDisconnect: string | undefined;
-  private outgoingBytes = 0;
-  private lastSend = 0;
-  private outgoingWrites: { end: number; at: number }[] = [];
-  private heartbeat: ReturnType<typeof setInterval> | undefined;
-  private inputTimes: number[] = [];
-  private snapshotTimes: number[] = [];
-  token = "";
-  private timeline = new SnapshotTimeline();
-  private contactPresentation = new Map<string, number>();
-  private displayedRemotes = new Map<
-    string,
-    { pose: Entity; target: Entity; at: number; smoothing: boolean }
-  >();
-  private contactOwner = "";
-  private retry: ReturnType<typeof setTimeout> | undefined;
   private closed = false;
+  private retry: ReturnType<typeof setTimeout> | undefined;
+  private heartbeat: ReturnType<typeof setInterval> | undefined;
+  private lastDisconnect: string | undefined;
+  private reconnects = 0;
+  private lastResponse = 0;
+  private snapshotTimes: number[] = [];
+  private inputTimes: number[] = [];
   private debugSerial = 0;
   private debugRequests = new Map<
     number,
-    {
-      resolve: (state: DebugState) => void;
-      reject: (error: Error) => void;
-      timer: ReturnType<typeof setTimeout>;
-    }
+    { resolve: (state: DebugState) => void; reject: (error: Error) => void }
   >();
+  private timeline = new SnapshotTimeline();
   constructor(
     private hooks: NetworkHooks,
     private name: string,
@@ -90,63 +127,31 @@ export class GameNetwork {
     private city?: City,
     private character?: Character,
   ) {}
-  worldReady = (_point: { x: number; z: number }) => true;
   connect() {
-    this.closed = true;
+    this.closed = false;
     if (this.socket) this.disconnect(this.socket);
     clearTimeout(this.retry);
     clearInterval(this.heartbeat);
-    this.closed = false;
-    this.welcomed = false;
-    this.rtt = undefined;
-    this.jitter = this.latency = this.received = this.snapshotInterval = 0;
-    this.ack = -1;
-    this.ackTimestamp = undefined;
-    this.queued = undefined;
-    this.inputTimes = [];
-    this.snapshotTimes = [];
-    this.resyncs = 0;
-    this.hooks.status("connecting");
-    this.socket = new WebSocket(
+    this.hooks.status(this.lastDisconnect ? "reconnecting" : "connecting");
+    const socket = new WebSocket(
       `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`,
     );
-    const socket = this.socket;
-    this.lastResponse = performance.now();
-    this.outgoingBytes = 0;
-    this.lastSend = this.lastResponse;
-    this.outgoingWrites = [];
-    let checkedAt = this.lastResponse;
-    let pingAt = this.lastResponse;
+    this.socket = socket;
+    socket.binaryType = "arraybuffer";
+    let pingAt = 0;
     this.heartbeat = setInterval(() => {
-      if (this.socket !== socket) return;
+      if (this.socket !== socket || socket.readyState !== WebSocket.OPEN) return;
       const now = performance.now();
-      // A paused event loop must process queued replies before judging the link.
-      if (now - checkedAt > 500) {
-        this.lastResponse = this.stateProgressAt = now;
-        this.stateRequested = false;
-      }
-      checkedAt = now;
-      if (now - this.lastResponse >= 5000) this.disconnect(socket, "No server replies");
-      else if (this.welcomed) {
-        const stale = now - this.stateProgressAt;
-        // Pongs prove transport liveness, not that authority is still arriving.
-        if (stale >= 2000) {
-          this.disconnect(socket, "No snapshots for 2 seconds");
-          return;
-        }
-        if (stale >= 500 && !this.stateRequested) {
-          this.stateRequested = true;
-          this.resyncs++;
-          this.send({ type: "resync" });
-        }
-        if (now - pingAt >= 1000) {
-          pingAt = now;
-          this.send({ type: "ping" });
-        }
+      if (this.lastResponse && now - this.lastResponse > 5000)
+        this.disconnect(socket, "No response from the server");
+      else if (now - pingAt >= 1000) {
+        pingAt = now;
+        this.send({ type: "ping", timestamp: now });
       }
     }, 250);
-    socket.binaryType = "arraybuffer";
-    this.socket.onopen = () => {
+    socket.onopen = async () => {
+      if (this.socket !== socket) return;
+      await loadPhysics();
       if (this.socket !== socket) return;
       this.send({
         type: "join",
@@ -154,189 +159,175 @@ export class GameNetwork {
         name: this.name,
         color: this.color,
         character: this.character,
-        token: this.token || undefined,
       });
     };
-    this.socket.onmessage = (event) => {
+    socket.onmessage = (event) => {
       if (this.socket !== socket) return;
-      let m;
+      let m: ServerMessage;
       try {
-        m =
-          typeof event.data === "string"
-            ? JSON.parse(event.data)
-            : decodeSnapshot(event.data);
+        m = decode(new Uint8Array(event.data as ArrayBuffer)) as ServerMessage;
       } catch {
         return;
       }
-      if (["welcome", "state", "pong"].includes(m.type))
-        this.lastResponse = performance.now();
-      if (m.type === "versionMismatch") {
-        this.hooks.status("version mismatch; refresh the game");
-        this.close();
-        return;
-      }
-      if (m.type === "debugResult") {
-        const result = m as DebugResult,
-          pending = this.debugRequests.get(result.requestId);
-        if (pending) {
-          clearTimeout(pending.timer);
-          this.debugRequests.delete(result.requestId);
-          if (result.error || !result.state)
-            pending.reject(Error(result.error || "Missing debug state"));
-          else pending.resolve(result.state);
-        }
-        return;
-      }
-      if (m.type === "welcome") {
-        if (m.version !== VERSION) {
-          this.hooks.status("version mismatch");
-          this.close();
-          return;
-        }
-        this.welcomed = true;
-        this.stateProgressAt = performance.now();
-        this.stateRequested = false;
-        if (!this.send({ type: "ping" })) return;
-        this.playerId = m.id;
-        this.token = m.token;
-        this.prediction = new Prediction(this.city ?? emptyCity(m.map), (point) =>
-          this.worldReady(point),
-        );
-        this.authorityPending = false;
-        this.seq = 0;
-        this.frame = 0;
-        this.entities.clear();
-        this.timeline.reset();
-        this.contactPresentation.clear();
-        this.displayedRemotes.clear();
-        this.contactOwner = "";
-        this.hooks.welcome(m);
-        this.hooks.status("connected");
-      }
-      if (m.type === "state") {
-        if (!this.welcomed) return;
-        const snapshot = m as Snapshot;
-        if (snapshot.version !== VERSION || snapshot.frame <= this.frame) return;
-        if (!snapshot.full && snapshot.base !== this.frame) {
-          this.resyncs++;
-          this.send({ type: "resync" });
-          return;
-        }
-        if (snapshot.full) this.entities.clear();
-        for (const id of snapshot.removed) this.entities.delete(id);
-        for (const e of snapshot.entities) applyPatch(this.entities, e);
-        this.frame = snapshot.frame;
-        this.serverTime = snapshot.time;
-        const now = performance.now();
-        this.snapshotInterval = this.received ? now - this.received : 0;
-        this.received = now;
-        this.stateProgressAt = now;
-        this.stateRequested = false;
-        this.snapshotTimes.push(now);
-        this.snapshotTimes = this.snapshotTimes.filter((at) => at >= now - 1000);
-        this.ack = snapshot.ack;
-        this.seq = Math.max(this.seq, (snapshot.idleAck ?? -1) + 1);
-        this.ackTimestamp = snapshot.ackTimestamp;
-        this.queued = snapshot.queued;
-        this.clock?.feedback(snapshot.queued);
-        const entities = [...this.entities.values()];
-        this.timeline.push(snapshot.time, entities, this.received);
-        this.authorityPending = true;
-        if (!this.prediction?.body) this.reconcile(now);
-        this.hooks.state({ ...snapshot, entities });
-      }
-      if (m.type === "chat") this.hooks.chat(m.name, m.text);
-      if (m.type === "roster") this.hooks.roster?.((m as PlayerRoster).players);
-      if (m.type === "positions")
-        this.hooks.positions?.((m as PlayerPositions).players);
-      if (m.type === "destruction") {
-        if (this.city) {
-          setBrokenProps(this.city, m.brokenProps);
-          setPropDamage(this.city, m.propDamage ?? {});
-        }
-        this.hooks.destruction?.(m.brokenProps);
-      }
-      if (m.type === "pong" && Number.isFinite(m.timestamp)) {
-        const rtt = Math.max(0, performance.now() - m.timestamp);
+      this.lastResponse = performance.now();
+      if (m.type === "welcome") this.welcome(m);
+      else if (m.type === "state") this.state(m);
+      else if (m.type === "roster") this.hooks.roster?.(m.players);
+      else if (m.type === "positions") this.hooks.positions?.(m.players);
+      else if (m.type === "chat") this.hooks.chat(m.name, m.text);
+      else if (m.type === "debugResult") {
+        const pending = this.debugRequests.get(m.requestId);
+        if (!pending) return;
+        this.debugRequests.delete(m.requestId);
+        if (m.error || !m.state) pending.reject(Error(m.error || "Missing state"));
+        else pending.resolve(m.state as DebugState);
+      } else if (m.type === "pong") {
+        const rtt = performance.now() - m.timestamp;
         this.jitter =
           this.rtt === undefined
             ? 0
-            : this.jitter * 0.75 + Math.abs(rtt - this.rtt) * 0.25;
-        this.rtt = rtt;
-        this.latency = rtt / 2;
+            : this.jitter * 0.8 + Math.abs(rtt - this.rtt) * 0.2;
+        this.rtt = this.rtt === undefined ? rtt : this.rtt * 0.8 + rtt * 0.2;
+        this.latency = this.rtt / 2;
       }
     };
-    socket.onclose = (event) =>
-      this.disconnect(
-        socket,
-        `Socket closed (${event.code})${event.reason ? `: ${event.reason}` : ""}`,
-      );
-    socket.onerror = () => {
-      if (this.socket === socket) this.hooks.status("connection error");
-    };
+    socket.onclose = () => this.disconnect(socket, "Connection closed");
+    socket.onerror = () => this.disconnect(socket, "Connection error");
   }
-  private disconnect(socket: WebSocket, reason = "Connection replaced") {
-    if (this.socket !== socket) return;
-    if (!this.closed) this.lastDisconnect = reason;
-    this.socket = undefined;
-    socket.close();
-    this.welcomed = false;
-    clearInterval(this.heartbeat);
-    for (const request of this.debugRequests.values()) {
-      clearTimeout(request.timer);
-      request.reject(Error("Connection closed"));
+  private welcome(m: Extract<ServerMessage, { type: "welcome" }>) {
+    if (m.version !== VERSION) {
+      this.hooks.status("version mismatch; refresh the game");
+      this.close();
+      return;
     }
-    this.debugRequests.clear();
-    this.authorityPending = false;
-    this.prediction?.reset();
-    if (this.closed) return;
-    this.hooks.status("reconnecting");
-    this.retry = setTimeout(() => this.connect(), 1500);
+    const map = mapManifestSchema.safeParse(m.map);
+    if (!map.success) {
+      this.hooks.status("bad city manifest");
+      this.close();
+      return;
+    }
+    this.welcomed = true;
+    this.playerId = m.id;
+    this.serverTick = m.tick;
+    this.stamper.reset(m.tick);
+    this.seq = 0;
+    this.lastInput = undefined;
+    this.received = performance.now();
+    this.entities.clear();
+    this.timeline.reset();
+    this.prediction = new Prediction(this.city ?? {});
+    this.hooks.status("connected");
+    this.hooks.welcome({ id: m.id, map: map.data, debug: m.debug });
   }
-  send(data: object) {
-    const socket = this.socket;
-    if (socket?.readyState !== WebSocket.OPEN) return false;
+  private state(m: Extract<ServerMessage, { type: "state" }>) {
     const now = performance.now();
-    // bufferedAmount can still include delivered bytes until the browser resumes.
-    if (now - this.lastSend > 100)
-      for (const write of this.outgoingWrites) write.at = now;
-    this.lastSend = now;
-    const drained = this.outgoingBytes - socket.bufferedAmount;
-    this.outgoingWrites = this.outgoingWrites.filter((write) => write.end > drained);
-    if (socket.bufferedAmount && !this.outgoingWrites.length)
-      this.outgoingWrites.push({ end: this.outgoingBytes, at: now });
-    const message = JSON.stringify({ timestamp: now, ...data });
-    const bytes = new TextEncoder().encode(message).byteLength;
-    const oldest = this.outgoingWrites[0]?.at;
-    // A 500 ms catch-up can enqueue over 4 KiB before the browser drains writes.
-    if (
-      socket.bufferedAmount + bytes > 8192 ||
-      (oldest !== undefined && now - oldest >= 250)
-    ) {
-      this.disconnect(
-        socket,
-        socket.bufferedAmount + bytes > 8192
-          ? "Send buffer exceeded 8192 bytes"
-          : "Outgoing commands stalled for 250 ms",
-      );
-      return false;
+    if (m.base === null) this.entities.clear();
+    for (const id of m.removed) this.entities.delete(id);
+    for (const e of m.entities) this.entities.set(e.id, e as Entity);
+    this.seat.update(now, this.playerId, this.entities, this.interactAt);
+    this.serverTick = m.tick;
+    this.serverTime = m.time;
+    this.ack = m.ack ?? undefined;
+    this.lead = m.lead;
+    this.stamper.feedback(m.lead);
+    this.received = now;
+    this.snapshotTimes.push(now);
+    this.snapshotTimes = this.snapshotTimes.filter((at) => at >= now - 1000);
+    const entities = [...this.entities.values()];
+    this.timeline.push(m.time, entities, now);
+    if (m.broken) this.broken = new Set(m.broken);
+    if (this.city) {
+      this.prediction?.syncStatic(this.city);
+      this.prediction?.syncProps(this.city.props, this.broken);
+    }
+    const me = this.entities.get(this.playerId);
+    const controlledVehicle = me?.vehicle ? this.entities.get(me.vehicle) : undefined;
+    if (me && m.you)
+      this.prediction?.reconcile(me, controlledVehicle, m.you, this.ack, entities);
+    if (m.broken) this.hooks.destruction?.(m.broken);
+    this.hooks.state({
+      entities,
+      pickups: m.pickups as Pickup[],
+      events: m.events as WorldEvent[],
+      time: m.time,
+      day: m.day,
+      dayRate: m.dayRate,
+      players: m.players,
+      grenades: m.grenades,
+      debris: m.debris as DebrisState[],
+    });
+  }
+  private disconnect(socket: WebSocket, reason?: string) {
+    if (this.socket !== socket) return;
+    socket.onopen = socket.onmessage = socket.onclose = socket.onerror = null;
+    if (socket.readyState < WebSocket.CLOSING) socket.close();
+    this.socket = undefined;
+    clearInterval(this.heartbeat);
+    this.welcomed = false;
+    this.broken = new Set();
+    this.prediction?.reset();
+    this.timeline.reset();
+    if (reason) this.lastDisconnect = reason;
+    if (this.closed) return;
+    this.reconnects++;
+    this.hooks.status("reconnecting");
+    this.retry = setTimeout(() => this.connect(), 1000);
+  }
+  close() {
+    this.closed = true;
+    clearTimeout(this.retry);
+    if (this.socket) this.disconnect(this.socket);
+  }
+  send(message: ClientMessage | { type: string; [key: string]: unknown }): boolean {
+    if (this.socket?.readyState !== WebSocket.OPEN) return false;
+    switch (message.type) {
+      case "interact":
+      case "drop":
+      case "reload":
+      case "jetpack":
+        // Edge actions ride on the next input frame instead of a separate message.
+        this.edge[message.type] = true;
+        if (message.type === "interact")
+          this.actions.pressInteract(
+            (this.interactAt = performance.now()),
+            this.seated,
+          );
+        return true;
+      case "equip":
+        this.edge.equip = message.slot as number;
+        return true;
+      case "join":
+      case "input":
+      case "chat":
+      case "ping":
+      case "debugCommand":
+        break;
+      default:
+        return true;
     }
     try {
-      socket.send(message);
-      this.outgoingBytes += bytes;
-      this.outgoingWrites.push({ end: this.outgoingBytes, at: now });
+      this.socket.send(encode(message, { ignoreUndefined: true }));
       return true;
     } catch {
-      this.disconnect(socket, "Socket send failed");
+      this.disconnect(this.socket, "Socket send failed");
       return false;
     }
   }
-  private reconcile(now: number) {
-    if (!this.authorityPending) return;
-    this.authorityPending = false;
-    const player = this.entities.get(this.playerId);
-    if (player)
-      this.prediction?.reconcile(player, [...this.entities.values()], this.ack, now);
+  debug(command: DebugCommand): Promise<DebugState> {
+    if (this.socket?.readyState !== WebSocket.OPEN)
+      return Promise.reject(Error("Not connected to the server"));
+    const requestId = ++this.debugSerial;
+    return new Promise<DebugState>((resolve, reject) => {
+      this.debugRequests.set(requestId, { resolve, reject });
+      if (!this.send({ type: "debugCommand", requestId, command })) {
+        this.debugRequests.delete(requestId);
+        reject(Error("Debug command could not be sent"));
+      }
+    });
+  }
+  /** Current server tick, extrapolated from the last snapshot. */
+  private serverTickAt(now: number) {
+    return this.serverTick + (now - this.received) / (TUNING.tick * 1000);
   }
   input(input: Input, timestamp = performance.now()) {
     if (
@@ -345,192 +336,104 @@ export class GameNetwork {
       !this.prediction
     )
       return;
-    const frame: InputFrame = {
-      seq: this.seq++,
-      timestamp,
-      input: {
-        ...input,
-        shotTime: Math.max(
-          0,
-          this.serverTime + (timestamp - this.received) / 1000 - this.latency / 1000,
-        ),
-      },
+    this.actions.controls(performance.now(), inputX(input), this.drawn);
+    const tick = this.stamper.stamp(this.serverTickAt(timestamp));
+    // Already a tick or more ahead of the aim: the server runs one input per tick, so an
+    // extra one would only queue. The next slot carries the current controls.
+    if (tick === undefined) return;
+    const controls: Controls = {
+      up: input.up,
+      down: input.down,
+      left: input.left,
+      right: input.right,
+      moveX: input.moveX,
+      moveY: input.moveY,
+      brake: input.brake,
+      sprint: input.sprint ?? false,
+      ascend: input.ascend,
+      descend: input.descend,
+      attack: input.attack,
+      aim: input.aim,
+      ...this.edge,
     };
-    if (!this.send({ type: "input", seq: frame.seq, timestamp, ...frame.input }))
-      return;
-    // Send controls first, then consume the latest authority before predicting.
-    this.reconcile(performance.now());
-    // A slot the server already simulated on held controls is acknowledged before its
-    // command exists here; stepping it again would run that tick twice.
-    if (frame.seq > this.ack)
-      this.prediction.input(frame, [...this.entities.values()], this.clock?.interval);
+    this.edge = { interact: false, drop: false, reload: false, jetpack: false };
+    if (!this.send({ type: "input", tick, ack: this.serverTick, controls })) return;
+    // A jump in the stamps skips server ticks. It runs them on the held controls, so the
+    // predicted body must step through them too or it trails the server by a tick or two.
+    if (this.lastInput && tick > this.seq + 1 && tick - this.seq <= 8)
+      for (let held = this.seq + 1; held < tick; held++)
+        this.prediction.input(
+          held,
+          this.lastInput,
+          timestamp - (tick - held) * TUNING.tick * 1000,
+        );
+    this.seq = tick;
+    this.lastInput = input;
+    this.prediction.input(tick, input, timestamp);
     this.inputTimes.push(timestamp);
     this.inputTimes = this.inputTimes.filter((at) => at >= timestamp - 1000);
   }
+  /** Interpolated remote bodies plus the predicted local one. */
+  renderEntities(now: number, _input?: Input): Entity[] {
+    const frame = this.timeline.sample(now);
+    const me = this.prediction?.render(now);
+    // What the newest snapshot says the player drives, ahead of the interpolated copy's driver.
+    const mine = this.entities.get(this.playerId)?.vehicle,
+      latest = mine ? this.entities.get(mine) : undefined,
+      driving = latest?.driver === this.playerId ? mine : undefined;
+    let out = me
+      ? withPredicted(frame, me, this.playerId, this.prediction?.drawnCars, driving)
+      : frame;
+    if (driving && latest && latest.kind !== "car") {
+      // Aircraft and boats are not predicted: drawing them from the interpolation timeline would
+      // add its whole delay to the round trip, so the newest snapshot is carried on instead.
+      const flown = this.piloted.render(latest, this.received, now, this.latency);
+      out = out.map((e) => (e.id === driving ? flown : e));
+    }
+    const player = out.find((e) => e.id === this.playerId),
+      car = driving ? out.find((e) => e.id === driving) : undefined,
+      body = car ?? player;
+    this.seated = !!car;
+    this.controlled = car?.kind;
+    this.drawn = body && { angle: body.angle, speed: Math.hypot(body.vx, body.vz) };
+    this.actions.frame(now, this.seated, this.drawn);
+    return out;
+  }
   stats(now = performance.now()) {
     const p = this.prediction;
+    const interval =
+      this.snapshotTimes.length > 1
+        ? (now - this.snapshotTimes[0]) / (this.snapshotTimes.length - 1)
+        : undefined;
     return {
       connected: this.welcomed && this.socket?.readyState === WebSocket.OPEN,
       lastDisconnect: this.lastDisconnect,
+      reconnects: this.reconnects,
+      seatLoss: this.seat.loss,
+      enterMs: this.actions.enterMs,
+      steerMs: this.actions.steerMs,
+      controlled: this.controlled,
       rtt: this.rtt,
       jitter: this.jitter,
       snapshotAge: this.received ? Math.max(0, now - this.received) : undefined,
-      snapshotInterval: this.snapshotInterval,
+      snapshotInterval: interval,
       interpolationDelay: this.timeline.delay * 1000,
-      snapshotsPerSecond: this.snapshotTimes.filter((at) => at >= now - 1000).length,
-      inputsPerSecond: this.inputTimes.filter((at) => at >= now - 1000).length,
-      seq: this.seq - 1,
-      ack: this.ack,
+      snapshotsPerSecond: this.snapshotTimes.length,
+      inputsPerSecond: this.inputTimes.length,
+      seq: this.seq,
+      ack: this.ack ?? -1,
       ackAge:
-        this.ackTimestamp === undefined
-          ? undefined
-          : Math.max(0, now - this.ackTimestamp),
-      pending: p?.pending.filter((frame) => frame.seq > this.ack).length ?? 0,
-      queued: this.queued,
-      prediction: p?.status ?? "waiting for authority",
+        this.ack === undefined ? undefined : (this.seq - this.ack) * TUNING.tick * 1000,
+      pending: p?.pending.length ?? 0,
+      queued: this.lead,
+      prediction: p?.body ? "predicted" : "none",
       correction: p?.lastCorrection.distance ?? 0,
       angle: ((p?.lastCorrection.angle ?? 0) * 180) / Math.PI,
-      offset: p ? Math.hypot(p.offset.x, p.offset.z, p.offset.y) : 0,
+      offset: p ? Math.hypot(p.offset.x, p.offset.z) : 0,
       corrections: p?.corrections ?? 0,
       buffered: this.socket?.bufferedAmount ?? 0,
-      resyncs: this.resyncs,
+      resyncs: 0,
       serverTime: this.serverTime,
     };
-  }
-  debug(command: DebugCommand): Promise<DebugState> {
-    if (this.socket?.readyState !== WebSocket.OPEN)
-      return Promise.reject(Error("Not connected"));
-    const requestId = ++this.debugSerial;
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.debugRequests.delete(requestId);
-        reject(Error("Debug request timed out"));
-      }, 5000);
-      this.debugRequests.set(requestId, { resolve, reject, timer });
-      this.send({ type: "debugCommand", requestId, command });
-    });
-  }
-  renderEntities(now = performance.now(), input?: Input) {
-    this.reconcile(now);
-    const result = this.timeline.sample(now);
-    const presented = new Set<string>();
-    const currentPlayer = this.entities.get(this.playerId);
-    if (currentPlayer) {
-      const i = result.findIndex((e) => e.id === this.playerId);
-      if (i >= 0) result[i] = { ...currentPlayer };
-      else result.push({ ...currentPlayer });
-    }
-    const prediction = this.prediction?.render(now, input);
-    this.predictedImpacts = prediction?.impacts ?? new Map();
-    const remote = this.timeline.renderTime ?? this.serverTime;
-    this.debrisClock = {
-      remote,
-      local: prediction ? this.serverTime + (this.prediction?.ahead ?? 0) : remote,
-    };
-    const controlled = currentPlayer?.vehicle
-      ? this.entities.get(currentPlayer.vehicle)
-      : currentPlayer;
-    const predicted =
-      prediction?.body ??
-      (!currentPlayer?.vehicle || controlled?.driver === this.playerId
-        ? controlled
-        : undefined);
-    if (predicted) {
-      if (this.contactOwner !== predicted.id) {
-        this.contactPresentation.clear();
-        this.displayedRemotes.clear();
-        this.contactOwner = predicted.id;
-      }
-      for (const [id, until] of this.contactPresentation)
-        if (until <= now) this.contactPresentation.delete(id);
-      // Only interacting bodies leave the buffered timeline, not every nearby player.
-      for (const neighbour of prediction?.neighbours ?? this.entities.values()) {
-        if (neighbour.id === predicted.id || neighbour.vehicle) continue;
-        const index = result.findIndex((e) => e.id === neighbour.id);
-        const remote = index >= 0 ? result[index] : this.entities.get(neighbour.id);
-        if (!remote) continue;
-        const distance = Math.min(
-          Math.hypot(remote.x - predicted.x, remote.z - predicted.z),
-          Math.hypot(neighbour.x - predicted.x, neighbour.z - predicted.z),
-        );
-        const interacting = prediction?.contacts.has(neighbour.id);
-        // Let interpolation catch up gradually after a provisional impact.
-        if (interacting) this.contactPresentation.set(neighbour.id, now + 500);
-        const remaining = (this.contactPresentation.get(neighbour.id) ?? now) - now;
-        const weight = Math.max(0, Math.min(1, (24 - distance) / 12, remaining / 500));
-        const previous = this.displayedRemotes.get(neighbour.id);
-        if (weight === 0 && !previous?.smoothing) continue;
-        let pose = interpolate(remote, neighbour, weight);
-        let smoothing = weight > 0;
-        if (previous) {
-          const dt = Math.max(0, Math.min(0.1, (now - previous.at) / 1000));
-          const reference = previous.smoothing ? pose : remote;
-          const dx = reference.x - previous.target.x,
-            dy = reference.y - previous.target.y,
-            dz = reference.z - previous.target.z;
-          const distance = Math.hypot(dx, dy, dz);
-          const travel =
-            Math.max(
-              Math.hypot(previous.pose.vx, previous.pose.vy, previous.pose.vz),
-              Math.hypot(pose.vx, pose.vy, pose.vz),
-            ) * dt;
-          const fraction = distance ? Math.min(1, travel / distance) : 0;
-          const advanced = {
-            ...previous.pose,
-            x: previous.pose.x + dx * fraction,
-            y: previous.pose.y + dy * fraction,
-            z: previous.pose.z + dz * fraction,
-            angle: wrap(previous.pose.angle + (pose.angularVelocity || 0) * dt),
-          };
-          smoothing ||=
-            Math.hypot(advanced.x - pose.x, advanced.y - pose.y, advanced.z - pose.z) >
-              0.01 || Math.abs(wrap(advanced.angle - pose.angle)) > 0.001;
-          const target = pose;
-          pose = interpolate(advanced, target, 1 - Math.exp(-12 * dt));
-          this.displayedRemotes.set(neighbour.id, { pose, target, at: now, smoothing });
-        } else {
-          this.displayedRemotes.set(neighbour.id, {
-            pose,
-            target: pose,
-            at: now,
-            smoothing,
-          });
-        }
-        presented.add(neighbour.id);
-        if (index >= 0) result[index] = pose;
-        else result.push(pose);
-      }
-      const index = result.findIndex((e) => e.id === predicted.id);
-      if (index >= 0) result[index] = { ...predicted };
-      else result.push({ ...predicted });
-    }
-    for (const p of result) {
-      const v = p.vehicle && result.find((e) => e.id === p.vehicle);
-      if (v) {
-        p.x = v.x;
-        p.z = v.z;
-        p.y = v.y;
-        p.angle = v.angle;
-      }
-    }
-    const visible = new Set(result.map((e) => e.id));
-    for (const id of this.displayedRemotes.keys())
-      if (!visible.has(id)) this.displayedRemotes.delete(id);
-    for (const e of result)
-      if (!presented.has(e.id))
-        this.displayedRemotes.set(e.id, {
-          pose: e,
-          target: e,
-          at: now,
-          smoothing: false,
-        });
-    return result;
-  }
-  close() {
-    this.closed = true;
-    this.welcomed = false;
-    clearInterval(this.heartbeat);
-    clearTimeout(this.retry);
-    if (this.socket) this.disconnect(this.socket);
   }
 }

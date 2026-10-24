@@ -136,7 +136,7 @@ A separate headless reconnect check at the same viewport restored the same playe
 
 Browser messages now carry a local monotonic `timestamp` in milliseconds, including discrete actions. The scripting AgentClient stamps its messages too. Server messages carry `time` in simulation seconds; snapshots additionally echo the applied command's `ackTimestamp`. These clocks are separate: input age subtracts the echoed browser timestamp from the browser clock, never from server time. Timestamps are diagnostic and do not authorize extra simulation time. Optional action timestamps and acknowledgement fields keep protocol 4 clients compatible; legacy tools may omit action timestamps, while input timestamps remain mandatory.
 
-Ping runs once per second independently of player input. The F1 networking section is available only with server-authorized debug tools (`ALLOW_DEBUG=1` in production). Ping is full round-trip time; the combat clock continues to use half of it as a latency estimate. Ping variation is an exponential average of changes between consecutive RTT samples, not measured packet loss. Snapshot age means time since the last accepted snapshot, and gap means the last accepted arrival interval. Rates count events in the past second. Applied input age includes both directions, server queueing and snapshot cadence; it is not pure network latency. Prediction status identifies missing collision coverage or stalled acknowledgements. The outgoing buffer is WebSocket bytes waiting to send. Diagnostics use bounded history and update only while the panel is open.
+Ping runs once per second independently of player input. The F1 networking section is available only with server-authorized debug tools (`ALLOW_DEBUG=1` in production). Ping is full round-trip time; the combat clock continues to use half of it as a latency estimate. Ping variation is an exponential average of changes between consecutive RTT samples, not measured packet loss. Snapshot age means time since the last accepted snapshot, and gap means the last accepted arrival interval. Rates count events in the past second. Applied input age includes both directions, server queueing and snapshot cadence; it is not pure network latency. Render resolution is the share of the base pixel density the game draws at: when the median frame of the last two seconds takes over 38 ms (under about 26 fps; a 30 Hz display never trips it) the engine's hardware scaling steps up by 1.25x, to at most twice the base, and it steps back after a 20 s cooldown at vsync speed (a relapse doubles the wait, up to 160 s). A machine that draws 15 fps shows every snapshot and key press a frame late whatever the link, so fewer pixels is the only lever left; in the software-rendered test browser it took 2.6 fps to 4.5 fps and the 95th-percentile frame from 640 to 300 ms. `?fixedscale` keeps the resolution where it starts. Dropped from vehicle says when the vehicle you sat in disappeared or you were put out of it without pressing the key, and which: the server removed it, it was wrecked or burned out, or the server just stopped listing you as its rider (the browser console also logs it). "never" means it has not happened this session. Enter / exit vehicle is the time from pressing the interact key to the first drawn frame in the new seat; Turn response is the time from a steering press (from near-straight, above 3 m/s) to a visible heading change of about one degree. Both are measured on what is drawn, include the link and the physics, and show a dash until the first sample; a car's turn is bounded by the steering rate and suspension, so compare it with a plane's rather than expecting zero. Enter and exit make the server send a snapshot at once instead of waiting for the next even tick, and a plane or helicopter you pilot is drawn from the newest snapshot carried forward to the present rather than from the interpolation delay behind. Prediction status identifies missing collision coverage or stalled acknowledgements. The outgoing buffer is WebSocket bytes waiting to send. Diagnostics use bounded history and update only while the panel is open.
 
 Very short keyboard presses and clicks are retained for the next regular 30 Hz input sample, then released. Held keys continue sampling without relying on operating-system key repeat. Multiple presses within one sample are coalesced; input events do not grant extra physics ticks. Blur, hidden tabs, map opening and camera switches clear pending presses and aiming. Mouse aim is recomputed from the displayed character to the pointer's ground projection on every input sample, so a stationary pointer stays meaningful while the player or camera moves. Different discrete actions no longer suppress each other through a shared 100 ms cooldown; per-action and total message limits remain.
 
@@ -311,3 +311,105 @@ window, and changing controls during an outage can still require reconciliation.
 
 The production trace included outages longer than a second. This change does not
 remove that underlying transport delay or promise smooth movement through it.
+
+## Input lead (Rust server)
+
+Each input is stamped with the server tick it should run on (`client/network/lead.ts`). The
+snapshot's `lead` says how many ticks early the newest input arrived (the Networking panel's
+"Server input buffer"); the stamper aims for about two and bumps its target when inputs arrive
+late. The server runs one input per tick, so a send timer slightly faster than 30 Hz used to
+stack extra inputs until a resync (a clean link sat at 9-10 commands, about 300 ms of input age
+and ten pending replays). The stamper now skips a slot whenever its stream is already more than a
+tick past the aim, and its target decays by a quarter tick per snapshot once the lead exceeds
+three. `tests/input-lead.test.ts` simulates the loop over lan, 74 ms and stalling links at 30, 31
+and 32.3 Hz sends (`tests/support/link.ts`); `scripts/drive-client.ts` measures the same live.
+
+## Entity heights and steering
+
+Clients draw an entity at its reported `y`, and the car renderer treats a car as airborne unless
+`y` is the ground under its wheels (`carGrounded`), as the original game reported it. The physics
+body centres sit above that, so the server subtracts `VEHICLE_REST` (1.26 m, tilt-adjusted) for
+cars and `CHARACTER_FEET` (0.91 m) for people, and the client's local prediction applies the same
+offsets to the wasm body. Without them every car hovered about 1.3 m up with drooping wheels and
+people floated. `Entity.steering` is the front wheel angle in radians from the physics, and the
+local car reads it from the predicted body so the wheels turn with the key, not a snapshot later.
+`cars_and_people_are_reported_at_ground_height` and `the_front_wheels_turn_gradually_to_the_steering_lock`
+in `crates/server/tests/scene.rs` pin both.
+
+## Cars in the predicted world
+
+The client's predicted world has terrain, water, buildings and parks. It also keeps the (up to
+eight) cars within 40 m as real bodies, reset from every snapshot and coasting between them
+(parked ones hold their brake), so driving into a parked or passing car stops the predicted body
+where the server stops it. Before this, every touch of another car was a 1-2 m correction: the
+`scripts/drive-client.ts` run that hits a parked car near spawn went from 2-3 corrections (up to
+2.3 m) to none. `restore_entity` and `state_of` in the physics crate restore and read one body
+without disturbing the rest. Shortcuts: props (lamps, trees) and other people are not predicted,
+and a neighbour's future steering and throttle are unknown, so a head-on with a moving car can
+still correct.
+
+## The ack, held ticks and server cost
+
+`ack` in a state message is the newest tick the state includes, input or not: when no input
+arrived the server runs the held controls and still acks that tick. Acking only real inputs made
+the client replay one tick too many after a held tick and one too few after the next, a +-1.2 m
+seesaw at 18 m/s even on a clean link. A jump in the client's stamp stream skips server ticks
+that run on held controls, so the client steps its prediction through them with the last input.
+`scripts/drive-client.ts --pattern track` over a 150 ms round trip with 40 ms jitter and 250 ms
+spikes went from 44-61 corrections a lap (about 20 over 1 m) to none.
+
+The server tick must also fit its 33 ms budget. Two costs had grown past it on a busy server (tick
+CPU p95 35 ms with 50 cars): `record_impacts` scanned every prop collider (thousands) for every
+contact pair of every car on every substep, now a reverse map, and the tyre model kept every
+parked car awake. Sleeping cars with the pedals up now skip suspension and tyre work. The Server
+stats window shows tick CPU, late ticks and dropped time; `cargo run --release -p
+afterhours-server --example tick-cost` measures the cost as cars accumulate (about 5 ms with 50).
+
+## What is drawn
+
+The mesh and the camera follow the entity of the thing you control. `withPredicted` swaps the
+predicted body into the player and, when the player drives a car, into that car too; before, only
+the player was swapped and a car at 18 m/s was drawn about 4 m behind the prediction (the server
+copy, interpolated). The predicted body advances on 30 Hz input ticks, so `Prediction.render`
+carries its last step forward by the time since that step, capped at one tick, instead of drawing a
+stall and a double jump on a faster screen. A walker's predicted velocity comes from the same step
+(the physics row has none).
+
+Cars within 16 m of you are drawn the same way, not from the server copy: the prediction already
+simulates them (restored from each snapshot and replayed through your unacknowledged inputs, so
+they are time-aligned with your own body), and a collision is decided in that world. The server
+copy is an interpolation delay behind, so a car passing at 10 m/s was drawn about three metres from
+where the predicted body met it. Each such car carries its own correction easing and between-tick
+step, and fades between the two over 0.4 s at the 16 m edge so nothing pops. Cars further out, and
+other people, are still interpolated from snapshots.
+
+The server also sends `roster` (who is in the city, on every join and leave) and `positions` (where
+everyone is, about twice a second); the player list, nameplates and island map read them.
+
+The drawn car also carries a velocity: the suspension springs (heave, pitch, roll) are driven by how
+fast it changes between frames. The prediction only steps at 30 Hz, so the velocity is ramped from the
+previous step's value to the new one across each tick; as a step it was 0 on one 60 fps frame and
+double on the next, and the body rocked (frame-to-frame pitch jerk 8.6e-4 against 3.7e-5 ramped).
+
+## Props and collisions
+
+Trees, palms and lamps (`city.props`, about 7,400 in the city) are colliders on the server and, within
+45 m of you, in the predicted world too (`Prediction.syncProps`). On each _live_ input step (not on
+a replay, or one hit would count again at every snapshot) the server's strike rule runs: above
+2 m/s a hit does `(speed - 2) * 14` damage, and at the prop's health (palm 65, tree 90, lamp 45) it
+breaks, keeps 96% of the car's speed and flies off. A predicted break goes into `predictedImpacts`, so
+the scene throws the debris at the impact instead of when the server's `broken` list arrives (a
+round trip later: 109-226 ms measured). The server confirming it keeps the prop out; one it does not
+confirm within 1.2 s stands again, and so does one the server's debris has expired. People and the
+benches, signals and hydrants the original game had are not colliders here.
+
+The server's strike detection used to ignore any contact with a positive gap. Rapier stops a fast
+car on a speculative contact a few millimetres before it touches, so a car at speed registered an
+impact of 0.1 m/s and stopped dead at every tree and lamp. `IMPACT_REACH` (5 cm) counts those
+contacts; the approach speed is read from before the step. `a_fast_car_registers_the_speed_it_hits_a_prop_at`
+(physics) and the strike tests in the feel suite pin it.
+
+The carry between ticks is measured from the input's own scheduled slot, not from when `input()` ran,
+and capped at two ticks. When a frame is late and the input clock steps several slots at once, the
+drawn body still moves by exactly the elapsed time; with 40 ms stalls every 0.7 s the visible forward
+hops fell from 2.5% of frames to 0.3-0.6%.

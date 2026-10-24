@@ -1,0 +1,26 @@
+[package]
+name = "afterhours-server"
+version = "0.1.0"
+edition = "2024"
+publish = false
+default-run = "afterhours-server"
+
+[dependencies]
+afterhours-physics = { path = "../physics" }
+afterhours-protocol = { path = "../protocol" }
+base64 = "0.22"
+rmp-serde = "1"
+serde = { version = "1", features = ["derive"] }
+serde_bytes = "0.11"
+serde_json = "1"
+axum = { version = "0.8", features = ["ws"] }
+futures-util = "0.3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal"] }
+tower-http = { version = "0.7", features = ["fs"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+afterhours-mapgen = { path = "../mapgen" }
+tower = { version = "0.5", features = ["util"] }
+tokio-tungstenite = "0.30"

@@ -1,18 +1,48 @@
 import type { GameNetwork } from "../network/index.ts";
 
-export function updateNetworkStats(element: HTMLElement, network: GameNetwork) {
+export function updateNetworkStats(
+  element: HTMLElement,
+  network: GameNetwork,
+  frames: { fps: number; p95Ms: number; worstMs: number },
+  scale?: { level: number; base: number },
+) {
   const s = network.stats();
   const ms = (value: number | undefined) =>
     value === undefined ? "—" : `${Math.round(value)} ms`;
   const rows = [
     ["Connection", s.connected ? "Connected" : "Disconnected"],
     ["Last disconnect", s.lastDisconnect ?? "None"],
+    ["Reconnects", String(s.reconnects)],
+    [
+      "Frame rate (5 s)",
+      `${Math.round(frames.fps)} fps, 95% under ${Math.round(frames.p95Ms)} ms, worst ${Math.round(frames.worstMs)} ms`,
+    ],
+    [
+      "Render resolution",
+      scale
+        ? `${Math.round((scale.base / scale.level) * 100)}%${scale.level > scale.base ? " (lowered: frames were slow)" : ""}`
+        : "—",
+    ],
     ["Server ping (RTT)", ms(s.rtt)],
     ["Ping variation", ms(s.jitter)],
     ["Snapshot age / gap", `${ms(s.snapshotAge)} / ${ms(s.snapshotInterval)}`],
     ["Snapshots / inputs", `${s.snapshotsPerSecond} / ${s.inputsPerSecond} per second`],
     ["Sent / applied input", `${s.seq} / ${s.ack}`],
     ["Applied input age", ms(s.ackAge)],
+    ["Interpolation delay", ms(s.interpolationDelay)],
+    ["Enter / exit vehicle", ms(s.enterMs)],
+    [
+      "Dropped from vehicle",
+      s.seatLoss
+        ? `${s.seatLoss.reason} (${Math.round((performance.now() - s.seatLoss.at) / 1000)} s ago)`
+        : "never",
+    ],
+    [
+      "Turn response",
+      s.steerMs === undefined
+        ? "—"
+        : `${ms(s.steerMs)} (${s.controlled === "car" ? "predicted" : "from the server"})`,
+    ],
     ["Pending replay", `${s.pending} inputs`],
     [
       "Server input buffer",

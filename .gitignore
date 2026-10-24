@@ -5,3 +5,10 @@ dist/
 test-results/
 playwright-report/
 dist-explorer/
+
+# Rust
+target/
+crates/physics/pkg/
+crates/physics/pkg-node/
+data/test-world.json
+data/test-world-meshes.msgpack

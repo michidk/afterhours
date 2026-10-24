@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Worker } from "node:worker_threads";
 import { ChunkDecoder, type ChunkReply } from "../client/world/chunk-decoder.ts";
-import { CityStore } from "../server/city-stream.ts";
+import { CityStore } from "../scripts/city-store.ts";
 import { emptyCity } from "../shared/city-stream.ts";
 
 test("map workers validate chunks without blocking the input loop", async () => {
