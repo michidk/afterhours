@@ -467,13 +467,16 @@ export class Prediction {
         angle = wrap(after.angle - before.angle);
       this.lastCorrection = { distance, angle };
       if (distance > 0.3) this.corrections++;
-      // Carry the visible error so the next frames ease it away.
-      this.offset = {
-        x: this.offset.x + before.x - after.x,
-        y: this.offset.y + before.y - after.y,
-        z: this.offset.z + before.z - after.z,
-        angle: this.offset.angle + wrap(before.angle - after.angle),
-      };
+      // Carry real corrections so the next frames ease them away. Tiny per-snapshot
+      // integration noise is expected during a turn; accumulating it forever makes
+      // the local body trail farther behind the input the longer the curve lasts.
+      if (distance > 0.3 || Math.abs(angle) > 0.03)
+        this.offset = {
+          x: this.offset.x + before.x - after.x,
+          y: this.offset.y + before.y - after.y,
+          z: this.offset.z + before.z - after.z,
+          angle: this.offset.angle - angle,
+        };
       if (distance > 2) this.offset = { x: 0, y: 0, z: 0, angle: 0 };
     }
     this.body = after;
