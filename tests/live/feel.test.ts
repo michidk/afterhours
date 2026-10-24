@@ -17,6 +17,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { accessSync } from "node:fs";
 
 const run = promisify(execFile);
 const seconds = Number(process.env.FEEL_SECONDS ?? 20);
@@ -79,20 +80,33 @@ const freePort = () =>
 /** Starts the Rust server on a free port and waits until it answers. */
 async function boot(env: Record<string, string>): Promise<Booted> {
   const port = await freePort();
-  const child = spawn("cargo", ["run", "-q", "--release", "-p", "afterhours-server"], {
+  const cargo = [process.env.CARGO, "/home/vibepod/.cargo/bin/cargo", "cargo"].find(
+    (candidate) => {
+      if (!candidate) return false;
+      try {
+        accessSync(candidate);
+        return true;
+      } catch {
+        return candidate === "cargo";
+      }
+    },
+  );
+  if (!cargo)
+    throw new Error("cargo is required for live feel tests (set CARGO to its path)");
+  const child = spawn(cargo, ["run", "-q", "--release", "-p", "afterhours-server"], {
     env: { ...process.env, PORT: String(port), ALLOW_DEBUG: "1", ...env },
     stdio: "ignore",
   });
-  const spawnFailure = new Promise<never>((_, reject) =>
-    {
-      child.once("error", (error) =>
-        reject(new Error(`server failed to start: ${error.message}`)),
-      );
-      child.once("exit", (code, signal) =>
-        reject(new Error(`server exited before health check (code ${code}, signal ${signal})`)),
-      );
-    },
-  );
+  const spawnFailure = new Promise<never>((_, reject) => {
+    child.once("error", (error) =>
+      reject(new Error(`server failed to start: ${error.message}`)),
+    );
+    child.once("exit", (code, signal) =>
+      reject(
+        new Error(`server exited before health check (code ${code}, signal ${signal})`),
+      ),
+    );
+  });
   const url = `http://127.0.0.1:${port}`;
   const deadline = Date.now() + 60_000;
   for (;;) {
