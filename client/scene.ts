@@ -172,6 +172,16 @@ export class CityScene {
     this.shadows.normalBias = 0.03;
     this.sun.shadowMinZ = 1;
     this.sun.shadowMaxZ = 220;
+    // Refreshing a large PCF map every frame stalls low-end and software renderers.
+    // The scene moves only a little between updates, so reuse it for two frames.
+    const shadowMap = this.shadows.getShadowMap();
+    if (shadowMap) {
+      shadowMap.refreshRate = 2;
+      shadowMap.getSize().width > 512 && this.shadows.getShadowMap()?.resize(512);
+      // Do not render the whole city into the first shadow pass. The nearby list is
+      // populated by update() once the camera has a settled target.
+      shadowMap.renderList = [];
+    }
     this.streetGlow = this.mat("#ffe5a1", true);
     this.lighting = new EnvironmentLighting(
       this.scene,
@@ -959,12 +969,14 @@ export class CityScene {
       this.shadowCandidates = this.shadowCandidates.filter((m) => !m.isDisposed());
       const shadowMap = this.shadows.getShadowMap();
       if (shadowMap)
-        shadowMap.renderList = this.shadowCandidates.filter((m) => {
-          const c = m.getBoundingInfo().boundingSphere.centerWorld;
-          return (
-            m.isEnabled() && Math.hypot(c.x - this.target.x, c.z - this.target.z) < 70
-          );
-        });
+        shadowMap.renderList = this.shadowCandidates
+          .filter((m) => {
+            const c = m.getBoundingInfo().boundingSphere.centerWorld;
+            return (
+              m.isEnabled() && Math.hypot(c.x - this.target.x, c.z - this.target.z) < 70
+            );
+          })
+          .slice(0, 256);
     }
     this.carLights.update(entities, this.nodes, this.target);
     this.lighting.update(this.day, this.target, dt);

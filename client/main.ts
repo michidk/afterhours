@@ -26,6 +26,7 @@ import { InputClock } from "./input/clock.ts";
 import { GameAudio } from "./audio/index.ts";
 import { prepareFirstFrame } from "./startup.ts";
 import { meshGroupSchema } from "../shared/city-mesh.ts";
+import { SceneInstrumentation } from "@babylonjs/core/Instrumentation/sceneInstrumentation";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { CityScene } from "./scene";
 import {
@@ -674,6 +675,18 @@ async function boot() {
       import.meta.env.DEV ||
       new URLSearchParams(location.search).get("profile") === "1";
     const profiler = profileEnabled ? new FrameProfiler() : undefined;
+    const instrumentation = profileEnabled
+      ? new SceneInstrumentation(scene.scene)
+      : undefined;
+    if (instrumentation) {
+      instrumentation.captureActiveMeshesEvaluationTime = true;
+      instrumentation.captureRenderTargetsRenderTime = true;
+      instrumentation.captureFrameTime = true;
+      instrumentation.captureRenderTime = true;
+      instrumentation.captureCameraRenderTime = true;
+      instrumentation.captureParticlesRenderTime = true;
+      instrumentation.captureSpritesRenderTime = true;
+    }
     if (profileEnabled)
       Object.defineProperty(window, "afterhours", {
         configurable: true,
@@ -716,6 +729,21 @@ async function boot() {
             };
           },
           meshes: scene.scene.meshes.length,
+          babylon: scene.scene,
+          shadowGenerator: scene.shadows,
+          scene: instrumentation && {
+            drawCalls: instrumentation.drawCallsCounter.current,
+            activeMeshes: scene.scene.getActiveMeshes().length,
+            activeIndices: scene.scene.getActiveIndices(),
+            shadowCasters: scene.shadows.getShadowMap()?.renderList?.length,
+            lights: scene.scene.lights.length,
+            materials: scene.scene.materials.length,
+            activeMeshesMs: instrumentation.activeMeshesEvaluationTimeCounter.current,
+            shadowPassMs: instrumentation.renderTargetsRenderTimeCounter.current,
+            cameraMs: instrumentation.cameraRenderTimeCounter.current,
+            renderMs: instrumentation.renderTimeCounter.current,
+            frameMs: instrumentation.frameTimeCounter.current,
+          },
           destruction: scene.destruction.diagnostics,
         }),
       });
