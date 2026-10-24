@@ -467,16 +467,17 @@ export class Prediction {
         angle = wrap(after.angle - before.angle);
       this.lastCorrection = { distance, angle };
       if (distance > 0.3) this.corrections++;
-      // Carry real corrections so the next frames ease them away. Tiny per-snapshot
-      // integration noise is expected during a turn; accumulating it forever makes
-      // the local body trail farther behind the input the longer the curve lasts.
-      if (distance > 0.3 || Math.abs(angle) > 0.03)
-        this.offset = {
-          x: this.offset.x + before.x - after.x,
-          y: this.offset.y + before.y - after.y,
-          z: this.offset.z + before.z - after.z,
-          angle: this.offset.angle - angle,
-        };
+      // Carry every correction so packet cadence cannot turn into a visible twitch.
+      // Bound the carry: repeated tiny differences during a long turn must not build
+      // an ever-growing tail behind the locally predicted body.
+      const carry = (value: number, delta: number, limit: number) =>
+        Math.max(-limit, Math.min(limit, value + delta));
+      this.offset = {
+        x: carry(this.offset.x, before.x - after.x, 0.5),
+        y: carry(this.offset.y, before.y - after.y, 0.5),
+        z: carry(this.offset.z, before.z - after.z, 0.5),
+        angle: carry(this.offset.angle, -angle, 0.25),
+      };
       if (distance > 2) this.offset = { x: 0, y: 0, z: 0, angle: 0 };
     }
     this.body = after;
