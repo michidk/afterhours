@@ -1,6 +1,4 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "github>michidk/workflows//templates/renovate"
-  ]
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["github>michidk/workflows//templates/renovate"],
 }
